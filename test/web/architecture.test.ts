@@ -125,57 +125,57 @@ describe("build", () => {
 
 describe("toGraph", () => {
   it("draws products and components, and every parent-child as a link", () => {
-    const g = toGraph(build(ROWS, EMPTY_FILTERS));
-    expect(g.nodes).toHaveLength(7);
-    expect(g.nodes.some((n) => n.kind === "root" || n.kind === "team")).toBe(
-      false,
-    );
-    expect(g.links).toHaveLength(g.nodes.length - 3);
+    const graph = toGraph(build(ROWS, EMPTY_FILTERS));
+    expect(graph.nodes).toHaveLength(7);
+    expect(
+      graph.nodes.some((n) => n.kind === "root" || n.kind === "team"),
+    ).toBe(false);
+    expect(graph.links).toHaveLength(graph.nodes.length - 3);
   });
 
   it("leaves each product as its own island", () => {
-    const g = toGraph(build(ROWS, EMPTY_FILTERS));
-    const targets = new Set(g.links.map((l) => l.target));
-    const roots = g.nodes.filter((n) => !targets.has(n.key));
+    const graph = toGraph(build(ROWS, EMPTY_FILTERS));
+    const targets = new Set(graph.links.map((l) => l.target));
+    const roots = graph.nodes.filter((n) => !targets.has(n.key));
     expect(roots.map((n) => n.kind)).toEqual(["product", "product", "product"]);
   });
 
   it("counts depth from the product", () => {
-    const g = toGraph(build(ROWS, EMPTY_FILTERS));
+    const graph = toGraph(build(ROWS, EMPTY_FILTERS));
     const depth = (label: string) =>
-      g.nodes.find((n) => n.label === label)!.depth;
+      graph.nodes.find((n) => n.label === label)!.depth;
     expect(depth("TRACE")).toBe(0);
     expect(depth("printer")).toBe(1);
     expect(depth("printer nozzle")).toBe(2);
   });
 
   it("links a subcomponent to its parent, not to its product", () => {
-    const g = toGraph(build(ROWS, EMPTY_FILTERS));
-    const printer = g.nodes.find((n) => n.label === "printer")!;
-    const nozzle = g.nodes.find((n) => n.label === "printer nozzle")!;
-    expect(g.links).toContainEqual({
+    const graph = toGraph(build(ROWS, EMPTY_FILTERS));
+    const printer = graph.nodes.find((n) => n.label === "printer")!;
+    const nozzle = graph.nodes.find((n) => n.label === "printer nozzle")!;
+    expect(graph.links).toContainEqual({
       source: printer.key,
       target: nozzle.key,
     });
   });
 
   it("counts what hangs off each node, for sizing", () => {
-    const g = toGraph(build(ROWS, EMPTY_FILTERS));
-    expect(g.nodes.find((n) => n.label === "printer")!.weight).toBe(1);
-    expect(g.nodes.find((n) => n.label === "scanner")!.weight).toBe(0);
+    const graph = toGraph(build(ROWS, EMPTY_FILTERS));
+    expect(graph.nodes.find((n) => n.label === "printer")!.weight).toBe(1);
+    expect(graph.nodes.find((n) => n.label === "scanner")!.weight).toBe(0);
   });
 
   it("has nothing to draw for an empty catalogue", () => {
-    const g = toGraph(build([], EMPTY_FILTERS));
-    expect(g.nodes).toEqual([]);
-    expect(g.links).toEqual([]);
+    const graph = toGraph(build([], EMPTY_FILTERS));
+    expect(graph.nodes).toEqual([]);
+    expect(graph.links).toEqual([]);
   });
 
   it("roots a team's graph at its products", () => {
-    const g = toGraph(build(ROWS, { ...EMPTY_FILTERS, team: "platform" }));
-    const targets = new Set(g.links.map((l) => l.target));
+    const graph = toGraph(build(ROWS, { ...EMPTY_FILTERS, team: "platform" }));
+    const targets = new Set(graph.links.map((l) => l.target));
     expect(
-      g.nodes
+      graph.nodes
         .filter((n) => !targets.has(n.key))
         .map((n) => n.label)
         .sort(),
@@ -183,8 +183,8 @@ describe("toGraph", () => {
   });
 
   it("keeps the product node when filtered to one product", () => {
-    const g = toGraph(build(ROWS, { ...EMPTY_FILTERS, product: "trace" }));
-    expect(g.nodes.map((n) => n.kind)).toEqual([
+    const graph = toGraph(build(ROWS, { ...EMPTY_FILTERS, product: "trace" }));
+    expect(graph.nodes.map((n) => n.kind)).toEqual([
       "product",
       "component",
       "component",
@@ -235,24 +235,24 @@ describe("simulate", () => {
     const island = new Map<SimNode, SimNode>(nodes.map((n) => [n, n]));
     const find = (n: SimNode): SimNode =>
       island.get(n) === n ? n : find(island.get(n)!);
-    for (const l of links)
-      island.set(find(l.source as SimNode), find(l.target as SimNode));
+    for (const link of links)
+      island.set(find(link.source as SimNode), find(link.target as SimNode));
     // Measured between label boxes, not centres: a long label is most of what
     // an island's edge is made of.
     let gap = Infinity;
     for (const a of nodes)
       for (const b of nodes) {
         if (find(a) === find(b)) continue;
-        const p = boxOf(a, 0);
-        const q = boxOf(b, 0);
+        const boxA = boxOf(a, 0);
+        const boxB = boxOf(b, 0);
         const dx = Math.max(
-          b.x! - q.left - (a.x! + p.right),
-          a.x! - p.left - (b.x! + q.right),
+          b.x! - boxB.left - (a.x! + boxA.right),
+          a.x! - boxA.left - (b.x! + boxB.right),
           0,
         );
         const dy = Math.max(
-          b.y! - q.up - (a.y! + p.down),
-          a.y! - p.up - (b.y! + q.down),
+          b.y! - boxB.up - (a.y! + boxA.down),
+          a.y! - boxA.up - (b.y! + boxB.down),
           0,
         );
         gap = Math.min(gap, Math.hypot(dx, dy));
@@ -280,16 +280,16 @@ describe("simulate", () => {
     );
     const productOf = (n: SimNode): SimNode =>
       parent.has(n) ? productOf(parent.get(n)!) : n;
-    const out = (n: SimNode) => {
-      const p = productOf(n);
-      return Math.hypot(n.x! - p.x!, n.y! - p.y!);
+    const distance = (n: SimNode) => {
+      const product = productOf(n);
+      return Math.hypot(n.x! - product.x!, n.y! - product.y!);
     };
     let checked = 0;
     for (const n of nodes) {
-      const p = parent.get(n);
-      if (!p || p.kind === "product") continue;
+      const above = parent.get(n);
+      if (!above || above.kind === "product") continue;
       checked++;
-      expect(out(n)).toBeGreaterThan(out(p));
+      expect(distance(n)).toBeGreaterThan(distance(above));
     }
     expect(checked).toBeGreaterThan(10);
   });
@@ -345,9 +345,9 @@ describe("simulate", () => {
       LAYOUT,
       0.8,
     );
-    const shape = (ns: SimNode[]) => {
-      const xs = ns.map((n) => n.x!);
-      const ys = ns.map((n) => n.y!);
+    const shape = (group: SimNode[]) => {
+      const xs = group.map((n) => n.x!);
+      const ys = group.map((n) => n.y!);
       return (
         (Math.max(...xs) - Math.min(...xs)) /
         (Math.max(...ys) - Math.min(...ys))
@@ -380,12 +380,12 @@ describe("simulate", () => {
     const branch = new Set<SimNode>([dragged]);
     for (let grew = true; grew;) {
       grew = false;
-      for (const l of links)
+      for (const link of links)
         if (
-          branch.has(l.source as SimNode) &&
-          !branch.has(l.target as SimNode)
+          branch.has(link.source as SimNode) &&
+          !branch.has(link.target as SimNode)
         ) {
-          branch.add(l.target as SimNode);
+          branch.add(link.target as SimNode);
           grew = true;
         }
     }
@@ -395,8 +395,8 @@ describe("simulate", () => {
 
     hold(dragged);
     sim.alpha(DRAG_HEAT).alphaTarget(DRAG_HEAT);
-    for (let t = 0; t < 60; t++) {
-      dragged.fx = before.get(dragged)![0] + Math.min(t, 10) * 0.4;
+    for (let tick = 0; tick < 60; tick++) {
+      dragged.fx = before.get(dragged)![0] + Math.min(tick, 10) * 0.4;
       dragged.fy = before.get(dragged)![1];
       sim.tick();
     }
@@ -428,10 +428,10 @@ describe("simulate", () => {
 
       hold(dragged);
       sim.alpha(DRAG_HEAT).alphaTarget(DRAG_HEAT);
-      for (let t = 1; t <= 40; t++) {
-        const k = Math.min(1, t / 20);
-        dragged.fx = from.x + (to.x - from.x) * k;
-        dragged.fy = from.y + (to.y - from.y) * k;
+      for (let tick = 1; tick <= 40; tick++) {
+        const progress = Math.min(1, tick / 20);
+        dragged.fx = from.x + (to.x - from.x) * progress;
+        dragged.fy = from.y + (to.y - from.y) * progress;
         sim.tick();
       }
       drop(dragged);
@@ -439,7 +439,7 @@ describe("simulate", () => {
       dragged.fy = null;
       hold(null);
       sim.alphaTarget(0).alpha(1);
-      for (let t = 0; t < 600 && restless() > 0.05; t++) sim.tick();
+      for (let tick = 0; tick < 600 && restless() > 0.05; tick++) sim.tick();
 
       expect(Math.hypot(dragged.x! - to.x, dragged.y! - to.y)).toBeLessThan(1);
       shape().forEach(([x, y], i) => {
@@ -474,10 +474,10 @@ describe("simulate", () => {
 
 describe("radius", () => {
   it("ranks a product over its direct children over what hangs below them", () => {
-    const of = (kind: "product" | "component", depth: number) =>
+    const radiusOf = (kind: "product" | "component", depth: number) =>
       radius({ key: "k", kind, label: "l", weight: 0, depth });
-    expect(of("product", 0)).toBeGreaterThan(of("component", 1));
-    expect(of("component", 1)).toBeGreaterThan(of("component", 2));
+    expect(radiusOf("product", 0)).toBeGreaterThan(radiusOf("component", 1));
+    expect(radiusOf("component", 1)).toBeGreaterThan(radiusOf("component", 2));
   });
 
   it("grows with what hangs off it, but not without limit", () => {

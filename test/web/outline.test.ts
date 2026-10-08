@@ -49,7 +49,7 @@ describe("article outline", () => {
       "<h2>Overview</h2><p>a</p><h3>Queue</h3><p>b</p><h2>Overview</h2><p>c</p>",
       items,
     );
-    for (const it of items) expect(html).toContain(`id="${it.id}"`);
+    for (const item of items) expect(html).toContain(`id="${item.id}"`);
     expect(html).toContain('<h2 id="overview">');
     expect(html).toContain('<h2 id="overview-1">');
   });

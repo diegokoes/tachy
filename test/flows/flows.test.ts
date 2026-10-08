@@ -68,7 +68,7 @@ const form = (over: Partial<ComposerForm> = {}): ComposerForm => ({
 
 describe("applyFormConfig", () => {
   it("turns the team's defaults into prefills, @me into the caller", () => {
-    const f = applyFormConfig(form(), {
+    const applied = applyFormConfig(form(), {
       fields: {
         "System.AssignedTo": { default: { value: "luca@corp" } },
         "Custom.Reporter": { default: { macro: "@me" } },
@@ -78,13 +78,13 @@ describe("applyFormConfig", () => {
       },
       order: ["Custom.Cloud", "Custom.Gone", "Custom.Reporter"],
     });
-    expect(f.prefill).toEqual({
+    expect(applied.prefill).toEqual({
       "Microsoft.VSTS.Common.Priority": { value: 2, origin: "process" },
       "System.AssignedTo": { value: "luca@corp", origin: "admin" },
       "Custom.Reporter": { value: "me@corp", origin: "admin" },
       "Custom.Cloud": { value: "PROD", origin: "admin" },
     });
-    expect(f.display).toEqual({
+    expect(applied.display).toEqual({
       show: {
         "Custom.Cloud": "form",
         "Microsoft.VSTS.Common.Priority": "hidden",
@@ -94,15 +94,15 @@ describe("applyFormConfig", () => {
   });
 
   it("leaves @me empty when the source cannot say who the caller is", () => {
-    const f = applyFormConfig(form({ me: null }), {
+    const applied = applyFormConfig(form({ me: null }), {
       fields: { "Custom.Reporter": { default: { macro: "@me" } } },
     });
-    expect(f.prefill["Custom.Reporter"]).toBeUndefined();
+    expect(applied.prefill["Custom.Reporter"]).toBeUndefined();
   });
 
   it("changes nothing without a config for the type", () => {
-    const f = form();
-    expect(applyFormConfig(f, undefined)).toBe(f);
+    const applied = form();
+    expect(applyFormConfig(applied, undefined)).toBe(applied);
   });
 });
 
@@ -133,7 +133,7 @@ describe("flows config", () => {
   let leadCookie: string;
   let devCookie: string;
 
-  const req = (cookie: string, path: string, init: RequestInit = {}) =>
+  const request = (cookie: string, path: string, init: RequestInit = {}) =>
     app.request(`/api/compose${path}`, {
       ...init,
       headers: {
@@ -210,12 +210,12 @@ describe("flows config", () => {
         },
       },
     });
-    const denied = await req(devCookie, `/projects/${projectId}/config`, {
+    const denied = await request(devCookie, `/projects/${projectId}/config`, {
       method: "PUT",
       body,
     });
     expect(denied.status).toBe(403);
-    const ok = await req(leadCookie, `/projects/${projectId}/config`, {
+    const ok = await request(leadCookie, `/projects/${projectId}/config`, {
       method: "PUT",
       body,
     });
@@ -226,13 +226,17 @@ describe("flows config", () => {
   });
 
   it("refuses a config it would not know how to apply", async () => {
-    const res = await req(leadCookie, `/projects/${projectId}/config`, {
-      method: "PUT",
-      body: JSON.stringify({
-        forms: { Bug: { fields: { X: { show: "sometimes" } } } },
-      }),
-    });
-    expect(res.status).toBe(400);
+    const response = await request(
+      leadCookie,
+      `/projects/${projectId}/config`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          forms: { Bug: { fields: { X: { show: "sometimes" } } } },
+        }),
+      },
+    );
+    expect(response.status).toBe(400);
   });
 
   it("serves the form with the team's defaults, and raw without them", async () => {
@@ -270,20 +274,20 @@ describe("flows config", () => {
       }),
     );
     const applied = await (
-      await req(devCookie, `/projects/${projectId}/form?type=Bug`)
+      await request(devCookie, `/projects/${projectId}/form?type=Bug`)
     ).json();
     expect(applied.prefill["Custom.Cloud"]).toEqual({
       value: "PROD",
       origin: "admin",
     });
     const raw = await (
-      await req(devCookie, `/projects/${projectId}/form?type=Bug&raw=1`)
+      await request(devCookie, `/projects/${projectId}/form?type=Bug&raw=1`)
     ).json();
     expect(raw.prefill["Custom.Cloud"]).toBeUndefined();
   });
 
   it("puts the team's guidance into the review", () => {
-    const p = reviewPrompt({
+    const prompt = reviewPrompt({
       type: "Bug",
       title: "t",
       fields: [],
@@ -291,7 +295,7 @@ describe("flows config", () => {
       context: [],
       guidance: "Always ask for the MES version.",
     });
-    expect(p).toContain(
+    expect(prompt).toContain(
       "The team that owns this project also asks: Always ask for the MES version.",
     );
   });

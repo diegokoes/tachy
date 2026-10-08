@@ -73,7 +73,7 @@ describe("/az line", () => {
   });
 });
 
-const f = (
+const field = (
   reference_name: string,
   extra: Partial<FieldSpec> = {},
 ): FieldSpec => ({
@@ -85,34 +85,34 @@ const f = (
 
 describe("field layout", () => {
   const fields = [
-    f("System.Title", { required: true }),
-    f("System.State", { required: true }),
-    f("System.CreatedBy", { read_only: true }),
-    f("Microsoft.VSTS.TCM.ReproSteps", { type: "html" }),
-    f("System.Description", { type: "html" }),
-    f("Microsoft.VSTS.Common.Severity", {
+    field("System.Title", { required: true }),
+    field("System.State", { required: true }),
+    field("System.CreatedBy", { read_only: true }),
+    field("Microsoft.VSTS.TCM.ReproSteps", { type: "html" }),
+    field("System.Description", { type: "html" }),
+    field("Microsoft.VSTS.Common.Severity", {
       required: true,
       allowed_values: ["1", "2"],
     }),
-    f("System.AreaPath", { type: "treePath" }),
-    f("Custom.Customer", { required: true }),
-    f("Custom.Notes"),
-    f("System.History", { type: "history" }),
+    field("System.AreaPath", { type: "treePath" }),
+    field("Custom.Customer", { required: true }),
+    field("Custom.Notes"),
+    field("System.History", { type: "history" }),
   ];
 
   it("puts prose first, then the usual fields, then what is required, then the rest", () => {
-    const l = layoutFields(fields);
+    const laid = layoutFields(fields);
     const refs = (xs: FieldSpec[]) => xs.map((x) => x.reference_name);
-    expect(refs(l.body)).toEqual([
+    expect(refs(laid.body)).toEqual([
       "Microsoft.VSTS.TCM.ReproSteps",
       "System.Description",
     ]);
-    expect(refs(l.core)).toEqual([
+    expect(refs(laid.core)).toEqual([
       "System.AreaPath",
       "Microsoft.VSTS.Common.Severity",
     ]);
-    expect(refs(l.required)).toEqual(["Custom.Customer"]);
-    expect(refs(l.more)).toEqual(["Custom.Notes"]);
+    expect(refs(laid.required)).toEqual(["Custom.Customer"]);
+    expect(refs(laid.more)).toEqual(["Custom.Notes"]);
   });
 
   it("counts the title and required fields ADO will not fill", () => {
@@ -197,20 +197,20 @@ describe("arrange", () => {
     ...over,
   });
   const fields = [
-    f("System.Title", { required: true }),
-    f("System.Description", { type: "html" }),
-    f("Microsoft.VSTS.Common.Severity"),
-    f("Microsoft.VSTS.Common.Priority", { default_value: 2 }),
-    f("Microsoft.VSTS.Common.ValueArea", {
+    field("System.Title", { required: true }),
+    field("System.Description", { type: "html" }),
+    field("Microsoft.VSTS.Common.Severity"),
+    field("Microsoft.VSTS.Common.Priority", { default_value: 2 }),
+    field("Microsoft.VSTS.Common.ValueArea", {
       required: true,
       default_value: "Business",
     }),
-    f("Custom.Secret", { required: true }),
-    f("System.State", { required: true }),
+    field("Custom.Secret", { required: true }),
+    field("System.State", { required: true }),
   ];
 
   it("follows ADO's layout and keeps its hidden fields out of the way", () => {
-    const a = arrange(
+    const arranged = arrange(
       form({
         fields,
         layout: {
@@ -221,19 +221,21 @@ describe("arrange", () => {
         },
       }),
     );
-    expect(a.body.map((x) => x.reference_name)).toEqual(["System.Description"]);
-    expect(a.groups).toEqual([
+    expect(arranged.body.map((x) => x.reference_name)).toEqual([
+      "System.Description",
+    ]);
+    expect(arranged.groups).toEqual([
       { label: "Planning", fields: [fields[2]] },
       { label: "also required", fields: [fields[5]] },
     ]);
-    expect(a.hidden.map((x) => x.reference_name)).toEqual([
+    expect(arranged.hidden.map((x) => x.reference_name)).toEqual([
       "Microsoft.VSTS.Common.Priority",
       "Microsoft.VSTS.Common.ValueArea",
     ]);
   });
 
   it("lays the team's choices over the source's form", () => {
-    const a = arrange(
+    const arranged = arrange(
       form({
         fields,
         prefill: { "Custom.Secret": { value: "x", origin: "admin" } },
@@ -260,31 +262,31 @@ describe("arrange", () => {
       }),
     );
     const refs = (xs: FieldSpec[]) => xs.map((x) => x.reference_name);
-    expect(a.groups.map((g) => [g.label, refs(g.fields)])).toEqual([
+    expect(arranged.groups.map((g) => [g.label, refs(g.fields)])).toEqual([
       ["more", ["Microsoft.VSTS.Common.Priority"]],
     ]);
-    expect(refs(a.hidden)).toEqual([
+    expect(refs(arranged.hidden)).toEqual([
       "Microsoft.VSTS.Common.Severity",
       "Custom.Secret",
     ]);
   });
 
   it("keeps a hidden field on screen when nothing would fill it", () => {
-    const a = arrange(
+    const arranged = arrange(
       form({
         fields,
         layout: { body: [], groups: [] },
         display: { show: { "Custom.Secret": "hidden" }, order: [] },
       }),
     );
-    expect(a.groups.at(-1)).toEqual({
+    expect(arranged.groups.at(-1)).toEqual({
       label: "also required",
       fields: [fields[5]],
     });
   });
 
   it("orders fields the team's way", () => {
-    const a = arrange(
+    const arranged = arrange(
       form({
         fields,
         layout: {
@@ -302,16 +304,18 @@ describe("arrange", () => {
         display: { show: {}, order: ["Microsoft.VSTS.Common.Priority"] },
       }),
     );
-    expect(a.groups[0].fields.map((f) => f.reference_name)).toEqual([
+    expect(arranged.groups[0].fields.map((f) => f.reference_name)).toEqual([
       "Microsoft.VSTS.Common.Priority",
       "Microsoft.VSTS.Common.Severity",
     ]);
   });
 
   it("falls back to its own guess when the layout could not be read", () => {
-    const a = arrange(form({ fields }));
-    expect(a.body.map((x) => x.reference_name)).toEqual(["System.Description"]);
-    expect(a.groups[0].fields.map((x) => x.reference_name)).toContain(
+    const arranged = arrange(form({ fields }));
+    expect(arranged.body.map((x) => x.reference_name)).toEqual([
+      "System.Description",
+    ]);
+    expect(arranged.groups[0].fields.map((x) => x.reference_name)).toContain(
       "Microsoft.VSTS.Common.Priority",
     );
   });

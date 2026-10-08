@@ -26,31 +26,32 @@ describe("slash command registry", () => {
   });
 
   it("compact posts by default and keeps the transcript out of the chat", () => {
-    const t = findCommand("compact")!.expand("fd 59577");
-    expect(t).toContain("compact_work_item");
-    expect(t).toContain("leave post_note at its default so it posts");
-    expect(t).toContain("--no-note");
-    expect(t).toContain("Do NOT pass return_turns");
-    expect(t).toMatch(/at most four lines/);
+    const expanded = findCommand("compact")!.expand("fd 59577");
+    expect(expanded).toContain("compact_work_item");
+    expect(expanded).toContain("leave post_note at its default so it posts");
+    expect(expanded).toContain("--no-note");
+    expect(expanded).toContain("Do NOT pass return_turns");
+    expect(expanded).toMatch(/at most four lines/);
   });
 
   it("only /compact carries a write auto-approval", () => {
     expect(commandAutoApprove("compact")).toEqual(["compact_work_item"]);
-    for (const c of BUILTIN_COMMANDS)
-      if (c.name !== "compact") expect(commandAutoApprove(c.name)).toEqual([]);
+    for (const command of BUILTIN_COMMANDS)
+      if (command.name !== "compact")
+        expect(commandAutoApprove(command.name)).toEqual([]);
     expect(commandAutoApprove("save_knowledge_entry")).toEqual([]);
     expect(commandAutoApprove("")).toEqual([]);
   });
 
   // Written by the wiki's gap list, so both arguments name themselves.
   it("wiki-draft names its arguments and falls back to the gap list", () => {
-    const t = findCommand("wiki-draft")!.expand(
+    const expanded = findCommand("wiki-draft")!.expand(
       "tpd component=printing article=spooler-stalls",
     );
-    expect(t).toContain("list_wiki_gaps");
-    expect(t).toContain("article=<slug>");
-    expect(t).toContain("never from general knowledge");
-    expect(t).toContain(
+    expect(expanded).toContain("list_wiki_gaps");
+    expect(expanded).toContain("article=<slug>");
+    expect(expanded).toContain("never from general knowledge");
+    expect(expanded).toContain(
       "User arguments: tpd component=printing article=spooler-stalls",
     );
   });
@@ -100,10 +101,10 @@ describe("slash command registry", () => {
   });
 
   it("/az explain carries its own instructions and the id", () => {
-    const t = findCommand("az")!.expand("explain 4312");
-    expect(t).toContain("fetch_work_item");
-    expect(t).toContain("save nothing");
-    expect(t).toContain("User arguments: 4312");
+    const expanded = findCommand("az")!.expand("explain 4312");
+    expect(expanded).toContain("fetch_work_item");
+    expect(expanded).toContain("save nothing");
+    expect(expanded).toContain("User arguments: 4312");
   });
 
   it("/az with an unknown subcommand lists the real ones", () => {

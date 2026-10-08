@@ -71,22 +71,22 @@ describe("per-turn agent config isolation (cross-user token safety)", () => {
     process.env.TACHY_API_TOKEN = "server-api-token";
     process.env.OIDC_CLIENT_SECRET = "server-oidc-secret";
     try {
-      const cfg = await mcpConfig(
+      const config = await mcpConfig(
         "alice@example.com",
         await effectiveSettings(),
       );
       // The vault key is the one that matters most: with it, and a file read,
       // every stored credential in the deployment is recoverable.
-      expect(cfg.mcpEnv.TACHY_SECRET_KEY).toBeUndefined();
-      expect(cfg.mcpEnv.TACHY_SESSION_SECRET).toBeUndefined();
-      expect(cfg.mcpEnv.TACHY_API_TOKEN).toBeUndefined();
-      expect(cfg.mcpEnv.OIDC_CLIENT_SECRET).toBeUndefined();
+      expect(config.mcpEnv.TACHY_SECRET_KEY).toBeUndefined();
+      expect(config.mcpEnv.TACHY_SESSION_SECRET).toBeUndefined();
+      expect(config.mcpEnv.TACHY_API_TOKEN).toBeUndefined();
+      expect(config.mcpEnv.OIDC_CLIENT_SECRET).toBeUndefined();
       // What it does still need in order to work at all.
-      expect(cfg.mcpEnv.DATABASE_URL).toBe(process.env.DATABASE_URL);
-      expect(cfg.mcpEnv.TACHY_DB_POOL_MAX).toBe("2");
-      expect(cfg.mcpEnv.TACHY_DB_APP_NAME).toBe("tachy-mcp");
-      expect(cfg.mcpEnv.TACHY_EMBED_URL).toBeUndefined();
-      expect(cfg.mcpEnv.NODE_OPTIONS).toBe("--max-old-space-size=256");
+      expect(config.mcpEnv.DATABASE_URL).toBe(process.env.DATABASE_URL);
+      expect(config.mcpEnv.TACHY_DB_POOL_MAX).toBe("2");
+      expect(config.mcpEnv.TACHY_DB_APP_NAME).toBe("tachy-mcp");
+      expect(config.mcpEnv.TACHY_EMBED_URL).toBeUndefined();
+      expect(config.mcpEnv.NODE_OPTIONS).toBe("--max-old-space-size=256");
     } finally {
       delete process.env.TACHY_API_TOKEN;
       delete process.env.OIDC_CLIENT_SECRET;
@@ -119,8 +119,8 @@ describe("per-turn agent config isolation (cross-user token safety)", () => {
       password: "a-long-password",
     });
     void carol;
-    const cfg = await mcpConfig("carol@example.com", settings);
-    expect(cfg.mcpEnv[TOKEN_VAR]).toBeUndefined();
+    const config = await mcpConfig("carol@example.com", settings);
+    expect(config.mcpEnv[TOKEN_VAR]).toBeUndefined();
   });
 
   it("gives each caller their own config dir, so logins and transcripts never mix", async () => {
@@ -325,17 +325,17 @@ describe("server-env credential is the lowest rung (deployment-wide fallback)", 
       secret: "per-boot",
     });
     try {
-      const cfg = await mcpConfig(
+      const config = await mcpConfig(
         "alice@example.com",
         await effectiveSettings(),
       );
-      expect(cfg.mcpEnv.TACHY_EMBED_URL).toBe(
+      expect(config.mcpEnv.TACHY_EMBED_URL).toBe(
         "http://127.0.0.1:8787/internal/embed",
       );
-      expect(cfg.mcpEnv.TACHY_LOG_URL).toBe(
+      expect(config.mcpEnv.TACHY_LOG_URL).toBe(
         "http://127.0.0.1:8787/internal/log",
       );
-      expect(cfg.mcpEnv.TACHY_INTERNAL_SECRET).toBe("per-boot");
+      expect(config.mcpEnv.TACHY_INTERNAL_SECRET).toBe("per-boot");
     } finally {
       setInternalEndpoint(undefined);
     }

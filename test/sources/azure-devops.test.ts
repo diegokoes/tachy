@@ -329,23 +329,23 @@ describe("azure-devops client", () => {
       "/_apis/wiki/wikis": { value: [] },
     });
 
-    const c = client();
-    await c.getConnectionData();
-    await c.listProjects();
-    await c.getWorkItem("42");
-    await c.getWorkItemsBatch([42], ["System.Title"]);
-    await c.getComments("ProjA", "42");
-    await c.queryWorkItemIds("ProjA", "2026-01-01T00:00:00Z", 50);
-    await c.getPullRequest("ProjA", "r1", "77");
-    await c.getCommit("ProjA", "r1", "abc");
-    await c.listWorkItemTypes("ProjA");
-    await c.getTypeFields("ProjA", "Bug");
-    await c.createWorkItem("ProjA", "Bug", []);
-    await c.listWikis("ProjA");
-    await c.listWikis();
-    await c.listWikiPages("ProjA", "w");
-    await c.getWikiPage("ProjA", "w", "/Home/Setup");
-    await c.listRepos("ProjA");
+    const ado = client();
+    await ado.getConnectionData();
+    await ado.listProjects();
+    await ado.getWorkItem("42");
+    await ado.getWorkItemsBatch([42], ["System.Title"]);
+    await ado.getComments("ProjA", "42");
+    await ado.queryWorkItemIds("ProjA", "2026-01-01T00:00:00Z", 50);
+    await ado.getPullRequest("ProjA", "r1", "77");
+    await ado.getCommit("ProjA", "r1", "abc");
+    await ado.listWorkItemTypes("ProjA");
+    await ado.getTypeFields("ProjA", "Bug");
+    await ado.createWorkItem("ProjA", "Bug", []);
+    await ado.listWikis("ProjA");
+    await ado.listWikis();
+    await ado.listWikiPages("ProjA", "w");
+    await ado.getWikiPage("ProjA", "w", "/Home/Setup");
+    await ado.listRepos("ProjA");
 
     expect(calls.length).toBe(16);
     for (const call of calls) {

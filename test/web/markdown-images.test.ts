@@ -11,18 +11,18 @@ describe("images in a rendered body", () => {
   const asset = "/api/library/assets/0b6a8f5e-3c1d-4e2f-9a7b-1c2d3e4f5a6b";
 
   it("keeps the library's own image", () => {
-    const out = renderMarkdown(`![sketch](${asset})`);
-    expect(out).toContain(`<img src="${asset}"`);
-    expect(out).toContain('loading="lazy"');
+    const rendered = renderMarkdown(`![sketch](${asset})`);
+    expect(rendered).toContain(`<img src="${asset}"`);
+    expect(rendered).toContain('loading="lazy"');
   });
 
   it("strips a raw img pointing anywhere else", () => {
-    const out = renderMarkdown(
+    const rendered = renderMarkdown(
       'before <img src="https://example.invalid/t.png?d=x"> after',
     );
-    expect(out).not.toContain("<img");
-    expect(out).toContain("before");
-    expect(out).toContain("after");
+    expect(rendered).not.toContain("<img");
+    expect(rendered).toContain("before");
+    expect(rendered).toContain("after");
   });
 
   it("strips a raw img with no source, or a data: one", () => {

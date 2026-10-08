@@ -21,9 +21,9 @@ describe("service accounts", () => {
       insert into knowledge_entries (status, issue_summary)
       values ('approved', 'printer queue stalls') returning id
     `;
-    for (const u of [person, robot]) {
-      await recordView({ entryId: entry.id }, u.id);
-      await recordToolCall("search_knowledge", false, u.id, {
+    for (const user of [person, robot]) {
+      await recordView({ entryId: entry.id }, user.id);
+      await recordToolCall("search_knowledge", false, user.id, {
         ok: true,
         misuse: false,
       });
@@ -80,10 +80,10 @@ describe("password login under SSO", () => {
       password: "a-long-password",
     });
     const app = createApp({ passwordAuth: true });
-    const res = await app.request(
+    const response = await app.request(
       "/auth/password/login",
       json({ email: "plain@example.com", password: "a-long-password" }),
     );
-    expect(res.status).toBe(200);
+    expect(response.status).toBe(200);
   });
 });

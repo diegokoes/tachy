@@ -32,7 +32,7 @@ describe("following a wikilink", () => {
   it("follows on Enter and on Space, not on any other key", () => {
     navigated.length = 0;
     const links = withTarget("spooler", "/wiki/tpd/spooler");
-    const a = anchorIn(
+    const anchor = anchorIn(
       '<a role="link" tabindex="0" data-wikilink="spooler">x</a>',
     );
 
@@ -42,13 +42,13 @@ describe("following a wikilink", () => {
         bubbles: true,
         cancelable: true,
       });
-      a.dispatchEvent(e);
+      anchor.dispatchEvent(e);
       links.onKeydown(e);
     }
     expect(navigated).toEqual(["/wiki/tpd/spooler", "/wiki/tpd/spooler"]);
 
     const tab = new KeyboardEvent("keydown", { key: "Tab", cancelable: true });
-    Object.defineProperty(tab, "target", { value: a });
+    Object.defineProperty(tab, "target", { value: anchor });
     links.onKeydown(tab);
     expect(navigated).toHaveLength(2);
     expect(tab.defaultPrevented).toBe(false);
@@ -67,7 +67,7 @@ describe("following a wikilink", () => {
   it("does not navigate for a target the server did not resolve", () => {
     navigated.length = 0;
     const links = withTarget("spooler", "/somewhere");
-    const a = anchorIn(
+    const anchor = anchorIn(
       '<a role="link" tabindex="0" data-wikilink="unknown">x</a>',
     );
     const e = new KeyboardEvent("keydown", {
@@ -75,7 +75,7 @@ describe("following a wikilink", () => {
       bubbles: true,
       cancelable: true,
     });
-    a.dispatchEvent(e);
+    anchor.dispatchEvent(e);
     links.onKeydown(e);
     expect(navigated).toEqual([]);
     // Still swallowed, so Space does not scroll the page under the reader.

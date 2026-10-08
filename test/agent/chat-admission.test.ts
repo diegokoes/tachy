@@ -10,12 +10,12 @@ class FakeTurn implements AgentTurn {
   finished = false;
   pendingApprovals = 0;
   oldestPendingApprovalAt = null;
-  private push?: (ev: AgentEvent | null) => void;
+  private push?: (event: AgentEvent | null) => void;
   private backlog: (AgentEvent | null)[] = [];
 
-  emit(ev: AgentEvent | null) {
-    if (this.push) this.push(ev);
-    else this.backlog.push(ev);
+  emit(event: AgentEvent | null) {
+    if (this.push) this.push(event);
+    else this.backlog.push(event);
   }
   finish() {
     this.finished = true;
@@ -27,16 +27,16 @@ class FakeTurn implements AgentTurn {
   }
   async *events(): AsyncGenerator<AgentEvent> {
     for (;;) {
-      const ev =
+      const event =
         this.backlog.shift() ??
-        (await new Promise<AgentEvent | null>((r) => {
+        (await new Promise<AgentEvent | null>((resolve) => {
           this.push = (e) => {
             this.push = undefined;
-            r(e);
+            resolve(e);
           };
         }));
-      if (ev === null) return;
-      yield ev;
+      if (event === null) return;
+      yield event;
     }
   }
 }
@@ -45,9 +45,9 @@ const started: FakeTurn[] = [];
 vi.mock("@tachy/agent", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tachy/agent")>()),
   startTurn: () => {
-    const t = new FakeTurn();
-    started.push(t);
-    return t;
+    const turn = new FakeTurn();
+    started.push(turn);
+    return turn;
   },
 }));
 
@@ -57,41 +57,41 @@ const app = createApp({ passwordAuth: true });
 const cookies: Record<string, string> = {};
 
 async function chat(who: string) {
-  const res = await app.request("/api/agent/chat", {
+  const response = await app.request("/api/agent/chat", {
     ...json({ message: "hi" }),
     headers: { "Content-Type": "application/json", Cookie: cookies[who] },
   });
-  return res;
+  return response;
 }
 
 /** Reads SSE frames until `until` matches one, and returns them all. */
 async function framesUntil(
-  res: Response,
+  response: Response,
   until: (event: string) => boolean,
 ): Promise<{ event: string; data: any }[]> {
-  const reader = res.body!.getReader();
+  const reader = response.body!.getReader();
   const dec = new TextDecoder();
-  const out: { event: string; data: any }[] = [];
-  let buf = "";
+  const frames: { event: string; data: any }[] = [];
+  let buffer = "";
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    buf += dec.decode(value, { stream: true });
+    buffer += dec.decode(value, { stream: true });
     let i;
-    while ((i = buf.indexOf("\n\n")) >= 0) {
-      const raw = buf.slice(0, i);
-      buf = buf.slice(i + 2);
+    while ((i = buffer.indexOf("\n\n")) >= 0) {
+      const raw = buffer.slice(0, i);
+      buffer = buffer.slice(i + 2);
       const event = /event: (.*)/.exec(raw)?.[1];
       const data = /data: (.*)/.exec(raw)?.[1];
       if (!event) continue;
-      out.push({ event, data: data ? JSON.parse(data) : null });
+      frames.push({ event, data: data ? JSON.parse(data) : null });
       if (until(event)) {
         reader.releaseLock();
-        return out;
+        return frames;
       }
     }
   }
-  return out;
+  return frames;
 }
 
 const post = (who: string, path: string, body: unknown) =>

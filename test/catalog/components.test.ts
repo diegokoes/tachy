@@ -124,8 +124,8 @@ describe("components", () => {
       docs: 0,
     });
 
-    const res = await renameComponent(tpd, "lc", "line-controller");
-    expect(res).toMatchObject({
+    const renamed = await renameComponent(tpd, "lc", "line-controller");
+    expect(renamed).toMatchObject({
       renamed: true,
       from: "lc",
       to: "line-controller",
@@ -135,12 +135,12 @@ describe("components", () => {
     expect((await listComponents(tpd)).map((c) => c.slug)).toEqual([
       "line-controller",
     ]);
-    const [t] =
+    const [taggedRow] =
       await sql`select tags from knowledge_entries where id = ${tagged.id}`;
-    expect(t.tags).toEqual(["line-controller", "printing"]);
-    const [u] =
+    expect(taggedRow.tags).toEqual(["line-controller", "printing"]);
+    const [untaggedRow] =
       await sql`select tags from knowledge_entries where id = ${untagged.id}`;
-    expect(u.tags).toEqual(["printing"]);
+    expect(untaggedRow.tags).toEqual(["printing"]);
   });
 
   it("refuses to rename onto an existing component slug in the same product", async () => {

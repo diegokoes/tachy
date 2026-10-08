@@ -36,16 +36,16 @@ describe("customers", () => {
   });
 
   it("resolves by email domain, including a partner who fronts for them", async () => {
-    const c = await addCustomer({
+    const customer = await addCustomer({
       name: "Davidoff",
       slug: "davidoff",
       emailDomains: ["davidoff.com", "arvato.com"],
     });
     expect((await resolveCustomerByEmail("user@davidoff.com")).customerId).toBe(
-      c.id,
+      customer.id,
     );
     expect((await resolveCustomerByEmail("agent@arvato.com")).customerId).toBe(
-      c.id,
+      customer.id,
     );
     expect(
       (await resolveCustomerByEmail("user@unrelated.com")).customerId,
@@ -54,14 +54,14 @@ describe("customers", () => {
   });
 
   it("normalizes domains, so '@Foo.COM' and 'foo.com' are the same rule", async () => {
-    const c = await addCustomer({
+    const customer = await addCustomer({
       name: "Logista",
       slug: "logista",
       emailDomains: [" @TabacaleraCigar.com "],
     });
     expect(
       (await resolveCustomerByEmail("Javier@TABACALERACIGAR.com")).customerId,
-    ).toBe(c.id);
+    ).toBe(customer.id);
   });
 
   it("a name alias is not an email domain", async () => {
@@ -93,9 +93,9 @@ describe("customers", () => {
   });
 
   it("still resolves a customer whose slug is its domain", async () => {
-    const c = await addCustomer({ name: "Acme", slug: "acme.com" });
+    const customer = await addCustomer({ name: "Acme", slug: "acme.com" });
     expect((await resolveCustomerByEmail("bob@acme.com")).customerId).toBe(
-      c.id,
+      customer.id,
     );
   });
 
@@ -138,8 +138,8 @@ describe("customers", () => {
   });
 
   it("getCustomerName resolves a name, and is null-safe", async () => {
-    const c = await addCustomer({ name: "Davidoff", slug: "davidoff" });
-    expect(await getCustomerName(c.id)).toBe("Davidoff");
+    const customer = await addCustomer({ name: "Davidoff", slug: "davidoff" });
+    expect(await getCustomerName(customer.id)).toBe("Davidoff");
     expect(await getCustomerName(null)).toBeNull();
   });
 });
@@ -242,15 +242,15 @@ describe("customer resolution by slug or alias", () => {
   beforeEach(resetData);
 
   it("resolves an alias to the customer, case-insensitively", async () => {
-    const c = await addCustomer({
+    const customer = await addCustomer({
       name: "Imperial Brands",
       slug: "itg",
       aliases: ["Altadis", "Imperial Tobacco"],
     });
-    expect((await resolveCustomer("itg")).id).toBe(c.id);
-    expect((await resolveCustomer("altadis")).id).toBe(c.id);
-    expect((await resolveCustomer("IMPERIAL TOBACCO")).id).toBe(c.id);
-    expect(await getCustomerIdBySlug("Altadis")).toBe(c.id);
+    expect((await resolveCustomer("itg")).id).toBe(customer.id);
+    expect((await resolveCustomer("altadis")).id).toBe(customer.id);
+    expect((await resolveCustomer("IMPERIAL TOBACCO")).id).toBe(customer.id);
+    expect(await getCustomerIdBySlug("Altadis")).toBe(customer.id);
   });
 
   it("prefers an exact slug over another customer's alias for the same string", async () => {

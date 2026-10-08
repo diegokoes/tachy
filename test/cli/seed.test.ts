@@ -51,12 +51,12 @@ describe("seed", () => {
     const bookkeeping = new Set(["schema_meta", "chat_uploads", "test_runs"]);
     // Worker processes write themselves; a seeded one would show as a dead worker.
     const live = new Set(["job_workers"]);
-    for (const t of await tables()) {
-      if (bookkeeping.has(t) || live.has(t)) continue;
+    for (const table of await tables()) {
+      if (bookkeeping.has(table) || live.has(table)) continue;
       const [{ n }] = await sql.unsafe<{ n: string }[]>(
-        `select count(*)::text as n from ${t}`,
+        `select count(*)::text as n from ${table}`,
       );
-      if (n === "0") empty.push(t);
+      if (n === "0") empty.push(table);
     }
     expect(empty).toEqual([]);
   });
@@ -116,9 +116,9 @@ describe("seed", () => {
   it("seeds an admin who can reach admin-only routes", async () => {
     const app = createApp({ passwordAuth: true });
     const cookie = await loginCookie(app, ADMIN_EMAIL, DEV_PASSWORD);
-    const res = await app.request("/api/system", {
+    const response = await app.request("/api/system", {
       headers: { Cookie: cookie },
     });
-    expect(res.status).toBe(200);
+    expect(response.status).toBe(200);
   });
 });

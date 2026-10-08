@@ -37,18 +37,18 @@ const ORG = "https://dev.azure.com/ctxorg";
 let client: Client;
 
 async function call(name: string, args: Record<string, unknown> = {}) {
-  const res = (await client.callTool({ name, arguments: args })) as {
+  const answer = (await client.callTool({ name, arguments: args })) as {
     content: { type: string; text: string }[];
     isError?: boolean;
   };
-  const text = res.content[0]?.text ?? "";
+  const text = answer.content[0]?.text ?? "";
   let json: unknown;
   try {
     json = JSON.parse(text);
   } catch {
     json = undefined;
   }
-  return { isError: res.isError === true, text, json: json as never };
+  return { isError: answer.isError === true, text, json: json as never };
 }
 
 const ticket = (over: Partial<RawWorkItem> = {}): RawWorkItem => ({
@@ -89,12 +89,12 @@ registerSource("fake-ctx", () => ({
 
 const fetchTicket = async (item: RawWorkItem) => {
   served = item;
-  const res = await call("fetch_work_item", {
+  const answer = await call("fetch_work_item", {
     source: "fake-ctx-conn",
     external_id: item.externalId,
   });
-  expect(res.isError).toBe(false);
-  return res.json as Record<string, any>;
+  expect(answer.isError).toBe(false);
+  return answer.json as Record<string, any>;
 };
 
 beforeAll(async () => {
@@ -104,9 +104,13 @@ beforeAll(async () => {
     slug: "fake-ctx-conn",
     baseUrl: "https://example.invalid",
   });
-  const [a, b] = InMemoryTransport.createLinkedPair();
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
   client = new Client({ name: "test", version: "0" });
-  await Promise.all([server.connect(b), client.connect(a)]);
+  await Promise.all([
+    server.connect(serverTransport),
+    client.connect(clientTransport),
+  ]);
 });
 
 beforeEach(resetData);
@@ -128,9 +132,9 @@ describe("capTurns", () => {
   });
 
   it("skips a turn that does not fit and keeps the readable ones after it", () => {
-    const res = capTurns([turn(3), turn(50), turn(4)], 10);
-    expect(res.turns).toEqual([turn(3), turn(4)]);
-    expect(res.turns_truncated).toEqual({ shown: 2, of: 3 });
+    const capped = capTurns([turn(3), turn(50), turn(4)], 10);
+    expect(capped.turns).toEqual([turn(3), turn(4)]);
+    expect(capped.turns_truncated).toEqual({ shown: 2, of: 3 });
   });
 });
 

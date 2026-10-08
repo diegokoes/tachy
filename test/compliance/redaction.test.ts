@@ -21,17 +21,17 @@ import { createGithubSource } from "@tachy/source-github";
 describe("scrubText", () => {
   it("tokenizes emails and phones with stable, repeated tokens", () => {
     const map = new TokenMap();
-    const out = scrubText(
+    const scrubbed = scrubText(
       "reach me at a@b.com or a@b.com, call +1 (555) 123-4567",
       map,
     );
-    expect(out).toBe("reach me at [EMAIL_1] or [EMAIL_1], call [PHONE_1]");
+    expect(scrubbed).toBe("reach me at [EMAIL_1] or [EMAIL_1], call [PHONE_1]");
   });
 
   it("keeps bare digit groups, which in a ticket are identifiers not phones", () => {
     const map = new TokenMap();
-    const out = scrubText("UID 040 5900 1234 failed to lock", map);
-    expect(out).toBe("UID 040 5900 1234 failed to lock");
+    const scrubbed = scrubText("UID 040 5900 1234 failed to lock", map);
+    expect(scrubbed).toBe("UID 040 5900 1234 failed to lock");
   });
 
   it("still takes a bare group when a word announces it as a phone", () => {
@@ -51,20 +51,22 @@ describe("scrubText", () => {
 
   it("does not mangle ISO dates or short status codes", () => {
     const map = new TokenMap();
-    const out = scrubText(
+    const scrubbed = scrubText(
       "created 2015-08-24, error HTTP 503 seen on 2026-01-02",
       map,
     );
-    expect(out).toBe("created 2015-08-24, error HTTP 503 seen on 2026-01-02");
+    expect(scrubbed).toBe(
+      "created 2015-08-24, error HTTP 503 seen on 2026-01-02",
+    );
   });
 
   it("tokenizes credential assignments but keeps the key as a searchable signal", () => {
     const map = new TokenMap();
-    const out = scrubText(
+    const scrubbed = scrubText(
       'set password=hunter2 and api_key: "abc-123" in the config',
       map,
     );
-    expect(out).toBe(
+    expect(scrubbed).toBe(
       "set password=[SECRET_1] and api_key: [SECRET_2] in the config",
     );
   });
@@ -112,12 +114,14 @@ describe("scrubText", () => {
 describe("scrubKnownNames", () => {
   it("tokenizes declared names case-insensitively at word boundaries only", () => {
     const map = new TokenMap();
-    const out = scrubKnownNames(
+    const scrubbed = scrubKnownNames(
       "Hi, this is jane doe. The Announcement is by Ann.",
       ["Jane Doe", "Ann"],
       map,
     );
-    expect(out).toBe("Hi, this is [USER_1]. The Announcement is by [USER_2].");
+    expect(scrubbed).toBe(
+      "Hi, this is [USER_1]. The Announcement is by [USER_2].",
+    );
   });
 
   it("skips empty and too-short names", () => {
@@ -178,13 +182,15 @@ describe("scrubDeep", () => {
       created_at: created,
       structured: { conversation_summary: "call from ops@acme.com" },
     };
-    const out = scrubDeep(row, map);
-    expect(out.issue_summary).toBe("mail [EMAIL_1]");
-    expect(out.signals[0]).toBe("token=[SECRET_1]");
-    expect(out.signals[1]).toBe("HTTP 503");
-    expect(out.version).toBe(3);
-    expect(out.created_at).toBe(created);
-    expect(out.structured.conversation_summary).toBe("call from [EMAIL_1]");
+    const scrubbed = scrubDeep(row, map);
+    expect(scrubbed.issue_summary).toBe("mail [EMAIL_1]");
+    expect(scrubbed.signals[0]).toBe("token=[SECRET_1]");
+    expect(scrubbed.signals[1]).toBe("HTTP 503");
+    expect(scrubbed.version).toBe(3);
+    expect(scrubbed.created_at).toBe(created);
+    expect(scrubbed.structured.conversation_summary).toBe(
+      "call from [EMAIL_1]",
+    );
     expect(row.issue_summary).toBe("mail ops@acme.com");
   });
 });
@@ -209,21 +215,21 @@ describe("redactNormalized", () => {
 
   it("slugs the requester, drops the email, scrubs text, tokenizes authors", () => {
     const map = new TokenMap();
-    const r = redactNormalized(base, { customerSlug: "acme-corp", map });
-    expect(r.requester).toBe("acme-corp");
-    expect(r.requesterEmail).toBeUndefined();
-    expect(r.title).toBe("email [EMAIL_1] about login");
-    expect(r.messages[0].bodyText).toBe("hi from [EMAIL_1]");
-    expect(r.messages[0].author).toBe("[USER_1]");
+    const redacted = redactNormalized(base, { customerSlug: "acme-corp", map });
+    expect(redacted.requester).toBe("acme-corp");
+    expect(redacted.requesterEmail).toBeUndefined();
+    expect(redacted.title).toBe("email [EMAIL_1] about login");
+    expect(redacted.messages[0].bodyText).toBe("hi from [EMAIL_1]");
+    expect(redacted.messages[0].author).toBe("[USER_1]");
   });
 
   it("falls back to [CUSTOMER] with no slug and never mutates the input", () => {
     const snapshot = structuredClone(base);
-    const r = redactNormalized(base, {
+    const redacted = redactNormalized(base, {
       customerSlug: null,
       map: new TokenMap(),
     });
-    expect(r.requester).toBe("[CUSTOMER]");
+    expect(redacted.requester).toBe("[CUSTOMER]");
     expect(base).toEqual(snapshot);
   });
 });
@@ -260,20 +266,20 @@ describe("freshdesk redactRaw", () => {
       status: 2,
     };
     const snapshot = structuredClone(raw);
-    const out = redact(raw, new TokenMap(), "acme-corp") as any;
+    const redacted = redact(raw, new TokenMap(), "acme-corp") as any;
 
-    expect(out.email).toMatch(/^\[EMAIL_\d+\]$/);
-    expect(out.name).toBe("acme-corp");
-    expect(out.phone).toMatch(/^\[PHONE_\d+\]$/);
-    expect(out.cc_emails[0]).toMatch(/^\[EMAIL_\d+\]$/);
-    expect(out.to_emails[0]).toMatch(/^\[EMAIL_\d+\]$/);
-    expect(out.twitter_id).toMatch(/^\[HANDLE_\d+\]$/);
-    expect(out.description_text).toBe("reach me at [EMAIL_1]");
-    expect(out.requester.name).toBe("acme-corp");
-    expect(out.requester.email).toMatch(/^\[EMAIL_\d+\]$/);
-    expect(out.custom_fields.cf_devops_work_item).toBe("DevOps#158327");
-    expect(out.custom_fields.cf_note).toMatch(/^ping \[EMAIL_\d+\]$/);
-    expect(out.status).toBe(2);
+    expect(redacted.email).toMatch(/^\[EMAIL_\d+\]$/);
+    expect(redacted.name).toBe("acme-corp");
+    expect(redacted.phone).toMatch(/^\[PHONE_\d+\]$/);
+    expect(redacted.cc_emails[0]).toMatch(/^\[EMAIL_\d+\]$/);
+    expect(redacted.to_emails[0]).toMatch(/^\[EMAIL_\d+\]$/);
+    expect(redacted.twitter_id).toMatch(/^\[HANDLE_\d+\]$/);
+    expect(redacted.description_text).toBe("reach me at [EMAIL_1]");
+    expect(redacted.requester.name).toBe("acme-corp");
+    expect(redacted.requester.email).toMatch(/^\[EMAIL_\d+\]$/);
+    expect(redacted.custom_fields.cf_devops_work_item).toBe("DevOps#158327");
+    expect(redacted.custom_fields.cf_note).toMatch(/^ping \[EMAIL_\d+\]$/);
+    expect(redacted.status).toBe(2);
     expect(raw).toEqual(snapshot);
   });
 });
@@ -292,10 +298,10 @@ describe("github redactRaw", () => {
       body: "email alice@corp.com",
       user: { login: "alice", email: "alice@corp.com" },
     };
-    const out = redact(raw, new TokenMap(), null) as any;
-    expect(out.user.login).toMatch(/^\[USER_\d+\]$/);
-    expect(out.user.email).toMatch(/^\[EMAIL_\d+\]$/);
-    expect(out.body).toBe("email [EMAIL_1]");
+    const redacted = redact(raw, new TokenMap(), null) as any;
+    expect(redacted.user.login).toMatch(/^\[USER_\d+\]$/);
+    expect(redacted.user.email).toMatch(/^\[EMAIL_\d+\]$/);
+    expect(redacted.body).toBe("email [EMAIL_1]");
   });
 });
 
@@ -322,11 +328,11 @@ describe("redactForLlm", () => {
         },
       ],
     };
-    const out = redactForLlm(item, redactRaw, "acme-corp");
-    expect(out.requester).toBe("acme-corp");
-    expect(out.requesterEmail).toBeUndefined();
-    expect((out.raw as any).email).toMatch(/^\[EMAIL_\d+\]$/);
-    expect((out.raw as any).name).toBe("acme-corp");
+    const redacted = redactForLlm(item, redactRaw, "acme-corp");
+    expect(redacted.requester).toBe("acme-corp");
+    expect(redacted.requesterEmail).toBeUndefined();
+    expect((redacted.raw as any).email).toMatch(/^\[EMAIL_\d+\]$/);
+    expect((redacted.raw as any).name).toBe("acme-corp");
   });
 
   it("drops the raw payload when the source has no redactRaw hook", () => {
@@ -337,8 +343,8 @@ describe("redactForLlm", () => {
       raw: { secret: "pii" },
       messages: [],
     };
-    const out = redactForLlm(item, undefined, null);
-    expect(out.raw).toEqual({});
+    const redacted = redactForLlm(item, undefined, null);
+    expect(redacted.raw).toEqual({});
   });
 });
 
@@ -388,14 +394,16 @@ describe("redactNormalized name scrubbing", () => {
         },
       ],
     };
-    const r = redactNormalized(item, {
+    const redacted = redactNormalized(item, {
       customerSlug: "acme-corp",
       map: new TokenMap(),
     });
-    expect(r.title).not.toMatch(/Jane/);
-    expect(r.messages[0].bodyText).not.toMatch(/Jane/);
+    expect(redacted.title).not.toMatch(/Jane/);
+    expect(redacted.messages[0].bodyText).not.toMatch(/Jane/);
 
-    expect(r.messages[0].bodyText).toContain(r.messages[0].author);
+    expect(redacted.messages[0].bodyText).toContain(
+      redacted.messages[0].author,
+    );
   });
 });
 

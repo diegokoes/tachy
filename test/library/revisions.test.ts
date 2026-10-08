@@ -26,31 +26,31 @@ describe("library revisions", () => {
   beforeEach(resetData);
 
   it("seeds revision 1 when an entry is created", async () => {
-    const e = await entry();
-    const revs = await listRevisions({ entryId: e.id });
+    const saved = await entry();
+    const revs = await listRevisions({ entryId: saved.id });
     expect(revs).toHaveLength(1);
     expect(revs[0].version).toBe(1);
     expect(revs[0].changed_fields).toEqual([]);
-    const { snapshot } = await getRevision({ entryId: e.id }, 1);
+    const { snapshot } = await getRevision({ entryId: saved.id }, 1);
     expect(snapshot.issue_summary).toBe("printer stalls at 023");
   });
 
   it("records one revision per update, naming what changed", async () => {
-    const e = await entry();
+    const saved = await entry();
     await updateKnowledgeEntry(
-      e.id,
+      saved.id,
       { resolution: "restart the print service" },
       { actor: "web", userId: null },
     );
-    const revs = await listRevisions({ entryId: e.id });
+    const revs = await listRevisions({ entryId: saved.id });
     expect(revs.map((r) => r.version)).toEqual([2, 1]);
     expect(revs[0].changed_fields).toEqual(["resolution"]);
     expect(revs[0].actor).toBe("web");
   });
 
   it("keeps the snapshot free of the embedding - the reason this is cheap", async () => {
-    const e = await entry();
-    const { snapshot } = await getRevision({ entryId: e.id }, 1);
+    const saved = await entry();
+    const { snapshot } = await getRevision({ entryId: saved.id }, 1);
     expect(snapshot).not.toHaveProperty("embedding");
     expect(Object.keys(snapshot).some((k) => k.startsWith("search_"))).toBe(
       false,
@@ -58,92 +58,92 @@ describe("library revisions", () => {
   });
 
   it("writes NO revision when the optimistic lock rejects the update", async () => {
-    const e = await entry();
+    const saved = await entry();
     await expect(
-      updateKnowledgeEntry(e.id, {
+      updateKnowledgeEntry(saved.id, {
         resolution: "nope",
         expectedVersion: 99,
       }),
     ).rejects.toThrow(/Version conflict/);
-    const revs = await listRevisions({ entryId: e.id });
+    const revs = await listRevisions({ entryId: saved.id });
     expect(revs).toHaveLength(1);
   });
 
   it("attributes an agent edit to the human whose turn made it, and to the turn", async () => {
-    const u = await createUser({ email: "dev@example.com", role: "member" });
-    const e = await entry();
+    const user = await createUser({ email: "dev@example.com", role: "member" });
+    const saved = await entry();
     await updateKnowledgeEntry(
-      e.id,
+      saved.id,
       { rootCause: "spooler deadlock" },
-      { actor: "agent", userId: u.id, turnId: "turn-abc" },
+      { actor: "agent", userId: user.id, turnId: "turn-abc" },
     );
-    const [latest] = await listRevisions({ entryId: e.id });
+    const [latest] = await listRevisions({ entryId: saved.id });
     expect(latest.actor).toBe("agent");
-    expect(latest.user_id).toBe(u.id);
+    expect(latest.user_id).toBe(user.id);
     expect(latest.turn_id).toBe("turn-abc");
     expect(latest.user_email).toBe("dev@example.com");
   });
 
   it("distinguishes the same person editing through two different doors", async () => {
-    const u = await createUser({ email: "sam@example.com", role: "member" });
-    const e = await entry();
+    const user = await createUser({ email: "sam@example.com", role: "member" });
+    const saved = await entry();
     await updateKnowledgeEntry(
-      e.id,
+      saved.id,
       { resolution: "a" },
-      { actor: "web", userId: u.id },
+      { actor: "web", userId: user.id },
     );
     await updateKnowledgeEntry(
-      e.id,
+      saved.id,
       { resolution: "b" },
-      { actor: "agent", userId: u.id, turnId: "t1" },
+      { actor: "agent", userId: user.id, turnId: "t1" },
     );
-    const revs = await listRevisions({ entryId: e.id });
+    const revs = await listRevisions({ entryId: saved.id });
     expect(revs.map((r) => r.actor)).toEqual(["agent", "web", "api"]);
     expect(new Set(revs.slice(0, 2).map((r) => r.user_id))).toEqual(
-      new Set([u.id]),
+      new Set([user.id]),
     );
   });
 
   it("reverts by making a new edit, never by rewriting history", async () => {
-    const e = await entry();
-    await updateKnowledgeEntry(e.id, { resolution: "wrong turn" });
-    await updateKnowledgeEntry(e.id, { resolution: "worse turn" });
+    const saved = await entry();
+    await updateKnowledgeEntry(saved.id, { resolution: "wrong turn" });
+    await updateKnowledgeEntry(saved.id, { resolution: "worse turn" });
 
-    const reverted = await revertKnowledgeEntry(e.id, 1, {
+    const reverted = await revertKnowledgeEntry(saved.id, 1, {
       actor: "web",
       userId: null,
     });
     expect(reverted.version).toBe(4);
 
-    const live = await getKnowledgeEntry(e.id);
+    const live = await getKnowledgeEntry(saved.id);
     expect(live.resolution).toBe("restart the spooler");
 
-    const revs = await listRevisions({ entryId: e.id });
+    const revs = await listRevisions({ entryId: saved.id });
     expect(revs.map((r) => r.version)).toEqual([4, 3, 2, 1]);
     // The bad versions are still there - reverting hides nothing.
-    expect((await getRevision({ entryId: e.id }, 3)).snapshot.resolution).toBe(
-      "worse turn",
-    );
+    expect(
+      (await getRevision({ entryId: saved.id }, 3)).snapshot.resolution,
+    ).toBe("worse turn");
   });
 
   it("goes away with the entry", async () => {
-    const e = await entry();
-    await sql`delete from knowledge_entries where id = ${e.id}`;
-    expect(await listRevisions({ entryId: e.id })).toHaveLength(0);
+    const saved = await entry();
+    await sql`delete from knowledge_entries where id = ${saved.id}`;
+    expect(await listRevisions({ entryId: saved.id })).toHaveLength(0);
   });
 
   it("versions reference docs the same way", async () => {
-    const d = await saveReferenceDoc({
+    const doc = await saveReferenceDoc({
       productId: await tpdProductId(),
       title: "Spooler runbook",
       body: "step one",
     });
     await updateReferenceDoc(
-      d.id,
+      doc.id,
       { body: "step one\n\nstep two" },
       { actor: "mcp", userId: null },
     );
-    const revs = await listRevisions({ docId: d.id });
+    const revs = await listRevisions({ docId: doc.id });
     expect(revs.map((r) => r.version)).toEqual([2, 1]);
     expect(revs[0].actor).toBe("mcp");
     expect(revs[0].changed_fields).toEqual(["body"]);

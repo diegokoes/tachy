@@ -166,15 +166,15 @@ describe("the fact resolution ladder", () => {
     await fact("layout-3", "coding_mode", "LAYOUT");
     await fact("tlc191", "coding_mode", "LINE");
 
-    const f = byKind(
+    const facts = byKind(
       await resolveUnitFacts(
         (await resolveUnit(await getCustomerIdBySlug("itg"), "tlc191")).id,
       ),
       "coding_mode",
     );
-    expect(f.value).toBe("LINE");
-    expect(f.origin_slug).toBe("tlc191");
-    expect(f.inherited).toBe(false);
+    expect(facts.value).toBe("LINE");
+    expect(facts.origin_slug).toBe("tlc191");
+    expect(facts.inherited).toBe(false);
   });
 
   // Why profile_id exists: a template beats the place.
@@ -184,14 +184,14 @@ describe("the fact resolution ladder", () => {
     await fact("cantabria", "coding_mode", "SITE");
     await fact("layout-3", "coding_mode", "LAYOUT");
 
-    const f = byKind(
+    const facts = byKind(
       await resolveUnitFacts((await resolveUnit(customerId, "tlc191")).id),
       "coding_mode",
     );
-    expect(f.value).toBe("LAYOUT");
-    expect(f.origin_slug).toBe("layout-3");
-    expect(f.origin_kind).toBe("layout");
-    expect(f.inherited).toBe(true);
+    expect(facts.value).toBe("LAYOUT");
+    expect(facts.origin_slug).toBe("layout-3");
+    expect(facts.origin_kind).toBe("layout");
+    expect(facts.inherited).toBe(true);
   });
 
   it("falls through the parent to the customer", async () => {
@@ -219,11 +219,11 @@ describe("the fact resolution ladder", () => {
     await fact("cantabria", "coding_mode", "SITE");
 
     // tpc141 has no profile, so the layout's fact must not reach it.
-    const f = byKind(
+    const facts = byKind(
       await resolveUnitFacts((await resolveUnit(customerId, "tpc141")).id),
       "coding_mode",
     );
-    expect(f.value).toBe("SITE");
+    expect(facts.value).toBe("SITE");
   });
 
   it("does not leak a sibling's facts", async () => {

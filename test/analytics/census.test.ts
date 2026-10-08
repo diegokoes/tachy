@@ -71,11 +71,11 @@ describe("the admin census", () => {
       await addLabel(tpd, "with-words", "what this label means");
       await addResolutionPattern("configured", "the setting was wrong");
 
-      const c = await catalogCensus();
-      expect(c.components_no_description).toBe(1);
-      expect(c.labels_no_description).toBe(1);
-      expect(c.patterns).toBe(1);
-      expect(c.patterns_no_description).toBe(0);
+      const census = await catalogCensus();
+      expect(census.components_no_description).toBe(1);
+      expect(census.labels_no_description).toBe(1);
+      expect(census.patterns).toBe(1);
+      expect(census.patterns_no_description).toBe(0);
     });
 
     it("counts a customer with no email domain - nothing resolves to them", async () => {
@@ -86,9 +86,9 @@ describe("the admin census", () => {
         emailDomains: ["known.example"],
       });
 
-      const c = await catalogCensus();
-      expect(c.customers).toBe(2);
-      expect(c.customers_no_domains).toBe(1);
+      const census = await catalogCensus();
+      expect(census.customers).toBe(2);
+      expect(census.customers_no_domains).toBe(1);
     });
 
     it("reports every product in the per-product tally, empty ones included", async () => {
@@ -101,24 +101,24 @@ describe("the admin census", () => {
         parentSlug: "engine",
       });
 
-      const c = await catalogCensus();
-      const mine = c.components_by_product.find((p) => p.slug === "tpd");
+      const census = await catalogCensus();
+      const mine = census.components_by_product.find((p) => p.slug === "tpd");
       expect(mine?.n).toBe(2);
       // Products with nothing under them are the point of the chart, so they
       // must still be rows in it - the left join, not an inner one.
-      expect(c.components_by_product.length).toBe(c.products);
-      const summed = c.components_by_product.reduce((n, p) => n + p.n, 0);
-      expect(summed).toBe(c.components);
+      expect(census.components_by_product.length).toBe(census.products);
+      const summed = census.components_by_product.reduce((n, p) => n + p.n, 0);
+      expect(summed).toBe(census.components);
     });
   });
 
   describe("sources", () => {
     it("splits projects by role and finds the ones with no wiki", async () => {
-      const s = await sourceCensus();
-      expect(s.with_product).toBe(1);
-      expect(s.without_product).toBe(0);
-      expect(s.projects_no_wiki).toBe(1);
-      expect(s.projects_for_customer).toBe(0);
+      const census = await sourceCensus();
+      expect(census.with_product).toBe(1);
+      expect(census.without_product).toBe(0);
+      expect(census.projects_no_wiki).toBe(1);
+      expect(census.projects_for_customer).toBe(0);
     });
 
     it("stops counting a project once it has a wiki", async () => {
@@ -141,17 +141,17 @@ describe("the admin census", () => {
     });
 
     it("groups connections by kind", async () => {
-      const s = await sourceCensus();
-      expect(s.by_type.freshdesk).toBeGreaterThanOrEqual(1);
-      const grouped = Object.values(s.by_type).reduce((n, v) => n + v, 0);
-      expect(grouped).toBe(s.connections);
+      const census = await sourceCensus();
+      expect(census.by_type.freshdesk).toBeGreaterThanOrEqual(1);
+      const grouped = Object.values(census.by_type).reduce((n, v) => n + v, 0);
+      expect(grouped).toBe(census.connections);
     });
   });
 
   describe("repos", () => {
     it("is all zeroes and no oldest index when nothing is linked", async () => {
-      const r = await repoCensus();
-      expect(r).toMatchObject({
+      const census = await repoCensus();
+      expect(census).toMatchObject({
         repos: 0,
         ready: 0,
         working: 0,
@@ -161,7 +161,7 @@ describe("the admin census", () => {
         chunks: 0,
         never_indexed: 0,
       });
-      expect(r.oldest_indexed_at).toBeNull();
+      expect(census.oldest_indexed_at).toBeNull();
     });
 
     it("splits by index status and sums what is searchable", async () => {
@@ -185,18 +185,18 @@ describe("the admin census", () => {
         where repo_id = (select id from repos where slug = 'seed-broken')
       `;
 
-      const r = await repoCensus();
-      expect(r.repos).toBe(2);
-      expect(r.ready).toBe(1);
-      expect(r.failing).toBe(1);
-      expect(r.idle).toBe(0);
-      expect(r.files).toBe(10);
-      expect(r.chunks).toBe(40);
+      const census = await repoCensus();
+      expect(census.repos).toBe(2);
+      expect(census.ready).toBe(1);
+      expect(census.failing).toBe(1);
+      expect(census.idle).toBe(0);
+      expect(census.files).toBe(10);
+      expect(census.chunks).toBe(40);
       // The one that never indexed is the broken one.
-      expect(r.never_indexed).toBe(1);
-      expect(r.no_component).toBe(2);
-      expect(r.no_project).toBe(2);
-      expect(r.oldest_indexed_at).toBeInstanceOf(Date);
+      expect(census.never_indexed).toBe(1);
+      expect(census.no_component).toBe(2);
+      expect(census.no_project).toBe(2);
+      expect(census.oldest_indexed_at).toBeInstanceOf(Date);
 
       // The same conditions by name, for the issues list - a failing repo is
       // not also listed as never indexed.
@@ -215,13 +215,13 @@ describe("the admin census", () => {
 
   describe("knowledge", () => {
     it("is empty before anything is written", async () => {
-      const k = await knowledgeCensus();
-      expect(k).toMatchObject({
+      const census = await knowledgeCensus();
+      expect(census).toMatchObject({
         entries: 0,
         entries_no_component: 0,
         entries_no_product: 0,
       });
-      expect(k.by_status).toEqual({});
+      expect(census.by_status).toEqual({});
     });
 
     it("splits by status and counts what the tree does not describe", async () => {
@@ -237,12 +237,12 @@ describe("the admin census", () => {
         issueSummary: "Something nobody has filed yet",
       });
 
-      const k = await knowledgeCensus();
-      expect(k.entries).toBe(2);
-      expect(k.by_status).toEqual({ approved: 1, draft: 1 });
+      const census = await knowledgeCensus();
+      expect(census.entries).toBe(2);
+      expect(census.by_status).toEqual({ approved: 1, draft: 1 });
       // Neither carries a component; only one carries a product.
-      expect(k.entries_no_component).toBe(2);
-      expect(k.entries_no_product).toBe(1);
+      expect(census.entries_no_component).toBe(2);
+      expect(census.entries_no_product).toBe(1);
     });
 
     it("files an entry once it is given a component", async () => {
@@ -256,9 +256,9 @@ describe("the admin census", () => {
         resolution: "clear the export cache",
       });
 
-      const k = await knowledgeCensus();
-      expect(k.entries).toBe(1);
-      expect(k.entries_no_component).toBe(0);
+      const census = await knowledgeCensus();
+      expect(census.entries).toBe(1);
+      expect(census.entries_no_component).toBe(0);
     });
 
     it("counts each component's entries, and the ones search returns", async () => {
@@ -294,13 +294,13 @@ describe("the admin census", () => {
       });
       await createUser({ email: "sso-only@test.local" });
 
-      const u = await userCensus();
-      expect(u.users).toBe(2);
-      expect(u.admins).toBe(1);
-      expect(u.with_password).toBe(1);
-      expect(u.disabled).toBe(0);
-      expect(u.users_no_team).toBe(2);
-      expect(u.teams_with_admin).toBe(0);
+      const census = await userCensus();
+      expect(census.users).toBe(2);
+      expect(census.admins).toBe(1);
+      expect(census.with_password).toBe(1);
+      expect(census.disabled).toBe(0);
+      expect(census.users_no_team).toBe(2);
+      expect(census.teams_with_admin).toBe(0);
     });
 
     it("counts a team as curated only once someone admins it", async () => {
@@ -320,13 +320,13 @@ describe("the admin census", () => {
       await sql`
         update team_members set role = 'admin' where user_id = ${user.id}
       `;
-      const u = await userCensus();
-      expect(u.teams_with_admin).toBe(1);
-      expect(u.team_admins).toBe(1);
-      expect(u.teams_without_admin.map((t) => t.slug)).not.toContain(
+      const census = await userCensus();
+      expect(census.teams_with_admin).toBe(1);
+      expect(census.team_admins).toBe(1);
+      expect(census.teams_without_admin.map((t) => t.slug)).not.toContain(
         "test-team",
       );
-      expect(u.users_no_team).toBe(0);
+      expect(census.users_no_team).toBe(0);
     });
 
     // The four segments the access overview draws have to partition the roll,
@@ -342,19 +342,21 @@ describe("the admin census", () => {
         values (${team.id}, ${user.id}, 'admin')
       `;
 
-      const u = await userCensus();
-      expect(u.admins).toBe(1);
-      expect(u.team_admins).toBe(0);
-      expect(u.teams_with_admin).toBe(1);
-      expect(u.users - u.disabled - u.admins - u.team_admins).toBe(u.users - 1);
+      const census = await userCensus();
+      expect(census.admins).toBe(1);
+      expect(census.team_admins).toBe(0);
+      expect(census.teams_with_admin).toBe(1);
+      expect(
+        census.users - census.disabled - census.admins - census.team_admins,
+      ).toBe(census.users - 1);
     });
 
     it("counts a disabled user as one who cannot sign in", async () => {
       const user = await createUser({ email: "gone@test.local" });
       await sql`update users set disabled = true where id = ${user.id}`;
-      const u = await userCensus();
-      expect(u.users).toBe(1);
-      expect(u.disabled).toBe(1);
+      const census = await userCensus();
+      expect(census.users).toBe(1);
+      expect(census.disabled).toBe(1);
     });
   });
 });

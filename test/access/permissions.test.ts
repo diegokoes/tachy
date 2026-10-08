@@ -44,8 +44,8 @@ describe("core permissions", () => {
     otherTeamId = other.id;
     const prod = await addProduct("other-team", "op", "Other Product");
     otherProductId = prod.id;
-    const [tt] = await sql`select id from teams where slug = 'test-team'`;
-    testTeamId = tt.id as string;
+    const [testTeam] = await sql`select id from teams where slug = 'test-team'`;
+    testTeamId = testTeam.id as string;
   });
 
   beforeEach(() => clearPermissionCache());
@@ -121,7 +121,12 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
 
   const login = (email: string, password: string) =>
     loginCookie(app, email, password);
-  const req = (cookie: string, path: string, method: string, body?: unknown) =>
+  const request = (
+    cookie: string,
+    path: string,
+    method: string,
+    body?: unknown,
+  ) =>
     app.request(`/api${path}`, {
       method,
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -192,11 +197,11 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
   beforeEach(() => clearPermissionCache());
 
   it("team admin can PATCH an own-team entry but not a cross-team one", async () => {
-    const ok = await req(leadCookie, `/knowledge/${ownEntryId}`, "PATCH", {
+    const ok = await request(leadCookie, `/knowledge/${ownEntryId}`, "PATCH", {
       rootCause: "found it",
     });
     expect(ok.status).toBe(200);
-    const denied = await req(
+    const denied = await request(
       leadCookie,
       `/knowledge/${otherEntryId}`,
       "PATCH",
@@ -206,7 +211,7 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
   });
 
   it("work-item attribution is held to the item's own scope", async () => {
-    const ok = await req(
+    const ok = await request(
       leadCookie,
       `/work-items/${ownItemId}/customer`,
       "PATCH",
@@ -220,21 +225,26 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     // edits to curated attribution, not reads.
     expect(
       (
-        await req(leadCookie, `/work-items/${otherItemId}/customer`, "PATCH", {
+        await request(
+          leadCookie,
+          `/work-items/${otherItemId}/customer`,
+          "PATCH",
+          {
+            customer_slug: null,
+          },
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(devCookie, `/work-items/${ownItemId}/customer`, "PATCH", {
           customer_slug: null,
         })
       ).status,
     ).toBe(403);
     expect(
       (
-        await req(devCookie, `/work-items/${ownItemId}/customer`, "PATCH", {
-          customer_slug: null,
-        })
-      ).status,
-    ).toBe(403);
-    expect(
-      (
-        await req(
+        await request(
           devCookie,
           `/work-items/${ownItemId}/observed-version`,
           "PATCH",
@@ -245,29 +255,34 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
   });
 
   it("plain member cannot PATCH or POST knowledge", async () => {
-    const patch = await req(devCookie, `/knowledge/${ownEntryId}`, "PATCH", {
-      rootCause: "x",
-    });
+    const patch = await request(
+      devCookie,
+      `/knowledge/${ownEntryId}`,
+      "PATCH",
+      {
+        rootCause: "x",
+      },
+    );
     expect(patch.status).toBe(403);
-    const post = await req(devCookie, "/knowledge", "POST", {
+    const post = await request(devCookie, "/knowledge", "POST", {
       issueSummary: "y",
     });
     expect(post.status).toBe(403);
   });
 
   it("team admin creates entries and products in their team, not org-wide", async () => {
-    const entry = await req(leadCookie, "/knowledge", "POST", {
+    const entry = await request(leadCookie, "/knowledge", "POST", {
       productId: await tpdProductId(),
       issueSummary: "lead-created",
     });
     expect(entry.status).toBe(200);
-    const product = await req(leadCookie, "/products", "POST", {
+    const product = await request(leadCookie, "/products", "POST", {
       team_slug: "test-team",
       slug: "newp",
       name: "New Product",
     });
     expect(product.status).toBe(200);
-    const crossProduct = await req(leadCookie, "/products", "POST", {
+    const crossProduct = await request(leadCookie, "/products", "POST", {
       team_slug: "other-team",
       slug: "nope",
       name: "Nope",
@@ -277,26 +292,34 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
 
   it("org-wide ops stay global-admin-only for team admins", async () => {
     expect(
-      (await req(leadCookie, "/teams", "POST", { slug: "t2", name: "T2" }))
+      (await request(leadCookie, "/teams", "POST", { slug: "t2", name: "T2" }))
         .status,
     ).toBe(403);
     expect(
-      (await req(leadCookie, "/settings/agent_effort", "PUT", { value: "low" }))
-        .status,
+      (
+        await request(leadCookie, "/settings/agent_effort", "PUT", {
+          value: "low",
+        })
+      ).status,
     ).toBe(403);
     expect(
-      (await req(adminCookie, "/teams", "POST", { slug: "t2", name: "T2" }))
+      (await request(adminCookie, "/teams", "POST", { slug: "t2", name: "T2" }))
         .status,
     ).toBe(200);
   });
 
   it("team membership is manageable by that team's admin only", async () => {
-    const ok = await req(leadCookie, "/users/team-members/test-team", "PUT", {
-      email: "dev@example.com",
-      role: "member",
-    });
+    const ok = await request(
+      leadCookie,
+      "/users/team-members/test-team",
+      "PUT",
+      {
+        email: "dev@example.com",
+        role: "member",
+      },
+    );
     expect(ok.status).toBe(200);
-    const denied = await req(
+    const denied = await request(
       leadCookie,
       "/users/team-members/other-team",
       "PUT",
@@ -306,7 +329,7 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
       },
     );
     expect(denied.status).toBe(403);
-    const badRole = await req(
+    const badRole = await request(
       leadCookie,
       "/users/team-members/test-team",
       "PUT",
@@ -333,21 +356,26 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
   });
 
   it("attributes HTTP knowledge posts and feedback to the session user", async () => {
-    const res = await req(leadCookie, "/knowledge", "POST", {
+    const response = await request(leadCookie, "/knowledge", "POST", {
       productId: await tpdProductId(),
       issueSummary: "attributed entry",
     });
-    expect(res.status).toBe(200);
-    const { id } = await res.json();
+    expect(response.status).toBe(200);
+    const { id } = await response.json();
     const [entry] = await sql`
       select u.email from knowledge_entries k join users u on u.id = k.created_by where k.id = ${id}
     `;
     expect(entry.email).toBe("lead@example.com");
 
-    const fb = await req(devCookie, `/knowledge/${id}/feedback`, "POST", {
-      rating: 4,
-    });
-    expect(fb.status).toBe(200);
+    const feedback = await request(
+      devCookie,
+      `/knowledge/${id}/feedback`,
+      "POST",
+      {
+        rating: 4,
+      },
+    );
+    expect(feedback.status).toBe(200);
     const [row] = await sql`
       select u.email from knowledge_feedback f join users u on u.id = f.user_id
       where f.knowledge_entry_id = ${id}
@@ -357,44 +385,49 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
 
   it("GET /knowledge narrows by component slug/alias within a product", async () => {
     const productId = await tpdProductId();
-    const comp = await req(adminCookie, "/products/tpd/components", "POST", {
-      slug: "line-controller",
-      name: "Line Controller",
-      aliases: ["lc"],
-    });
+    const comp = await request(
+      adminCookie,
+      "/products/tpd/components",
+      "POST",
+      {
+        slug: "line-controller",
+        name: "Line Controller",
+        aliases: ["lc"],
+      },
+    );
     expect(comp.status).toBe(200);
-    const inComp = await req(adminCookie, "/knowledge", "POST", {
+    const inComp = await request(adminCookie, "/knowledge", "POST", {
       productId,
       issueSummary: "lc jam",
       component: "line-controller",
     });
     expect(inComp.status).toBe(200);
     const inCompId = (await inComp.json()).id as string;
-    const outComp = await req(adminCookie, "/knowledge", "POST", {
+    const outComp = await request(adminCookie, "/knowledge", "POST", {
       productId,
       issueSummary: "printer offline",
     });
     expect(outComp.status).toBe(200);
 
-    const res = await app.request(
+    const response = await app.request(
       `/api/knowledge?product_id=${productId}&component=lc`,
       {
         headers: { cookie: devCookie },
       },
     );
-    const rows = await res.json();
+    const rows = await response.json();
     expect(rows.map((r: { id: string }) => r.id)).toEqual([inCompId]);
   });
 
   it("reference docs: curator-gated create, status flips, stale version 409", async () => {
-    const denied = await req(devCookie, "/reference", "POST", {
+    const denied = await request(devCookie, "/reference", "POST", {
       title: "runbook",
       body: "restart the line controller after deploys",
       productId: await tpdProductId(),
     });
     expect(denied.status).toBe(403);
 
-    const created = await req(leadCookie, "/reference", "POST", {
+    const created = await request(leadCookie, "/reference", "POST", {
       title: "runbook",
       body: "restart the line controller after deploys",
       productId: await tpdProductId(),
@@ -407,27 +440,37 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     `;
     expect(attributed.email).toBe("lead@example.com");
 
-    const approved = await req(leadCookie, `/reference/${doc.id}`, "PATCH", {
-      status: "approved",
-      expectedVersion: doc.version,
-    });
+    const approved = await request(
+      leadCookie,
+      `/reference/${doc.id}`,
+      "PATCH",
+      {
+        status: "approved",
+        expectedVersion: doc.version,
+      },
+    );
     expect(approved.status).toBe(200);
     expect((await approved.json()).status).toBe("approved");
 
-    const stale = await req(leadCookie, `/reference/${doc.id}`, "PATCH", {
+    const stale = await request(leadCookie, `/reference/${doc.id}`, "PATCH", {
       status: "archived",
       expectedVersion: doc.version,
     });
     expect(stale.status).toBe(409);
 
-    const crossTeam = await req(devCookie, `/reference/${doc.id}`, "PATCH", {
-      status: "archived",
-    });
+    const crossTeam = await request(
+      devCookie,
+      `/reference/${doc.id}`,
+      "PATCH",
+      {
+        status: "archived",
+      },
+    );
     expect(crossTeam.status).toBe(403);
   });
 
   it("team admin registers projects for their own team only", async () => {
-    const own = await req(leadCookie, "/source-projects", "POST", {
+    const own = await request(leadCookie, "/source-projects", "POST", {
       source_slug: "test-freshdesk",
       external_key: "LeadProj",
       product_slug: "tpd",
@@ -435,26 +478,26 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     expect(own.status).toBe(200);
     const projectId = (await own.json()).id;
 
-    const otherProduct = await req(adminCookie, "/products", "POST", {
+    const otherProduct = await request(adminCookie, "/products", "POST", {
       team_slug: "other-team",
       slug: "otherp",
       name: "Other Product",
     });
     expect(otherProduct.status).toBe(200);
-    const crossTeam = await req(leadCookie, "/source-projects", "POST", {
+    const crossTeam = await request(leadCookie, "/source-projects", "POST", {
       source_slug: "test-freshdesk",
       external_key: "TheirProj",
       product_slug: "otherp",
     });
     expect(crossTeam.status).toBe(403);
 
-    const tracker = await req(leadCookie, "/source-projects", "POST", {
+    const tracker = await request(leadCookie, "/source-projects", "POST", {
       source_slug: "test-freshdesk",
       external_key: "LeadTracker",
       team_slug: "test-team",
     });
     expect(tracker.status).toBe(200);
-    const crossTracker = await req(leadCookie, "/source-projects", "POST", {
+    const crossTracker = await request(leadCookie, "/source-projects", "POST", {
       source_slug: "test-freshdesk",
       external_key: "TheirTracker",
       team_slug: "other-team",
@@ -463,7 +506,7 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
 
     // Re-pointing a project needs rights on where it lands, not only where it
     // is.
-    const moved = await req(
+    const moved = await request(
       leadCookie,
       `/source-projects/${projectId}`,
       "PATCH",
@@ -475,7 +518,7 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
 
     expect(
       (
-        await req(devCookie, "/source-projects", "POST", {
+        await request(devCookie, "/source-projects", "POST", {
           source_slug: "test-freshdesk",
           external_key: "DevProj",
           product_slug: "tpd",
@@ -485,9 +528,11 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
 
     // Reads stay open: the admin panel loads them before it knows who is signed
     // in.
-    expect((await req(devCookie, "/source-projects", "GET")).status).toBe(200);
+    expect((await request(devCookie, "/source-projects", "GET")).status).toBe(
+      200,
+    );
 
-    const area = await req(
+    const area = await request(
       leadCookie,
       `/source-projects/${projectId}/areas`,
       "PUT",
@@ -500,18 +545,18 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     expect(area.status).toBe(400);
     expect(
       (
-        await req(devCookie, `/source-projects/${projectId}/areas`, "PUT", {
+        await request(devCookie, `/source-projects/${projectId}/areas`, "PUT", {
           area_prefix: "x",
           component_slug: "y",
         })
       ).status,
     ).toBe(403);
 
-    await req(leadCookie, `/source-projects/${projectId}`, "DELETE");
+    await request(leadCookie, `/source-projects/${projectId}`, "DELETE");
   });
 
   it("repo writes follow the repo's scope, and connections stay admin-only", async () => {
-    const own = await req(leadCookie, "/repos", "PUT", {
+    const own = await request(leadCookie, "/repos", "PUT", {
       slug: "leadrepo",
       url: "https://example.invalid/lead.git",
       product: "tpd",
@@ -522,7 +567,7 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     // against both scopes - otherwise a team admin could hijack the slug.
     expect(
       (
-        await req(leadCookie, "/repos", "PUT", {
+        await request(leadCookie, "/repos", "PUT", {
           slug: "leadrepo",
           url: "https://example.invalid/lead.git",
           product: "otherp",
@@ -530,24 +575,24 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
       ).status,
     ).toBe(403);
 
-    expect((await req(devCookie, "/repos/leadrepo", "DELETE")).status).toBe(
+    expect((await request(devCookie, "/repos/leadrepo", "DELETE")).status).toBe(
       403,
     );
     expect(
       (
-        await req(leadCookie, "/repos", "PUT", {
+        await request(leadCookie, "/repos", "PUT", {
           slug: "unscoped",
           url: "https://example.invalid/u.git",
         })
       ).status,
     ).toBe(403);
-    expect((await req(leadCookie, "/repos/leadrepo", "DELETE")).status).toBe(
-      200,
-    );
+    expect(
+      (await request(leadCookie, "/repos/leadrepo", "DELETE")).status,
+    ).toBe(200);
 
     expect(
       (
-        await req(leadCookie, "/source-connections", "POST", {
+        await request(leadCookie, "/source-connections", "POST", {
           sourceType: "freshdesk",
           slug: "lead-desk",
         })

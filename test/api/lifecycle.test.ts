@@ -25,16 +25,16 @@ afterEach(async () => {
 describe("probes", () => {
   it("answers /livez and keeps /health as its alias", async () => {
     for (const path of ["/livez", "/health"]) {
-      const res = await app.request(path);
-      expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ ok: true });
+      const response = await app.request(path);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ ok: true });
     }
   });
 
   it("is ready on a database that predates the schema stamp", async () => {
-    const res = await app.request("/readyz");
-    expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({
+    const response = await app.request("/readyz");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
       ready: true,
       database: true,
       schema: "unstamped",
@@ -51,9 +51,9 @@ describe("probes", () => {
 
   it("is not ready when the database was built from another schema.sql", async () => {
     await sql`insert into schema_meta (schema_sha256) values ('0000')`;
-    const res = await app.request("/readyz");
-    expect(res.status).toBe(503);
-    expect((await res.json()).schema).toBe("mismatch");
+    const response = await app.request("/readyz");
+    expect(response.status).toBe(503);
+    expect((await response.json()).schema).toBe("mismatch");
   });
 
   it("is not ready while the embedding model loads", async () => {
@@ -69,12 +69,12 @@ describe("draining", () => {
     lifecycle.draining = true;
     expect((await app.request("/readyz")).status).toBe(503);
 
-    const res = await app.request(
+    const response = await app.request(
       "/api/agent/chat",
       json({ message: "hello" }),
     );
-    expect(res.status).toBe(503);
-    expect(res.headers.get("Retry-After")).toBe("30");
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("30");
   });
 
   it("follows an external embedder's readiness", async () => {
@@ -96,9 +96,9 @@ describe("draining", () => {
         model: "external",
       });
       up = false;
-      const res = await app.request("/readyz");
-      expect(res.status).toBe(503);
-      expect((await res.json()).model).toBe("unreachable");
+      const response = await app.request("/readyz");
+      expect(response.status).toBe(503);
+      expect((await response.json()).model).toBe("unreachable");
     } finally {
       lifecycle.embedderUrl = undefined;
       server.close();

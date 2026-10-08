@@ -47,12 +47,12 @@ beforeAll(async () => {
 describe("nonsense queries return nothing", () => {
   // Raw cosine never starts at zero, so these are rejected by the vector leg's
   // floor and by having no lexical candidates, not by a score threshold.
-  it.each(NONSENSE)("knowledge: %j", async (q) => {
-    expect(await searchKnowledge(q)).toEqual([]);
+  it.each(NONSENSE)("knowledge: %j", async (query) => {
+    expect(await searchKnowledge(query)).toEqual([]);
   });
 
-  it.each(NONSENSE)("reference: %j", async (q) => {
-    expect(await searchReferenceDocs(q)).toEqual([]);
+  it.each(NONSENSE)("reference: %j", async (query) => {
+    expect(await searchReferenceDocs(query)).toEqual([]);
   });
 });
 
@@ -101,7 +101,7 @@ describe("grading", () => {
   it("ranks an unrelated-but-admitted row below a real match", async () => {
     const rows = await searchKnowledge("printer label problem");
     expect(rows[0].id).toBe(idByKey.get("printer-023"));
-    for (const r of rows.slice(1)) expect(r.relevance).toBeLessThan(GOOD);
+    for (const row of rows.slice(1)) expect(row.relevance).toBeLessThan(GOOD);
   });
 });
 
@@ -133,8 +133,8 @@ describe("calibration constants", () => {
 describe("index usage", () => {
   // These assert the query shapes stay index-eligible. On a small table the
   // planner still prefers a scan on cost, so seqscan is disabled.
-  const planOf = async (q: string) => {
-    const rows = await sql.unsafe(`explain (format json) ${q}`);
+  const planOf = async (query: string) => {
+    const rows = await sql.unsafe(`explain (format json) ${query}`);
     return JSON.stringify(rows);
   };
 

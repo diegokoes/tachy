@@ -35,11 +35,11 @@ describe("draft sources", () => {
       resolution: "restart the spooler",
     });
 
-    const [s] = await draftSources(productId, "printing");
-    expect(s.kind).toBe("entry");
-    expect(s.title).toBe("spooler stalls at 023");
-    expect(s.body).toContain("buffer overrun");
-    expect(s.body).toContain("restart the spooler");
+    const [source] = await draftSources(productId, "printing");
+    expect(source.kind).toBe("entry");
+    expect(source.title).toBe("spooler stalls at 023");
+    expect(source.body).toContain("buffer overrun");
+    expect(source.body).toContain("restart the spooler");
   });
 
   // A lesson filed against a sub-component is still about the parent topic.

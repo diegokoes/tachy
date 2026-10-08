@@ -97,7 +97,7 @@ describe("artifact spec persistence", () => {
       { output: { format: "xlsx", columns: [] } },
     ];
     for (const spec of bad) {
-      const res = await app.request("/api/artifacts", {
+      const response = await app.request("/api/artifacts", {
         method: "PUT",
         body: JSON.stringify({
           scope: "user",
@@ -108,14 +108,14 @@ describe("artifact spec persistence", () => {
         }),
         headers: { "Content-Type": "application/json", cookie },
       });
-      expect(res.status).toBe(400);
+      expect(response.status).toBe(400);
     }
   });
 
   it("applies the column type default on the way in", async () => {
     await alice();
     const cookie = await login("alice@example.com");
-    const res = await app.request("/api/artifacts", {
+    const response = await app.request("/api/artifacts", {
       method: "PUT",
       body: JSON.stringify({
         scope: "user",
@@ -126,7 +126,7 @@ describe("artifact spec persistence", () => {
       }),
       headers: { "Content-Type": "application/json", cookie },
     });
-    expect(res.status).toBe(200);
+    expect(response.status).toBe(200);
 
     const list = await app.request("/api/artifacts", { headers: { cookie } });
     const [row] = (await list.json()) as { spec: ArtifactSpec }[];
@@ -183,7 +183,7 @@ describe("export_table", () => {
         _registeredTools: Record<
           string,
           {
-            inputSchema: { parse: (v: unknown) => unknown };
+            inputSchema: { parse: (value: unknown) => unknown };
             handler: (a: unknown, e: unknown) => Promise<ToolResult>;
           }
         >;
@@ -209,7 +209,7 @@ describe("export_table", () => {
   it("fills an artifact's declared columns and returns a descriptor, not bytes", async () => {
     await seedGlobalRegister();
 
-    const res = await call({
+    const answer = await call({
       artifact_slug: "escalation-register",
       rows: [
         {
@@ -220,16 +220,16 @@ describe("export_table", () => {
         { ticket_id: "FD-2", customer: null, opened_at: null },
       ],
     });
-    expect(res.isError).toBeFalsy();
+    expect(answer.isError).toBeFalsy();
 
-    const { output } = JSON.parse(res.content[0].text) as {
+    const { output } = JSON.parse(answer.content[0].text) as {
       output: Record<string, unknown>;
     };
     expect(output.rows).toBe(2);
     expect(output.columns).toBe(3);
     expect(output.filename).toMatch(/^escalations-\d{4}-\d{2}-\d{2}\.xlsx$/);
     expect(output.url).toBe(`/api/outputs/${output.id}/download`);
-    expect(res.content[0].text).not.toContain("PK");
+    expect(answer.content[0].text).not.toContain("PK");
 
     const [row] =
       await sql`select byte_size, artifact_id from generated_outputs where id = ${output.id as string}`;
@@ -262,22 +262,22 @@ describe("export_table", () => {
       body: "b",
       spec: SPEC,
     });
-    const res = await call({
+    const answer = await call({
       artifact_slug: "private-register",
       rows: [{ ticket_id: "FD-1" }],
     });
-    expect(res.isError).toBe(true);
-    expect(res.content[0].text).toContain("no artifact 'private-register'");
+    expect(answer.isError).toBe(true);
+    expect(answer.content[0].text).toContain("no artifact 'private-register'");
   });
 
   it("works without an artifact when columns are passed directly", async () => {
-    const res = await call({
+    const answer = await call({
       format: "csv",
       columns: [{ key: "name" }, { key: "count", type: "number" }],
       rows: [{ name: "acme", count: 2 }],
     });
-    expect(res.isError).toBeFalsy();
-    const { output } = JSON.parse(res.content[0].text) as {
+    expect(answer.isError).toBeFalsy();
+    const { output } = JSON.parse(answer.content[0].text) as {
       output: { filename: string; mime: string };
     };
     expect(output.filename).toMatch(/\.csv$/);
@@ -285,8 +285,8 @@ describe("export_table", () => {
   });
 
   it("refuses when neither an artifact nor columns say what the shape is", async () => {
-    const res = await call({ rows: [{ a: 1 }] });
-    expect(res.isError).toBe(true);
-    expect(res.content[0].text).toContain("no columns");
+    const answer = await call({ rows: [{ a: 1 }] });
+    expect(answer.isError).toBe(true);
+    expect(answer.content[0].text).toContain("no columns");
   });
 });

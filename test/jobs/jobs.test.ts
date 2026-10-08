@@ -43,12 +43,12 @@ defineJob({
   maxAttempts: 2,
   subject: (p) => p.word,
   outcome: (o) => `said ${o.said}`,
-  run: async (ctx, p) => {
-    ctx.log(`saying ${p.word}`);
+  run: async (ctx, params) => {
+    ctx.log(`saying ${params.word}`);
     await ctx.progress(0.5, "half");
-    calls.push(p.word);
-    if (p.fail) throw new Error("asked to fail");
-    return { said: p.word };
+    calls.push(params.word);
+    if (params.fail) throw new Error("asked to fail");
+    return { said: params.word };
   },
 });
 defineJob({
@@ -165,7 +165,7 @@ describe("job definitions", () => {
       createJobDefinition({ kind: "nope", name: "x" }, null),
     ).rejects.toThrow(/unknown job kind/);
 
-    const d = await createJobDefinition(
+    const definition = await createJobDefinition(
       {
         kind: "test.echo",
         name: "echo nightly",
@@ -174,21 +174,21 @@ describe("job definitions", () => {
       },
       null,
     );
-    await updateJobDefinition(d.id, { params: { word: "bye" } }, null);
-    const changes = await listJobDefinitionChanges(d.id);
+    await updateJobDefinition(definition.id, { params: { word: "bye" } }, null);
+    const changes = await listJobDefinitionChanges(definition.id);
     expect(changes.map((c) => c.action)).toEqual(["updated", "created"]);
     expect(previewSchedule("0 2 * * *", "UTC", 2)).toHaveLength(2);
   });
 
   it("disables stored definitions whose params stopped validating", async () => {
-    const d = await createJobDefinition(
+    const definition = await createJobDefinition(
       { kind: "test.echo", name: "echo" },
       null,
     );
-    await sql`update job_definitions set params = '{"word": 42}' where id = ${d.id}`;
+    await sql`update job_definitions set params = '{"word": 42}' where id = ${definition.id}`;
     expect(await disableInvalidDefinitions()).toEqual(["echo"]);
     const [row] =
-      await sql`select enabled, disabled_reason from job_definitions where id = ${d.id}`;
+      await sql`select enabled, disabled_reason from job_definitions where id = ${definition.id}`;
     expect(row.enabled).toBe(false);
     expect(row.disabled_reason).toMatch(/params no longer valid/);
   });
@@ -536,12 +536,12 @@ describe("the worker roster", () => {
 
 describe("the scheduler", () => {
   it("fires a due slot once, even when called twice at once", async () => {
-    const d = await createJobDefinition(
+    const definition = await createJobDefinition(
       { kind: "test.echo", name: "every 5", schedule: "*/5 * * * *" },
       null,
     );
     const now = new Date();
-    await sql`update job_definitions set last_scheduled_for = ${minutesAgo(6)} where id = ${d.id}`;
+    await sql`update job_definitions set last_scheduled_for = ${minutesAgo(6)} where id = ${definition.id}`;
     const inserted = await Promise.all([
       scheduleDueRuns(now),
       scheduleDueRuns(now),
@@ -554,17 +554,17 @@ describe("the scheduler", () => {
   });
 
   it("reports a schedule nothing queued, until a scheduler catches up", async () => {
-    const d = await createJobDefinition(
+    const definition = await createJobDefinition(
       { kind: "test.echo", name: "every 5", schedule: "*/5 * * * *" },
       null,
     );
     await createJobDefinition({ kind: "test.echo", name: "unscheduled" }, null);
     expect((await jobIssues())["jobs.overdue"]).toEqual({ n: 0, items: [] });
 
-    await sql`update job_definitions set last_scheduled_for = ${minutesAgo(60)} where id = ${d.id}`;
+    await sql`update job_definitions set last_scheduled_for = ${minutesAgo(60)} where id = ${definition.id}`;
     expect((await jobIssues())["jobs.overdue"]).toEqual({
       n: 1,
-      items: [{ key: d.id, label: "every 5" }],
+      items: [{ key: definition.id, label: "every 5" }],
     });
 
     await scheduleDueRuns();
@@ -589,15 +589,15 @@ describe("the scheduler", () => {
     await scheduleDueRuns(now);
     const runs = await sql`select definition_id from job_runs`;
     expect(runs.map((r) => r.definition_id)).toEqual([once.id]);
-    const [s] =
+    const [skipped] =
       await sql`select last_scheduled_for from job_definitions where id = ${skip.id}`;
     expect(
-      now.getTime() - new Date(s.last_scheduled_for).getTime(),
+      now.getTime() - new Date(skipped.last_scheduled_for).getTime(),
     ).toBeLessThan(300_000);
   });
 
   it("skips a firing while the previous run is still going", async () => {
-    const d = await createJobDefinition(
+    const definition = await createJobDefinition(
       { kind: "test.echo", name: "no overlap", schedule: "* * * * *" },
       null,
     );
@@ -605,7 +605,7 @@ describe("the scheduler", () => {
       kind: "test.echo",
       params: {},
       trigger: "manual",
-      definitionId: d.id,
+      definitionId: definition.id,
     });
     await sql`update job_definitions set last_scheduled_for = ${minutesAgo(2)}`;
     await scheduleDueRuns();
@@ -693,12 +693,12 @@ describe("the job census", () => {
   `;
 
   it("is all zeroes with a filled run of days when nothing has run", async () => {
-    const j = await jobCensus(14);
-    expect(j.runs).toBe(0);
-    expect(j.per_day).toHaveLength(14);
-    expect(j.by_kind).toEqual([]);
-    expect(j.definitions).toMatchObject({ total: 0, scheduled: 0 });
-    expect(j.upcoming).toEqual([]);
+    const census = await jobCensus(14);
+    expect(census.runs).toBe(0);
+    expect(census.per_day).toHaveLength(14);
+    expect(census.by_kind).toEqual([]);
+    expect(census.definitions).toMatchObject({ total: 0, scheduled: 0 });
+    expect(census.upcoming).toEqual([]);
   });
 
   it("reports the median and the tail of each kind's run time, and what was retried", async () => {
@@ -707,14 +707,14 @@ describe("the job census", () => {
     await sql`update job_runs set queue = 'maintenance'`;
     await sql`update job_runs set attempts = 2 where id = (select id from job_runs limit 1)`;
 
-    const j = await jobCensus(14);
-    const echo = j.by_kind.find((k) => k.kind === "test.echo")!;
+    const census = await jobCensus(14);
+    const echo = census.by_kind.find((k) => k.kind === "test.echo")!;
     expect(echo.p50_seconds).toBe(30);
     expect(echo.p95_seconds).toBeCloseTo(88, 0);
     expect(echo.retried).toBe(1);
     expect(echo.timeout_ms).toBeGreaterThan(0);
-    expect(j.wait_per_day.length).toBeGreaterThan(0);
-    expect(j.wait_per_day[0]).toMatchObject({ queue: "maintenance" });
+    expect(census.wait_per_day.length).toBeGreaterThan(0);
+    expect(census.wait_per_day[0]).toMatchObject({ queue: "maintenance" });
   });
 
   it("looks as far back as it is asked, up to a quarter", async () => {
@@ -736,32 +736,32 @@ describe("the job census", () => {
     await run({ status: "queued", trigger: "event" });
     await run({ status: "succeeded", createdMinutesAgo: 60 * 24 * 20 });
 
-    const j = await jobCensus(14);
-    expect(j.runs).toBe(6);
-    expect(j.by_status).toMatchObject({
+    const census = await jobCensus(14);
+    expect(census.runs).toBe(6);
+    expect(census.by_status).toMatchObject({
       succeeded: 2,
       failed: 1,
       timed_out: 1,
       running: 1,
       queued: 1,
     });
-    expect(j.by_trigger).toEqual({ schedule: 2, manual: 3, event: 1 });
-    expect(j.by_class).toEqual({ light: 4, heavy: 2 });
-    expect(j.success).toEqual({
+    expect(census.by_trigger).toEqual({ schedule: 2, manual: 3, event: 1 });
+    expect(census.by_class).toEqual({ light: 4, heavy: 2 });
+    expect(census.success).toEqual({
       light: { finished: 3, succeeded: 2 },
       heavy: { finished: 1, succeeded: 0 },
     });
-    expect(j.now).toEqual({
+    expect(census.now).toEqual({
       light: { running: 0, queued: 1 },
       heavy: { running: 1, queued: 0 },
     });
-    expect(j.per_day.at(-1)).toMatchObject({
+    expect(census.per_day.at(-1)).toMatchObject({
       succeeded: 2,
       failed: 1,
       timed_out: 1,
     });
 
-    expect(j.by_queue.map((q) => q.queue)).toEqual([
+    expect(census.by_queue.map((q) => q.queue)).toEqual([
       "index",
       "embed",
       "testing",
@@ -769,12 +769,12 @@ describe("the job census", () => {
       "flows",
       "maintenance",
     ]);
-    expect(j.by_queue.every((q) => q.started === 0)).toBe(true);
+    expect(census.by_queue.every((q) => q.started === 0)).toBe(true);
 
-    const echo = j.by_kind.find((k) => k.kind === "test.echo");
+    const echo = census.by_kind.find((k) => k.kind === "test.echo");
     expect(echo).toMatchObject({ runs: 4, succeeded: 2, failed: 1 });
     expect(echo?.avg_seconds).toBeCloseTo(14, 5);
-    expect(j.by_kind.find((k) => k.kind === "test.slow")).toMatchObject({
+    expect(census.by_kind.find((k) => k.kind === "test.slow")).toMatchObject({
       runs: 2,
       failed: 1,
       avg_seconds: 60,
@@ -792,14 +792,14 @@ describe("the job census", () => {
              ('test.echo', 'light', 'maintenance', 'manual', 'queued', 60000,
               now() - interval '10 minutes', null, null)
     `;
-    const j = await jobCensus(14);
-    expect(j.by_queue.find((q) => q.queue === "maintenance")).toEqual({
+    const census = await jobCensus(14);
+    expect(census.by_queue.find((q) => q.queue === "maintenance")).toEqual({
       queue: "maintenance",
       started: 2,
       avg_wait_seconds: 120,
       max_wait_seconds: 180,
     });
-    expect(j.by_queue.find((q) => q.queue === "index")?.started).toBe(0);
+    expect(census.by_queue.find((q) => q.queue === "index")?.started).toBe(0);
   });
 
   // The light and heavy counters on the overview are jobs, not runs. A
@@ -819,8 +819,8 @@ describe("the job census", () => {
       null,
     );
 
-    const j = await jobCensus(14);
-    expect(j.definitions.by_class).toEqual({ light: 1, heavy: 2 });
+    const census = await jobCensus(14);
+    expect(census.definitions.by_class).toEqual({ light: 1, heavy: 2 });
   });
 
   // What the failed counter opens: which jobs failed, not a count of runs.
@@ -843,14 +843,14 @@ describe("the job census", () => {
     await run({ kind: "test.slow", cls: "heavy", status: "failed" });
     await run({ status: "failed", createdMinutesAgo: 60 * 24 * 20 });
 
-    const j = await jobCensus(14);
-    expect(j.failures.map((f) => [f.name, f.runs])).toEqual([
+    const census = await jobCensus(14);
+    expect(census.failures.map((f) => [f.name, f.runs])).toEqual([
       ["nightly", 2],
       ["test.slow", 1],
     ]);
-    expect(j.failures[0].definition_id).toBe(nightly.id);
+    expect(census.failures[0].definition_id).toBe(nightly.id);
     // An ad-hoc run has no definition, so it is named by its kind.
-    expect(j.failures[1].definition_id).toBeNull();
+    expect(census.failures[1].definition_id).toBeNull();
   });
 
   it("lists the next day's firings of each scheduled definition", async () => {
@@ -869,8 +869,8 @@ describe("the job census", () => {
     );
 
     const now = new Date("2026-09-18T10:15:00Z");
-    const j = await jobCensus(14, now);
-    expect(j.definitions).toEqual({
+    const census = await jobCensus(14, now);
+    expect(census.definitions).toEqual({
       total: 4,
       enabled: 3,
       scheduled: 2,
@@ -878,9 +878,11 @@ describe("the job census", () => {
       disabled: 1,
       by_class: { light: 4, heavy: 0 },
     });
-    expect(j.upcoming.map((u) => u.name)).toEqual(["daily", "hourly"]);
-    expect(j.upcoming.find((u) => u.name === "hourly")?.at).toHaveLength(24);
-    expect(j.upcoming.find((u) => u.name === "daily")?.at).toEqual([
+    expect(census.upcoming.map((u) => u.name)).toEqual(["daily", "hourly"]);
+    expect(census.upcoming.find((u) => u.name === "hourly")?.at).toHaveLength(
+      24,
+    );
+    expect(census.upcoming.find((u) => u.name === "daily")?.at).toEqual([
       "2026-09-19T03:30:00.000Z",
     ]);
   });

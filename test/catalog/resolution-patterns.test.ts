@@ -75,11 +75,11 @@ describe("resolution_patterns", () => {
       entries: 2,
     });
 
-    const res = await renameResolutionPattern(
+    const renamed = await renameResolutionPattern(
       "config-mismatch",
       "config-drift",
     );
-    expect(res).toMatchObject({
+    expect(renamed).toMatchObject({
       renamed: true,
       from: "config-mismatch",
       to: "config-drift",
