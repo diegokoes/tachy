@@ -12,50 +12,50 @@ const ROOT = new URL("..", import.meta.url).pathname;
 const RUNES =
   /(?<![\w$.])\$(state|derived|effect|props|bindable|inspect|host)\b/;
 
-function walk(dir, out = []) {
+function walk(dir, found = []) {
   for (const name of readdirSync(dir)) {
     if (name === "node_modules" || name === "dist" || name.startsWith("."))
       continue;
     const path = join(dir, name);
-    if (statSync(path).isDirectory()) walk(path, out);
+    if (statSync(path).isDirectory()) walk(path, found);
     else if (/\.[cm]?[jt]s$/.test(name) && !/\.svelte\.[cm]?[jt]s$/.test(name))
-      out.push(path);
+      found.push(path);
   }
-  return out;
+  return found;
 }
 
-const bad = [];
+const misplaced = [];
 for (const path of walk(join(ROOT, "packages"))) {
   const lines = readFileSync(path, "utf8").split("\n");
   lines.forEach((line, i) => {
     if (RUNES.test(line))
-      bad.push(`${relative(ROOT, path)}:${i + 1}  ${line.trim()}`);
+      misplaced.push(`${relative(ROOT, path)}:${i + 1}  ${line.trim()}`);
   });
 }
 
-if (bad.length) {
+if (misplaced.length) {
   console.error(
     "Runes used in files the Svelte compiler does not process.\n" +
       "Rename each file to *.svelte.ts, or the rune becomes an undefined\n" +
       "global at runtime and the module throws on import.\n",
   );
-  for (const b of bad) console.error("  " + b);
+  for (const line of misplaced) console.error("  " + line);
   process.exit(1);
 }
 
 // The same failure from the other side, in `.svelte.ts` modules. An exported
 // `$state({…})` is a proxy every importer shares, but `export const n =
 // $state(0)` exports the value at that instant, so no importer sees it change.
-const REACTIVE_MODULES = [];
-function walkSvelteTs(dir, out = []) {
+const unreactive = [];
+function walkSvelteTs(dir, found = []) {
   for (const name of readdirSync(dir)) {
     if (name === "node_modules" || name === "dist" || name.startsWith("."))
       continue;
     const path = join(dir, name);
-    if (statSync(path).isDirectory()) walkSvelteTs(path, out);
-    else if (/\.svelte\.[cm]?[jt]s$/.test(name)) out.push(path);
+    if (statSync(path).isDirectory()) walkSvelteTs(path, found);
+    else if (/\.svelte\.[cm]?[jt]s$/.test(name)) found.push(path);
   }
-  return out;
+  return found;
 }
 
 // A literal, or nothing at all - the cases where the export is a value rather
@@ -70,24 +70,24 @@ for (const path of walkSvelteTs(join(ROOT, "packages"))) {
     .split("\n")
     .forEach((line, i) => {
       if (EXPORTED_PRIMITIVE.test(line))
-        REACTIVE_MODULES.push(
+        unreactive.push(
           `${relative(ROOT, path)}:${i + 1}  ${line.trim()}\n` +
             "      exports the value, not the signal - wrap it in an object or a getter",
         );
       if (ORPHAN_EFFECT.test(line))
-        REACTIVE_MODULES.push(
+        unreactive.push(
           `${relative(ROOT, path)}:${i + 1}  ${line.trim()}\n` +
             "      $effect at module scope throws effect_orphan on import",
         );
     });
 }
 
-if (REACTIVE_MODULES.length) {
+if (unreactive.length) {
   console.error(
     "Reactive state that will not be reactive where it is used.\n" +
       "Both of these build cleanly and fail at runtime.\n",
   );
-  for (const b of REACTIVE_MODULES) console.error("  " + b);
+  for (const line of unreactive) console.error("  " + line);
   process.exit(1);
 }
 

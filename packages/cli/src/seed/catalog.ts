@@ -46,10 +46,10 @@ export interface Catalog {
 
 export async function seedCatalog(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   products: SeededProduct[],
 ): Promise<Catalog> {
-  const patterns = PATTERN_SLUGS.slice(0, v.resolutionPatterns);
+  const patterns = PATTERN_SLUGS.slice(0, volumes.resolutionPatterns);
   await insertRows(
     tx,
     "resolution_patterns",
@@ -61,7 +61,7 @@ export async function seedCatalog(
   );
 
   const customers: SeededCustomer[] = Array.from(
-    { length: v.customers },
+    { length: volumes.customers },
     (_, i) => ({
       id: uuidFor("customer", i),
       slug:
@@ -88,10 +88,16 @@ export async function seedCatalog(
     }),
   );
 
-  const components = await seedComponents(tx, v, products);
-  const labels = await seedLabels(tx, v, products);
-  await seedCustomerComponents(tx, v, customers, components);
-  const units = await seedCustomerFacts(tx, v, customers, components, products);
+  const components = await seedComponents(tx, volumes, products);
+  const labels = await seedLabels(tx, volumes, products);
+  await seedCustomerComponents(tx, volumes, customers, components);
+  const units = await seedCustomerFacts(
+    tx,
+    volumes,
+    customers,
+    components,
+    products,
+  );
 
   return { customers, components, patterns, labels, units };
 }
@@ -103,7 +109,7 @@ export async function seedCatalog(
  */
 async function seedComponents(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   products: SeededProduct[],
 ): Promise<SeededComponent[]> {
   // Skewed like a real catalog, a few sprawling products and a long tail; an
@@ -112,12 +118,12 @@ async function seedComponents(
   const weights = products.map((_, rank) => 1 / (rank + 1) ** 0.8);
   const weightSum = weights.reduce((a, b) => a + b, 0);
   const counts = weights.map((w) =>
-    Math.max(3, Math.round((v.components * w) / weightSum)),
+    Math.max(3, Math.round((volumes.components * w) / weightSum)),
   );
   const components: SeededComponent[] = [];
   let n = 0;
 
-  for (const [index, p] of products.entries()) {
+  for (const [index, product] of products.entries()) {
     const perProduct = counts[index];
     const roots = Math.max(1, Math.ceil(perProduct / 3));
     const mine: SeededComponent[] = [];
@@ -128,7 +134,7 @@ async function seedComponents(
         id: uuidFor("component", n++),
         slug:
           i >= COMPONENT_NAMES.length ? `${slugify(name)}-${i}` : slugify(name),
-        productId: p.id,
+        productId: product.id,
         parentId: parent ? parent.id : null,
       });
     }
@@ -167,19 +173,19 @@ async function seedComponents(
 
 async function seedLabels(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   products: SeededProduct[],
 ): Promise<string[]> {
-  const perProduct = Math.max(1, Math.floor(v.labels / products.length));
+  const perProduct = Math.max(1, Math.floor(volumes.labels / products.length));
   const rows: Record<string, unknown>[] = [];
   const slugs: string[] = [];
-  for (const p of products)
+  for (const product of products)
     for (let i = 0; i < perProduct; i++) {
       const slug = `area-${i}`;
       slugs.push(slug);
       rows.push({
         id: uuidFor("label", rows.length),
-        product_id: p.id,
+        product_id: product.id,
         slug,
         description: `Seeded label ${i}.`,
       });
@@ -196,20 +202,20 @@ async function seedLabels(
 /** A stride rather than a dense block, so the join table looks scattered. */
 async function seedCustomerComponents(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   customers: SeededCustomer[],
   components: SeededComponent[],
 ): Promise<void> {
   const rows: Record<string, unknown>[] = [];
   const seen = new Set<string>();
-  for (let i = 0; i < v.customerComponents; i++) {
-    const c = customers[i % customers.length];
+  for (let i = 0; i < volumes.customerComponents; i++) {
+    const customer = customers[i % customers.length];
     const comp = components[(i * 7) % components.length];
-    const key = `${c.id}:${comp.id}`;
+    const key = `${customer.id}:${comp.id}`;
     if (seen.has(key)) continue;
     seen.add(key);
     rows.push({
-      customer_id: c.id,
+      customer_id: customer.id,
       component_id: comp.id,
       notes: chance(rngFor("cc", i), 0.2) ? "Customer-specific build." : null,
     });
@@ -268,7 +274,7 @@ function factValue(kind: string, rng: () => number): string {
 /** (customer, kind, label) is enumerated, never sampled, so it stays unique. */
 async function seedCustomerFacts(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   customers: SeededCustomer[],
   components: SeededComponent[],
   products: SeededProduct[],
@@ -356,18 +362,18 @@ async function seedCustomerFacts(
     at("tpc141", "ip", "plc", "10.4.12.41");
   }
 
-  outer: for (const c of customers) {
+  outer: for (const customer of customers) {
     for (const kind of FACT_KINDS) {
       // 'version' is per product, so the product slug is the label; the
       // others need none, and '' keeps the unique key usable.
       const labels = kind === "version" ? products.map((p) => p.slug) : [""];
       for (const label of labels) {
-        if (rows.length >= v.customerFacts) break outer;
+        if (rows.length >= volumes.customerFacts) break outer;
         const i = rows.length;
         const rng = rngFor("fact", i);
         rows.push({
           id: uuidFor("customer_fact", i),
-          customer_id: c.id,
+          customer_id: customer.id,
           unit_id: null,
           kind,
           label,

@@ -39,7 +39,7 @@ export function setup() {
     fail("set BASELINE_P95_MS to the idle knowledge_search p95 from search.js");
   const data = setupSession();
   if (__ENV.ADMIN_TOKEN) {
-    const res = http.post(
+    const response = http.post(
       `${BASE_URL}/api/jobs/runs`,
       JSON.stringify({ kind: "embeddings.backfill", params: { all: true } }),
       {
@@ -49,7 +49,7 @@ export function setup() {
         },
       },
     );
-    check(res, { "backfill queued": (r) => r.status === 202 });
+    check(response, { "backfill queued": (r) => r.status === 202 });
   }
   return data;
 }

@@ -47,7 +47,7 @@ const STATUSES = ["open", "pending", "resolved", "closed"];
 
 export async function seedSources(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   teams: SeededTeam[],
   products: SeededProduct[],
   customers: SeededCustomer[],
@@ -73,7 +73,7 @@ export async function seedSources(
   // Every third project has no product: a ticket target owned by a team.
   const projects: SeededProject[] = [];
   const projectRows: Record<string, unknown>[] = [];
-  for (let i = 0; i < v.sourceProjects; i++) {
+  for (let i = 0; i < volumes.sourceProjects; i++) {
     const conn = connections[i % connections.length];
     const hasProduct = i % 3 !== 2;
     const product = products[i % products.length];
@@ -109,38 +109,38 @@ export async function seedSources(
     projectRows,
   );
 
-  await seedProjectAreas(tx, v, projects, components);
+  await seedProjectAreas(tx, volumes, projects, components);
   const workItems = await seedWorkItems(
     tx,
-    v,
+    volumes,
     connections,
     projects,
     products,
     customers,
   );
-  await seedMessages(tx, v, workItems);
-  await seedLinks(tx, v, workItems, projects);
+  await seedMessages(tx, volumes, workItems);
+  await seedLinks(tx, volumes, workItems, projects);
 
   return { connections, projects, workItems };
 }
 
 async function seedProjectAreas(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   projects: SeededProject[],
   components: SeededComponent[],
 ): Promise<void> {
   const rows: Record<string, unknown>[] = [];
   const perProject = Math.max(
     1,
-    Math.ceil(v.projectAreas / Math.max(1, projects.length)),
+    Math.ceil(volumes.projectAreas / Math.max(1, projects.length)),
   );
-  for (const p of projects) {
-    for (let i = 0; i < perProject && rows.length < v.projectAreas; i++) {
+  for (const project of projects) {
+    for (let i = 0; i < perProject && rows.length < volumes.projectAreas; i++) {
       const comp = components[(rows.length * 3) % components.length];
       rows.push({
         id: uuidFor("project_area", rows.length),
-        source_project_id: p.id,
+        source_project_id: project.id,
         // Enumerated per project, so (project, prefix) is unique.
         area_prefix: `Area\\Team ${i}`,
         component_id: comp.id,
@@ -157,7 +157,7 @@ async function seedProjectAreas(
 
 async function seedWorkItems(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   connections: { id: string; slug: string }[],
   projects: SeededProject[],
   products: SeededProduct[],
@@ -168,7 +168,7 @@ async function seedWorkItems(
   // external_id is a per-connection counter, so (connection, external_id)
   // is unique without needing a conflict clause.
   const counters = new Map<string, number>();
-  const items: SeededWorkItem[] = [];
+  const workItems: SeededWorkItem[] = [];
 
   await insertWindowed(
     tx,
@@ -192,14 +192,14 @@ async function seedWorkItems(
       "source_created_at",
       "source_updated_at",
     ],
-    v.workItems,
+    volumes.workItems,
     (i) => {
       const conn = connections[i % connections.length];
       const next = (counters.get(conn.id) ?? 0) + 1;
       counters.set(conn.id, next);
       const externalId = `${next}`;
       const id = uuidFor("work_item", i);
-      items.push({ id, connectionId: conn.id, externalId });
+      workItems.push({ id, connectionId: conn.id, externalId });
 
       const rng = rngFor("work_item", i);
       // Drawn from the row's stream, not by `i % list.length`: cycling repeats
@@ -243,15 +243,18 @@ async function seedWorkItems(
     },
   );
 
-  return items;
+  return workItems;
 }
 
 async function seedMessages(
   tx: Tx,
-  v: Volumes,
-  items: SeededWorkItem[],
+  volumes: Volumes,
+  workItems: SeededWorkItem[],
 ): Promise<void> {
-  const per = Math.max(1, Math.floor(v.workItemMessages / items.length));
+  const per = Math.max(
+    1,
+    Math.floor(volumes.workItemMessages / workItems.length),
+  );
 
   await insertWindowed(
     tx,
@@ -266,10 +269,10 @@ async function seedMessages(
       "body_text",
       "created_at",
     ],
-    items.length * per,
+    workItems.length * per,
     (i) => {
-      const item = items[Math.floor(i / per)];
-      const k = i % per;
+      const item = workItems[Math.floor(i / per)];
+      const step = i % per;
       const rng = rngFor("message", i);
       // A step, an outcome and a detail are composed per message so the
       // follow-ups stay distinct at --scale=large.
@@ -278,18 +281,19 @@ async function seedMessages(
       // keeps a body unique: the composed halves alone repeat at --scale=large.
       const ref = `${item.externalId}`;
       const body =
-        k === 0
+        step === 0
           ? `${pick(rng, MESSAGE_OPENERS)}: ${symptom}. It shows up ${pick(rng, CONTEXTS)}, and ${pick(rng, IMPACTS)}. Logged as #${ref} against ${intBetween(rng, 3, 9)}.${intBetween(rng, 0, 12)}.`
-          : `Update ${k} on #${ref}: ${pick(rng, MESSAGE_STEPS)} - ${pick(rng, MESSAGE_OUTCOMES)}. ${pick(rng, DIAGNOSTICS)}. Seen ${intBetween(rng, 2, 400)} times in the last ${intBetween(rng, 2, 72)} hours.`;
+          : `Update ${step} on #${ref}: ${pick(rng, MESSAGE_STEPS)} - ${pick(rng, MESSAGE_OUTCOMES)}. ${pick(rng, DIAGNOSTICS)}. Seen ${intBetween(rng, 2, 400)} times in the last ${intBetween(rng, 2, 72)} hours.`;
 
       return {
         id: uuidFor("work_item_message", i),
         work_item_id: item.id,
         // Per-item ordinal: (work_item_id, external_id) is unique.
-        external_id: `${k}`,
-        author: k % 2 === 0 ? "customer@example.invalid" : "agent@tachy.local",
+        external_id: `${step}`,
+        author:
+          step % 2 === 0 ? "customer@example.invalid" : "agent@tachy.local",
         visibility: chance(rng, 0.2) ? "private" : "public",
-        direction: k % 2 === 0 ? "inbound" : "outbound",
+        direction: step % 2 === 0 ? "inbound" : "outbound",
         body_text: body,
         created_at: pastDate(rng, 500),
       };
@@ -305,22 +309,22 @@ async function seedMessages(
  */
 async function seedLinks(
   tx: Tx,
-  v: Volumes,
-  items: SeededWorkItem[],
+  volumes: Volumes,
+  workItems: SeededWorkItem[],
   projects: SeededProject[],
 ): Promise<void> {
-  if (items.length < 2) return;
+  if (workItems.length < 2) return;
   const trackers = projects.filter((p) => !p.hasProduct);
   const rows: Record<string, unknown>[] = [];
   const seen = new Set<string>();
 
   for (
     let i = 0;
-    i < v.workItemLinks * 2 && rows.length < v.workItemLinks;
+    i < volumes.workItemLinks * 2 && rows.length < volumes.workItemLinks;
     i++
   ) {
     const rng = rngFor("link", i);
-    const from = items[i % items.length];
+    const from = workItems[i % workItems.length];
     const kind = pick(rng, WORK_ITEM_LINK_KINDS);
     const external = trackers.length > 0 && i % 10 >= 7;
 
@@ -339,7 +343,7 @@ async function seedLinks(
         kind,
       });
     } else {
-      const to = items[(i * 7919 + 1) % items.length];
+      const to = workItems[(i * 7919 + 1) % workItems.length];
       if (to.id === from.id) continue;
       const key = `i:${from.id}:${to.id}:${kind}`;
       if (seen.has(key)) continue;

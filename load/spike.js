@@ -33,7 +33,7 @@ export const setup = setupSession;
 
 export default function (data) {
   const h = headers(data);
-  const res =
+  const response =
     Math.random() < 0.3
       ? http.get(
           `${BASE_URL}/api/knowledge/search?q=${encodeURIComponent(pick(QUERIES))}`,
@@ -47,5 +47,5 @@ export default function (data) {
           headers: h,
           tags: { endpoint: "knowledge_list" },
         });
-  check(res, { "no server error": (r) => r.status < 500 });
+  check(response, { "no server error": (r) => r.status < 500 });
 }
