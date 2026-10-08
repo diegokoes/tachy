@@ -3,12 +3,12 @@
  *
  * These carry rules, not sample values. A placeholder that looks like a name
  * reads as data the record already holds, and a quoted example invites input
- * that `csv` below stores with the quote marks on.
+ * that `csv` stores with the quote marks on.
  */
 export const INFO = {
   slug: "Lowercase id, derived from the name. Used by URLs, filters and the agent. Not shown in lists.",
-  /* Three tables carry aliases and they do not all mean the same thing -
-     a customer's are trading names, not email domains. See catalog/customers.ts. */
+  // Three tables carry aliases and they do not all mean the same thing - a
+  // customer's are trading names, not email domains. See catalog/customers.ts.
   aliases: {
     product:
       "Alternate names, comma-separated, no quotes. Resolved like the slug.",

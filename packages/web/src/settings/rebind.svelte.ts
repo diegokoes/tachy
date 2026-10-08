@@ -47,49 +47,48 @@ export function open(target: Target | null, label = "") {
 
 export const close = () => open(null);
 
-export function boundKey(t: Target): string {
-  if (t.kind === "subnav") return subnavKey(t.slot);
-  if (t.kind === "action") return actionKey(t.item);
+export function boundKey(target: Target): string {
+  if (target.kind === "subnav") return subnavKey(target.slot);
+  if (target.kind === "action") return actionKey(target.item);
   return navKey(
-    t.item,
-    navItems().findIndex((n) => n.key === t.item),
+    target.item,
+    navItems().findIndex((n) => n.key === target.item),
   );
 }
 
-export function defaultKey(t: Target): string {
-  if (t.kind === "subnav") return defaultSubnavKey(t.slot);
-  if (t.kind === "action") return ACTIONS[t.item].key;
-  return defaultNavKey(navItems().findIndex((n) => n.key === t.item));
+export function defaultKey(target: Target): string {
+  if (target.kind === "subnav") return defaultSubnavKey(target.slot);
+  if (target.kind === "action") return ACTIONS[target.item].key;
+  return defaultNavKey(navItems().findIndex((n) => n.key === target.item));
 }
 
-export function customized(t: Target): boolean {
-  if (t.kind === "subnav") return t.slot in keymap.subnav;
-  return t.item in keymap.nav;
+export function customized(target: Target): boolean {
+  if (target.kind === "subnav") return target.slot in keymap.subnav;
+  return target.item in keymap.nav;
 }
 
-function write(t: Target, key: string | null) {
-  if (t.kind === "subnav") setSubnavKey(t.slot, key);
-  else setNavKey(t.item, key);
+function write(target: Target, key: string | null) {
+  if (target.kind === "subnav") setSubnavKey(target.slot, key);
+  else setNavKey(target.item, key);
 }
 
 const MODIFIERS = ["Shift", "Control", "Alt", "Meta"];
 
-/** The modifiers normalize() can record, as held right now. Alt and Meta are
- *  left out: a chord never carries them, so showing them would promise a
- *  binding that is not the one saved. */
+/**
+ * The modifiers `normalize()` can record, as held at this instant. Alt and Meta
+ * are left out: a chord never carries them, so showing them would promise a
+ * binding that is not the one saved.
+ */
 const heldMods = (e: KeyboardEvent) =>
   [e.ctrlKey && "ctrl", e.shiftKey && "shift"].filter(Boolean).join("+") ||
   null;
 
 /**
  * Captured through the dispatcher's own normalize(), so a key recorded here is
- * byte-for-byte the string a keypress will later be matched against - anything
- * else silently records bindings that can never fire. A modifier on its own is
- * shown as it goes down but never recorded: you cannot bind Shift by itself.
- *
- * Escape and Tab go on to the dialog, which closes and traps focus with them.
- * Enter does too once a usable key is held, as the dialog's confirm; before
- * that it is recorded like any key, and turned down as reserved.
+ * the string a keypress is later matched against. A modifier on its own is
+ * shown as it goes down but never recorded. Escape and Tab go on to the dialog,
+ * which closes and traps focus with them; so does Enter once a usable key is
+ * held, as the dialog's confirm.
  */
 export function capture(e: KeyboardEvent) {
   const target = rebind.target;
@@ -112,8 +111,10 @@ export function capture(e: KeyboardEvent) {
     : "";
 }
 
-/** Keyup keeps the held caps honest: letting go of K while Ctrl is still down
- *  leaves CTRL showing, and letting go of everything leaves the recorded chord. */
+/**
+ * Keyup updates the held caps: letting go of K while Ctrl is still down leaves
+ * CTRL showing, and letting go of everything leaves the recorded chord.
+ */
 export function release(e: KeyboardEvent) {
   if (!rebind.target) return;
   rebind.held = heldMods(e);

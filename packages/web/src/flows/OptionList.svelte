@@ -18,7 +18,7 @@
     /** Anything typed is fine too; the list only suggests. */
     free?: boolean;
     label: string;
-    onchange: (v: string[]) => void;
+    onchange: (value: string[]) => void;
   } = $props();
 
   let options = $state<FlowOption[]>([]);
@@ -30,8 +30,8 @@
     const want = JSON.stringify([source, deps]);
     error = null;
     fetchOptions(source, deps)
-      .then((o) => {
-        if (want === JSON.stringify([source, deps])) options = o;
+      .then((loaded) => {
+        if (want === JSON.stringify([source, deps])) options = loaded;
       })
       .catch((e) => (error = e instanceof Error ? e.message : String(e)));
   });
@@ -39,9 +39,9 @@
   const labelOf = (v: string) => options.find((o) => o.value === v)?.label;
   const left = $derived(options.filter((o) => !value.includes(o.value)));
 
-  function add(v: string) {
-    const x = v.trim();
-    if (x && !value.includes(x)) onchange([...value, x]);
+  function add(raw: string) {
+    const added = raw.trim();
+    if (added && !value.includes(added)) onchange([...value, added]);
   }
   function commit() {
     add(typed);
@@ -52,9 +52,9 @@
 <div class="list">
   {#if value.length}
     <span class="chips">
-      {#each value as v (v)}
-        <Chip onremove={() => onchange(value.filter((x) => x !== v))}
-          >{labelOf(v) ?? v}</Chip
+      {#each value as picked (picked)}
+        <Chip onremove={() => onchange(value.filter((x) => x !== picked))}
+          >{labelOf(picked) ?? picked}</Chip
         >
       {/each}
     </span>
@@ -73,7 +73,8 @@
       onchange={commit}
     />
     <datalist {id}>
-      {#each left as o (o.value)}<option value={o.value}>{o.label}</option
+      {#each left as option (option.value)}<option value={option.value}
+          >{option.label}</option
         >{/each}
     </datalist>
   {:else}

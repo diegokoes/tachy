@@ -41,20 +41,26 @@
   type Leaf = Extract<Condition, { field: string }>;
   const leaf = (): Condition => ({ field: "item.status", op: "eq", value: "" });
 
-  const mode = $derived("all" in value ? "all" : "any" in value ? "any" : null);
-  const children = $derived(
-    "all" in value ? value.all : "any" in value ? value.any : [],
-  );
+  const mode = $derived.by(() => {
+    if ("all" in value) return "all";
+    return "any" in value ? "any" : null;
+  });
+  const children = $derived.by(() => {
+    if ("all" in value) return value.all;
+    return "any" in value ? value.any : [];
+  });
 
   function setChildren(next: Condition[]) {
     onchange(mode === "any" ? { any: next } : { all: next });
   }
-  function setChild(i: number, c: Condition) {
-    setChildren(children.map((x, j) => (j === i ? c : x)));
+  function setChild(at: number, next: Condition) {
+    setChildren(children.map((x, j) => (j === at ? next : x)));
   }
 
-  const listText = (v: unknown) =>
-    Array.isArray(v) ? v.join(", ") : v == null ? "" : String(v);
+  const listText = (v: unknown) => {
+    if (Array.isArray(v)) return v.join(", ");
+    return v == null ? "" : String(v);
+  };
 </script>
 
 {#if mode}
@@ -76,9 +82,9 @@
         >
       {/if}
     </div>
-    {#each children as c, i (i)}
+    {#each children as child, i (i)}
       <ConditionEditor
-        value={c}
+        value={child}
         {connection}
         {fields}
         onchange={(n) => setChild(i, n)}
@@ -114,56 +120,56 @@
     />
   </div>
 {:else}
-  {@const c = value as Leaf}
+  {@const leaf = value as Leaf}
   <div class="leaf">
     <span class="field">
       <OptionSelect
         source="item.fields"
         deps={{ connection }}
-        value={c.field}
+        value={leaf.field}
         extra={fields}
         free
         label="Field"
-        onchange={(v) => onchange({ ...c, field: v })}
+        onchange={(v) => onchange({ ...leaf, field: v })}
       />
     </span>
     <span class="op">
       <Select
-        value={c.op}
+        value={leaf.op}
         options={ops}
         aria-label="Comparison"
-        onchange={(v) => onchange({ ...c, op: v as ConditionOp })}
+        onchange={(v) => onchange({ ...leaf, op: v as ConditionOp })}
       />
     </span>
-    {#if c.op !== "exists"}
+    {#if leaf.op !== "exists"}
       <span class="value">
-        {#if c.op === "in"}
+        {#if leaf.op === "in"}
           <input
             aria-label="Values"
-            value={listText(c.value)}
+            value={listText(leaf.value)}
             oninput={(e) =>
               onchange({
-                ...c,
+                ...leaf,
                 value: e.currentTarget.value
                   .split(",")
                   .map((s) => s.trim())
                   .filter(Boolean),
               })}
           />
-        {:else if connection && c.field.startsWith("item.")}
+        {:else if connection && leaf.field.startsWith("item.")}
           <OptionSelect
             source="item.values"
-            deps={{ connection, field: c.field }}
-            value={listText(c.value)}
+            deps={{ connection, field: leaf.field }}
+            value={listText(leaf.value)}
             free
             label="Value"
-            onchange={(v) => onchange({ ...c, value: v })}
+            onchange={(v) => onchange({ ...leaf, value: v })}
           />
         {:else}
           <input
             aria-label="Value"
-            value={listText(c.value)}
-            oninput={(e) => onchange({ ...c, value: e.currentTarget.value })}
+            value={listText(leaf.value)}
+            oninput={(e) => onchange({ ...leaf, value: e.currentTarget.value })}
           />
         {/if}
       </span>

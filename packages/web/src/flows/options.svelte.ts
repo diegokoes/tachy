@@ -12,10 +12,10 @@ export function fetchOptions(
   key: string,
   deps: Record<string, string> = {},
 ): Promise<FlowOption[]> {
-  const q = new URLSearchParams(
+  const query = new URLSearchParams(
     Object.entries(deps).filter(([, v]) => v !== ""),
   ).toString();
-  const url = `/flows/options/${encodeURIComponent(key)}${q ? `?${q}` : ""}`;
+  const url = `/flows/options/${encodeURIComponent(key)}${query ? `?${query}` : ""}`;
   let hit = cache.get(url);
   if (!hit) {
     hit = api.get<FlowOption[]>(url);

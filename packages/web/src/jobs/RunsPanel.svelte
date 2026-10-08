@@ -57,19 +57,19 @@
   const current = createSequence();
 
   function query(before?: string) {
-    const q = new URLSearchParams({ limit: String(PAGE) });
-    if (status === "active") q.set("active", "true");
-    else if (status) q.set("status", status);
-    if (kind) q.set("kind", kind);
-    if (trigger) q.set("trigger", trigger);
-    if (queue) q.set("queue", queue);
-    if (parent) q.set("parent_id", parent.id);
-    if (before) q.set("before", before);
-    return `/jobs/runs?${q}`;
+    const search = new URLSearchParams({ limit: String(PAGE) });
+    if (status === "active") search.set("active", "true");
+    else if (status) search.set("status", status);
+    if (kind) search.set("kind", kind);
+    if (trigger) search.set("trigger", trigger);
+    if (queue) search.set("queue", queue);
+    if (parent) search.set("parent_id", parent.id);
+    if (before) search.set("before", before);
+    return `/jobs/runs?${search}`;
   }
 
-  /* A refresh replaces the newest page and keeps the older pages loaded
-     below it, so following live runs does not collapse a list read further down. */
+  // A refresh replaces the newest page and keeps the older pages loaded below
+  // it, so following live runs does not collapse a list read further down.
   async function load() {
     const isCurrent = current();
     try {
@@ -108,10 +108,10 @@
     void load();
   });
 
-  async function cancel(r: JobRunListedRow) {
+  async function cancel(run: JobRunListedRow) {
     error = null;
     try {
-      await api.post(`/jobs/runs/${r.id}/cancel`, {});
+      await api.post(`/jobs/runs/${run.id}/cancel`, {});
       await load();
       void census.reload();
     } catch (e) {
@@ -120,12 +120,12 @@
   }
 
   const shown = $derived.by(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return rows;
+    const needle = filter.trim().toLowerCase();
+    if (!needle) return rows;
     return rows.filter((r) =>
       `${r.definition_name ?? ""} ${titleOf(r.kind)} ${r.subject ?? ""} ${startedBy(r, titleOf).who} ${r.outcome ?? ""} ${r.error ?? ""}`
         .toLowerCase()
-        .includes(q),
+        .includes(needle),
     );
   });
 
@@ -155,10 +155,10 @@
     kinds.find((k) => k.kind === kind)?.title ?? kind;
   const nameOf = (r: JobRunListedRow) => r.definition_name ?? titleOf(r.kind);
 
-  function elapsed(r: JobRunListedRow) {
-    if (!r.started_at) return "";
-    const from = Date.parse(r.started_at);
-    const to = r.finished_at ? Date.parse(r.finished_at) : now;
+  function elapsed(run: JobRunListedRow) {
+    if (!run.started_at) return "";
+    const from = Date.parse(run.started_at);
+    const to = run.finished_at ? Date.parse(run.finished_at) : now;
     return Number.isFinite(from)
       ? duration(Math.max(0, (to - from) / 1000))
       : "";
@@ -180,88 +180,88 @@
   ];
 </script>
 
-{#snippet statusCell(r: JobRunListedRow)}
-  {@const m = statusMark(r.status)}
+{#snippet statusCell(run: JobRunListedRow)}
+  {@const mark = statusMark(run.status)}
   <span
-    class="mark {m.tone}"
-    class:spin={r.status === "running"}
-    use:tip={m.label}
+    class="mark {mark.tone}"
+    class:spin={run.status === "running"}
+    use:tip={mark.label}
   >
-    <Icon name={m.icon} size="1.25em" label={m.label} />
+    <Icon name={mark.icon} size="1.25em" label={mark.label} />
   </span>
 {/snippet}
 
-{#snippet jobCell(r: JobRunListedRow)}
-  <span class="name">{nameOf(r)}</span>
-  {#if r.definition_name && r.definition_name !== titleOf(r.kind)}
+{#snippet jobCell(run: JobRunListedRow)}
+  <span class="name">{nameOf(run)}</span>
+  {#if run.definition_name && run.definition_name !== titleOf(run.kind)}
     <span class="dim small"
-      >{titleOf(r.kind)}{r.subject ? ` · ${r.subject}` : ""}</span
+      >{titleOf(run.kind)}{run.subject ? ` · ${run.subject}` : ""}</span
     >
-  {:else if r.subject}
-    <span class="dim small">{r.subject}</span>
+  {:else if run.subject}
+    <span class="dim small">{run.subject}</span>
   {/if}
 {/snippet}
 
-{#snippet byCell(r: JobRunListedRow)}
-  {@const by = startedBy(r, titleOf)}
+{#snippet byCell(run: JobRunListedRow)}
+  {@const by = startedBy(run, titleOf)}
   <span class="name by"
     ><Icon name={by.icon} size="1.1em" /><span>{by.who}</span></span
   >
-  <span class="dim small"><Time at={r.created_at} /></span>
+  <span class="dim small"><Time at={run.created_at} /></span>
 {/snippet}
 
-{#snippet resultCell(r: JobRunListedRow)}
-  {#if r.children}
-    {@const c = r.children}
-    <button class="link" onclick={() => (parent = r)}>
-      {c.succeeded + c.failed} of {c.total} done{c.running
-        ? ` · ${c.running} running`
-        : ""}{c.failed ? ` · ${c.failed} failed` : ""}
+{#snippet resultCell(run: JobRunListedRow)}
+  {#if run.children}
+    {@const children = run.children}
+    <button class="link" onclick={() => (parent = run)}>
+      {children.succeeded + children.failed} of {children.total} done{children.running
+        ? ` · ${children.running} running`
+        : ""}{children.failed ? ` · ${children.failed} failed` : ""}
     </button>
   {/if}
-  {#if r.status === "running"}
+  {#if run.status === "running"}
     <span class="progress">
-      <Meter value={r.progress ?? 0} width={12} label="progress" />
-      <span class="pct">{Math.round((r.progress ?? 0) * 100)}%</span>
+      <Meter value={run.progress ?? 0} width={12} label="progress" />
+      <span class="pct">{Math.round((run.progress ?? 0) * 100)}%</span>
     </span>
-    <span class="dim small" use:tip={r.locked_by ?? undefined}>
-      {r.progress_note ?? "starting"}
-      {#if r.cancel_requested}<span class="warn"> · stopping</span>{/if}
+    <span class="dim small" use:tip={run.locked_by ?? undefined}>
+      {run.progress_note ?? "starting"}
+      {#if run.cancel_requested}<span class="warn"> · stopping</span>{/if}
     </span>
-  {:else if r.status === "queued"}
-    <span class="dim">{waitingText(r, now)}</span>
-  {:else if r.error}
-    <span class="err">{r.error}</span>
-  {:else if r.outcome}
-    <span class="small">{r.outcome}</span>
-  {:else if r.status === "cancelled"}
+  {:else if run.status === "queued"}
+    <span class="dim">{waitingText(run, now)}</span>
+  {:else if run.error}
+    <span class="err">{run.error}</span>
+  {:else if run.outcome}
+    <span class="small">{run.outcome}</span>
+  {:else if run.status === "cancelled"}
     <span class="dim">stopped</span>
   {/if}
 {/snippet}
 
-{#snippet tookCell(r: JobRunListedRow)}
-  <span class="dim took">{elapsed(r)}</span>
+{#snippet tookCell(run: JobRunListedRow)}
+  <span class="dim took">{elapsed(run)}</span>
 {/snippet}
 
 <!-- Both slots are always there, so stop stays under stop whether or not a
      run has a log worth opening. -->
-{#snippet actsCell(r: JobRunListedRow)}
+{#snippet actsCell(run: JobRunListedRow)}
   <span class="acts">
     <span class="slot">
-      {#if hasLog(r.log_tail)}
+      {#if hasLog(run.log_tail)}
         <Button
           variant="ghost"
           square
           iconSize="1.2em"
           icon="file"
           title="log"
-          aria-label={`log of ${nameOf(r)}`}
-          onclick={() => (logOf = r.id)}
+          aria-label={`log of ${nameOf(run)}`}
+          onclick={() => (logOf = run.id)}
         />
       {/if}
     </span>
     <span class="slot">
-      {#if isActive(r.status) && !r.cancel_requested}
+      {#if isActive(run.status) && !run.cancel_requested}
         <Button
           variant="ghost"
           square
@@ -269,8 +269,8 @@
           icon="stop"
           tone="danger"
           title="stop; a running run finishes its current step first"
-          aria-label={`stop ${nameOf(r)}`}
-          onclick={() => cancel(r)}
+          aria-label={`stop ${nameOf(run)}`}
+          onclick={() => cancel(run)}
         />
       {/if}
     </span>

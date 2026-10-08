@@ -34,37 +34,42 @@
   import Overview from "../admin/Overview.svelte";
   import Tile from "../admin/Tile.svelte";
 
-  const c = $derived(census.data.detail.catalog);
-  const k = $derived(census.data.detail.knowledge);
+  const catalog = $derived(census.data.detail.catalog);
+  const knowledge = $derived(census.data.detail.knowledge);
   const library = $derived(activity.data.library);
 
   const figures = $derived([
-    { key: "teams", label: t("teams"), value: c.teams, to: "teams" },
+    { key: "teams", label: t("teams"), value: catalog.teams, to: "teams" },
     {
       key: "products",
       label: t("products"),
-      value: c.products,
+      value: catalog.products,
       to: "products",
     },
     {
       key: "components",
       label: "components",
-      value: c.components,
+      value: catalog.components,
       to: "components",
     },
-    { key: "labels", label: "labels", value: c.labels, to: "labels" },
-    { key: "patterns", label: "patterns", value: c.patterns, to: "patterns" },
+    { key: "labels", label: "labels", value: catalog.labels, to: "labels" },
+    {
+      key: "patterns",
+      label: "patterns",
+      value: catalog.patterns,
+      to: "patterns",
+    },
     {
       key: "entries",
       label: "entries",
-      value: k.entries,
+      value: knowledge.entries,
     },
     ...(showCustomer()
       ? [
           {
             key: "customers",
             label: t("customers"),
-            value: c.customers,
+            value: catalog.customers,
             to: "customers",
           },
         ]
@@ -75,15 +80,15 @@
     () => api.get<ComponentCoverage[]>("/overview/components"),
     [],
   );
-  /* Follows the census: a dialog section over this overview changes products
-     without unmounting it, and the census is what gets recounted on close. */
+  // Follows the census: a dialog section over this overview changes products
+  // without unmounting it, and the census is what gets recounted on close.
   $effect(() => {
     if (!census.loading) void coverage.reload();
   });
   const map = $derived(coverageTree(coverage.data, t("products")));
 
-  /* Ordered as an entry moves through its life, not by size, so the chart
-     reads the same on every deployment. */
+  // Ordered as an entry moves through its life, not by size, so the chart reads
+  // the same on every deployment.
   const STATUS_TONES = {
     approved: "ok",
     draft: "accent",
@@ -96,7 +101,7 @@
     Object.entries(STATUS_TONES).map(([key, tone]): Col => ({
       key,
       label: key,
-      value: k.by_status[key] ?? 0,
+      value: knowledge.by_status[key] ?? 0,
       tone,
     })),
   );
@@ -107,29 +112,32 @@
     col<Col>(
       "share",
       "of entries",
-      (x) => (k.entries ? `${Math.round((x.value / k.entries) * 100)}%` : "–"),
+      (x) =>
+        knowledge.entries
+          ? `${Math.round((x.value / knowledge.entries) * 100)}%`
+          : "–",
       { end: true },
     ),
   ];
   const statusFigures = $derived<Count[]>([
-    { key: "entries", label: "entries", value: k.entries },
+    { key: "entries", label: "entries", value: knowledge.entries },
     {
       key: "approved",
       label: "approved",
-      value: k.by_status.approved ?? 0,
+      value: knowledge.by_status.approved ?? 0,
       tone: "ok",
     },
     {
       key: "nocomponent",
       label: "in no component",
-      value: k.entries_no_component,
-      tone: k.entries_no_component ? "warn" : "muted",
+      value: knowledge.entries_no_component,
+      tone: knowledge.entries_no_component ? "warn" : "muted",
     },
     {
       key: "noproduct",
       label: "in no product",
-      value: k.entries_no_product,
-      tone: k.entries_no_product ? "warn" : "muted",
+      value: knowledge.entries_no_product,
+      tone: knowledge.entries_no_product ? "warn" : "muted",
     },
   ]);
 
@@ -246,7 +254,7 @@
       .filter((d) => d.age === "older" || d.age === "quarter")
       .reduce((n, d) => n + d.n, 0),
   );
-  const approved = $derived(k.by_status.approved ?? 0);
+  const approved = $derived(knowledge.by_status.approved ?? 0);
   const share = (n: number, of: number) =>
     of ? Math.round((n / of) * 100) : 0;
   const backlogFigures = $derived<FigureItem[]>([
@@ -409,8 +417,8 @@
   <Tile
     title="entries by status"
     key="status"
-    meta={`${k.entries}`}
-    empty={!k.entries}
+    meta={`${knowledge.entries}`}
+    empty={!knowledge.entries}
   >
     {#snippet detail()}
       <Detail figures={statusFigures} table={statusTable}>
@@ -485,7 +493,7 @@
     title="review backlog"
     key="backlog"
     meta="{draftTotal} drafts"
-    empty={!k.by_status.approved && !k.by_status.draft}
+    empty={!knowledge.by_status.approved && !knowledge.by_status.draft}
   >
     {#snippet detail()}
       <Detail figures={staleFigures} loading={stale.loading} table={staleTable}>

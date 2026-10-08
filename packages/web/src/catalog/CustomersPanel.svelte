@@ -50,7 +50,8 @@
   let error = $state<string | null>(null);
   let busy = $state<string | null>(null);
 
-  /* One row of each form per customer, so two open profiles never share a draft. */
+  // One row of each form per customer, so two open profiles never share a
+  // draft.
   let factForm = $state({
     kind: "",
     label: "",
@@ -65,14 +66,14 @@
 
   async function loadProfile(slug: string) {
     try {
-      const [p, f, u] = await Promise.all([
+      const [profile, factRows, unitRows] = await Promise.all([
         api.get<CustomerProfile>(`/customers/${slug}/profile`),
         api.get<CustomerFactRow[]>(`/customers/${slug}/facts`),
         api.get<CustomerUnitRow[]>(`/customers/${slug}/units`).catch(() => []),
       ]);
-      units[slug] = u;
-      profiles[slug] = p;
-      facts[slug] = f;
+      units[slug] = unitRows;
+      profiles[slug] = profile;
+      facts[slug] = factRows;
     } catch (e) {
       error = errText(e);
     }
@@ -167,15 +168,15 @@
     aliases: "",
   });
 
-  function startEditUnit(slug: string, u: CustomerUnitRow) {
-    editUnit[slug] = u.slug;
+  function startEditUnit(slug: string, unit: CustomerUnitRow) {
+    editUnit[slug] = unit.slug;
     const rows = units[slug] ?? [];
     editForm = {
-      name: u.name,
-      kind: u.kind,
-      parent: unitName(rows, u.parent_id) ?? "",
-      profile: unitName(rows, u.profile_id) ?? "",
-      aliases: (u.aliases ?? []).join(", "),
+      name: unit.name,
+      kind: unit.kind,
+      parent: unitName(rows, unit.parent_id) ?? "",
+      profile: unitName(rows, unit.profile_id) ?? "",
+      aliases: (unit.aliases ?? []).join(", "),
     };
   }
 
@@ -237,17 +238,20 @@
   /** Depth-first with a depth, so the tree reads as a tree in a flat list. */
   function unitTree(rows: CustomerUnitRow[]) {
     const byParent = new Map<string | null, CustomerUnitRow[]>();
-    for (const u of rows)
-      byParent.set(u.parent_id, [...(byParent.get(u.parent_id) ?? []), u]);
-    const out: { u: CustomerUnitRow; depth: number }[] = [];
+    for (const unit of rows)
+      byParent.set(unit.parent_id, [
+        ...(byParent.get(unit.parent_id) ?? []),
+        unit,
+      ]);
+    const flat: { unit: CustomerUnitRow; depth: number }[] = [];
     const walk = (parent: string | null, depth: number) => {
-      for (const u of byParent.get(parent) ?? []) {
-        out.push({ u, depth });
-        walk(u.id, depth + 1);
+      for (const unit of byParent.get(parent) ?? []) {
+        flat.push({ unit, depth });
+        walk(unit.id, depth + 1);
       }
     };
     walk(null, 0);
-    return out;
+    return flat;
   }
 
   const unitName = (rows: CustomerUnitRow[], id: string | null) =>
@@ -340,23 +344,22 @@
   /** The customer whose record dialog is open, if one is. */
   let opened = $state<string | null>(null);
 
-  /* Everything hanging off the customer (units, facts, component rules)
-     fetched when its dialog opens, once the products its forms offer have
-     arrived. */
+  // Everything hanging off the customer (units, facts, component rules) fetched
+  // when its dialog opens, once the products its forms offer have arrived.
   $effect(() => {
     if (!opened || products.loading) return;
     const slug = opened;
     untrack(() => void openProfile(slug));
   });
 
-  async function createCustomer(d: Draft) {
+  async function createCustomer(draft: Draft) {
     await customers.mutate(() =>
       api.post("/customers", {
-        slug: d.slug,
-        name: d.name,
-        aliases: csv(String(d.aliases ?? "")),
-        emailDomains: csv(String(d.email_domains ?? "")),
-        notes: d.notes || undefined,
+        slug: draft.slug,
+        name: draft.name,
+        aliases: csv(String(draft.aliases ?? "")),
+        emailDomains: csv(String(draft.email_domains ?? "")),
+        notes: draft.notes || undefined,
       }),
     );
   }
@@ -377,8 +380,8 @@
   let filter = $state(recall("admin.customers.filter", ""));
   $effect(() => keep("admin.customers.filter", filter));
   const filtered = $derived.by(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return customers.data;
+    const needle = filter.trim().toLowerCase();
+    if (!needle) return customers.data;
     return customers.data.filter((c) =>
       [
         c.slug ?? "",
@@ -388,39 +391,46 @@
       ]
         .join(" ")
         .toLowerCase()
-        .includes(q),
+        .includes(needle),
     );
   });
 </script>
 
-{#snippet detail(r: Customer)}
-  {@const p = profiles[r.slug]}
+{#snippet detail(customer: Customer)}
+  {@const profile = profiles[customer.slug]}
   {#if error}<Note tone="danger">{error}</Note>{/if}
   <div class="profile">
     <div class="block wide">
       <span class="dim">estate</span>
-      {#each unitTree(units[r.slug] ?? []) as { u, depth } (u.id)}
+      {#each unitTree(units[customer.slug] ?? []) as { unit, depth } (unit.id)}
         <div class="frow" style="--depth: {depth}">
           <span class="indent"></span>
-          <Badge tone="muted">{u.kind}</Badge>
-          <button class="unitname" onclick={() => showUnit(r.slug, u.slug)}>
-            {u.name}
+          <Badge tone="muted">{unit.kind}</Badge>
+          <button
+            class="unitname"
+            onclick={() => showUnit(customer.slug, unit.slug)}
+          >
+            {unit.name}
           </button>
-          <span class="lbl">{u.slug}</span>
-          {#if u.profile_id}
+          <span class="lbl">{unit.slug}</span>
+          {#if unit.profile_id}
             <span class="dim sm"
-              >conforms to {unitName(units[r.slug] ?? [], u.profile_id)}</span
+              >conforms to {unitName(
+                units[customer.slug] ?? [],
+                unit.profile_id,
+              )}</span
             >
           {/if}
-          <button class="tiny" onclick={() => startEditUnit(r.slug, u)}
-            >edit</button
+          <button
+            class="tiny"
+            onclick={() => startEditUnit(customer.slug, unit)}>edit</button
           >
           <DeleteButton
             label="remove unit"
-            onclick={() => delUnit(r.slug, u.slug)}
+            onclick={() => delUnit(customer.slug, unit.slug)}
           />
         </div>
-        {#if editUnit[r.slug] === u.slug}
+        {#if editUnit[customer.slug] === unit.slug}
           <div class="frow add" style="--depth: {depth}">
             <span class="indent"></span>
             <input
@@ -438,10 +448,12 @@
               aria-label="inside"
               options={[
                 { value: "", label: "top level" },
-                ...(units[r.slug] ?? [])
+                ...(units[customer.slug] ?? [])
                   .filter(
                     (x) =>
-                      !unitSubtree(units[r.slug] ?? [], u).includes(x.slug),
+                      !unitSubtree(units[customer.slug] ?? [], unit).includes(
+                        x.slug,
+                      ),
                   )
                   .map((x) => ({ value: x.slug, label: `inside ${x.slug}` })),
               ]}
@@ -451,8 +463,8 @@
               aria-label="conforms to"
               options={[
                 { value: "", label: "no shared profile" },
-                ...(units[r.slug] ?? [])
-                  .filter((x) => x.slug !== u.slug)
+                ...(units[customer.slug] ?? [])
+                  .filter((x) => x.slug !== unit.slug)
                   .map((x) => ({
                     value: x.slug,
                     label: `conforms to ${x.slug}`,
@@ -467,22 +479,22 @@
             <Button
               size="sm"
               variant="primary"
-              busy={busy === r.slug}
-              onclick={() => saveUnit(r.slug)}
+              busy={busy === customer.slug}
+              onclick={() => saveUnit(customer.slug)}
             >
               save
             </Button>
             <Button
               size="sm"
               variant="ghost"
-              onclick={() => (editUnit[r.slug] = "")}
+              onclick={() => (editUnit[customer.slug] = "")}
             >
               cancel
             </Button>
           </div>
         {/if}
       {/each}
-      {#if !(units[r.slug] ?? []).length}
+      {#if !(units[customer.slug] ?? []).length}
         <span class="dim sm">
           Not broken down. Every fact below is true of the whole account.
         </span>
@@ -509,7 +521,7 @@
           aria-label="inside"
           options={[
             { value: "", label: "top level" },
-            ...(units[r.slug] ?? []).map((u) => ({
+            ...(units[customer.slug] ?? []).map((u) => ({
               value: u.slug,
               label: `inside ${u.slug}`,
             })),
@@ -520,7 +532,7 @@
           aria-label="conforms to"
           options={[
             { value: "", label: "no shared profile" },
-            ...(units[r.slug] ?? []).map((u) => ({
+            ...(units[customer.slug] ?? []).map((u) => ({
               value: u.slug,
               label: `conforms to ${u.slug}`,
             })),
@@ -533,71 +545,71 @@
           icon="plus"
           title="add unit"
           aria-label="add unit"
-          busy={busy === r.slug}
+          busy={busy === customer.slug}
           disabled={!unitForm.slug.trim() ||
             !unitForm.name.trim() ||
             !unitForm.kind.trim()}
-          onclick={() => addUnit(r.slug)}
+          onclick={() => addUnit(customer.slug)}
         />
       </div>
       <datalist id="unit-kinds">
-        {#each [...new Set((units[r.slug] ?? []).map((u) => u.kind))] as k}
-          <option value={k}></option>
+        {#each [...new Set((units[customer.slug] ?? []).map((u) => u.kind))] as kind}
+          <option value={kind}></option>
         {/each}
       </datalist>
     </div>
 
     <div class="block wide">
       <span class="dim">specifics</span>
-      {#if (units[r.slug] ?? []).length}
+      {#if (units[customer.slug] ?? []).length}
         <div class="frow">
           <span class="dim sm">showing</span>
           <Select
-            value={viewUnit[r.slug] ?? ""}
+            value={viewUnit[customer.slug] ?? ""}
             aria-label="resolve for unit"
             options={[
               { value: "", label: "the whole customer" },
-              ...(units[r.slug] ?? []).map((u) => ({
+              ...(units[customer.slug] ?? []).map((u) => ({
                 value: u.slug,
                 label: `as ${u.slug} sees it`,
               })),
             ]}
-            onchange={(v) => showUnit(r.slug, String(v))}
+            onchange={(v) => showUnit(customer.slug, String(v))}
           />
         </div>
       {/if}
 
-      {#if viewUnit[r.slug]}
+      {#if viewUnit[customer.slug]}
         <!-- Resolved ladder: inherited facts are greyed and say where from, so
              a reader can tell what is true of this line specifically. -->
-        {#each resolved[`${r.slug}:${viewUnit[r.slug]}`] ?? [] as f (f.kind + f.label)}
-          <div class="frow" class:inherited={f.inherited}>
-            <Badge tone="muted">{f.kind}</Badge>
-            {#if f.label}<span class="lbl">{f.label}</span>{/if}
-            <code>{f.value}</code>
+        {#each resolved[`${customer.slug}:${viewUnit[customer.slug]}`] ?? [] as fact (fact.kind + fact.label)}
+          <div class="frow" class:inherited={fact.inherited}>
+            <Badge tone="muted">{fact.kind}</Badge>
+            {#if fact.label}<span class="lbl">{fact.label}</span>{/if}
+            <code>{fact.value}</code>
             <span class="dim sm">
-              {f.inherited
-                ? `from ${f.origin_slug ?? "the customer"}${f.origin_kind ? ` (${f.origin_kind})` : ""}`
+              {fact.inherited
+                ? `from ${fact.origin_slug ?? "the customer"}${fact.origin_kind ? ` (${fact.origin_kind})` : ""}`
                 : "set here"}
             </span>
           </div>
         {/each}
-        {#if !(resolved[`${r.slug}:${viewUnit[r.slug]}`] ?? []).length}
+        {#if !(resolved[`${customer.slug}:${viewUnit[customer.slug]}`] ?? []).length}
           <span class="dim sm">Nothing applies to this unit yet.</span>
         {/if}
       {:else}
-        {#each facts[r.slug] ?? [] as f (f.id)}
+        {#each facts[customer.slug] ?? [] as fact (fact.id)}
           <div class="frow">
-            <Badge tone="muted">{f.kind}</Badge>
-            {#if f.label}<span class="lbl">{f.label}</span>{/if}
-            <code>{f.value}</code>
+            <Badge tone="muted">{fact.kind}</Badge>
+            {#if fact.label}<span class="lbl">{fact.label}</span>{/if}
+            <code>{fact.value}</code>
             <DeleteButton
               label="remove specific"
-              onclick={() => delFact(r.slug, f.id)}
+              onclick={() => delFact(customer.slug, fact.id)}
             />
           </div>
         {/each}
-        {#if !(facts[r.slug] ?? []).length}
+        {#if !(facts[customer.slug] ?? []).length}
           <span class="dim sm">
             Nothing recorded. An answer for them is only as good as what is
             here.
@@ -620,7 +632,7 @@
           aria-label="value"
           placeholder="value"
           bind:value={factForm.value}
-          onkeydown={(e) => e.key === "Enter" && addFact(r.slug)}
+          onkeydown={(e) => e.key === "Enter" && addFact(customer.slug)}
         />
         <Button
           variant="ghost"
@@ -629,9 +641,9 @@
           icon="plus"
           title="add specific"
           aria-label="add specific"
-          busy={busy === r.slug}
+          busy={busy === customer.slug}
           disabled={!factForm.kind.trim() || !factForm.value.trim()}
-          onclick={() => addFact(r.slug)}
+          onclick={() => addFact(customer.slug)}
         />
       </div>
       <!-- Where it was learned is what makes a handover fact auditable later. -->
@@ -658,13 +670,13 @@
             components.load(String(v));
           }}
         />
-        {#if (units[r.slug] ?? []).length}
+        {#if (units[customer.slug] ?? []).length}
           <Select
             bind:value={factForm.unit}
             aria-label="fact unit"
             options={[
               { value: "", label: "whole customer" },
-              ...(units[r.slug] ?? []).map((u) => ({
+              ...(units[customer.slug] ?? []).map((u) => ({
                 value: u.slug,
                 label: `true of ${u.slug}`,
               })),
@@ -685,7 +697,7 @@
         />
       </div>
       <datalist id="fact-kinds">
-        {#each kinds as k}<option value={k.kind}></option>{/each}
+        {#each kinds as factKind}<option value={factKind.kind}></option>{/each}
       </datalist>
       {#if kinds.length}
         <span class="dim sm">
@@ -698,12 +710,17 @@
     <div class="block">
       <span class="dim">components they run</span>
       <div class="chips">
-        {#each p?.components ?? [] as c (c.product_slug + c.slug)}
-          <Chip onremove={() => delComponent(r.slug, c.product_slug, c.slug)}
-            >{c.slug}</Chip
+        {#each profile?.components ?? [] as component (component.product_slug + component.slug)}
+          <Chip
+            onremove={() =>
+              delComponent(
+                customer.slug,
+                component.product_slug,
+                component.slug,
+              )}>{component.slug}</Chip
           >
         {/each}
-        {#if !(p?.components ?? []).length}
+        {#if !(profile?.components ?? []).length}
           <span class="dim sm">none recorded</span>
         {/if}
       </div>
@@ -736,7 +753,7 @@
           title="add component"
           aria-label="add component"
           disabled={!compForm.component}
-          onclick={() => addComponent(r.slug)}
+          onclick={() => addComponent(customer.slug)}
         />
       </div>
     </div>
@@ -744,13 +761,13 @@
     <div class="block">
       <span class="dim">their records</span>
       <div class="chips">
-        {#each p?.repos ?? [] as repo (repo.slug)}
+        {#each profile?.repos ?? [] as repo (repo.slug)}
           <Chip>{repo.slug}</Chip>
         {/each}
-        {#each p?.projects ?? [] as proj (proj.external_key)}
+        {#each profile?.projects ?? [] as proj (proj.external_key)}
           <Chip tone="accent">{proj.external_key}</Chip>
         {/each}
-        {#if !(p?.repos ?? []).length && !(p?.projects ?? []).length}
+        {#if !(profile?.repos ?? []).length && !(profile?.projects ?? []).length}
           <span class="dim sm">
             no repo or project is filed under them. Set those on the repo and
             project rows.
@@ -772,8 +789,8 @@
 
 <!-- Units, facts and component rules ride under the fields in the same
      dialog, so it is wider than the others. -->
-{#snippet profileExtra(f: { mode: "create" | "edit"; row: Customer | null })}
-  {#if f.row}<div class="profile">{@render detail(f.row)}</div>{/if}
+{#snippet profileExtra(form: { mode: "create" | "edit"; row: Customer | null })}
+  {#if form.row}<div class="profile">{@render detail(form.row)}</div>{/if}
 {/snippet}
 
 <CrudTable

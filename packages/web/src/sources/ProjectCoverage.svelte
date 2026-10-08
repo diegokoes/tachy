@@ -19,7 +19,7 @@
     onclose,
   }: {
     groups: CoverageGroup[];
-    onpick: (g: CoverageGroup) => void;
+    onpick: (group: CoverageGroup) => void;
     onclose: () => void;
   } = $props();
 
@@ -40,18 +40,23 @@
     </p>
   {:else}
     <ul class="groups">
-      {#each groups as g (g.key)}
-        <li class="group {toneOf(g)}">
-          <button class="head" disabled={!g.filter} onclick={() => onpick(g)}>
+      {#each groups as group (group.key)}
+        <li class="group {toneOf(group)}">
+          <button
+            class="head"
+            disabled={!group.filter}
+            onclick={() => onpick(group)}
+          >
             <span class="mark" aria-hidden="true"></span>
-            <span class="text">{g.label}</span>
-            {#if g.detail}<span class="detail">{g.detail}</span>{/if}
-            {#if g.filter}<span class="go" aria-hidden="true">{G.right}</span
+            <span class="text">{group.label}</span>
+            {#if group.detail}<span class="detail">{group.detail}</span>{/if}
+            {#if group.filter}<span class="go" aria-hidden="true"
+                >{G.right}</span
               >{/if}
           </button>
           <ul class="items">
-            {#each g.gaps as it, i (i)}
-              <li class={it.tone}>{it.text}</li>
+            {#each group.gaps as gap, i (i)}
+              <li class={gap.tone}>{gap.text}</li>
             {/each}
           </ul>
         </li>

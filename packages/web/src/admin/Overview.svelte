@@ -27,8 +27,8 @@
   const expanded = $derived(expandedKey());
   let grid: HTMLElement | undefined = $state();
 
-  /* A link to a chart that is not there - a stale key, a tile the viewer may
-     not see - lands on the overview rather than on an empty window. */
+  // A link to a chart that is not there - a stale key, a tile the viewer may
+  // not see - lands on the overview rather than on an empty window.
   $effect(() => {
     if (!expanded || loading) return;
     void tick().then(() => {
@@ -38,9 +38,12 @@
   });
 </script>
 
-<!-- Every overview is this and nothing else: a row of counters, then a grid of
-     charts that shares out the rest of the window, so the page never scrolls.
-     Air on every side rather than a frame - the window is the frame. -->
+<!--
+@component
+Every overview: a row of counters, then a grid of charts that shares out the
+rest of the window, so the page never scrolls. Air on every side and no frame:
+the window is the frame.
+-->
 <div class="overview" style="--cols: {cols}; --rows: {rows}">
   {#if error}<p class="error">{error}</p>{/if}
   {#if !expanded}<Counts items={figures} {loading} />{/if}

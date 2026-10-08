@@ -25,8 +25,8 @@
   const top = $derived(Math.max(1, ...types.map((t) => t.files)));
   const shown = $derived(all ? types : types.slice(0, FIRST));
 
-  /* Starts from the whole effective set, built-in types this repo lacks
-     included, so turning one type off does not quietly drop the rest. */
+  // Starts from the whole effective set, built-in types this repo lacks
+  // included, so turning one type off does not drop the rest.
   function toggle(ext: string, on: boolean) {
     const next = new Set(chosen);
     if (on) next.add(ext);
@@ -38,22 +38,22 @@
 </script>
 
 <div class="types">
-  {#each shown as t (t.ext)}
-    {@const on = !t.binary && chosen.has(t.ext)}
+  {#each shown as type (type.ext)}
+    {@const on = !type.binary && chosen.has(type.ext)}
     <ToggleRow
       checked={on}
-      disabled={t.binary}
-      label={t.ext ? `index .${t.ext} files` : "files with no extension"}
-      share={(on ? t.admitted : t.files) / top}
-      count={on && t.admitted !== t.files
-        ? `${fmt(t.admitted)} / ${fmt(t.files)}`
-        : fmt(t.files)}
-      onchange={(v) => toggle(t.ext, v)}
+      disabled={type.binary}
+      label={type.ext ? `index .${type.ext} files` : "files with no extension"}
+      share={(on ? type.admitted : type.files) / top}
+      count={on && type.admitted !== type.files
+        ? `${fmt(type.admitted)} / ${fmt(type.files)}`
+        : fmt(type.files)}
+      onchange={(v) => toggle(type.ext, v)}
     >
       {#snippet icon()}
-        <FileIcon icon={t.icon} light={t.icon_light} />
+        <FileIcon icon={type.icon} light={type.icon_light} />
       {/snippet}
-      {t.ext ? `.${t.ext}` : "no extension"}
+      {type.ext ? `.${type.ext}` : "no extension"}
     </ToggleRow>
   {/each}
   {#if types.length > FIRST}

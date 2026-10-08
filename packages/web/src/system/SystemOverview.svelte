@@ -65,8 +65,8 @@
   /** The lamp whose detail is open, if one is. */
   let lamp = $state<(Cell & { detail?: string }) | null>(null);
 
-  /* Current values only; a light refresh keeps them honest while the page is
-     open. The probes are deliberately not on this clock; see systemState. */
+  // Current values only, refreshed while the page is open. The probes are not
+  // on this clock; see `systemState`.
   let timer: ReturnType<typeof setInterval> | undefined;
   onMount(() => {
     void system.reload().then(() => (now = Date.now()));
@@ -79,10 +79,10 @@
   });
   onDestroy(() => timer && clearInterval(timer));
 
-  const r = $derived(system.data?.runtime ?? null);
+  const runtime = $derived(system.data?.runtime ?? null);
   const settings = $derived(system.data?.settings ?? null);
   const status = $derived(
-    (r?.status ?? null) as Record<string, unknown> | null,
+    (runtime?.status ?? null) as Record<string, unknown> | null,
   );
   const backup = $derived(status?.backup as Result | undefined);
   const restore = $derived(status?.restore as Result | undefined);
@@ -90,15 +90,18 @@
   const summary = $derived(loadSummary(loads.data.runs));
 
   /** A host result as a counter: its age, toned by whether it failed or is overdue. */
-  const result = (
-    x: Result | undefined,
+  const hostCounter = (
+    hostResult: Result | undefined,
     overdue: number,
   ): { text: string; tone: Tone } => {
     if (!status) return { text: "–", tone: "muted" };
-    if (!x?.at) return { text: "none", tone: "danger" };
-    const text = age(x.at, now) ?? "–";
-    if (x.ok === false) return { text, tone: "danger" };
-    return { text, tone: now - Date.parse(x.at) > overdue ? "warn" : "ok" };
+    if (!hostResult?.at) return { text: "none", tone: "danger" };
+    const text = age(hostResult.at, now) ?? "–";
+    if (hostResult.ok === false) return { text, tone: "danger" };
+    return {
+      text,
+      tone: now - Date.parse(hostResult.at) > overdue ? "warn" : "ok",
+    };
   };
 
   const disk = $derived.by(() => {
@@ -108,34 +111,49 @@
     return used.length ? Math.max(...used) : null;
   });
 
+  const runState = (): { text: string; tone: Tone } => {
+    if (!runtime) return { text: "–", tone: "muted" };
+    if (runtime.draining) return { text: "draining", tone: "warn" };
+    if (!runtime.readiness.ready) return { text: "not ready", tone: "danger" };
+    return runtime.refusingChats
+      ? { text: "paused", tone: "warn" }
+      : { text: "ready", tone: "ok" };
+  };
+  const tallyText = (counted: number) => {
+    if (tally) return `${tally.passing}/${counted}`;
+    return probes.running ? "…" : "–";
+  };
+  const tallyTone = (): Tone => {
+    if (!tally) return "muted";
+    if (tally.failing) return "danger";
+    return tally.warning ? "warn" : "ok";
+  };
+  const PASS_OK = 0.95;
+  const PASS_WARN = 0.8;
+  const passTone = (rate: number | null): Tone => {
+    if (rate === null) return "muted";
+    if (rate >= PASS_OK) return "ok";
+    return rate >= PASS_WARN ? "warn" : "danger";
+  };
+
   const figures = $derived.by(() => {
-    const ready = r?.readiness.ready;
-    const state = !r
-      ? { text: "–", tone: "muted" as Tone }
-      : r.draining
-        ? { text: "draining", tone: "warn" as Tone }
-        : !ready
-          ? { text: "not ready", tone: "danger" as Tone }
-          : r.refusingChats
-            ? { text: "paused", tone: "warn" as Tone }
-            : { text: "ready", tone: "ok" as Tone };
+    const state = runState();
     const commit = system.data?.env?.commit;
-    const b = result(backup, 12 * HOUR);
-    const rt = result(restore, 8 * 24 * HOUR);
-    /* A skipped probe ran nothing, so it is out of the denominator too. */
+    const backupCounter = hostCounter(backup, 12 * HOUR);
+    const restoreCounter = hostCounter(restore, 8 * 24 * HOUR);
+    // A skipped probe ran nothing, so it is out of the denominator too.
     const counted = tally ? tally.total - tally.skipped : 0;
     const openReports = census.data.warn.reports ?? 0;
+    let reportsTone: Tone = "muted";
+    if (openReports) reportsTone = "warn";
+    else if (census.data.counts.reports) reportsTone = "accent";
     return [
       { key: "status", label: "status", ...state, to: "runtime" },
       {
         key: "reports",
         label: "reports",
         value: census.data.counts.reports ?? 0,
-        tone: openReports
-          ? ("warn" as Tone)
-          : census.data.counts.reports
-            ? ("accent" as Tone)
-            : ("muted" as Tone),
+        tone: reportsTone,
         to: "reports",
       },
       {
@@ -148,24 +166,15 @@
         key: "up",
         label: "up",
         text:
-          r?.uptimeSeconds !== undefined ? span(r.uptimeSeconds * 1000) : "–",
+          runtime?.uptimeSeconds !== undefined
+            ? span(runtime.uptimeSeconds * 1000)
+            : "–",
       },
       {
         key: "checks",
         label: "checks",
-        text:
-          probes.running && !tally
-            ? "…"
-            : tally
-              ? `${tally.passing}/${counted}`
-              : "–",
-        tone: !tally
-          ? ("muted" as Tone)
-          : tally.failing
-            ? ("danger" as Tone)
-            : tally.warning
-              ? ("warn" as Tone)
-              : ("ok" as Tone),
+        text: tallyText(counted),
+        tone: tallyTone(),
         to: "checks",
       },
       {
@@ -173,18 +182,11 @@
         label: "load tests",
         text:
           summary.passRate === null ? "–" : pct(summary.passed, summary.judged),
-        tone:
-          summary.passRate === null
-            ? ("muted" as Tone)
-            : summary.passRate >= 0.95
-              ? ("ok" as Tone)
-              : summary.passRate >= 0.8
-                ? ("warn" as Tone)
-                : ("danger" as Tone),
+        tone: passTone(summary.passRate),
         to: "loads",
       },
-      { key: "backup", label: "last backup", ...b, to: "host" },
-      { key: "restore", label: "restore test", ...rt, to: "host" },
+      { key: "backup", label: "last backup", ...backupCounter, to: "host" },
+      { key: "restore", label: "restore test", ...restoreCounter, to: "host" },
       {
         key: "disk",
         label: "disk",
@@ -196,22 +198,29 @@
   });
 
   const gauges = $derived.by((): DialItem[] => {
-    if (!r) return [];
-    const t = r.turns;
-    const pg = "error" in r.postgres ? null : r.postgres;
-    const pgUsed = pg ? pg.byProcess.reduce((n, p) => n + p.n, 0) : 0;
-    const mem = r.memory;
+    if (!runtime) return [];
+    const turns = runtime.turns;
+    const postgres = "error" in runtime.postgres ? null : runtime.postgres;
+    const pgUsed = postgres
+      ? postgres.byProcess.reduce((n, p) => n + p.n, 0)
+      : 0;
+    const mem = runtime.memory;
     const memShare = mem?.maxBytes ? mem.currentBytes / mem.maxBytes : null;
-    const loop = r.eventLoopP99Ms;
+    const loop = runtime.eventLoopP99Ms;
+    let memCenter = "–";
+    if (memShare !== null) memCenter = `${Math.round(memShare * 100)}%`;
+    else if (mem) memCenter = bytes(mem.currentBytes);
+    let memSub = "unknown";
+    if (mem) memSub = mem.maxBytes ? bytes(mem.currentBytes) : "no limit";
     return [
       {
         key: "slots",
         label: "chat slots",
-        title: `${t.queued} queued · ${t.rejectedSinceBoot} refused since boot`,
-        value: ratio(t.slotsUsed, t.slotCap),
-        tone: load(ratio(t.slotsUsed, t.slotCap)),
-        center: pct(t.slotsUsed, t.slotCap),
-        sub: `${t.slotsUsed}/${t.slotCap}`,
+        title: `${turns.queued} queued · ${turns.rejectedSinceBoot} refused since boot`,
+        value: ratio(turns.slotsUsed, turns.slotCap),
+        tone: load(ratio(turns.slotsUsed, turns.slotCap)),
+        center: pct(turns.slotsUsed, turns.slotCap),
+        sub: `${turns.slotsUsed}/${turns.slotCap}`,
       },
       {
         key: "memory",
@@ -220,28 +229,21 @@
           memShare === null ? "no container limit" : "of the container limit",
         value: memShare ?? 0,
         tone: memShare === null ? "muted" : load(memShare),
-        center:
-          memShare === null
-            ? mem
-              ? bytes(mem.currentBytes)
-              : "–"
-            : `${Math.round(memShare * 100)}%`,
-        sub: mem
-          ? mem.maxBytes
-            ? `${bytes(mem.currentBytes)}`
-            : "no limit"
-          : "unknown",
+        center: memCenter,
+        sub: memSub,
       },
       {
         key: "postgres",
         label: "postgres",
-        title: pg
-          ? pg.byProcess.map((p) => `${p.name} ${p.state} ${p.n}`).join(" · ")
+        title: postgres
+          ? postgres.byProcess
+              .map((p) => `${p.name} ${p.state} ${p.n}`)
+              .join(" · ")
           : "unavailable",
-        value: pg ? ratio(pgUsed, pg.max) : 0,
-        tone: pg ? load(ratio(pgUsed, pg.max)) : "muted",
-        center: pg ? pct(pgUsed, pg.max) : "–",
-        sub: pg ? `${pgUsed}/${pg.max}` : "unknown",
+        value: postgres ? ratio(pgUsed, postgres.max) : 0,
+        tone: postgres ? load(ratio(pgUsed, postgres.max)) : "muted",
+        center: postgres ? pct(pgUsed, postgres.max) : "–",
+        sub: postgres ? `${pgUsed}/${postgres.max}` : "unknown",
       },
       {
         key: "loop",
@@ -272,59 +274,65 @@
     fail: "danger",
     skip: "muted",
   };
+  const SCHEMA_TONES: Record<string, Cell["tone"]> = {
+    match: "ok",
+    mismatch: "danger",
+    unstamped: "muted",
+  };
+  const MODEL_TONES: Record<string, Cell["tone"]> = {
+    ready: "ok",
+    external: "ok",
+    unreachable: "danger",
+    loading: "warn",
+  };
+  type Runtime = NonNullable<typeof runtime>;
+  /** `off` is the tone of a vault with no key set. */
+  const vaultTone = (
+    vault: Runtime["security"]["vault"],
+    off: Cell["tone"],
+  ): Cell["tone"] => {
+    if (!vault.enabled) return off;
+    return vault.by_key.some((k) => !k.current) ? "warn" : "ok";
+  };
+  const embedState = (embed: Runtime["embed"]) => {
+    if (!embed) return "unknown";
+    return embed.running ? "busy" : "idle";
+  };
 
-  /* One board for every "is this working" answer: the runtime's own readiness
-     lamps, tachy-watch's host checks, and the on-demand probes once run. They
-     answer the same question from different distances. */
+  // One board for every "is this working" answer: the runtime's own readiness
+  // lamps, tachy-watch's host checks, and the on-demand probes once run. They
+  // answer the same question from different distances.
   const lamps = $derived.by((): (Cell & { detail?: string })[] => {
-    if (!r) return [];
-    const rd = r.readiness;
-    const vault = r.security.vault;
-    const out: (Cell & { detail?: string })[] = [
+    if (!runtime) return [];
+    const readiness = runtime.readiness;
+    const vault = runtime.security.vault;
+    const cells: (Cell & { detail?: string })[] = [
       {
         key: "database",
         label: "database",
-        tone: rd.database ? "ok" : "danger",
-        title: rd.database ? "up" : "down",
+        tone: readiness.database ? "ok" : "danger",
+        title: readiness.database ? "up" : "down",
       },
       {
         key: "schema",
         label: "schema",
-        tone:
-          rd.schema === "match"
-            ? "ok"
-            : rd.schema === "mismatch"
-              ? "danger"
-              : rd.schema === "unstamped"
-                ? "muted"
-                : "warn",
-        title: rd.schema,
+        tone: SCHEMA_TONES[readiness.schema] ?? "warn",
+        title: readiness.schema,
         detail:
-          rd.schema === "mismatch"
+          readiness.schema === "mismatch"
             ? "The database schema does not match what this build expects. Apply db/schema.sql before relying on anything new."
             : undefined,
       },
       {
         key: "model",
         label: "model",
-        tone:
-          rd.model === "ready" || rd.model === "external"
-            ? "ok"
-            : rd.model === "unreachable"
-              ? "danger"
-              : rd.model === "loading"
-                ? "warn"
-                : "muted",
-        title: rd.model,
+        tone: MODEL_TONES[readiness.model] ?? "muted",
+        title: readiness.model,
       },
       {
         key: "vault",
         label: "vault keys",
-        tone: !vault.enabled
-          ? "muted"
-          : vault.by_key.some((k) => !k.current)
-            ? "warn"
-            : "ok",
+        tone: vaultTone(vault, "muted"),
         title: vault.enabled
           ? vault.by_key
               .map((k) => `${k.key_id ?? "no key id"}: ${k.count}`)
@@ -335,103 +343,102 @@
           : undefined,
       },
     ];
-    for (const [name, c] of Object.entries(
+    for (const [name, check] of Object.entries(
       (status?.watch as Watch | undefined)?.checks ?? {},
     ))
-      out.push({
+      cells.push({
         key: `watch-${name}`,
         label: name.replaceAll("_", " "),
-        tone: WATCH_TONES[c.state] ?? "muted",
-        title: c.value,
+        tone: WATCH_TONES[check.state] ?? "muted",
+        title: check.value,
       });
-    /* A probe is the deeper answer to the same question, so where both carry
-       one name (the database), only the probe is shown. Two lamps called
-       "database", one green and one red, read as the board contradicting
-       itself. */
+    // A probe is the deeper answer to the same question, so where both carry
+    // one name (the database) only the probe is shown: two lamps called
+    // "database" in different colours read as a contradiction.
     const probed = new Set((probes.checks ?? []).map((p) => p.name));
-    const kept = out.filter((l) => !probed.has(l.label));
-    for (const p of probes.checks ?? [])
+    const kept = cells.filter((l) => !probed.has(l.label));
+    for (const probe of probes.checks ?? [])
       kept.push({
-        key: `probe-${p.name}`,
-        label: p.name,
-        tone: PROBE_TONES[p.state] ?? "muted",
-        title: p.detail || undefined,
+        key: `probe-${probe.name}`,
+        label: probe.name,
+        tone: PROBE_TONES[probe.state] ?? "muted",
+        title: probe.detail || undefined,
       });
     return kept;
   });
 
   const runtimeFacts = $derived.by((): Fact[] => {
-    if (!r) return [];
-    const t = r.turns;
+    if (!runtime) return [];
+    const turns = runtime.turns;
     return [
       {
         key: "maintenance",
         label: "new chats",
-        value: r.refusingChats ? "paused" : "open",
-        tone: r.refusingChats ? "warn" : "ok",
-        detail: r.refusingChats ? "running turns finish" : undefined,
+        value: runtime.refusingChats ? "paused" : "open",
+        tone: runtime.refusingChats ? "warn" : "ok",
+        detail: runtime.refusingChats ? "running turns finish" : undefined,
       },
       {
         key: "queue",
         label: "chat queue",
-        value: String(t.queued),
-        tone: t.queued ? "warn" : undefined,
-        detail: t.rejectedSinceBoot
-          ? `${t.rejectedSinceBoot} refused since boot`
+        value: String(turns.queued),
+        tone: turns.queued ? "warn" : undefined,
+        detail: turns.rejectedSinceBoot
+          ? `${turns.rejectedSinceBoot} refused since boot`
           : "none refused",
       },
       {
         key: "approvals",
         label: "approvals waiting",
-        value: String(t.pendingApprovals),
-        tone: t.pendingApprovals ? "warn" : undefined,
+        value: String(turns.pendingApprovals),
+        tone: turns.pendingApprovals ? "warn" : undefined,
         detail:
-          t.oldestApprovalAgeSeconds === null
+          turns.oldestApprovalAgeSeconds === null
             ? undefined
-            : `oldest ${Math.round(t.oldestApprovalAgeSeconds / 60)} min`,
+            : `oldest ${Math.round(turns.oldestApprovalAgeSeconds / 60)} min`,
       },
       {
         key: "embed",
         label: "embedding queue",
-        value: r.embed ? String(r.embed.queries + r.embed.passages) : "–",
-        detail: r.embed ? (r.embed.running ? "busy" : "idle") : "unknown",
+        value: runtime.embed
+          ? String(runtime.embed.queries + runtime.embed.passages)
+          : "–",
+        detail: embedState(runtime.embed),
       },
     ];
   });
 
   const securityFacts = $derived.by((): Fact[] => {
-    if (!r) return [];
-    const s = r.security;
+    if (!runtime) return [];
+    const security = runtime.security;
     return [
       {
         key: "sso",
         label: "single sign-on",
-        value: s.sso_configured ? "on" : "off",
-        tone: s.sso_configured ? "ok" : "muted",
-        detail: s.sso_configured
-          ? `${s.password_login_under_sso} with password too`
+        value: security.sso_configured ? "on" : "off",
+        tone: security.sso_configured ? "ok" : "muted",
+        detail: security.sso_configured
+          ? `${security.password_login_under_sso} with password too`
           : "password only",
       },
       {
         key: "vault",
         label: "credential vault",
-        value: s.vault.enabled ? (s.vault.current_key ?? "on") : "off",
-        tone: !s.vault.enabled
-          ? "danger"
-          : s.vault.by_key.some((k) => !k.current)
-            ? "warn"
-            : "ok",
-        detail: s.vault.enabled ? undefined : "TACHY_SECRET_KEY unset",
+        value: security.vault.enabled
+          ? (security.vault.current_key ?? "on")
+          : "off",
+        tone: vaultTone(security.vault, "danger"),
+        detail: security.vault.enabled ? undefined : "TACHY_SECRET_KEY unset",
       },
       {
         key: "passwords",
         label: "password accounts",
-        value: String(s.users_with_password),
+        value: String(security.users_with_password),
       },
       {
         key: "service",
         label: "service accounts",
-        value: String(s.service_accounts),
+        value: String(security.service_accounts),
       },
     ];
   });
@@ -474,7 +481,7 @@
   });
 
   const backups = $derived.by((): Col[] => {
-    const rows = ((r?.history?.backup ?? []) as Result[])
+    const rows = ((runtime?.history?.backup ?? []) as Result[])
       .filter((b) => b.at)
       .slice(-12);
     const top = Math.max(1, ...rows.map((b) => (b.dump_bytes ?? 0) / 2 ** 20));
@@ -497,28 +504,28 @@
     );
   });
 
+  const RUN_TONES: Record<string, Col["tone"]> = {
+    passed: "ok",
+    failed: "danger",
+    error: "danger",
+  };
   const loadTests = $derived(
     loads.data.runs
-      .map((t) => ({ t, p95: runP95(t) }))
+      .map((run) => ({ run, p95: runP95(run) }))
       .filter((x) => x.p95 !== null)
       .slice(0, 12)
       .reverse()
-      .map(({ t, p95 }): Col => ({
-        key: t.id,
-        label: dayOfMonth(t.created_at),
-        title: `${t.script}${t.profile ? ` (${t.profile})` : ""} · ${t.target} · ${t.status} · ${utcTip(t.created_at)}`,
+      .map(({ run, p95 }): Col => ({
+        key: run.id,
+        label: dayOfMonth(run.created_at),
+        title: `${run.script}${run.profile ? ` (${run.profile})` : ""} · ${run.target} · ${run.status} · ${utcTip(run.created_at)}`,
         value: p95 ?? 0,
-        tone:
-          t.status === "passed"
-            ? "ok"
-            : t.status === "failed" || t.status === "error"
-              ? "danger"
-              : "muted",
+        tone: RUN_TONES[run.status] ?? "muted",
       })),
   );
 
   const storage = $derived(
-    (r?.tableSizes ?? []).map((x): Bar => ({
+    (runtime?.tableSizes ?? []).map((x): Bar => ({
       key: x.table,
       label: x.table,
       value: x.bytes,
@@ -527,7 +534,7 @@
 
   type Backup = Result & { at: string };
   const history = $derived(
-    ((r?.history?.backup ?? []) as Result[]).filter((b): b is Backup =>
+    ((runtime?.history?.backup ?? []) as Result[]).filter((b): b is Backup =>
       Boolean(b.at),
     ),
   );
@@ -636,10 +643,10 @@
   />
 {/snippet}
 
-{#snippet runtimeExtra(f: Fact)}
-  {#if f.key === "maintenance" && r}
+{#snippet runtimeExtra(fact: Fact)}
+  {#if fact.key === "maintenance" && runtime}
     <Checkbox
-      checked={r.refusingChats}
+      checked={runtime.refusingChats}
       disabled={pausing}
       ariaLabel="pause new chats"
       onchange={(on) => setMaintenance(on)}
@@ -780,18 +787,18 @@
 </Overview>
 
 {#if lamp}
-  {@const l = lamp}
+  {@const open = lamp}
   <Modal
-    title={l.label}
+    title={open.label}
     width="28rem"
     cancelLabel="close"
     onCancel={() => (lamp = null)}
   >
     <p class="state">
-      <Badge tone={l.tone}>{LAMP_WORDS[l.tone]}</Badge>
-      {#if l.title}<span class="dim">{l.title}</span>{/if}
+      <Badge tone={open.tone}>{LAMP_WORDS[open.tone]}</Badge>
+      {#if open.title}<span class="dim">{open.title}</span>{/if}
     </p>
-    {#if l.detail}<Note>{l.detail}</Note>{/if}
+    {#if open.detail}<Note>{open.detail}</Note>{/if}
     <button
       class="link"
       onclick={() => {

@@ -1,35 +1,35 @@
 import type { ComponentRow } from "@tachy/contract";
 
 /**
- * Components nest arbitrarily deep via `parent_id`, but `/products/:slug/components`
- * returns them flat and slug-ordered - so a sub-component lands next to its
- * parent's siblings and the shape is invisible in a picker. Re-order the flat
- * list depth-first and indent each row by its depth.
+ * Components nest arbitrarily deep via `parent_id`, but
+ * `/products/:slug/components` returns them flat and slug-ordered, so a
+ * sub-component lands next to its parent's siblings. Re-orders the flat list
+ * depth-first and indents each row by its depth.
  */
 export function componentOptions(
   rows: Pick<ComponentRow, "id" | "slug" | "parent_id">[],
 ): { value: string; label: string }[] {
   type Row = (typeof rows)[number];
   const byParent = new Map<string | null, Row[]>();
-  for (const r of rows) {
-    byParent.set(r.parent_id, [...(byParent.get(r.parent_id) ?? []), r]);
+  for (const row of rows) {
+    byParent.set(row.parent_id, [...(byParent.get(row.parent_id) ?? []), row]);
   }
 
-  // A row whose parent is not in this list (filtered, or a stale id) would
-  // otherwise vanish; treat it as a root so nothing is silently dropped.
+  // A row whose parent is not in this list (filtered, or a stale id) is treated
+  // as a root, or it would not be listed at all.
   const ids = new Set(rows.map((r) => r.id));
   const roots = rows.filter(
     (r) => r.parent_id === null || !ids.has(r.parent_id),
   );
 
-  const out: { value: string; label: string }[] = [];
+  const options: { value: string; label: string }[] = [];
   const walk = (row: Row, depth: number) => {
-    out.push({
+    options.push({
       value: row.slug,
       label: depth ? `${" ".repeat(depth * 2)}↳ ${row.slug}` : row.slug,
     });
     for (const child of byParent.get(row.id) ?? []) walk(child, depth + 1);
   };
-  for (const r of roots) walk(r, 0);
-  return out;
+  for (const root of roots) walk(root, 0);
+  return options;
 }

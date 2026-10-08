@@ -28,8 +28,8 @@ export const endpointP95 = (run: TestRun) =>
 
 /** p95 across every request of the run, or null when k6 recorded none. */
 export const runP95 = (run: TestRun): number | null => {
-  const p = metrics(run).http_req_duration?.["p(95)"];
-  return typeof p === "number" ? Math.round(p) : null;
+  const p95 = metrics(run).http_req_duration?.["p(95)"];
+  return typeof p95 === "number" ? Math.round(p95) : null;
 };
 
 const PASSED = "passed";
@@ -56,19 +56,19 @@ export function loadSummary(runs: TestRun[]): LoadSummary {
   let judged = 0;
   let passed = 0;
   let stress = 0;
-  for (const r of runs) {
-    const s = scripts.get(r.script) ?? { runs: 0, passed: 0, stress: 0 };
-    s.runs += 1;
-    if (r.profile === "stress") {
-      s.stress += 1;
+  for (const run of runs) {
+    const tally = scripts.get(run.script) ?? { runs: 0, passed: 0, stress: 0 };
+    tally.runs += 1;
+    if (run.profile === "stress") {
+      tally.stress += 1;
       stress += 1;
     }
-    if (r.status === PASSED || FAILED.has(r.status)) judged += 1;
-    if (r.status === PASSED) {
+    if (run.status === PASSED || FAILED.has(run.status)) judged += 1;
+    if (run.status === PASSED) {
       passed += 1;
-      s.passed += 1;
+      tally.passed += 1;
     }
-    scripts.set(r.script, s);
+    scripts.set(run.script, tally);
   }
   return {
     runs: runs.length,

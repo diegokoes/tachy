@@ -15,15 +15,15 @@
   import Rows from "./Rows.svelte";
 
   const prefs = $derived(agentPrefs.prefs);
-  const list = $derived(agentPrefs.models);
-  const listed = $derived(list?.models ?? []);
+  const modelList = $derived(agentPrefs.models);
+  const listed = $derived(modelList?.models ?? []);
 
   const current = $derived(
     listed.find((m) => m.id === prefs?.agent_model.value),
   );
 
-  /* The stored model stays pickable when the runtime no longer offers it, so
-     the menu never claims a value other than the one turns actually use. */
+  // The stored model stays pickable when the runtime no longer offers it, so
+  // the menu never shows a value other than the one turns use.
   const modelOptions = $derived.by(() => {
     const opts: { value: string; label: string; hint?: string }[] = listed.map(
       (m) => ({
@@ -44,21 +44,21 @@
 
   const efforts = $derived(current ? current.efforts : [...AGENT_EFFORTS]);
   const effortOptions = $derived.by(() => {
-    const v = prefs?.agent_effort.value;
+    const stored = prefs?.agent_effort.value;
     const opts: { value: string; label: string; hint?: string }[] = efforts.map(
       (e) => ({
         value: e,
         label: e,
       }),
     );
-    if (v && !efforts.includes(v as (typeof efforts)[number]))
-      opts.push({ value: v, label: v, hint: "not offered" });
+    if (stored && !efforts.includes(stored as (typeof efforts)[number]))
+      opts.push({ value: stored, label: stored, hint: "not offered" });
     return opts;
   });
 
-  /* Typed by hand only when the runtime could not be asked: then there is no
-     list to pick from, and a model id is the one thing left to go on. */
-  const typed = $derived(Boolean(list && !list.models.length));
+  // Typed by hand only when the runtime could not be asked: then there is no
+  // list to pick from, and a model id is the one thing left to go on.
+  const typed = $derived(Boolean(modelList && !modelList.models.length));
   let modelDraft = $state("");
   const draftChanged = $derived(
     Boolean(
@@ -91,7 +91,7 @@
   <Rows>
     <Row
       label="model"
-      hint={list?.restricted ? "limited by your org" : undefined}
+      hint={modelList?.restricted ? "limited by your org" : undefined}
     >
       {#if typed}
         <input
@@ -110,7 +110,7 @@
         />
       {/if}
       {#snippet actions()}
-        {#if typed && list?.error}
+        {#if typed && modelList?.error}
           <span class="warn">?</span>
         {/if}
         <Origin of={origin(prefs.agent_model.source, "default")} />

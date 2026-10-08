@@ -12,42 +12,42 @@
 
   const groups = $derived(groupCounts(items));
 
-  /* A breakdown that goes where its parent goes adds no target of its own, so
-     the whole group is one click rather than buttons inside a button. */
+  // A breakdown that goes where its parent goes adds no target of its own, so
+  // the whole group is one click rather than buttons inside a button.
   const merged = (head: Count, parts: Count[]) =>
     parts.every((p) => !p.to || p.to === head.to);
 </script>
 
-{#snippet figure(it: Count)}
+{#snippet figure(counter: Count)}
   {#if loading}
     <span class="n skeleton" aria-label="loading">{RAMP[0].repeat(4)}</span>
   {:else}
-    <span class="n {it.tone ?? 'accent'}"
-      >{it.text ?? (it.value ?? 0).toLocaleString()}</span
+    <span class="n {counter.tone ?? 'accent'}"
+      >{counter.text ?? (counter.value ?? 0).toLocaleString()}</span
     >
   {/if}
-  <span class="lbl">{it.label}</span>
+  <span class="lbl">{counter.label}</span>
 {/snippet}
 
-{#snippet part(it: Count)}
-  <span class="pn {it.tone ?? 'accent'}"
+{#snippet part(counter: Count)}
+  <span class="pn {counter.tone ?? 'accent'}"
     >{loading
       ? RAMP[0].repeat(2)
-      : (it.text ?? (it.value ?? 0).toLocaleString())}</span
+      : (counter.text ?? (counter.value ?? 0).toLocaleString())}</span
   >
-  <span class="pl">{it.label}</span>
+  <span class="pl">{counter.label}</span>
 {/snippet}
 
 {#snippet parts(list: Count[])}
   <span class="parts">
-    {#each list as p (p.key)}
-      {#if p.to}
-        {@const to = p.to}
+    {#each list as counter (counter.key)}
+      {#if counter.to}
+        {@const to = counter.to}
         <button class="part go" onclick={() => showSection(to)}
-          >{@render part(p)}</button
+          >{@render part(counter)}</button
         >
       {:else}
-        <span class="part">{@render part(p)}</span>
+        <span class="part">{@render part(counter)}</span>
       {/if}
     {/each}
   </span>
@@ -55,25 +55,25 @@
 
 {#snippet plain(list: Count[])}
   <span class="parts">
-    {#each list as p (p.key)}
-      <span class="part">{@render part(p)}</span>
+    {#each list as counter (counter.key)}
+      <span class="part">{@render part(counter)}</span>
     {/each}
   </span>
 {/snippet}
 
 <div class="counts">
-  {#each groups as g (g.head.key)}
-    {@const head = g.head}
+  {#each groups as group (group.head.key)}
+    {@const head = group.head}
     {@const to = head.to}
     <div
       class="group"
-      class:split={g.parts.length > 0}
-      style="--w: {1 + g.parts.length * 0.35}"
+      class:split={group.parts.length > 0}
+      style="--w: {1 + group.parts.length * 0.35}"
     >
-      {#if g.parts.length && to && merged(head, g.parts)}
+      {#if group.parts.length && to && merged(head, group.parts)}
         <button class="cell go" onclick={() => showSection(to)}>
           <span class="main">{@render figure(head)}</span>
-          {@render plain(g.parts)}
+          {@render plain(group.parts)}
         </button>
       {:else}
         {#if to}
@@ -85,7 +85,7 @@
             <span class="main">{@render figure(head)}</span>
           </div>
         {/if}
-        {#if g.parts.length}{@render parts(g.parts)}{/if}
+        {#if group.parts.length}{@render parts(group.parts)}{/if}
       {/if}
     </div>
   {/each}

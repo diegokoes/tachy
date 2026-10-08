@@ -19,6 +19,10 @@
   let runs = $state<FlowRun[]>([]);
   let error = $state<string | null>(null);
 
+  const POLL_MS = 3000;
+  /** Polls made after a refresh whether or not a run is still going. */
+  const EAGER_POLLS = 10;
+
   async function load(id: string) {
     try {
       const got = await api.get<FlowRun[]>(`/flows/${id}/runs`);
@@ -32,8 +36,8 @@
     }
   }
 
-  /* Runs are queued jobs, so a new one shows up a moment after it is asked
-     for; the list is read again every few seconds while anything moves. */
+  // Runs are queued jobs, so a new one shows up a moment after it is asked for;
+  // the list is read again every few seconds while anything moves.
   $effect(() => {
     const id = flowId;
     refresh;
@@ -41,8 +45,9 @@
     let ticks = 0;
     const timer = setInterval(() => {
       ticks++;
-      if (ticks < 10 || runs.some((r) => r.status === "running")) void load(id);
-    }, 3000);
+      if (ticks < EAGER_POLLS || runs.some((r) => r.status === "running"))
+        void load(id);
+    }, POLL_MS);
     return () => clearInterval(timer);
   });
 
@@ -56,16 +61,16 @@
 
 <div class="runs">
   {#if error}<Note tone="danger">{error}</Note>{/if}
-  {#each runs as r (r.id)}
+  {#each runs as run (run.id)}
     <button
       class="run"
-      class:sel={r.id === selected}
-      onclick={() => onpick(r.id === selected ? null : r)}
+      class:sel={run.id === selected}
+      onclick={() => onpick(run.id === selected ? null : run)}
     >
-      <Badge tone={TONES[r.status]}>{r.status}</Badge>
-      {#if r.dry_run}<Badge tone="warn">dry</Badge>{/if}
-      <span class="when"><Time at={r.started_at} /></span>
-      <span class="trig">{r.trigger_id ?? "by hand"}</span>
+      <Badge tone={TONES[run.status]}>{run.status}</Badge>
+      {#if run.dry_run}<Badge tone="warn">dry</Badge>{/if}
+      <span class="when"><Time at={run.started_at} /></span>
+      <span class="trig">{run.trigger_id ?? "by hand"}</span>
     </button>
   {:else}
     <p class="none">No runs yet. Try it on an item with test run.</p>

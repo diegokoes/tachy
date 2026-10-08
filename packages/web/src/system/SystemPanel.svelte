@@ -46,14 +46,14 @@
   async function saveSetting(key: string, value: unknown) {
     error = null;
     try {
-      const res = await api.put<{ settings: SystemInfo["settings"] }>(
+      const saved = await api.put<{ settings: SystemInfo["settings"] }>(
         `/settings/${key}`,
         { value },
       );
-      if (system) system = { ...system, settings: res.settings };
+      if (system) system = { ...system, settings: saved.settings };
       syncDraft();
-      /* The overview behind this dialog reads its own copy; refresh it so the
-         setting shows there the moment the dialog closes. */
+      // The overview behind this dialog reads its own copy; refresh it so the
+      // setting shows there the moment the dialog closes.
       void shared.reload();
 
       if (key === "deployment_profile") await initSession();

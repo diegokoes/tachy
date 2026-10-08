@@ -4,8 +4,8 @@
   import { tip, VimMark } from "../tui";
   import RefList from "./RefList.svelte";
 
-  /* Real chords, not pre-formatted display strings: they go through the same
-     speller as a rebindable key, so the two lists cannot drift apart. */
+  // Real chords, not pre-formatted display strings: they go through the same
+  // speller as a rebindable key, so the two lists cannot drift apart.
   const VIM: { keys: string[]; what: string }[] = [
     { keys: ["g g", "shift+g"], what: "first / last row" },
     { keys: ["/"], what: "focus the search box" },
