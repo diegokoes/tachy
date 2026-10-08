@@ -63,6 +63,9 @@ create table users (
     -- Honoured only while SSO is configured: then password login works for
     -- these accounts alone (break-glass admin, load-test user).
     password_login_allowed boolean not null default false,
+    -- A session cookie carries the value it was issued under and stops working
+    -- once this moves on: logout, a new password, being disabled.
+    session_epoch int not null default 0,
     created_at    timestamptz not null default now()
 );
 

@@ -92,7 +92,7 @@ const INHERITED_ENV = [
 export async function mcpConfig(
   userEmail: string | undefined,
   settings: EffectiveSettings,
-  turnId?: string,
+  turn: { id?: string; actorRole?: "admin" } = {},
 ): Promise<Omit<AgentConfig, "systemPrompt">> {
   const mcpEnv: Record<string, string> = {};
   for (const name of INHERITED_ENV) {
@@ -111,10 +111,11 @@ export async function mcpConfig(
   if (userEmail) mcpEnv.TACHY_USER_EMAIL = userEmail;
   // Lets a write made during a turn be told apart from one made by someone
   // pointing their own MCP client at tachy, and links it back to the run.
-  if (turnId) {
+  if (turn.id) {
     mcpEnv.TACHY_ACTOR = "agent";
-    mcpEnv.TACHY_TURN_ID = turnId;
+    mcpEnv.TACHY_TURN_ID = turn.id;
   }
+  if (turn.actorRole) mcpEnv.TACHY_ACTOR_ROLE = turn.actorRole;
   if (settings.redaction_global.value) mcpEnv.TACHY_REDACT = "true";
 
   mcpEnv.NODE_OPTIONS = "--max-old-space-size=256";

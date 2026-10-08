@@ -122,7 +122,7 @@ export async function login(email: string, password: string): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
-  await fetch("/auth/logout");
+  await fetch("/auth/logout", { method: "POST" });
   session.me = null;
   window.location.href = "/";
 }

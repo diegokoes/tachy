@@ -22,7 +22,7 @@ import { getArtifact, listVisibleArtifacts } from "@tachy/core/exports";
 import { saveUpload } from "@tachy/core/chat";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { requireCaller } from "../authz";
-import { sessionEmail } from "../auth";
+import { getIdentity, sessionEmail } from "../auth";
 import { lifecycle } from "../lifecycle";
 import { requestIdOf } from "../logging";
 import { AdmissionCancelled, QueueFull } from "../admission";
@@ -146,7 +146,14 @@ export const agent = new Hono()
     // edit made mid-turn records which conversation made it.
     const turnId = randomUUID();
     const settings = await effectiveSettings();
-    const base = await mcpConfig(userEmail, settings, turnId);
+    const identity = getIdentity(c);
+    const base = await mcpConfig(userEmail, settings, {
+      id: turnId,
+      actorRole:
+        identity?.via === "token" || identity?.via === "open"
+          ? "admin"
+          : undefined,
+    });
     const requestId = requestIdOf(c);
     if (requestId) base.mcpEnv.TACHY_REQUEST_ID = requestId;
     const config: AgentConfig = {
