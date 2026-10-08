@@ -3,6 +3,8 @@ import type { Tone } from "../tui";
 import type { IconName } from "../tui/icons";
 import { span } from "../admin/overview";
 
+const MINUTE_MS = 60_000;
+
 export const STATUS_MARK: Record<
   JobStatus,
   { icon: IconName; tone: Tone; label: string }
@@ -77,7 +79,7 @@ export function waitingText(
     return `retry ${run.attempts + 1} of ${run.max_attempts}`;
   const from = Date.parse(run.run_after || run.created_at);
   const ms = Number.isFinite(from) ? now - from : 0;
-  return ms < 60_000 ? "waiting" : `waiting ${span(ms)}`;
+  return ms < MINUTE_MS ? "waiting" : `waiting ${span(ms)}`;
 }
 
 /** The health mark of a job: how its last run ended, and how long ago. */

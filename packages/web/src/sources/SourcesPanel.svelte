@@ -210,6 +210,10 @@
     return trimmed;
   }
 
+  const SLUG_SUFFIXES: Partial<Record<SourceType, string>> = {
+    freshdesk: "-freshdesk",
+    "azure-devops": "-ado",
+  };
   /** acme.freshdesk.com → acme-freshdesk: the slug names the connection, not the host. */
   function suggestSlug(type: SourceType, host: string): string {
     const raw = host
@@ -222,11 +226,7 @@
         : raw.split("/")[0].split(".")[0];
     const base = slugify(stem);
     if (!base) return "";
-    return type === "freshdesk"
-      ? `${base}-freshdesk`
-      : type === "azure-devops"
-        ? `${base}-ado`
-        : base;
+    return base + (SLUG_SUFFIXES[type] ?? "");
   }
 
   const columns: Column<Connection>[] = $derived([
@@ -353,12 +353,11 @@
     teams.reload();
   });
 
-  const probeTone = (c: Connection) =>
-    probes[c.slug] === undefined
-      ? undefined
-      : probes[c.slug].ok
-        ? ("ok" as const)
-        : ("danger" as const);
+  const probeTone = (c: Connection) => {
+    const probe = probes[c.slug];
+    if (probe === undefined) return undefined;
+    return probe.ok ? ("ok" as const) : ("danger" as const);
+  };
 </script>
 
 {#snippet typeCell(connection: Connection)}

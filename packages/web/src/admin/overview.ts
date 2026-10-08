@@ -21,19 +21,31 @@ export const pct = (n: number, of: number) =>
  * nothing to be ready. The ring colours the part that is done, so a partial
  * state must not paint the finished part red.
  */
-export const grade = (done: number, of: number): Tone =>
-  !of ? "muted" : done === of ? "ok" : done ? "warn" : "danger";
+export const grade = (done: number, of: number): Tone => {
+  if (!of) return "muted";
+  if (done === of) return "ok";
+  return done ? "warn" : "danger";
+};
+
+const LOAD_AT_CEILING = 0.9;
+const LOAD_CLOSE = 0.7;
 
 /** A load against its ceiling: fine, getting close, at it. */
-export const load = (share: number): Tone =>
-  share >= 0.9 ? "danger" : share >= 0.7 ? "warn" : "ok";
+export const load = (share: number): Tone => {
+  if (share >= LOAD_AT_CEILING) return "danger";
+  return share >= LOAD_CLOSE ? "warn" : "ok";
+};
+
+const MINUTE_SECONDS = 60;
+const HOUR_MINUTES = 60;
+const HOURS_SHOWN_BELOW = 48;
 
 /** "12 min", "5 h", "3 d" - how long ago, or how long up. */
 export const span = (ms: number) => {
   const min = Math.max(0, Math.round(ms / 60_000));
-  if (min < 60) return `${min} min`;
-  const h = Math.round(min / 60);
-  return h < 48 ? `${h} h` : `${Math.round(h / 24)} d`;
+  if (min < HOUR_MINUTES) return `${min} min`;
+  const h = Math.round(min / HOUR_MINUTES);
+  return h < HOURS_SHOWN_BELOW ? `${h} h` : `${Math.round(h / 24)} d`;
 };
 
 export const age = (iso: string | null | undefined, now = Date.now()) => {
@@ -44,23 +56,25 @@ export const age = (iso: string | null | undefined, now = Date.now()) => {
 /** "2m 10s", "45s", "1h 5m". */
 export const duration = (seconds: number) => {
   const whole = Math.round(seconds);
-  if (whole < 60) return `${whole}s`;
-  const minutes = Math.floor(whole / 60);
-  if (minutes < 60) return `${minutes}m ${whole % 60}s`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  if (whole < MINUTE_SECONDS) return `${whole}s`;
+  const minutes = Math.floor(whole / MINUTE_SECONDS);
+  if (minutes < HOUR_MINUTES) return `${minutes}m ${whole % MINUTE_SECONDS}s`;
+  return `${Math.floor(minutes / HOUR_MINUTES)}h ${minutes % HOUR_MINUTES}m`;
 };
 
 const UNITS = ["B", "KiB", "MiB", "GiB", "TiB"];
+const UNIT_STEP = 1024;
+const ONE_DECIMAL_BELOW = 10;
 
 /** 1536 → "1.5 KiB". */
 export const bytes = (n: number) => {
   let value = n;
   let i = 0;
-  while (value >= 1024 && i < UNITS.length - 1) {
-    value /= 1024;
+  while (value >= UNIT_STEP && i < UNITS.length - 1) {
+    value /= UNIT_STEP;
     i++;
   }
-  return `${value >= 10 || i === 0 ? Math.round(value) : value.toFixed(1)} ${UNITS[i]}`;
+  return `${value >= ONE_DECIMAL_BELOW || i === 0 ? Math.round(value) : value.toFixed(1)} ${UNITS[i]}`;
 };
 
 export type Count = {

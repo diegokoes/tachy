@@ -196,15 +196,22 @@ export function toGraph(root: ArchNode): Graph {
   return { nodes, links };
 }
 
+/** Sizes by rank: a product, its direct children, everything deeper. */
+const DOT_RADIUS = [11, 6.5, 4.5];
+const LABEL_FONT = [14, 12, 11];
+const sizeRank = (n: GraphNode) => {
+  if (n.kind === "product") return 0;
+  return n.depth === 1 ? 1 : 2;
+};
+
 /** Dot radius: products read as hubs, their direct children as branches. */
 export function radius(n: GraphNode): number {
-  const base = n.kind === "product" ? 11 : n.depth === 1 ? 6.5 : 4.5;
-  return base + Math.min(3, n.weight * 0.3);
+  return DOT_RADIUS[sizeRank(n)] + Math.min(3, n.weight * 0.3);
 }
 
 /** Label size in graph units, which the zoom scales with everything else. */
 export function labelFont(n: GraphNode): number {
-  return n.kind === "product" ? 14 : n.depth === 1 ? 12 : 11;
+  return LABEL_FONT[sizeRank(n)];
 }
 
 /**
@@ -274,6 +281,8 @@ export function separate(nodes: Placed[], passes = 80): void {
   }
 }
 
+const LAYOUT_ATTEMPTS = 40;
+
 /**
  * Places one product's tree around the origin. Each leaf gets a slot on its
  * depth's ring in depth-first order, so a branch keeps to one wedge with its
@@ -317,7 +326,7 @@ export function radialLayout(
   let angles = new Map<Placed, number>();
   let rx: number[] = [];
   let ry: number[] = [];
-  for (let attempt = 0; attempt < 40; attempt++) {
+  for (let attempt = 0; attempt < LAYOUT_ATTEMPTS; attempt++) {
     rx = [0];
     ry = [0];
     for (let depth = 1; depth <= deepest; depth++) {
@@ -352,7 +361,7 @@ export function radialLayout(
       at += step;
     }
     const used = at - sector;
-    if (used > room && attempt < 39) {
+    if (used > room && attempt < LAYOUT_ATTEMPTS - 1) {
       grow *= 1.12;
       continue;
     }
@@ -576,6 +585,9 @@ export function holdStill(
   return { restless, hold, drop };
 }
 
+const MIN_LENGTH = 1e-6;
+const MIN_COMPONENT = 1e-3;
+
 /**
  * How far to move `b` to clear `a`, heading away from the drop at (cx, cy)
  * rather than away from `a`. Every push then runs outwards from the drop, so
@@ -592,19 +604,23 @@ function awayFrom(
   let ux = b.x - cx;
   let uy = b.y - cy;
   const length = Math.hypot(ux, uy);
-  if (length < 1e-6) return { x: 0, y: oy };
+  if (length < MIN_LENGTH) return { x: 0, y: oy };
   ux /= length;
   uy /= length;
   const tx =
-    (b.x - a.x) * ux > 0 && Math.abs(ux) > 1e-3 ? ox / Math.abs(ux) : Infinity;
+    (b.x - a.x) * ux > 0 && Math.abs(ux) > MIN_COMPONENT
+      ? ox / Math.abs(ux)
+      : Infinity;
   const ty =
-    (b.y - a.y) * uy > 0 && Math.abs(uy) > 1e-3 ? oy / Math.abs(uy) : Infinity;
+    (b.y - a.y) * uy > 0 && Math.abs(uy) > MIN_COMPONENT
+      ? oy / Math.abs(uy)
+      : Infinity;
   let t = Math.min(tx, ty);
   if (!Number.isFinite(t))
     t =
       Math.min(
-        ox / Math.max(Math.abs(ux), 1e-3),
-        oy / Math.max(Math.abs(uy), 1e-3),
+        ox / Math.max(Math.abs(ux), MIN_COMPONENT),
+        oy / Math.max(Math.abs(uy), MIN_COMPONENT),
       ) + 1;
   return { x: ux * t, y: uy * t };
 }
@@ -717,32 +733,34 @@ export function forceHome(
  * swinging round, and a parent is never tugged by what hangs below it.
  */
 export function forceFollow(links: SimLink[], strength = 0.25) {
-  let rest = links.map((l) => {
-    const s = l.source as SimNode;
-    const t = l.target as SimNode;
+  let rest = links.map((link) => {
+    const parent = link.source as SimNode;
+    const child = link.target as SimNode;
     return {
-      s,
-      t,
-      dx: (t.x ?? 0) - (s.x ?? 0),
-      dy: (t.y ?? 0) - (s.y ?? 0),
+      parent,
+      child,
+      dx: (child.x ?? 0) - (parent.x ?? 0),
+      dy: (child.y ?? 0) - (parent.y ?? 0),
     };
   });
 
   function force() {
-    for (const { s, t, dx, dy } of rest) {
-      if (t.fx != null) continue;
-      t.vx = (t.vx ?? 0) + ((s.x ?? 0) + dx - (t.x ?? 0)) * strength;
-      t.vy = (t.vy ?? 0) + ((s.y ?? 0) + dy - (t.y ?? 0)) * strength;
+    for (const { parent, child, dx, dy } of rest) {
+      if (child.fx != null) continue;
+      child.vx =
+        (child.vx ?? 0) + ((parent.x ?? 0) + dx - (child.x ?? 0)) * strength;
+      child.vy =
+        (child.vy ?? 0) + ((parent.y ?? 0) + dy - (child.y ?? 0)) * strength;
     }
   }
 
   // Takes each child's offset from the given homes instead of from where it
   // settled.
   force.rebase = (homes: Map<SimNode, { x: number; y: number }>) => {
-    rest = rest.map(({ s, t }) => {
-      const hs = homes.get(s)!;
-      const ht = homes.get(t)!;
-      return { s, t, dx: ht.x - hs.x, dy: ht.y - hs.y };
+    rest = rest.map(({ parent, child }) => {
+      const from = homes.get(parent)!;
+      const to = homes.get(child)!;
+      return { parent, child, dx: to.x - from.x, dy: to.y - from.y };
     });
   };
 

@@ -43,6 +43,8 @@
   let y = $state(16);
   let scale = $state(1);
   let fitted = false;
+  /** A press that travels further than this is a pan, not a click. */
+  const CLICK_SLOP_PX = 3;
 
   function fit() {
     if (!viewport) return;
@@ -103,7 +105,8 @@
   }
   function onpointerup(e: PointerEvent) {
     const moved =
-      drag && Math.hypot(e.clientX - drag.px, e.clientY - drag.py) > 3;
+      drag &&
+      Math.hypot(e.clientX - drag.px, e.clientY - drag.py) > CLICK_SLOP_PX;
     drag = null;
     if (!moved && !(e.target as HTMLElement).closest("button")) onselect(null);
   }

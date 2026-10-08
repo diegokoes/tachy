@@ -47,6 +47,8 @@
   const TOWER = shapes("discover");
   /** The tower's lamp, which every wave swells out of. */
   const LAMP = { x: 12, y: 9 };
+  /** An inner wave is shorter than this, in the icon's units. */
+  const INNER_WAVE_BELOW = 10;
 
   let scanning = $state(false);
   let failure = $state<string | null>(null);
@@ -96,7 +98,7 @@
   function broadcast() {
     if (!probe || !tower || !signal || !word) return null;
     const all = waves();
-    const inner = all.filter((p) => p.getBBox().height < 10);
+    const inner = all.filter((p) => p.getBBox().height < INNER_WAVE_BELOW);
     const outer = all.filter((p) => !inner.includes(p));
     const letters = [...word.querySelectorAll<HTMLElement>(".ch")];
 

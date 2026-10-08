@@ -301,6 +301,12 @@
     (SECTIONS[page] ?? SECTIONS.integrations).filter((s) => s.show !== false),
   );
 
+  /** Undefined for a section that counts nothing, null while the census loads. */
+  function countOf(key: string | undefined) {
+    if (!key) return undefined;
+    return census.loading ? null : (census.data.counts[key] ?? 0);
+  }
+
   /**
    * The one section open in the window, when the route names one that opens
    * there. Only that one is rendered: a page section is a destination reached
@@ -319,11 +325,7 @@
           ...rest
         }): PageSection => ({
           ...rest,
-          count: n
-            ? census.loading
-              ? null
-              : (census.data.counts[n] ?? 0)
-            : undefined,
+          count: countOf(n),
           tone: n && census.data.warn[n] ? ("warn" as const) : undefined,
           actions: sectionActions(rest.key),
         }),
@@ -402,13 +404,10 @@
   let showIssues = $state(recall("admin.issues", false));
   $effect(() => keep("admin.issues", showIssues));
   const groups = $derived(issueGroups(issues.data));
-  const issueTone = $derived(
-    groups.some((g) => g.tone === "danger")
-      ? ("danger" as const)
-      : groups.length
-        ? ("warn" as const)
-        : undefined,
-  );
+  const issueTone = $derived.by(() => {
+    if (groups.some((g) => g.tone === "danger")) return "danger" as const;
+    return groups.length ? ("warn" as const) : undefined;
+  });
 
   function pickSection(section: string) {
     showIssues = false;

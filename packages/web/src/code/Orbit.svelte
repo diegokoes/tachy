@@ -54,6 +54,8 @@
   const ENTER = SPIRAL * Math.sqrt(2 / 3);
   /** The letters leave this long after the core has taken the comets in. */
   const AFTER = 0.1;
+  /** The swarm still orbits while its scale is above this. */
+  const ORBITING_ABOVE = 0.05;
 
   let svg = $state<SVGSVGElement>();
   let kick = $state<SVGGElement>();
@@ -195,7 +197,8 @@
    */
   function collapse(swarmEl: SVGGElement, heartEl: SVGGElement) {
     still();
-    const orbiting = Number(gsap.getProperty(swarmEl, "scale")) > 0.05;
+    const orbiting =
+      Number(gsap.getProperty(swarmEl, "scale")) > ORBITING_ABOVE;
     shake = gsap.to(heartEl, {
       x: "random(-0.4, 0.4)",
       y: "random(-0.4, 0.4)",
@@ -275,7 +278,7 @@
   /** How long an ask should be held for the collapse to land, in ms. */
   export function holdFor(): number {
     if (!swarm || reducedMotion()) return 0;
-    const orbiting = Number(gsap.getProperty(swarm, "scale")) > 0.05;
+    const orbiting = Number(gsap.getProperty(swarm, "scale")) > ORBITING_ABOVE;
     return ((orbiting ? ENTER : 0) + AFTER) * 1000;
   }
 

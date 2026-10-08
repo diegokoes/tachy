@@ -203,9 +203,9 @@
   const MODEL_TONES = ["accent", "info", "ok"] as const;
   const models = $derived([
     ...usage.by_model
-      .slice(0, 3)
+      .slice(0, MODEL_TONES.length)
       .map((m, i) => ({ key: m.model, label: m.model, tone: MODEL_TONES[i] })),
-    ...(usage.by_model.length > 3
+    ...(usage.by_model.length > MODEL_TONES.length
       ? [{ key: "other", label: "other", tone: "muted" as const }]
       : []),
   ]);
