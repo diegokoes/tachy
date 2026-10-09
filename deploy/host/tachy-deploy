@@ -66,7 +66,7 @@ stamp_now() {
   local hash=${1:-}
   [ -n "$hash" ] || hash=$(sha256sum "$TACHY_DIR/db/schema.sql" | cut -d' ' -f1)
   pg_owner -c "insert into schema_meta (schema_sha256) values ('$hash')
-    on conflict (id) do update set schema_sha256 = excluded.schema_sha256, applied_at = now()" >/dev/null
+    on conflict (id) do update set schema_sha256 = excluded.schema_sha256, applied_at = now()" >/dev/null || return 1
   log "schema stamped $hash"
 }
 
@@ -82,7 +82,7 @@ restore_stamp() {
   [ "$before" != "$set_by_deploy" ] || return 0
   case "$before" in
   unstamped)
-    pg_owner -c "delete from schema_meta" >/dev/null
+    pg_owner -c "delete from schema_meta" >/dev/null || return 1
     log "schema stamp removed, as it was before this deploy"
     ;;
   unreachable) ;;
@@ -257,7 +257,9 @@ if [ "$SCHEMA" = applied ] && [ -n "$DESTRUCTIVE" ]; then
   # instead of serving on a schema it cannot be trusted with.
   log "the applied plan was destructive ($DESTRUCTIVE): the stamp stays, and the previous release will not report ready. Restore the pre-deploy backup, or fix forward."
 else
-  restore_stamp "$LIVE_SCHEMA" "$NEW_SCHEMA"
+  # A stamp that cannot be restored must not stop the rollback itself.
+  restore_stamp "$LIVE_SCHEMA" "$NEW_SCHEMA" ||
+    log "could not restore the schema stamp; the previous release may not report ready"
 fi
 roll "$PREV_COMMIT" "$PREV_IMAGE"
 if wait_ready; then
