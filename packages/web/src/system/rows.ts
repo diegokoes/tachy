@@ -12,6 +12,7 @@ export type RuntimeInfo = {
     draining: boolean;
   };
   tableSizes: { table: string; bytes: number; rows: number }[];
+  /** Null for a member: the server sends how the deployment is secured to an admin only. */
   security: {
     vault: {
       enabled: boolean;
@@ -22,7 +23,7 @@ export type RuntimeInfo = {
     users_with_password: number;
     password_login_under_sso: number;
     service_accounts: number;
-  };
+  } | null;
   uploadTtlHours: number;
   turns: {
     slotsUsed: number;

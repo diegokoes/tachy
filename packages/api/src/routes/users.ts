@@ -15,7 +15,7 @@ import {
 } from "@tachy/core/access";
 import { USER_ROLES, TEAM_ROLES, MIN_PASSWORD_LENGTH } from "@tachy/core";
 import { requireAdmin } from "../auth";
-import { assertAnyTeamAdminApi, assertTeamAdmin } from "../authz";
+import { assertTeamAdmin, isAnyTeamAdminApi } from "../authz";
 
 const createSchema = z.object({
   email: z.string().email(),
@@ -41,10 +41,20 @@ const memberSchema = z.object({
   role: z.enum(TEAM_ROLES).nullable(),
 });
 
+/**
+ * Anyone signed in reads the directory and the rosters. How each account signs
+ * in goes only to those who curate a team or the app.
+ */
 export const users = new Hono()
   .get("/", async (c) => {
-    await assertAnyTeamAdminApi(c);
-    return c.json(await listUsers());
+    const rows = await listUsers();
+    if (await isAnyTeamAdminApi(c)) return c.json(rows);
+    return c.json(
+      rows.map(
+        ({ has_password, service_account, password_login_allowed, ...row }) =>
+          row,
+      ),
+    );
   })
 
   .post("/", requireAdmin, zValidator("json", createSchema), async (c) => {
@@ -76,15 +86,11 @@ export const users = new Hono()
     return c.json({ ok: true });
   })
 
-  .get("/memberships", async (c) => {
-    await assertAnyTeamAdminApi(c);
-    return c.json(await listMemberships());
-  })
+  .get("/memberships", async (c) => c.json(await listMemberships()))
 
-  .get("/team-members/:teamSlug", async (c) => {
-    await assertTeamAdmin(c, c.req.param("teamSlug"));
-    return c.json(await listTeamMembers(c.req.param("teamSlug")));
-  })
+  .get("/team-members/:teamSlug", async (c) =>
+    c.json(await listTeamMembers(c.req.param("teamSlug"))),
+  )
 
   .put(
     "/team-members/:teamSlug",

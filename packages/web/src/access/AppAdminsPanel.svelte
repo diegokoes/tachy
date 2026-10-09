@@ -5,6 +5,7 @@
   import { fmtDate } from "../dates.svelte";
   import {
     reloadRoster,
+    seesSignIn,
     signIn,
     ssoConfigured,
     system,
@@ -33,7 +34,16 @@
   const columns: Column<UserRow>[] = $derived([
     { key: "email", label: "user", width: "20rem" },
     { key: "display_name", label: "name", width: "14rem" },
-    { key: "signin", label: "can sign in", width: "9rem", cell: signInCell },
+    ...(seesSignIn()
+      ? [
+          {
+            key: "signin",
+            label: "can sign in",
+            width: "9rem",
+            cell: signInCell,
+          },
+        ]
+      : []),
     {
       key: "created_at",
       label: "since",
@@ -75,7 +85,7 @@
   {/if}
 {/snippet}
 
-{#if !live.length && rows.length}
+{#if seesSignIn() && !live.length && rows.length}
   <Note tone="danger">
     No {roleLabel("app", "admin")} can currently sign in. Nobody can change settings,
     users or connections until one can.

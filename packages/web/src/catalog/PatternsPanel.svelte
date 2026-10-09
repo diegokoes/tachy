@@ -9,6 +9,7 @@
   import type { Pattern } from "./rows";
   import { INFO } from "../admin/help";
   import { sectionHoist } from "../admin/sectionAction.svelte";
+  import { isCurator } from "../access/session.svelte";
 
   const patterns = createResource(
     () => api.get<Pattern[]>("/resolution-patterns"),
@@ -68,6 +69,9 @@
   addLabel="add pattern"
   noun="pattern"
   editTitle={(r) => r.slug}
+  canEdit={isCurator}
+  canDelete={isCurator}
+  canCreate={isCurator()}
   oncreate={(d) =>
     patterns.mutate(() =>
       api.post("/resolution-patterns", {

@@ -36,7 +36,7 @@
 
   let { slug }: { slug: string } = $props();
 
-  const LIST = "/admin/integrations/repos";
+  const LIST = "/console/integrations/repos";
 
   const repos = createResource(
     () => api.get<{ repos: Repo[] }>("/repos").then((r) => r.repos),
@@ -313,7 +313,7 @@
 
   function showRuns() {
     keep("admin.runs.kind", "repo.reindex");
-    navigate("/admin/workers/runs");
+    navigate("/console/workers/runs");
   }
 
   const freshness = (at: string | null) => {

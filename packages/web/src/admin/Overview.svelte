@@ -33,7 +33,7 @@
     if (!expanded || loading) return;
     void tick().then(() => {
       if (grid && !grid.querySelector(".tile.open"))
-        navigate(`/admin/${segment(1) ?? "integrations"}`, { replace: true });
+        navigate(`/console/${segment(1) ?? "integrations"}`, { replace: true });
     });
   });
 </script>
