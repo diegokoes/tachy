@@ -10,7 +10,7 @@
  */
 import http from "k6/http";
 import { check, fail } from "k6";
-import { BASE_URL, headers, setupSession, pick } from "./session.js";
+import { BASE_URL, headers, setupSeededSession, pick } from "./session.js";
 import { QUERIES } from "./corpus.js";
 
 const BASELINE = Number(__ENV.BASELINE_P95_MS || 0);
@@ -37,7 +37,7 @@ export const options = {
 export function setup() {
   if (!BASELINE)
     fail("set BASELINE_P95_MS to the idle knowledge_search p95 from search.js");
-  const data = setupSession();
+  const data = setupSeededSession();
   if (__ENV.ADMIN_TOKEN) {
     const response = http.post(
       `${BASE_URL}/api/jobs/runs`,
