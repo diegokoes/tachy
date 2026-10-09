@@ -2,8 +2,7 @@ import { gsap, Flip, SplitText, reducedMotion } from "./gsap";
 
 /**
  * Character-shatter: chars fall, tumble and fade, then the block collapses.
- * Used as a Svelte action on a denied approval and, via `shatterAll`, by the
- * chat Clear ceremony.
+ * A Svelte action on a denied approval.
  */
 export function shatter(node: HTMLElement) {
   if (reducedMotion()) return;
@@ -31,13 +30,22 @@ export function shatter(node: HTMLElement) {
   };
 }
 
-export function shatterAll(nodes: HTMLElement[], onComplete: () => void) {
-  if (reducedMotion() || !nodes.length) {
+/**
+ * Empties a view: each word of `text` drains away top to bottom, and `boxes`,
+ * the surfaces a word clip would leave standing, fade. `onComplete` fires once
+ * and is where the caller removes the nodes; nothing is restored to view.
+ */
+export function drainOut(
+  text: HTMLElement[],
+  boxes: HTMLElement[],
+  onComplete: () => void,
+) {
+  if (reducedMotion() || (!text.length && !boxes.length)) {
     onComplete();
     return null;
   }
-  const split = new SplitText(nodes, {
-    type: "chars",
+  const split = new SplitText(text, {
+    type: "words",
     reduceWhiteSpace: false,
   });
   const tl = gsap.timeline({
@@ -46,15 +54,18 @@ export function shatterAll(nodes: HTMLElement[], onComplete: () => void) {
       onComplete();
     },
   });
-  tl.to(split.chars, {
-    y: () => gsap.utils.random(60, 200),
-    rotation: () => gsap.utils.random(-30, 30),
-    opacity: 0,
-    duration: 0.6,
-    ease: "power1.in",
-    stagger: { amount: 0.5 },
-  });
-  tl.to(nodes, { y: 40, opacity: 0, duration: 0.4 }, 0.25);
+  tl.to(boxes, { opacity: 0, duration: 0.18, ease: "power1.out" }, 0);
+  tl.fromTo(
+    split.words,
+    { clipPath: "inset(0% 0 0 0)" },
+    {
+      clipPath: "inset(100% 0 0 0)",
+      duration: 0.28,
+      ease: "power2.in",
+      stagger: { amount: 0.22 },
+    },
+    0,
+  );
   return tl;
 }
 
