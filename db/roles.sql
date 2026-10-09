@@ -13,6 +13,13 @@ do $$ begin
 exception when duplicate_object then null;
 end $$;
 
+-- The chat tools' subprocess, where the api is given a password for it. A
+-- model drives that process, so it gets what the tools need and not the rest.
+do $$ begin
+    create role tachy_mcp nologin;
+exception when duplicate_object then null;
+end $$;
+
 -- tachy-watch, from inside the postgres container. It has no password, so it
 -- logs in only where pg_hba trusts: the container's own socket and loopback.
 do $$ begin
@@ -32,6 +39,28 @@ begin
     execute format('alter default privileges in schema %I grant select, insert, update, delete on tables to tachy_app', s);
     execute format('alter default privileges in schema %I grant usage, select, update on sequences to tachy_app', s);
     execute format('alter default privileges in schema %I grant execute on functions to tachy_app', s);
+end $$;
+
+alter role tachy_mcp set statement_timeout = '60s';
+
+-- tachy_app's grants, then less: no vault, no API tokens, no password hashes,
+-- and the audit trail write-only. A new table holding secrets needs a revoke
+-- here, because the default below grants it.
+do $$
+declare s text := current_schema();
+begin
+    execute format('grant usage on schema %I to tachy_mcp', s);
+    execute format('grant select, insert, update, delete on all tables in schema %I to tachy_mcp', s);
+    execute format('grant usage, select, update on all sequences in schema %I to tachy_mcp', s);
+    execute format('grant execute on all functions in schema %I to tachy_mcp', s);
+    execute format('alter default privileges in schema %I grant select, insert, update, delete on tables to tachy_mcp', s);
+    execute format('alter default privileges in schema %I grant usage, select, update on sequences to tachy_mcp', s);
+    execute format('alter default privileges in schema %I grant execute on functions to tachy_mcp', s);
+
+    execute format('revoke all on %I.credentials, %I.api_tokens, %I.users from tachy_mcp', s, s, s);
+    -- Enough to record who a tool acted as and to read their rights.
+    execute format('grant select (id, email, display_name, role, disabled, service_account, created_at), insert (email, display_name), update (display_name) on %I.users to tachy_mcp', s);
+    execute format('revoke select, update, delete, truncate on %I.audit_events from tachy_mcp', s);
 end $$;
 
 -- The audit trail is append-only for the application.

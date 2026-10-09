@@ -20,6 +20,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tachy}
       POSTGRES_DB: ${POSTGRES_DB:-tachy}
       TACHY_APP_DB_PASSWORD: ${TACHY_APP_DB_PASSWORD:-}
+      TACHY_MCP_DB_PASSWORD: ${TACHY_MCP_DB_PASSWORD:-}
       TACHY_BACKUP_DB_PASSWORD: ${TACHY_BACKUP_DB_PASSWORD:-}
     ports:
       # localhost-only: nothing on the office LAN needs raw Postgres access
