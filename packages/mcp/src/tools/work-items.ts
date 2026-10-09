@@ -8,8 +8,11 @@ import { resolveSource, resolveProjectContext } from "@tachy/core/sources";
 import {
   ingestWorkItem,
   compactWorkItem,
-  renderCompactHtml,
-  splitNoteBody,
+  renderCompactNotes,
+  renderSummaryHtml,
+  priorSummaryIds,
+  replaceNotes,
+  ticketSummarySchema,
   externalWorkItemScope,
   workItemScope,
 } from "@tachy/core/work-items";
@@ -114,21 +117,13 @@ tool(
         postFailed = `Source '${source}' does not support notes`;
       else {
         await requireCanEdit(await externalWorkItemScope(conn.id, external_id));
-        const bodies = splitNoteBody(renderCompactHtml(full));
-        for (const body of bodies)
-          await src.postNote(external_id, body, { private: true });
-        posted = { notes: bodies.length };
-        // Only once the replacement is on the ticket, and only for notes this
-        // tool wrote and identifies by its own marker.
-        if (replace_previous !== false && src.deleteNote) {
-          let replaced = 0;
-          for (const id of full.prior_transcript_ids)
-            await src.deleteNote(id).then(
-              () => replaced++,
-              () => {},
-            );
-          if (replaced) posted.replaced_previous = replaced;
-        }
+        // Only notes this tool wrote, identified by its own marker, are replaced.
+        posted = await replaceNotes(
+          src,
+          external_id,
+          renderCompactNotes(full),
+          replace_previous !== false ? full.prior_transcript_ids : [],
+        );
       }
     }
 
@@ -239,6 +234,37 @@ tool(
 );
 
 tool(
+  "post_work_item_summary",
+  {
+    description:
+      "Post a summary of a ticket onto it as a private note, replacing the summary an earlier call posted. Read the whole thread first (fetch_work_item), then pass the content only: the note's layout and markup are produced here, so write plain sentences with no markdown or HTML. Summarise what the thread says; where it does not say, leave it out.",
+    inputSchema: {
+      source: sourceSlug,
+      external_id: z.string(),
+      ...ticketSummarySchema.shape,
+    },
+  },
+  async ({ source, external_id, ...summary }) => {
+    const { conn, source: src } = await resolveSource(source);
+    if (!src.postNote)
+      throw badInput(`Source '${source}' does not support notes`);
+    await requireCanEdit(await externalWorkItemScope(conn.id, external_id));
+    const raw = await src.fetchItem(external_id);
+    const posted = await replaceNotes(
+      src,
+      external_id,
+      [renderSummaryHtml({ external_id, title: raw.title }, summary)],
+      priorSummaryIds(raw.messages),
+    );
+    return out({
+      posted_private_note: posted,
+      external_id,
+      next: "The summary is on the ticket as a private note. Say so in at most two lines; do not restate it.",
+    });
+  },
+);
+
+tool(
   "post_private_note",
   {
     description:
@@ -249,7 +275,7 @@ tool(
       body: z
         .string()
         .describe(
-          "Private note text. It lands on the customer's own ticket in their helpdesk - private to your organisation, not to you, and visible to every agent who opens it. Write it as something a colleague will read six months from now.",
+          "Private note text, rendered as HTML: plain text keeps its paragraphs, '-' lists and links, and markup you pass is posted as is. Never markdown. It lands on the customer's own ticket in their helpdesk - private to your organisation, not to you, and visible to every agent who opens it. Write it as something a colleague will read six months from now.",
         ),
     },
   },

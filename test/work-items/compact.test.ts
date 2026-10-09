@@ -7,14 +7,14 @@ import {
   splitQuotedBlocks,
   splitPrologue,
   renderCompactScript,
-  renderCompactHtml,
-  splitNoteBody,
+  renderCompactNotes,
   summarizeCompaction,
   normalizeAttachments,
   formatBytes,
   compactForLlm,
   COMPACT_MIN_CHARS,
   TRANSCRIPT_MARKER,
+  SUMMARY_MARKER,
 } from "@tachy/core/work-items";
 import { type RawMessage, type RawWorkItem } from "@tachy/core/sources";
 
@@ -331,12 +331,12 @@ describe("compactMessages", () => {
   });
 
   it("skips a transcript it posted itself instead of compacting its own output", () => {
-    const prior = renderCompactHtml(
+    const prior = renderCompactNotes(
       compactMessages(
         [message({ externalId: "1", bodyText: "the real issue" })],
         meta,
       ),
-    ).replace(/<[^>]+>/g, " ");
+    )[0].replace(/<[^>]+>/g, " ");
     const compacted = compactMessages(
       [
         message({ externalId: "1", bodyText: "the real issue" }),
@@ -534,7 +534,7 @@ describe("attachments", () => {
     expect(renderCompactScript(compacted)).toContain(
       "↳ files: xml-bad-soap.xml (66 KB, application/xml); notes.txt (900 B, text/plain)",
     );
-    const html = renderCompactHtml(compacted);
+    const [html] = renderCompactNotes(compacted);
     expect(html).toContain("xml-bad-soap.xml (66 KB, application/xml)");
     expect(summarizeCompaction(compacted).files).toBe(
       "2 files referenced by name - open them on the ticket.",
@@ -675,12 +675,12 @@ describe("summarizeCompaction", () => {
 
 describe("replacing a previous transcript", () => {
   it("reports the ids of transcripts it posted before", () => {
-    const prior = renderCompactHtml(
+    const prior = renderCompactNotes(
       compactMessages(
         [message({ externalId: "1", bodyText: "el problema real" })],
         meta,
       ),
-    ).replace(/<[^>]+>/g, " ");
+    )[0].replace(/<[^>]+>/g, " ");
     const compacted = compactMessages(
       [
         message({ externalId: "1", bodyText: "el problema real" }),
@@ -745,58 +745,121 @@ describe("renderers", () => {
       ],
       meta,
     );
-    const html = renderCompactHtml(recompacted);
+    const [html] = renderCompactNotes(recompacted);
     expect(html).toContain("&lt;epc&gt;0108435&lt;/epc&gt;");
     expect(html).not.toContain("<epc>");
     expect(html).toContain("nothing was summarised or reworded");
   });
 
-  it("splits an oversized note at paragraph boundaries", () => {
-    const html = renderCompactHtml(compacted);
-    expect(splitNoteBody(html)).toHaveLength(1);
-    const parts = splitNoteBody(html, 120);
-    expect(parts.length).toBeGreaterThan(1);
-    expect(parts[0]).toContain("[compacted transcript 1/");
-    const stripped = parts
-      .map((p) =>
-        p.replace(
-          /^<p style="color:#888">\[compacted transcript \d+\/\d+\] \[tachy:compacted-transcript\]<\/p>\n/,
-          "",
-        ),
-      )
-      .join("\n");
-    expect(stripped).toBe(html);
-  });
-});
-
-describe("a split transcript identifies itself", () => {
-  it("marks every part, not just the one carrying the header", () => {
-    const html = Array.from(
-      { length: 400 },
-      (_, i) => `<p>turn ${i} ${"x".repeat(400)}</p>`,
-    ).join("\n");
-    const parts = splitNoteBody(html, 20000);
-    expect(parts.length).toBeGreaterThan(1);
-    for (const part of parts) expect(part).toContain(TRANSCRIPT_MARKER);
+  it("gives each turn its own card, under a header with the figures", () => {
+    const [html] = renderCompactNotes(compacted);
+    expect(html).toContain(
+      "<strong>Compacted transcript</strong> - Report T&amp;T",
+    );
+    expect(html).toContain(">messages</span>");
+    expect(html.match(/border-left:3px solid/g)).toHaveLength(
+      compacted.turns.length,
+    );
+    expect(html).toContain("Earlier mail, recovered from quoted replies");
+    expect(html).toContain("The ticket thread");
+    expect(html).toContain(TRANSCRIPT_MARKER);
   });
 
-  it("recognises every part it posted back on the next fetch", () => {
-    const long = renderCompactHtml(
+  it("badges an internal note and a quoted turn in the thread", () => {
+    const [html] = renderCompactNotes(
       compactMessages(
         [
+          message({ externalId: "1", bodyText: "no imprime la linea 3" }),
           message({
-            externalId: "1",
-            bodyText: Array.from(
-              { length: 300 },
-              (_, i) => `linea ${i} ${"y".repeat(300)}`,
-            ).join("\n\n"),
+            externalId: "2",
+            visibility: "private",
+            direction: "outgoing",
+            bodyText: "revisado con desarrollo, es el spooler",
           }),
         ],
         meta,
       ),
     );
-    const parts = splitNoteBody(long, 20000);
+    expect(html).toMatch(/text-transform:uppercase">internal<\/span>/);
+    expect(html).toContain("background:#fff8e6");
+  });
+
+  it("keeps the structure inside a turn: lists, links and pasted payloads", () => {
+    const [html] = renderCompactNotes(
+      compactMessages(
+        [
+          message({
+            externalId: "1",
+            bodyText: [
+              "Pasos para reproducir:",
+              "- abrir el lote",
+              "- pulsar imprimir",
+              "",
+              "1. primero",
+              "2. segundo",
+              "",
+              "ver https://example.invalid/a?b=1&c=2.",
+              "",
+              "{",
+              '"batch": 3,',
+              '"state": "stalled"',
+              "}",
+            ].join("\n"),
+          }),
+        ],
+        meta,
+      ),
+    );
+    expect(html).toContain(
+      "<li>abrir el lote</li><li>pulsar imprimir</li></ul>",
+    );
+    expect(html).toContain("<li>primero</li><li>segundo</li></ol>");
+    expect(html).toContain(
+      '<a href="https://example.invalid/a?b=1&amp;c=2">https://example.invalid/a?b=1&amp;c=2</a>.',
+    );
+    expect(html).toMatch(/<pre [^>]*>\{\n&quot;batch&quot;: 3,/);
+  });
+
+  it("posts one note when the transcript fits, and cuts between cards when not", () => {
+    expect(renderCompactNotes(compacted)).toHaveLength(1);
+    const parts = renderCompactNotes(compacted, 900);
     expect(parts.length).toBeGreaterThan(1);
+    expect(parts[0]).toContain("part 1/");
+    for (const part of parts) {
+      expect(part.startsWith("<div>")).toBe(true);
+      expect(part.endsWith("</div>")).toBe(true);
+      expect(part.match(/<div/g)).toHaveLength(part.match(/<\/div>/g)!.length);
+    }
+  });
+});
+
+describe("a split transcript identifies itself", () => {
+  const long = compactMessages(
+    [
+      message({
+        externalId: "1",
+        bodyText: Array.from(
+          { length: 300 },
+          (_, i) => `linea ${i} ${"y".repeat(300)}`,
+        ).join("\n\n"),
+      }),
+    ],
+    meta,
+  );
+
+  it("cuts one very long turn into continued cards that fit a note", () => {
+    const parts = renderCompactNotes(long, 20000);
+    expect(parts.length).toBeGreaterThan(2);
+    for (const part of parts) {
+      expect(part).toContain(TRANSCRIPT_MARKER);
+      expect(part.length).toBeLessThan(25000);
+    }
+    expect(parts[1]).toContain(">continued</span>");
+    expect(parts.join("")).toContain("linea 299");
+  });
+
+  it("recognises every part it posted back on the next fetch", () => {
+    const parts = renderCompactNotes(long, 20000);
 
     // Each part comes back as its own private note. All of them must be
     // recognised, or the next run compacts its own output and replace_previous
@@ -818,5 +881,40 @@ describe("a split transcript identifies itself", () => {
     expect(again.prior_transcript_ids).toEqual(
       parts.map((_, i) => `note-${i}`),
     );
+  });
+
+  it("still recognises a transcript in the layout it posted before", () => {
+    const again = compactMessages(
+      [
+        message({ externalId: "1", bodyText: "el problema real" }),
+        message({
+          externalId: "old-note",
+          visibility: "private",
+          bodyText:
+            "Compacted transcript - Report T&T [#42] 3 messages. Generated by tachy",
+        }),
+      ],
+      meta,
+    );
+    expect(again.prior_transcript_ids).toEqual(["old-note"]);
+  });
+});
+
+describe("a summary note on the ticket", () => {
+  it("is left out of the transcript and is not the compactor's to replace", () => {
+    const compacted = compactMessages(
+      [
+        message({ externalId: "1", bodyText: "el problema real" }),
+        message({
+          externalId: "summary-1",
+          visibility: "private",
+          bodyText: `Summary - Report T&T Problem ... Generated by tachy ${SUMMARY_MARKER}`,
+        }),
+      ],
+      meta,
+    );
+    expect(compacted.turns).toHaveLength(1);
+    expect(compacted.compaction.dropped.prior_summary).toBe(1);
+    expect(compacted.prior_transcript_ids).toEqual([]);
   });
 });
