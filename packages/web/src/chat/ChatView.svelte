@@ -12,8 +12,7 @@
   } from "./agent";
   import { addEntry, chat, type Entry } from "./chatState.svelte";
   import { renderMarkdown } from "../markdown/markdown";
-  import { gsap, reducedMotion } from "../motion/gsap";
-  import { reflow, shatterAll } from "../motion/motion";
+  import { reflow, drainOut } from "../motion/motion";
   import Scrollbar from "../tui/Scrollbar.svelte";
   import ArtifactPanel from "./ArtifactPanel.svelte";
   import CommandMenu, {
@@ -640,28 +639,17 @@
   let clearArmed = $state(false);
   let disarmTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const transcriptNodes = () =>
-    Array.from(transcriptEl?.children ?? []) as HTMLElement[];
+  /** The transcript's running text, which leaves word by word. */
+  const WORDED =
+    ":scope > .turn > .who, :scope > .turn > .body:not(.md), :scope > .turn > .body.md > :not(pre, table, hr)";
+  /** What a word clip would leave standing: cards, tool rows, code, buttons. */
+  const BOXED =
+    ":scope > :not(.turn), :scope > .turn :is(pre, table, code, img, hr, .btn)";
 
   function armClear() {
     clearArmed = true;
     clearTimeout(disarmTimer);
     disarmTimer = setTimeout(() => (clearArmed = false), 4000);
-    if (reducedMotion()) return;
-    const nodes = transcriptNodes();
-    if (!nodes.length) return;
-    for (const n of nodes) n.classList.add("glitching");
-    gsap
-      .timeline({
-        repeat: 2,
-        onComplete: () => {
-          for (const n of nodes) n.classList.remove("glitching");
-          gsap.set(nodes, { clearProps: "x,skewX" });
-        },
-      })
-      .to(nodes, { x: -3, skewX: 10, duration: 0.05 })
-      .to(nodes, { x: 3, skewX: -8, duration: 0.05 })
-      .to(nodes, { x: 0, skewX: 0, duration: 0.05 });
   }
 
   function wipe() {
@@ -674,7 +662,9 @@
     clearTimeout(disarmTimer);
     clearArmed = false;
     if (!transcriptEl) return wipe();
-    shatterAll(transcriptNodes(), wipe);
+    const pick = (selector: string) =>
+      Array.from(transcriptEl!.querySelectorAll<HTMLElement>(selector));
+    drainOut(pick(WORDED), pick(BOXED), wipe);
   }
 
   function onClear() {
@@ -995,13 +985,6 @@
   .send-col :global(.btn:focus-visible:not(:disabled)) {
     border-color: transparent;
     box-shadow: none;
-  }
-
-  /* Momentary RGB-split while the clear glitch timeline jitters the blocks. */
-  :global(.glitching) {
-    text-shadow:
-      -2px 0 rgba(255, 64, 64, 0.55),
-      2px 0 rgba(64, 224, 255, 0.4);
   }
 
   /* The caret riding the end of a streaming message. A pseudo-element cannot
