@@ -1,6 +1,16 @@
 import { z } from "zod";
 import { assertModelCallAllowed, defineFlowAction } from "@tachy/core/flows";
+import { badInput } from "@tachy/core/infra";
+import { resolveSource } from "@tachy/core/sources";
+import {
+  ingestWorkItem,
+  priorSummaryIds,
+  renderSummaryHtml,
+  renderSummaryText,
+  replaceNotes,
+} from "@tachy/core/work-items";
 import { firstJsonObject, runAdvisory } from "./advisory";
+import { summarizeTicket } from "./ticket-summary";
 
 const SYSTEM = `You are one step of an automated support flow in tachy. You get an
 instruction and the material earlier steps gathered. Answer the instruction
@@ -72,6 +82,49 @@ export function registerAgentFlowActions(): void {
         text,
         json: params.answer === "json" ? firstJsonObject(text) : null,
       };
+    },
+  });
+
+  defineFlowAction({
+    key: "agent.summarize_item",
+    title: "Summarise ticket",
+    description:
+      "Reads the ticket fresh, writes a summary (problem, status, timeline, what was tried) and posts it as a private note, replacing the previous summary. Uses the flow owner's model credential.",
+    category: "agent",
+    writes: true,
+    params: z.object({
+      post: z
+        .boolean()
+        .default(true)
+        .describe("Off keeps the summary in the run, as steps.<id>.text."),
+    }),
+    output: z.object({
+      text: z.string(),
+      posted: z.boolean(),
+      replaced: z.number(),
+    }),
+    async run(ctx, params) {
+      if (!ctx.item) throw badInput("this step needs an item to work on");
+      await assertModelCallAllowed(ctx.flowId);
+      const { external_id, connection, source_type } = ctx.item;
+      const { conn, source } = await resolveSource(connection, ctx.scope);
+      if (params.post && !source.postNote)
+        throw badInput(`${source_type} items cannot take notes`);
+      const raw = await source.fetchItem(external_id);
+      await ingestWorkItem(conn.id, raw);
+      const summary = await summarizeTicket(raw, ctx.scope, ctx.userId, {
+        mode: "flow",
+        meta: { flow_id: ctx.flowId, flow_run_id: ctx.flowRunId },
+      });
+      const text = renderSummaryText(summary);
+      if (!params.post) return { text, posted: false, replaced: 0 };
+      const posted = await replaceNotes(
+        source,
+        external_id,
+        [renderSummaryHtml({ external_id, title: raw.title }, summary)],
+        priorSummaryIds(raw.messages),
+      );
+      return { text, posted: true, replaced: posted.replaced_previous ?? 0 };
     },
   });
 }

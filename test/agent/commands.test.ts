@@ -17,6 +17,7 @@ describe("slash command registry", () => {
         "analyze",
         "consult",
         "compact",
+        "summary",
         "az",
         "code",
         "ingest-wiki",
@@ -34,10 +35,19 @@ describe("slash command registry", () => {
     expect(expanded).toMatch(/at most four lines/);
   });
 
-  it("only /compact carries a write auto-approval", () => {
+  it("summary reads the thread, posts through its own tool and stays brief", () => {
+    const expanded = findCommand("summary")!.expand("fd 59577");
+    expect(expanded).toContain("fetch_work_item");
+    expect(expanded).toContain("post_work_item_summary");
+    expect(expanded).toMatch(/at most two lines/);
+    expect(expanded).toContain("User arguments: fd 59577");
+  });
+
+  it("only the commands that exist to post carry a write auto-approval", () => {
     expect(commandAutoApprove("compact")).toEqual(["compact_work_item"]);
+    expect(commandAutoApprove("summary")).toEqual(["post_work_item_summary"]);
     for (const command of BUILTIN_COMMANDS)
-      if (command.name !== "compact")
+      if (command.name !== "compact" && command.name !== "summary")
         expect(commandAutoApprove(command.name)).toEqual([]);
     expect(commandAutoApprove("save_knowledge_entry")).toEqual([]);
     expect(commandAutoApprove("")).toEqual([]);

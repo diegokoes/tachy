@@ -6,6 +6,7 @@ import {
   TokenMap,
 } from "@tachy/core/compliance";
 import { freshdeskToken, errorText, rememberSecret } from "@tachy/core/infra";
+import { asNoteHtml } from "@tachy/core/work-items";
 import type { FlowOption } from "@tachy/core";
 import type {
   WorkItemSource,
@@ -450,7 +451,10 @@ export const createFreshdeskSource: SourceFactory = (
         {
           method: "POST",
           headers: { Authorization: auth, "Content-Type": "application/json" },
-          body: JSON.stringify({ body, private: opts?.private ?? true }),
+          body: JSON.stringify({
+            body: asNoteHtml(body),
+            private: opts?.private ?? true,
+          }),
         },
         { connection: connection.slug },
       );

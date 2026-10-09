@@ -3,4 +3,6 @@ export * from "./ingest";
 export * from "./linked-refs";
 export * from "./links";
 export * from "./compact";
+export * from "./note-html";
+export * from "./summary";
 export { workItemScope, externalWorkItemScope } from "./scope";

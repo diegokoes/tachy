@@ -62,6 +62,19 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
         argsLine(args),
       ].join("\n"),
   },
+  {
+    name: "summary",
+    args: "<source> <ticket-id>",
+    description: "Post a summary of a ticket onto it as a private note",
+    // Self-contained, so the steps are paid for on the click, not every turn.
+    expand: (args) =>
+      [
+        "Summarise one ticket and post the summary onto it. Save nothing else.",
+        "fetch_work_item, then read every message chronologically, linked_items included. Call post_work_item_summary with what the thread establishes; it replaces the summary an earlier run posted.",
+        "Then STOP and answer in at most two lines: the ticket title, and that the summary was posted.",
+        argsLine(args),
+      ].join("\n"),
+  },
   group("az", "Azure DevOps work items", [
     {
       name: "new",
@@ -199,6 +212,7 @@ export const findCommand = (name: string): BuiltinCommand | undefined =>
  */
 const COMMAND_AUTO_APPROVE: Record<string, string[]> = {
   compact: ["compact_work_item"],
+  summary: ["post_work_item_summary"],
 };
 
 export const commandAutoApprove = (name: string): string[] =>
