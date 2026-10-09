@@ -71,4 +71,61 @@ describe("database roles", () => {
       asRole("tachy_watch", (tx) => tx`select count(*) from teams`.then()),
     ).rejects.toThrow(/permission denied|does not exist/);
   });
+
+  it("keeps tachy_app from changing or removing the audit trail", async () => {
+    await asRole("tachy_app", async (tx) => {
+      await tx`insert into audit_events (actor, action) values ('api', 'setup')`;
+      expect((await tx`select count(*)::int as n from audit_events`)[0].n).toBe(
+        1,
+      );
+    });
+    for (const statement of [
+      "update audit_events set action = 'login'",
+      "delete from audit_events",
+      "truncate audit_events",
+    ])
+      await expect(
+        asRole("tachy_app", (tx) => tx.unsafe(statement).then()),
+      ).rejects.toThrow(/permission denied/);
+  });
+
+  it("gives tachy_mcp what the chat tools use", async () => {
+    await asRole("tachy_mcp", async (tx) => {
+      const [user] = await tx`
+        insert into users (email, display_name) values ('tool@example.com', 'Tool')
+        on conflict (email) do update set
+          display_name = coalesce(excluded.display_name, users.display_name)
+        returning id
+      `;
+      const [seen] = await tx`
+        select u.role, u.disabled from users u where u.id = ${user.id}
+      `;
+      expect(seen.role).toBe("member");
+      await tx`insert into teams (slug, name) values ('mcp-test', 'Mcp')`;
+      await tx`
+        insert into audit_events (actor_user_id, actor_email, actor, action)
+        values (${user.id}, (select email from users where id = ${user.id}),
+                'mcp', 'catalog_add')
+      `;
+    });
+  });
+
+  it.each([
+    "select password_hash from users",
+    "select session_epoch from users",
+    "select * from users",
+    "update users set role = 'admin'",
+    "update users set password_hash = 'x'",
+    "delete from users",
+    "select count(*) from credentials",
+    "insert into credentials (scope, name) values ('global', 'x')",
+    "select count(*) from api_tokens",
+    "select count(*) from audit_events",
+    "delete from audit_events",
+    "create table mcp_probe (id int)",
+  ])("refuses tachy_mcp: %s", async (statement) => {
+    await expect(
+      asRole("tachy_mcp", (tx) => tx.unsafe(statement).then()),
+    ).rejects.toThrow(/permission denied/);
+  });
 });

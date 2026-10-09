@@ -13,11 +13,16 @@ import {
   listMemberships,
   setTeamMember,
   userEmailOf,
+  listApiTokens,
+  mintApiToken,
+  revokeApiToken,
 } from "@tachy/core/access";
+import { notFound } from "@tachy/core/infra";
 import { USER_ROLES, TEAM_ROLES, MIN_PASSWORD_LENGTH } from "@tachy/core";
-import { requireAdmin } from "../auth";
+import { requireAdmin, requireSession } from "../auth";
+import { expiryOf, tokenSchema } from "../tokens";
 import { audit } from "../audit";
-import { assertTeamAdmin, isAnyTeamAdminApi } from "../authz";
+import { assertTeamAdmin, callerUserId, isAnyTeamAdminApi } from "../authz";
 
 const createSchema = z.object({
   email: z.string().email(),
@@ -95,6 +100,46 @@ export const users = new Hono()
       ...(password === undefined ? {} : { password: "changed" }),
     });
     return c.json({ ok: true });
+  })
+
+  // An admin mints for someone else here, which is how a service account that
+  // cannot sign in gets its token.
+  .get("/:id/tokens", requireAdmin, async (c) =>
+    c.json(await listApiTokens(c.req.param("id")!)),
+  )
+
+  .post(
+    "/:id/tokens",
+    requireAdmin,
+    requireSession,
+    zValidator("json", tokenSchema),
+    async (c) => {
+      const owner = await userEmailOf(c.req.param("id")!);
+      if (!owner) throw notFound("no such user");
+      const body = c.req.valid("json");
+      const { token, row } = await mintApiToken({
+        userId: c.req.param("id")!,
+        name: body.name,
+        expiresAt: expiryOf(body.expires_in_days),
+        createdBy: await callerUserId(c),
+      });
+      await audit(c, "api_token_mint", body.name, {
+        for: owner,
+        expires_at: row.expires_at,
+      });
+      return c.json({ ...row, token }, 201);
+    },
+  )
+
+  .delete("/:id/tokens/:tokenId", requireAdmin, async (c) => {
+    const row = await revokeApiToken(
+      c.req.param("tokenId")!,
+      c.req.param("id")!,
+    );
+    await audit(c, "api_token_revoke", row.name, {
+      for: await userEmailOf(c.req.param("id")!),
+    });
+    return c.json(row);
   })
 
   .get("/memberships", async (c) => c.json(await listMemberships()))

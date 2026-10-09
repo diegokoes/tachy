@@ -1164,12 +1164,13 @@ sets them from `.env`, on a fresh volume and on every deploy. `roles.sql` also
 sets default privileges, so a table the schema plan adds is granted to
 `tachy_app` as it is created.
 
-| Role           | Used by                    | Rights                                                                                               |
-| -------------- | -------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `tachy_owner`  | schema apply               | meant to own every object. Not created: `tachy-deploy` applies the schema as the bootstrap superuser |
-| `tachy_app`    | api, workers, MCP children | DML on application tables, `pg_read_all_stats`, and a 60 s `statement_timeout`                       |
-| `tachy_backup` | `pg_dump`                  | `pg_read_all_data` (Postgres 14+)                                                                    |
-| `tachy_watch`  | `tachy-watch`              | `pg_monitor`. No password: it logs in only where `pg_hba` trusts, inside the postgres container      |
+| Role           | Used by                                                         | Rights                                                                                                                 |
+| -------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `tachy_owner`  | schema apply                                                    | meant to own every object. Not created: `tachy-deploy` applies the schema as the bootstrap superuser                   |
+| `tachy_app`    | api, workers, MCP children                                      | DML on application tables, `pg_read_all_stats`, and a 60 s `statement_timeout`                                         |
+| `tachy_mcp`    | the chat tools' subprocess, when `TACHY_MCP_DB_PASSWORD` is set | DML as `tachy_app`, except: no `credentials`, no `api_tokens`, no `users.password_hash`, insert-only on `audit_events` |
+| `tachy_backup` | `pg_dump`                                                       | `pg_read_all_data` (Postgres 14+)                                                                                      |
+| `tachy_watch`  | `tachy-watch`                                                   | `pg_monitor`. No password: it logs in only where `pg_hba` trusts, inside the postgres container                        |
 
 **Why the roles.** The MCP child is driven by a model and inherits the api's
 `DATABASE_URL` (`api/src/turn-config.ts`). A superuser can run

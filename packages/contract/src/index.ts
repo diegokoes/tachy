@@ -132,7 +132,8 @@ export type {
   CustomerComponentRow,
   CustomerProfile,
 } from "./catalog";
-export type { UserCensus } from "./access";
+export { API_TOKEN_PREFIX } from "./access";
+export type { ApiTokenRow, UserCensus } from "./access";
 export type {
   SourceCensus,
   SourceConnectionRow,
