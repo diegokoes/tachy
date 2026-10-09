@@ -20,9 +20,10 @@ stamps again. After a plan applied with `--allow-destructive` the stamp stays:
 the previous release is then not ready, on purpose, and the way back is the
 pre-deploy backup.
 
-The smoke run logs in as `SMOKE_EMAIL` from `/etc/tachy/tachy.env`. Without
-that account the deploy refuses to start; `--skip-smoke` deploys anyway and
-the log records `"smoke": "skipped"`.
+The smoke run logs in as `SMOKE_EMAIL` from `/etc/tachy/tachy.env`: a member
+account, no team, marked as a service account. It only reads, and passes on a
+database with no content. Without that account the deploy refuses to start;
+`--skip-smoke` deploys anyway and the log records `"smoke": "skipped"`.
 
 **By itself, at night.** With `TACHY_UPDATE_BRANCH=main` in
 `/etc/tachy/tachy.env`, `tachy-update` runs at 01:15 and 04:45 and deploys the
