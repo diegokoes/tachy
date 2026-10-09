@@ -2,6 +2,7 @@
  * The systems work items come from, and how their projects map onto products.
  */
 import { z } from "zod";
+import { isSourceBaseUrl } from "@tachy/core";
 import { getProductIdBySlug, getTeamIdBySlug } from "@tachy/core/catalog";
 import {
   listSourceConnections,
@@ -40,7 +41,13 @@ tool(
     inputSchema: {
       source_type: z.enum(["freshdesk", "github", "azure-devops"]),
       slug: z.string(),
-      base_url: z.string().optional(),
+      base_url: z
+        .string()
+        .refine(
+          isSourceBaseUrl,
+          "an http(s) URL with no username or password in it",
+        )
+        .optional(),
       config: z.record(z.string(), z.any()).optional(),
     },
   },
