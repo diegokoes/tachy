@@ -1,7 +1,7 @@
 /** A day's traffic in miniature. */
 import http from "k6/http";
 import { check } from "k6";
-import { BASE_URL, headers, setupSession, pick } from "./session.js";
+import { BASE_URL, headers, setupSeededSession, pick } from "./session.js";
 import { QUERIES, DOC_QUERIES } from "./corpus.js";
 
 // Placeholders: set W_LIST, W_DETAIL, W_SEARCH, W_DOC_SEARCH and W_FACETS to
@@ -33,7 +33,7 @@ export const options = {
   },
 };
 
-export const setup = setupSession;
+export const setup = setupSeededSession;
 
 function choose() {
   let roll = Math.random() * total;
