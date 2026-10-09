@@ -15,12 +15,15 @@ import {
   getUserByEmail,
   adminCount,
   verifyPassword,
+  isWeakerHash,
+  revokeSessions,
+  strengthenPasswordHash,
   teamAdminTeams,
   userTeams,
 } from "@tachy/core/access";
 import { env, log } from "@tachy/core/infra";
 import { type UserRole } from "@tachy/core";
-import { failureThrottle } from "./throttle";
+import { callerAddress, failureThrottle } from "./throttle";
 
 export interface OidcConfig {
   issuer: string;
@@ -63,11 +66,15 @@ function isHttps(c: Context): boolean {
 const COOKIE = "tachy_session";
 const SESSION_SECONDS = 7 * 24 * 3600;
 
+type SessionUser = NonNullable<Awaited<ReturnType<typeof getUserByEmail>>>;
+
+/** The cookie is `expiry|epoch|email`, signed; the epoch is what revokes it. */
 export async function setSessionCookie(
   c: Context,
   email: string,
 ): Promise<void> {
-  const value = `${Date.now() + SESSION_SECONDS * 1000}|${email}`;
+  const epoch = (await getUserByEmail(email))?.session_epoch ?? 0;
+  const value = `${Date.now() + SESSION_SECONDS * 1000}|${epoch}|${email}`;
   await setSignedCookie(c, COOKIE, value, sessionSecret, {
     httpOnly: true,
     sameSite: "Lax",
@@ -77,13 +84,21 @@ export async function setSessionCookie(
   });
 }
 
-async function cookieEmail(c: Context): Promise<string | undefined> {
+/**
+ * The account a session cookie still stands for: unexpired, issued under the
+ * account's current epoch, and not disabled.
+ */
+async function cookieUser(c: Context): Promise<SessionUser | null> {
   const value = await getSignedCookie(c, sessionSecret, COOKIE);
-  if (!value) return undefined;
-  const sep = value.indexOf("|");
-  const exp = Number(value.slice(0, sep));
-  if (!Number.isFinite(exp) || exp < Date.now()) return undefined;
-  return value.slice(sep + 1) || undefined;
+  if (!value) return null;
+  const [expiry, epoch, ...rest] = value.split("|");
+  const email = rest.join("|");
+  if (!email || !/^\d+$/.test(epoch)) return null;
+  if (!(Number(expiry) >= Date.now())) return null;
+  const user = await getUserByEmail(email);
+  if (!user || user.disabled || user.session_epoch !== Number(epoch))
+    return null;
+  return user;
 }
 
 function tokenMatches(header: string | undefined, token: string): boolean {
@@ -94,8 +109,8 @@ function tokenMatches(header: string | undefined, token: string): boolean {
 }
 
 export async function sessionEmail(c: Context): Promise<string | undefined> {
-  const fromCookie = await cookieEmail(c);
-  if (fromCookie) return fromCookie;
+  const fromCookie = await cookieUser(c);
+  if (fromCookie) return fromCookie.email;
   try {
     const auth = await getAuth(c as Parameters<typeof getAuth>[0]);
     return auth?.email;
@@ -114,7 +129,31 @@ export function markBootstrapped(): void {
   bootstrappedCache = true;
 }
 
-const logins = failureThrottle(5);
+const MAX_FAILURES_PER_ACCOUNT = 5;
+const MAX_FAILURES_PER_ADDRESS = 20;
+// Both keys carry the address, so failing on purpose locks out the caller's
+// own address and nobody else's account.
+const loginsByAccount = failureThrottle(MAX_FAILURES_PER_ACCOUNT);
+const loginsByAddress = failureThrottle(MAX_FAILURES_PER_ADDRESS);
+
+const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * Whether a browser sent this from another site. A session cookie rides along
+ * on such a request, so a write is refused. A client that is not a browser
+ * sends neither header and holds no cookie worth riding.
+ */
+export function isCrossSite(c: Context): boolean {
+  const site = c.req.header("sec-fetch-site");
+  if (site) return site !== "same-origin" && site !== "none";
+  const origin = c.req.header("origin");
+  if (!origin) return false;
+  try {
+    return new URL(origin).host !== c.req.header("host");
+  } catch {
+    return true;
+  }
+}
 
 async function resolveIdentity(
   c: Context,
@@ -126,17 +165,14 @@ async function resolveIdentity(
   )
     return { role: "admin", via: "token" };
 
-  const email = await cookieEmail(c);
-  if (email) {
-    const user = await getUserByEmail(email);
-    if (user && !user.disabled)
-      return {
-        email: user.email,
-        name: user.display_name ?? undefined,
-        role: user.role,
-        via: "password",
-      };
-  }
+  const user = await cookieUser(c);
+  if (user)
+    return {
+      email: user.email,
+      name: user.display_name ?? undefined,
+      role: user.role,
+      via: "password",
+    };
 
   if (opts.oidc) {
     try {
@@ -221,15 +257,23 @@ export function installAuth(
       zValidator("json", loginSchema),
       async (c) => {
         const { email, password } = c.req.valid("json");
-        if (logins.blocked(email))
-          return c.json({ error: "too many attempts; wait a minute" }, 429);
+        const address = callerAddress(c);
+        const account = `${address} ${email.toLowerCase()}`;
+        if (
+          loginsByAddress.blocked(address) ||
+          loginsByAccount.blocked(account)
+        )
+          return c.json({ error: "too many attempts; wait a minute" }, 429, {
+            "Retry-After": "60",
+          });
         const user = await getUserByEmail(email);
-        const ok =
-          user &&
-          !user.disabled &&
-          (await verifyPassword(password, user.password_hash));
-        if (!ok) {
-          logins.fail(email);
+        const matches = await verifyPassword(
+          password,
+          user?.password_hash ?? null,
+        );
+        if (!user || user.disabled || !matches) {
+          loginsByAddress.fail(address);
+          loginsByAccount.fail(account);
           return c.json({ error: "invalid email or password" }, 401);
         }
         if (oidc && !user.password_login_allowed)
@@ -237,6 +281,8 @@ export function installAuth(
             { error: "this account signs in with SSO; password login is off" },
             403,
           );
+        if (user.password_hash && isWeakerHash(user.password_hash))
+          await strengthenPasswordHash(user.id, password);
         await setSessionCookie(c, user.email);
         return c.json({
           email: user.email,
@@ -247,10 +293,16 @@ export function installAuth(
     );
   }
 
-  base.get("/auth/logout", async (c) => {
+  // A POST, so a link or an image on another page cannot sign someone out.
+  // The epoch moves on, which ends the session on every device it is open on.
+  base.post("/auth/logout", async (c) => {
+    if (isCrossSite(c))
+      throw new HTTPException(403, { message: "cross-site request refused" });
+    const user = await cookieUser(c);
+    if (user) await revokeSessions(user.id);
     deleteCookie(c, COOKIE, { path: "/" });
     if (oidc) await revokeSession(c as Parameters<typeof revokeSession>[0]);
-    return c.redirect("/");
+    return c.json({ ok: true });
   });
 
   base.get("/auth/me", async (c) => {
@@ -291,6 +343,9 @@ export function installAuth(
   base.use("/api/*", async (c, next) => {
     const identity = await resolveIdentity(c, opts);
     if (!identity) throw new HTTPException(401, { message: "unauthorized" });
+    const ridesCookie = identity.via === "password" || identity.via === "sso";
+    if (ridesCookie && UNSAFE_METHODS.has(c.req.method) && isCrossSite(c))
+      throw new HTTPException(403, { message: "cross-site request refused" });
     c.set(IDENTITY_KEY as never, identity as never);
     return next();
   });

@@ -31,10 +31,19 @@ export async function mcpActor(): Promise<ActorRef> {
   };
 }
 
+/**
+ * The user the gates check, or null when nothing is checked: no admin exists
+ * yet, or the session is an app admin with no user row. A session that names
+ * nobody is otherwise refused.
+ */
 export async function gateUserId(): Promise<string | null> {
+  if (!(await enforcementActive())) return null;
   const userId = await resolveCurrentUserId();
-  if (!userId) return null;
-  return (await enforcementActive()) ? userId : null;
+  if (userId) return userId;
+  if (env.actorRole === "admin") return null;
+  throw forbidden(
+    "no user is attached to this session: set TACHY_USER_EMAIL to act as one",
+  );
 }
 
 export async function requireCanEdit(scope: EntryScope): Promise<void> {
