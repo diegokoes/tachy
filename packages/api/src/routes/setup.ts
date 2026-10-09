@@ -88,7 +88,8 @@ export const setup = new Hono()
         values (${body.email}, ${body.display_name ?? null}, 'admin', ${hash})
         on conflict (email) do update set
           display_name = coalesce(excluded.display_name, users.display_name),
-          role = 'admin', password_hash = excluded.password_hash
+          role = 'admin', password_hash = excluded.password_hash,
+          session_epoch = users.session_epoch + 1
       `;
     });
     markBootstrapped();
