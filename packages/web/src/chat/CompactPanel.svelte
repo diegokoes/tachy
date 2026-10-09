@@ -14,6 +14,7 @@
       near_duplicate_blocks: number;
       boilerplate_lines: number;
       prior_transcript: number;
+      prior_summary: number;
     };
     recovered_earlier: number;
   }

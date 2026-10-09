@@ -80,10 +80,10 @@ cli            profile "tools", ad hoc: sync, backup, restore, reembed, seed
   hourly. `source.sync` has none: an admin adds a definition per connection.
 - **Model calls outside turns.** `completeOnce` (`agent/src/complete.ts`)
   runs one prompt through `query()` with no tools and no MCP child. Report
-  review and ticket review call it in the api, and the `agent.ask` flow step
-  calls it in `worker-light`. None of them takes a chat slot (§2.4). Each
-  call the `agent.ask` step makes counts against its flow's daily limit
-  (§5.3.7).
+  review and ticket review call it in the api, and the `agent.ask` and
+  `agent.summarize_item` flow steps call it in `worker-light`. None of them
+  takes a chat slot (§2.4). Each call those steps make counts against their
+  flow's daily limit (§5.3.7).
 - **Usage counting** writes to Postgres without waiting: library views, tool
   calls from each MCP child and source traffic, all through `inBackground`
   (`core/src/infra/background.ts`). The api waits up to 5 s for them when it
@@ -974,9 +974,9 @@ that adds to operations:
   DevOps item, change tags and start jobs. They act with the flow owner's
   tokens, so the worker decrypts vault credentials and holds
   `TACHY_SECRET_KEY`.
-- **Flows call the model.** The `agent.ask` step runs one prompt with the
-  owner's model credential and no tools (`agent/src/flow-actions.ts`). It
-  takes no chat slot (§2.4).
+- **Flows call the model.** The `agent.ask` and `agent.summarize_item` steps
+  each run one prompt with the owner's model credential and no tools
+  (`agent/src/flow-actions.ts`). They take no chat slot (§2.4).
 - **A flow's model calls are limited.** Each flow has `model_calls_per_day`,
   100 by default and set in the flow editor. Once it has made that many in 24
   hours the step refuses and the run fails saying so. A call is counted when it
@@ -1047,7 +1047,7 @@ never runs on an event loop that serves requests.
 - **An SSE keepalive** comment every 20 s, because approvals can wait 15
   minutes (`agent/src/turn.ts`) and idle connections get cut.
 
-**Not counted by the cap:** one-shot model calls and the `agent.ask` flow step
+**Not counted by the cap:** one-shot model calls and the model flow steps
 (§2.4).
 
 **Profile B, an `agent` service that owns turns.** Not built:
