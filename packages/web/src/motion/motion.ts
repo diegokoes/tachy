@@ -32,8 +32,9 @@ export function shatter(node: HTMLElement) {
 
 /**
  * Empties a view: each word of `text` drains away top to bottom, and `boxes`,
- * the surfaces a word clip would leave standing, fade. `onComplete` fires once
- * and is where the caller removes the nodes; nothing is restored to view.
+ * the surfaces a word clip would leave standing, fade. `onComplete` fires once,
+ * with the words whole again and the boxes still transparent, so the caller
+ * removes the nodes in it.
  */
 export function drainOut(
   text: HTMLElement[],
