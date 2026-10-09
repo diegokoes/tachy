@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isGlobalAdmin } from "../access/session.svelte";
   import { onDestroy, onMount } from "svelte";
   import { keep, recall } from "../shell/kept";
   import {
@@ -443,7 +444,7 @@
                   >{logOpen.has(run.id) ? "hide log" : "log"}</Button
                 >
               {/if}
-              {#if isActive(run.status)}
+              {#if isGlobalAdmin() && isActive(run.status)}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -606,7 +607,7 @@
     aria-label={definition.enabled
       ? `pause ${definition.name}`
       : `resume ${definition.name}`}
-    disabled={pausing === definition.id}
+    disabled={pausing === definition.id || !isGlobalAdmin()}
     onclick={() => pause(definition)}
   />
 {/snippet}
@@ -670,6 +671,9 @@
   editTitle={(d) => d.name}
   width="48rem"
   extraActions={dialogActions}
+  canEdit={isGlobalAdmin}
+  canDelete={isGlobalAdmin}
+  canCreate={isGlobalAdmin()}
   {formExtra}
   onform={(f) => {
     openedForm(f);

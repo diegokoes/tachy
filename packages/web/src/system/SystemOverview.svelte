@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isGlobalAdmin } from "../access/session.svelte";
   import { utcTip } from "../dates.svelte";
   import { onDestroy, onMount } from "svelte";
   import { api } from "../api";
@@ -136,6 +137,9 @@
     return rate >= PASS_WARN ? "warn" : "danger";
   };
 
+  /** Figures whose source the server sends to an app admin only. */
+  const ADMIN_FIGURES = new Set(["reports", "release"]);
+
   const figures = $derived.by(() => {
     const state = runState();
     const commit = system.data?.env?.commit;
@@ -147,7 +151,7 @@
     let reportsTone: Tone = "muted";
     if (openReports) reportsTone = "warn";
     else if (census.data.counts.reports) reportsTone = "accent";
-    return [
+    const all = [
       { key: "status", label: "status", ...state, to: "runtime" },
       {
         key: "reports",
@@ -195,6 +199,9 @@
         to: "host",
       },
     ];
+    return isGlobalAdmin()
+      ? all
+      : all.filter((figure) => !ADMIN_FIGURES.has(figure.key));
   });
 
   const gauges = $derived.by((): DialItem[] => {
@@ -288,7 +295,7 @@
   type Runtime = NonNullable<typeof runtime>;
   /** `off` is the tone of a vault with no key set. */
   const vaultTone = (
-    vault: Runtime["security"]["vault"],
+    vault: NonNullable<Runtime["security"]>["vault"],
     off: Cell["tone"],
   ): Cell["tone"] => {
     if (!vault.enabled) return off;
@@ -305,7 +312,7 @@
   const lamps = $derived.by((): (Cell & { detail?: string })[] => {
     if (!runtime) return [];
     const readiness = runtime.readiness;
-    const vault = runtime.security.vault;
+    const vault = runtime.security?.vault;
     const cells: (Cell & { detail?: string })[] = [
       {
         key: "database",
@@ -329,7 +336,9 @@
         tone: MODEL_TONES[readiness.model] ?? "muted",
         title: readiness.model,
       },
-      {
+    ];
+    if (vault)
+      cells.push({
         key: "vault",
         label: "vault keys",
         tone: vaultTone(vault, "muted"),
@@ -341,8 +350,7 @@
         detail: vault.by_key.some((k) => !k.current)
           ? "Some credentials are still sealed with an older key. Run npm run sync rotate-key."
           : undefined,
-      },
-    ];
+      });
     for (const [name, check] of Object.entries(
       (status?.watch as Watch | undefined)?.checks ?? {},
     ))
@@ -409,8 +417,8 @@
   });
 
   const securityFacts = $derived.by((): Fact[] => {
-    if (!runtime) return [];
-    const security = runtime.security;
+    const security = runtime?.security;
+    if (!security) return [];
     return [
       {
         key: "sso",
@@ -647,7 +655,7 @@
   {#if fact.key === "maintenance" && runtime}
     <Checkbox
       checked={runtime.refusingChats}
-      disabled={pausing}
+      disabled={pausing || !isGlobalAdmin()}
       ariaLabel="pause new chats"
       onchange={(on) => setMaintenance(on)}
     />
@@ -717,22 +725,33 @@
     <Facts items={runtimeFacts} extra={runtimeExtra} />
   </Tile>
 
-  <Tile title="security" empty={!securityFacts.length}>
-    {#snippet actions()}
-      <!-- Another page, not a section of this one, so a navigation rather
-           than showSection, which would build /admin/system/admins. -->
-      <Button
-        variant="ghost"
-        size="sm"
-        square
-        icon="next"
-        title="who holds app admin"
-        aria-label="app admins"
-        onclick={() => navigate("/admin/access/admins")}
-      />
-    {/snippet}
-    <Facts items={securityFacts} />
-  </Tile>
+  {#if isGlobalAdmin()}
+    <Tile title="security" empty={!securityFacts.length}>
+      {#snippet actions()}
+        <!-- Another page, not a section of this one, so a navigation rather
+             than showSection, which would build /console/system/admins. -->
+        <Button
+          variant="ghost"
+          size="sm"
+          square
+          icon="next"
+          title="who holds app admin"
+          aria-label="app admins"
+          onclick={() => navigate("/console/access/admins")}
+        />
+        <Button
+          variant="ghost"
+          size="sm"
+          square
+          icon="history"
+          title="who did what: sign-ins, accounts, credentials, settings"
+          aria-label="audit trail"
+          onclick={() => showSection("audit")}
+        />
+      {/snippet}
+      <Facts items={securityFacts} />
+    </Tile>
+  {/if}
 
   <Tile title="settings" empty={!settingFacts.length}>
     {#snippet actions()}

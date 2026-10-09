@@ -20,6 +20,7 @@
   import type { Team } from "../catalog/rows";
   import { INFO } from "../admin/help";
   import { sectionHoist } from "../admin/sectionAction.svelte";
+  import { isGlobalAdmin } from "../access/session.svelte";
 
   const buckets = createResource(() => api.get<Bucket[]>("/buckets"), []);
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
@@ -178,6 +179,9 @@
   formExtra={teamPicker}
   onform={openedForm}
   extraActions={rotateAction}
+  canEdit={isGlobalAdmin}
+  canDelete={isGlobalAdmin}
+  canCreate={isGlobalAdmin()}
   oncreate={(d) =>
     buckets.mutate(async () => {
       issued = await api.post<BucketWithToken>("/buckets", {

@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { failureThrottle } from "../../packages/api/src/throttle";
+import { Hono } from "hono";
+import {
+  callerAddress,
+  failureThrottle,
+} from "../../packages/api/src/throttle";
 
 afterEach(() => vi.useRealTimers());
 
@@ -31,5 +35,22 @@ describe("failure throttle", () => {
     throttle.fail("e");
     expect(throttle.blocked("b")).toBe(false);
     expect(throttle.blocked("e")).toBe(true);
+  });
+});
+
+describe("caller address", () => {
+  const app = new Hono().get("/", (c) => c.text(callerAddress(c)));
+  const from = (forwarded: string) =>
+    app.request("/", { headers: { "X-Forwarded-For": forwarded } });
+
+  afterEach(() => {
+    delete process.env.TACHY_BEHIND_PROXY;
+  });
+
+  it("is the forwarded client only where a proxy sets the header", async () => {
+    expect(await (await from("10.0.0.1")).text()).toBe("unknown");
+    process.env.TACHY_BEHIND_PROXY = "true";
+    expect(await (await from("10.0.0.1, 172.18.0.2")).text()).toBe("10.0.0.1");
+    expect(await (await app.request("/")).text()).toBe("unknown");
   });
 });

@@ -132,13 +132,15 @@ export type {
   CustomerComponentRow,
   CustomerProfile,
 } from "./catalog";
-export type { UserCensus } from "./access";
+export { API_TOKEN_PREFIX } from "./access";
+export type { ApiTokenRow, UserCensus } from "./access";
 export type {
   SourceCensus,
   SourceConnectionRow,
   SourceTraffic,
   Freshness,
 } from "./sources";
+export { isSourceBaseUrl } from "./sources";
 export {
   INGEST_TOKEN_PREFIX,
   BUCKET_BATCH_VERSION,
@@ -172,6 +174,9 @@ export {
 export type { LibraryAssetType } from "./assets";
 
 export { MAX_PAGE } from "./paging";
+
+export { AUDIT_ACTIONS } from "./audit";
+export type { AuditAction, AuditEventRow } from "./audit";
 
 export { GOOD, STRONG, grade } from "./relevance";
 export type { Grade } from "./relevance";

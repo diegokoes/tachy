@@ -101,29 +101,30 @@ differently:
 
 ### 2.2 Where state lives
 
-| State                                    | Location                                                                                                   | Durable?                             | With two API replicas                                      |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------- |
-| System of record                         | Postgres volume                                                                                            | yes                                  | fine                                                       |
-| Generated exports                        | `generated_outputs.bytes`, TTL 24 h; deleted daily by `retention.sweep`                                    | until TTL                            | fine                                                       |
-| Chat uploads                             | `chat_uploads.bytes`, TTL 24 h (`TACHY_UPLOAD_TTL_HOURS`), readable only by their owner                    | until TTL                            | fine                                                       |
-| Library images                           | `library_assets.bytes`, deduplicated by sha256, 5 MB cap; orphans removed after 7 days                     | yes                                  | fine                                                       |
-| Usage counters                           | `library_views`, `mcp_tool_calls`: per person per day for 13 months, then monthly; `source_calls` is kept  | yes                                  | fine; upserts                                              |
-| Jobs                                     | `job_definitions`, `job_runs` (90 days, failed 180), `job_workers`, `job_definition_changes`               | yes                                  | fine; claims take turns under an advisory lock             |
-| Wiki gaps                                | `wiki_gaps`, refreshed hourly by the `wiki.gaps` job                                                       | yes                                  | fine                                                       |
-| Buckets                                  | `buckets`, `bucket_docs`, `bucket_doc_chunks`; the ingest token is stored as a hash                        | yes                                  | fine                                                       |
-| Flows and notifications                  | `flows`, `flow_runs`, `notifications`; old runs and notifications are swept (§7)                           | yes                                  | fine                                                       |
-| Active turns, approvals, admission queue | in-process `Map`s (`api/src/turns.ts`, `api/src/admission.ts`); resolvers in `agent/src/turn.ts`           | no; a restart drains for up to 180 s | **breaks**: `/approve` must reach the owning process       |
-| Maintenance switch                       | an in-process flag (`api/src/lifecycle.ts`)                                                                | no; a restart clears it              | per replica                                                |
-| Claude session transcripts               | `tachy-agent-home` volume, `users/<id>`; pruned after 90 days                                              | yes                                  | **breaks** `resume` unless shared or routed sticky by user |
-| Throttles                                | `Map`s (`api/src/throttle.ts`): failed logins by email, failed ingest tokens by bucket and address         | no                                   | weaken to per replica                                      |
-| Settings                                 | `settings` table; each process re-reads it within 15 s (`core/src/config/settings.ts`)                     | yes                                  | fine                                                       |
-| Permission cache                         | 60 s `Map` (`core/src/access/permissions.ts`)                                                              | no                                   | a role change is stale for up to 60 s elsewhere            |
-| Repo clones                              | `tachy-repo-data` volume, mounted in the api and both workers                                              | rebuildable cache                    | per host                                                   |
-| Embedding model                          | image layer (`/app/.model-cache`)                                                                          | rebuildable                          | fine                                                       |
-| Container logs                           | Docker `local` driver, 20 MB × 10 files per container                                                      | bounded by size, not by age          | -                                                          |
-| Backups                                  | age ciphertext in `/srv/tachy/backup-export`, on the same disk until someone downloads it (§6)             | off-host only once downloaded        | -                                                          |
-| Host status                              | `/srv/tachy/status/*.json`, written by backups, the watch script and deploys; mounted read-only in the api | rebuildable                          | -                                                          |
-| Deploy log                               | `/srv/tachy/deploy.log`; in the daily file backup (§6)                                                     | off-host only once downloaded        | -                                                          |
+| State                                    | Location                                                                                                              | Durable?                             | With two API replicas                                      |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------- |
+| System of record                         | Postgres volume                                                                                                       | yes                                  | fine                                                       |
+| Generated exports                        | `generated_outputs.bytes`, TTL 24 h; deleted daily by `retention.sweep`                                               | until TTL                            | fine                                                       |
+| Chat uploads                             | `chat_uploads.bytes`, TTL 24 h (`TACHY_UPLOAD_TTL_HOURS`), readable only by their owner                               | until TTL                            | fine                                                       |
+| Library images                           | `library_assets.bytes`, deduplicated by sha256, 5 MB cap; orphans removed after 7 days                                | yes                                  | fine                                                       |
+| Usage counters                           | `library_views`, `mcp_tool_calls`: per person per day for 13 months, then monthly; `source_calls` is kept             | yes                                  | fine; upserts                                              |
+| Jobs                                     | `job_definitions`, `job_runs` (90 days, failed 180), `job_workers`, `job_definition_changes`                          | yes                                  | fine; claims take turns under an advisory lock             |
+| Wiki gaps                                | `wiki_gaps`, refreshed hourly by the `wiki.gaps` job                                                                  | yes                                  | fine                                                       |
+| Buckets                                  | `buckets`, `bucket_docs`, `bucket_doc_chunks`; the ingest token is stored as a hash                                   | yes                                  | fine                                                       |
+| Flows and notifications                  | `flows`, `flow_runs`, `notifications`; old runs and notifications are swept (§7)                                      | yes                                  | fine                                                       |
+| Audit trail                              | `audit_events`: sign-ins, account, credential and settings changes, exports. Append-only for `tachy_app`; never swept | yes                                  | fine                                                       |
+| Active turns, approvals, admission queue | in-process `Map`s (`api/src/turns.ts`, `api/src/admission.ts`); resolvers in `agent/src/turn.ts`                      | no; a restart drains for up to 180 s | **breaks**: `/approve` must reach the owning process       |
+| Maintenance switch                       | an in-process flag (`api/src/lifecycle.ts`)                                                                           | no; a restart clears it              | per replica                                                |
+| Claude session transcripts               | `tachy-agent-home` volume, `users/<id>`; pruned after 90 days                                                         | yes                                  | **breaks** `resume` unless shared or routed sticky by user |
+| Throttles                                | `Map`s (`api/src/throttle.ts`): failed logins by email, failed ingest tokens by bucket and address                    | no                                   | weaken to per replica                                      |
+| Settings                                 | `settings` table; each process re-reads it within 15 s (`core/src/config/settings.ts`)                                | yes                                  | fine                                                       |
+| Permission cache                         | 60 s `Map` (`core/src/access/permissions.ts`)                                                                         | no                                   | a role change is stale for up to 60 s elsewhere            |
+| Repo clones                              | `tachy-repo-data` volume, mounted in the api and both workers                                                         | rebuildable cache                    | per host                                                   |
+| Embedding model                          | image layer (`/app/.model-cache`)                                                                                     | rebuildable                          | fine                                                       |
+| Container logs                           | Docker `local` driver, 20 MB × 10 files per container                                                                 | bounded by size, not by age          | -                                                          |
+| Backups                                  | age ciphertext in `/srv/tachy/backup-export`, on the same disk until someone downloads it (§6)                        | off-host only once downloaded        | -                                                          |
+| Host status                              | `/srv/tachy/status/*.json`, written by backups, the watch script and deploys; mounted read-only in the api            | rebuildable                          | -                                                          |
+| Deploy log                               | `/srv/tachy/deploy.log`; in the daily file backup (§6)                                                                | off-host only once downloaded        | -                                                          |
 
 ### 2.3 How it is deployed
 
@@ -1163,12 +1164,13 @@ sets them from `.env`, on a fresh volume and on every deploy. `roles.sql` also
 sets default privileges, so a table the schema plan adds is granted to
 `tachy_app` as it is created.
 
-| Role           | Used by                    | Rights                                                                                               |
-| -------------- | -------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `tachy_owner`  | schema apply               | meant to own every object. Not created: `tachy-deploy` applies the schema as the bootstrap superuser |
-| `tachy_app`    | api, workers, MCP children | DML on application tables, `pg_read_all_stats`, and a 60 s `statement_timeout`                       |
-| `tachy_backup` | `pg_dump`                  | `pg_read_all_data` (Postgres 14+)                                                                    |
-| `tachy_watch`  | `tachy-watch`              | `pg_monitor`. No password: it logs in only where `pg_hba` trusts, inside the postgres container      |
+| Role           | Used by                                                         | Rights                                                                                                                 |
+| -------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `tachy_owner`  | schema apply                                                    | meant to own every object. Not created: `tachy-deploy` applies the schema as the bootstrap superuser                   |
+| `tachy_app`    | api, workers, MCP children                                      | DML on application tables, `pg_read_all_stats`, and a 60 s `statement_timeout`                                         |
+| `tachy_mcp`    | the chat tools' subprocess, when `TACHY_MCP_DB_PASSWORD` is set | DML as `tachy_app`, except: no `credentials`, no `api_tokens`, no `users.password_hash`, insert-only on `audit_events` |
+| `tachy_backup` | `pg_dump`                                                       | `pg_read_all_data` (Postgres 14+)                                                                                      |
+| `tachy_watch`  | `tachy-watch`                                                   | `pg_monitor`. No password: it logs in only where `pg_hba` trusts, inside the postgres container                        |
 
 **Why the roles.** The MCP child is driven by a model and inherits the api's
 `DATABASE_URL` (`api/src/turn-config.ts`). A superuser can run
@@ -1954,7 +1956,8 @@ and the SFTP pull keeps working as it is.
   - Ten failed tokens in a minute from one address stop that address, for that
     bucket, for the rest of the minute. Other addresses and buckets are
     unaffected, so a guesser cannot lock a pusher out. The address is
-    `X-Forwarded-For`, which Caddy sets itself: "For these `X-Forwarded-*`
+    `X-Forwarded-For`, read because the api runs with `TACHY_BEHIND_PROXY=true`
+    here and which Caddy sets itself: "For these `X-Forwarded-*`
     headers, by default, the proxy will ignore their values from incoming
     requests, to prevent spoofing"
     ([Caddy](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)).

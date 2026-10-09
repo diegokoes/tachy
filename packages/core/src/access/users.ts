@@ -96,13 +96,20 @@ export async function getUserByEmail(email: string): Promise<{
   disabled: boolean;
   password_hash: string | null;
   password_login_allowed: boolean;
+  session_epoch: number;
 } | null> {
   const [row] = await sql`
     select id, email, display_name, role, disabled, password_hash,
-           password_login_allowed
+           password_login_allowed, session_epoch
     from users where email = ${email}
   `;
   return (row as never) ?? null;
+}
+
+/** For naming an account in a record that outlives a rename of nothing but its id. */
+export async function userEmailOf(id: string): Promise<string | null> {
+  const [row] = await sql`select email from users where id = ${id}`;
+  return (row?.email as string | undefined) ?? null;
 }
 
 async function requireUser(
@@ -141,7 +148,24 @@ export async function setUserPassword(
 ): Promise<void> {
   await requireUser(id);
   const hash = await hashPassword(password);
+  await sql`
+    update users set password_hash = ${hash}, session_epoch = session_epoch + 1
+    where id = ${id}
+  `;
+}
+
+/** The same password hashed at today's cost. Sessions stay: nothing changed hands. */
+export async function strengthenPasswordHash(
+  id: string,
+  password: string,
+): Promise<void> {
+  const hash = await hashPassword(password);
   await sql`update users set password_hash = ${hash} where id = ${id}`;
+}
+
+/** Ends every session the user has open, on every device. */
+export async function revokeSessions(id: string): Promise<void> {
+  await sql`update users set session_epoch = session_epoch + 1 where id = ${id}`;
 }
 
 export async function setUserFlags(
@@ -167,7 +191,11 @@ export async function setUserDisabled(
     (await adminCount()) <= 1
   )
     throw badInput("cannot disable the last admin");
-  await sql`update users set disabled = ${disabled} where id = ${id}`;
+  await sql`
+    update users set disabled = ${disabled},
+                     session_epoch = session_epoch + ${disabled ? 1 : 0}
+    where id = ${id}
+  `;
   clearPermissionCache();
 }
 

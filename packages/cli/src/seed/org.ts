@@ -120,6 +120,23 @@ export async function seedOrg(tx: Tx, volumes: Volumes): Promise<Org> {
     })),
   );
 
+  // A token nobody holds: its hash is of nothing, so it lists and never opens.
+  await insertRows(
+    tx,
+    "api_tokens",
+    ["id", "user_id", "name", "token_hash", "hint", "created_by"],
+    [
+      {
+        id: uuidFor("api_token", 0),
+        user_id: users[1].id,
+        name: "nightly export script",
+        token_hash: Buffer.from(uuidFor("api_token_hash", 0)),
+        hint: "seed",
+        created_by: users[0].id,
+      },
+    ],
+  );
+
   // Every user joins at least one team; the k6 member joins all of them.
   const memberships: Record<string, unknown>[] = [];
   const seen = new Set<string>();

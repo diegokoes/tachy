@@ -38,6 +38,12 @@ const envSchema = z
      */
     actor: z.enum(["agent", "mcp"]).optional(),
     turnId: z.string().optional(),
+    /**
+     * Set by the API for a turn started with the bearer token or in open mode:
+     * an app admin with no user row. Without it, a session that names no user
+     * is refused once the deployment has an admin.
+     */
+    actorRole: z.literal("admin").optional(),
     apiToken: z.string().min(1).optional(),
     /**
      * Which stack answered, set per stack in `.env` rather than baked into the
@@ -88,6 +94,7 @@ const parsed = envSchema.safeParse({
   userEmail: process.env.TACHY_USER_EMAIL || undefined,
   actor: process.env.TACHY_ACTOR === "agent" ? "agent" : undefined,
   turnId: process.env.TACHY_TURN_ID || undefined,
+  actorRole: process.env.TACHY_ACTOR_ROLE === "admin" ? "admin" : undefined,
   apiToken: apiTokenRaw,
   envBadge: process.env.TACHY_ENV_BADGE || undefined,
   commit: process.env.TACHY_COMMIT || undefined,

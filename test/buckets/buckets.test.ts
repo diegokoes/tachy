@@ -1,4 +1,13 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+} from "vitest";
+import { env } from "@tachy/core/infra";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { BUCKET_BATCH_VERSION, INGEST_TOKEN_PREFIX } from "@tachy/core";
@@ -134,13 +143,40 @@ describe("bucket admin", () => {
     );
   });
 
-  it("is for app admins only", async () => {
+  it("lets a member list buckets, and change none", async () => {
     await createUser({ email: "m@example.com", password: "a-long-password" });
     const member = await loginCookie(app, "m@example.com", "a-long-password");
-    const response = await app.request("/api/buckets", {
-      headers: { Cookie: member },
+    const as = (path: string, method = "GET") =>
+      app.request(path, { method, headers: { Cookie: member } });
+
+    const listed = await as("/api/buckets");
+    expect(listed.status).toBe(200);
+    expect(JSON.stringify(await listed.json())).not.toContain(token);
+
+    expect(
+      (await as("/api/buckets/track-and-trace/token", "POST")).status,
+    ).toBe(403);
+    expect((await as("/api/buckets/track-and-trace", "DELETE")).status).toBe(
+      403,
+    );
+    const created = await app.request("/api/buckets", {
+      ...json({ slug: "mine", name: "Mine" }),
+      headers: { "Content-Type": "application/json", Cookie: member },
     });
-    expect(response.status).toBe(403);
+    expect(created.status).toBe(403);
+  });
+
+  it("keeps a bucket's documents to the teams it is assigned to", async () => {
+    await createUser({ email: "m@example.com", password: "a-long-password" });
+    const member = await loginCookie(app, "m@example.com", "a-long-password");
+    const docs = () =>
+      app.request("/api/buckets/track-and-trace/docs", {
+        headers: { Cookie: member },
+      });
+    expect((await docs()).status).toBe(403);
+
+    await setTeamMember("test-team", "m@example.com", "member");
+    expect((await docs()).status).toBe(200);
   });
 
   it("rejects an unknown team", async () => {
@@ -175,6 +211,10 @@ describe("ingest", () => {
   });
 
   it("stops answering an address that keeps sending bad tokens, for that bucket only", async () => {
+    process.env.TACHY_BEHIND_PROXY = "true";
+    onTestFinished(() => {
+      delete process.env.TACHY_BEHIND_PROXY;
+    });
     const guarded = await createBucket(
       { slug: "guarded", name: "Guarded" },
       null,
@@ -405,6 +445,12 @@ describe("bucket tools", () => {
     await server.connect(serverTransport);
     client = new Client({ name: "test", version: "0" });
     await client.connect(clientTransport);
+    // The suite names no user, and an admin exists: the turn of an app admin
+    // with no user row is the session that still passes the gate.
+    env.actorRole = "admin";
+  });
+  afterAll(() => {
+    env.actorRole = undefined;
   });
 
   async function call(name: string, args: Record<string, unknown> = {}) {

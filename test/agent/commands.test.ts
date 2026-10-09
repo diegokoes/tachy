@@ -91,6 +91,10 @@ describe("slash command registry", () => {
     expect(scoped).toContain("`repos` / `project`");
     expect(scoped).toContain("User arguments: why does login loop?");
 
+    // A flow is shown in the panel, and the text beside it stays short.
+    expect(scoped).toContain("call show_code_walkthrough");
+    expect(scoped).toContain("at most six lines");
+
     const open = findCommand("code")!.expand("why does login loop?");
     expect(open).not.toContain("Scope chosen");
     expect(open).toContain("CODE CONSULTATION MODE");

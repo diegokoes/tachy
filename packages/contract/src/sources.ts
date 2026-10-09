@@ -55,3 +55,19 @@ export interface Freshness {
   /** What the last attempt failed with, when it did. */
   error: string | null;
 }
+
+/**
+ * Whether a source connection may be pointed at this address: http or https,
+ * and no credentials in it. A password in the URL would be stored and listed
+ * in plain text, outside the vault that holds the connection's token.
+ */
+export function isSourceBaseUrl(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  return !url.username && !url.password;
+}

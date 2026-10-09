@@ -93,6 +93,7 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
       return [
         "Run CODE CONSULTATION MODE as defined in your instructions.",
         ...scopeLine(scope),
+        CODE_ANSWER_SHAPE,
         argsLine(scope.question),
       ].join("\n");
     },
@@ -143,6 +144,11 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
       ].join("\n"),
   },
 ];
+
+const CODE_ANSWER_SHAPE = [
+  "Shape of the answer: when the question asks how something works, flows or is processed, show it. Read the code, call show_code_walkthrough with the stages as steps, then write at most six lines: the flow in one sentence, and anything the steps cannot carry. Do not write the stages out in prose as well.",
+  "For any other question, answer in the first sentence and stop when it is answered. Name an index only when it is stale, failing or partial for a repo in scope; leave out what you did not use.",
+].join("\n");
 
 /** Nothing when the line names no scope: the mode then finds the repo itself. */
 function scopeLine(scope: { repos: string[]; projects: string[] }): string[] {

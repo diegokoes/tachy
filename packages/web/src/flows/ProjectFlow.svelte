@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isCurator } from "../access/session.svelte";
   import type { Snippet } from "svelte";
   import type {
     ComposeConfig,
@@ -369,7 +370,7 @@
     variant="ghost"
     size="sm"
     icon="run"
-    disabled={dirty || !raw}
+    disabled={dirty || !raw || !isCurator()}
     onclick={tryIt}>try it</Button
   >
   <Button
@@ -378,7 +379,7 @@
     icon="save"
     tone={dirty ? "accent" : undefined}
     busy={saving}
-    disabled={!dirty}
+    disabled={!dirty || !isCurator()}
     onclick={save}>save</Button
   >
 {/snippet}

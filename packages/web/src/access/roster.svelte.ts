@@ -1,6 +1,7 @@
 import type { TeamRole } from "@tachy/contract";
 import { api } from "../api";
 import { createResource } from "../resource.svelte";
+import { isCurator } from "./session.svelte";
 import type { Member, UserRow } from "./rows";
 import type { SystemInfo } from "../system/rows";
 import type { Team } from "../catalog/rows";
@@ -40,7 +41,10 @@ export const reloadRoster = () =>
 
 /** Whether single sign-on is set up, or null when the caller cannot see. */
 export const ssoConfigured = (): boolean | null =>
-  system.data?.runtime?.security.sso_configured ?? null;
+  system.data?.runtime?.security?.sso_configured ?? null;
+
+/** Whether the server sends this caller how each account signs in. */
+export const seesSignIn = () => isCurator();
 
 /**
  * How this account can sign in. Under SSO a password works only for an account
@@ -49,8 +53,9 @@ export const ssoConfigured = (): boolean | null =>
  */
 export function signIn(user: UserRow, sso: boolean | null) {
   return {
-    password:
+    password: Boolean(
       user.has_password && (sso !== true || user.password_login_allowed),
+    ),
     // SSO is a deployment-wide setting, so it is on for everyone or no one.
     // Service accounts authenticate with a token instead.
     sso: sso === true && !user.service_account,

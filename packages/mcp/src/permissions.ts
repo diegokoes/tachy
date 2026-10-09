@@ -8,6 +8,8 @@ import {
   assertGlobalAdmin,
 } from "@tachy/core/access";
 import { sql, forbidden, env } from "@tachy/core/infra";
+import type { AuditAction } from "@tachy/core";
+import { recordAudit } from "@tachy/core/audit";
 import type { ActorRef } from "@tachy/core/library";
 import type { EntryScope } from "@tachy/core/access";
 
@@ -31,10 +33,30 @@ export async function mcpActor(): Promise<ActorRef> {
   };
 }
 
+/** Runs the write, then records it: a refused or failed write leaves no row. */
+export async function audited<T>(
+  action: AuditAction,
+  target: string,
+  write: () => Promise<T>,
+): Promise<T> {
+  const result = await write();
+  await recordAudit({ actor: await mcpActor(), action, target });
+  return result;
+}
+
+/**
+ * The user the gates check, or null when nothing is checked: no admin exists
+ * yet, or the session is an app admin with no user row. A session that names
+ * nobody is otherwise refused.
+ */
 export async function gateUserId(): Promise<string | null> {
+  if (!(await enforcementActive())) return null;
   const userId = await resolveCurrentUserId();
-  if (!userId) return null;
-  return (await enforcementActive()) ? userId : null;
+  if (userId) return userId;
+  if (env.actorRole === "admin") return null;
+  throw forbidden(
+    "no user is attached to this session: set TACHY_USER_EMAIL to act as one",
+  );
 }
 
 export async function requireCanEdit(scope: EntryScope): Promise<void> {

@@ -31,6 +31,7 @@ import {
 import { tool } from "../server";
 import { out } from "../results";
 import {
+  audited,
   requireCanEdit,
   requireCanManageTeam,
   requireGlobalAdmin,
@@ -57,7 +58,11 @@ tool(
   },
   async ({ slug, description }) => {
     await requireAnyTeamAdmin();
-    return out(await addResolutionPattern(slug, description));
+    return out(
+      await audited("catalog_add", `pattern:${slug}`, () =>
+        addResolutionPattern(slug, description),
+      ),
+    );
   },
 );
 
@@ -91,14 +96,19 @@ tool(
     const productId = await getProductIdBySlug(args.product_slug);
     await requireCanEdit({ productId });
     return out(
-      await addComponent({
-        productId,
-        slug: args.slug,
-        name: args.name,
-        parentSlug: args.parent_slug,
-        description: args.description,
-        aliases: args.aliases,
-      }),
+      await audited(
+        "catalog_add",
+        `component:${args.product_slug}/${args.slug}`,
+        () =>
+          addComponent({
+            productId,
+            slug: args.slug,
+            name: args.name,
+            parentSlug: args.parent_slug,
+            description: args.description,
+            aliases: args.aliases,
+          }),
+      ),
     );
   },
 );
@@ -140,13 +150,15 @@ tool(
   async (args) => {
     await requireAnyTeamAdmin();
     return out(
-      await addCustomer({
-        name: args.name,
-        slug: args.slug,
-        aliases: args.aliases,
-        emailDomains: args.email_domains,
-        notes: args.notes,
-      }),
+      await audited("catalog_add", `customer:${args.slug}`, () =>
+        addCustomer({
+          name: args.name,
+          slug: args.slug,
+          aliases: args.aliases,
+          emailDomains: args.email_domains,
+          notes: args.notes,
+        }),
+      ),
     );
   },
 );
@@ -233,16 +245,18 @@ tool(
   async (args) => {
     await requireAnyTeamAdmin();
     return out(
-      await addCustomerUnit({
-        customerSlug: args.customer,
-        slug: args.slug,
-        name: args.name,
-        kind: args.kind,
-        parentSlug: args.parent,
-        profileSlug: args.profile,
-        aliases: args.aliases,
-        notes: args.notes,
-      }),
+      await audited("catalog_add", `unit:${args.customer}/${args.slug}`, () =>
+        addCustomerUnit({
+          customerSlug: args.customer,
+          slug: args.slug,
+          name: args.name,
+          kind: args.kind,
+          parentSlug: args.parent,
+          profileSlug: args.profile,
+          aliases: args.aliases,
+          notes: args.notes,
+        }),
+      ),
     );
   },
 );
@@ -368,7 +382,9 @@ tool(
   },
   async ({ slug, name }) => {
     await requireGlobalAdmin();
-    return out(await addTeam(slug, name));
+    return out(
+      await audited("catalog_add", `team:${slug}`, () => addTeam(slug, name)),
+    );
   },
 );
 
@@ -397,7 +413,11 @@ tool(
   },
   async ({ team_slug, slug, name, aliases }) => {
     await requireCanManageTeam(await getTeamIdBySlug(team_slug));
-    return out(await addProduct(team_slug, slug, name, aliases));
+    return out(
+      await audited("catalog_add", `product:${team_slug}/${slug}`, () =>
+        addProduct(team_slug, slug, name, aliases),
+      ),
+    );
   },
 );
 
@@ -427,6 +447,10 @@ tool(
   async ({ product_slug, slug, description }) => {
     const productId = await getProductIdBySlug(product_slug);
     await requireCanEdit({ productId });
-    return out(await addLabel(productId, slug, description));
+    return out(
+      await audited("catalog_add", `label:${product_slug}/${slug}`, () =>
+        addLabel(productId, slug, description),
+      ),
+    );
   },
 );
