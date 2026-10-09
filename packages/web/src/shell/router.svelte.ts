@@ -1,10 +1,18 @@
 const SERVER_SEGMENTS = new Set(["api", "auth", "health", "assets"]);
 
+/** Links to `/admin`, the console's former path, still land. */
+const FORMER_CONSOLE = /^\/admin(?=\/|$)/;
+
 function normalizePath(path: string): string {
-  return ("/" + path.replace(/^\/+|\/+$/g, "")).replace(/\/{2,}/g, "/");
+  return ("/" + path.replace(/^\/+|\/+$/g, ""))
+    .replace(/\/{2,}/g, "/")
+    .replace(FORMER_CONSOLE, "/console");
 }
 
 export const router = $state({ path: normalizePath(window.location.pathname) });
+
+if (FORMER_CONSOLE.test(window.location.pathname))
+  history.replaceState({}, "", router.path + window.location.search);
 
 const lastPathBySection = new Map<string, string>();
 let currentSection = "";

@@ -10,7 +10,7 @@
   import { coverageTree, trailTo } from "./coverage";
   import type { ComponentCoverage } from "./rows";
 
-  const BASE = "/admin/structure/map";
+  const BASE = "/console/structure/map";
 
   const coverage = createResource(
     () => api.get<ComponentCoverage[]>("/overview/components"),
@@ -35,7 +35,7 @@
         run: () =>
           trail.length > 1
             ? zoom(trail[trail.length - 2].key)
-            : navigate("/admin/structure"),
+            : navigate("/console/structure"),
       },
     ]);
   });

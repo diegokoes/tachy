@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isGlobalAdmin } from "../access/session.svelte";
   import { onDestroy, onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
@@ -145,7 +146,7 @@
     size="sm"
     icon="run"
     busy={starting}
-    disabled={Boolean(blocked)}
+    disabled={Boolean(blocked) || !isGlobalAdmin()}
     onclick={start}>start</Button
   >
 </div>
@@ -192,7 +193,7 @@
               >{open.has(run.id) ? "hide" : "output"}</Button
             >
           {/if}
-          {#if isActive(run.status)}
+          {#if isGlobalAdmin() && isActive(run.status)}
             <Button
               variant="ghost"
               size="sm"

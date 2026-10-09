@@ -1,14 +1,17 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   membersOf,
+  seesSignIn,
   signIn,
   teamsOf,
   type Membership,
 } from "../../packages/web/src/access/roster.svelte";
 import type { UserRow } from "../../packages/web/src/access/rows";
+import { session } from "../../packages/web/src/access/session.svelte";
+import { navItems } from "../../packages/web/src/shell/nav";
 
 const user = (p: Partial<UserRow> = {}): UserRow => ({
   id: "u1",
@@ -21,6 +24,46 @@ const user = (p: Partial<UserRow> = {}): UserRow => ({
   password_login_allowed: false,
   created_at: "2026-01-01",
   ...p,
+});
+
+describe("what a member is sent", () => {
+  const member = {
+    email: "m@example.com",
+    name: null,
+    role: "member" as const,
+    via: "password" as const,
+  };
+
+  afterEach(() => {
+    session.me = null;
+  });
+
+  it("reads a row without sign-in flags as unable to say, not as able", () => {
+    const { has_password, service_account, password_login_allowed, ...row } =
+      user();
+    expect(signIn(row, false).password).toBe(false);
+  });
+
+  it("shows sign-in columns to a curator and not to a member", () => {
+    session.me = { ...member, team_admin: [] };
+    expect(seesSignIn()).toBe(false);
+    session.me = {
+      ...member,
+      team_admin: [{ team_id: "t1", team_slug: "support" }],
+    };
+    expect(seesSignIn()).toBe(true);
+  });
+});
+
+describe("the tab bar", () => {
+  it("offers the console to everyone", () => {
+    expect(navItems().map((n) => n.key)).toEqual([
+      "chat",
+      "library",
+      "wiki",
+      "console",
+    ]);
+  });
 });
 
 describe("signIn", () => {

@@ -4,6 +4,7 @@ import {
   assertCanEditScope,
   assertCanManageTeamBySlug,
   assertAnyTeamAdmin,
+  isAnyTeamAdmin,
   userSoleTeamId,
   type EntryScope,
 } from "@tachy/core/access";
@@ -61,6 +62,12 @@ export async function assertTeamAdmin(
 ): Promise<void> {
   if (isAdminIdentity(c)) return;
   await assertCanManageTeamBySlug(await requireCaller(c), teamSlug);
+}
+
+export async function isAnyTeamAdminApi(c: Context): Promise<boolean> {
+  if (isAdminIdentity(c)) return true;
+  const id = await callerUserId(c);
+  return id !== null && (await isAnyTeamAdmin(id));
 }
 
 export async function assertAnyTeamAdminApi(c: Context): Promise<void> {

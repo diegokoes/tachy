@@ -391,7 +391,7 @@
                 <LibraryView />
               {:else if view === "wiki"}
                 <WikiView />
-              {:else if view === "admin"}
+              {:else if view === "console"}
                 <AdminView />
               {:else if view === "settings"}
                 <SettingsView />

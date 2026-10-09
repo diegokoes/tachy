@@ -71,7 +71,7 @@
     present?: "modal" | "page";
     /** A page section that takes the whole window, edge to edge, and never scrolls. */
     fill?: boolean;
-    /** What opens in the window for one record of the section, at /admin/<page>/<section>/<id>. */
+    /** What opens in the window for one record of the section, at /console/<page>/<section>/<id>. */
     detail?: Component;
   };
 
@@ -80,12 +80,8 @@
     { key: "structure", label: "structure", icon: "structure" },
     { key: "access", label: "users", icon: "users" },
     { key: "flows", label: "flows", icon: "flows" },
-    ...(isGlobalAdmin()
-      ? [
-          { key: "workers", label: "jobs", icon: "workers" as const },
-          { key: "system", label: "system", icon: "system" as const },
-        ]
-      : []),
+    { key: "workers", label: "jobs", icon: "workers" },
+    { key: "system", label: "system", icon: "system" },
   ]);
 
   const admin = $derived(isGlobalAdmin());
@@ -105,7 +101,6 @@
         label: "sources",
         view: SourcesPanel,
         n: "sources",
-        show: admin,
       },
       {
         key: "projects",
@@ -127,7 +122,6 @@
         label: "buckets",
         view: BucketsPanel,
         n: "buckets",
-        show: admin,
         present: "modal",
       },
       { key: "bulk-link", label: "bulk link", view: BulkLink, fill: true },
@@ -204,34 +198,29 @@
         label: "schedule",
         icon: "jobs",
         view: JobsPanel,
-        show: admin,
       },
       {
         key: "runs",
         label: "runs",
         icon: "runs",
         view: RunsPanel,
-        show: admin,
       },
       {
         key: "queues",
         label: "queues",
         icon: "queues",
         view: QueuesPanel,
-        show: admin,
       },
       {
         key: "processes",
         label: "workers",
         icon: "workerPool",
         view: WorkersPanel,
-        show: admin,
       },
       {
         key: "failures",
         label: "failed jobs",
         view: JobFailuresPanel,
-        show: admin,
         present: "modal",
       },
     ],
@@ -249,35 +238,30 @@
         key: "runtime",
         label: "runtime",
         view: RuntimePanel,
-        show: admin,
         present: "modal",
       },
       {
         key: "host",
         label: "backups & host",
         view: HostPanel,
-        show: admin,
         present: "modal",
       },
       {
         key: "checks",
         label: "checks",
         view: ChecksPanel,
-        show: admin,
         present: "modal",
       },
       {
         key: "loads",
         label: "load tests",
         view: LoadsPanel,
-        show: admin,
         present: "modal",
       },
       {
         key: "settings",
         label: "runtime settings",
         view: SystemPanel,
-        show: admin,
         present: "modal",
       },
     ],
@@ -288,8 +272,8 @@
     integrations: PipelinePanel,
     structure: CatalogPanel,
     access: PosturePanel,
-    workers: admin ? JobsOverview : undefined,
-    system: admin ? SystemOverview : undefined,
+    workers: JobsOverview,
+    system: SystemOverview,
   });
 
   // Links to `connect`, the integrations page's former slug, still land.
@@ -336,7 +320,7 @@
     setSubnav({
       items: PAGES,
       active: page,
-      onpick: (k) => navigate(`/admin/${k}`),
+      onpick: (k) => navigate(`/console/${k}`),
     }),
   );
 
@@ -378,7 +362,7 @@
   // replace, segment(2) is undefined and the condition stops holding.
   $effect(() => {
     if (segment(2) === "overview")
-      navigate(`/admin/${page}`, { replace: true });
+      navigate(`/console/${page}`, { replace: true });
   });
 
   const expanded = $derived(expandedKey());
@@ -390,13 +374,13 @@
   });
   onDestroy(() => setPeriod(undefined));
 
-  const backToOverview = () => navigate(`/admin/${page}`);
+  const backToOverview = () => navigate(`/console/${page}`);
 
   // A page without an overview has nothing to show until a section is named, so
   // it opens on its first.
   $effect(() => {
     if (!overview && !segment(2) && live[0])
-      navigate(`/admin/${page}/${live[0].key}`, { replace: true });
+      navigate(`/console/${page}/${live[0].key}`, { replace: true });
   });
 
   $effect(() => setTopActions(topActions));
@@ -411,7 +395,7 @@
 
   function pickSection(section: string) {
     showIssues = false;
-    navigate(`/admin/${page}/${section}`);
+    navigate(`/console/${page}/${section}`);
   }
 
   $effect(() => {
@@ -429,7 +413,7 @@
       variant="ghost"
       size="sm"
       icon="back"
-      onclick={() => navigate(`/admin/${page}/${detail.key}`)}
+      onclick={() => navigate(`/console/${page}/${detail.key}`)}
       >{detail.label}</Button
     >
   {:else if overview && !showing}
@@ -499,7 +483,7 @@
       {page}
       label="{page} sections"
       at={segment(2)}
-      onactive={(key) => navigate(`/admin/${page}/${key}`, { replace: true })}
+      onactive={(key) => navigate(`/console/${page}/${key}`, { replace: true })}
     />
   {/if}
 </div>

@@ -20,7 +20,7 @@
 
   type FoundRepo = { name: string; url: string; default_branch: string };
 
-  const LIST = "/admin/integrations/repos";
+  const LIST = "/console/integrations/repos";
 
   const repos = createResource(
     () => api.get<{ repos: Repo[] }>("/repos").then((r) => r.repos),

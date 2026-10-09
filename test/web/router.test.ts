@@ -35,6 +35,18 @@ describe("path normalisation", () => {
   });
 });
 
+describe("the console's former path", () => {
+  it.each([
+    ["/admin", "/console"],
+    ["/admin/workers/runs", "/console/workers/runs"],
+    ["/administer", "/administer"],
+    ["/wiki/admin", "/wiki/admin"],
+  ])("lands %s on %s", (input, want) => {
+    navigate(input);
+    expect(router.path).toBe(want);
+  });
+});
+
 describe("segments", () => {
   it("is empty at the root", () => {
     expect(segments()).toEqual([]);

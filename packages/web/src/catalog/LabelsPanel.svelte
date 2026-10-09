@@ -9,6 +9,7 @@
   import type { Label, Product } from "./rows";
   import { INFO } from "../admin/help";
   import { sectionHoist } from "../admin/sectionAction.svelte";
+  import { canCurateScope } from "../access/session.svelte";
 
   let team = $state("");
   let product = $state("");
@@ -32,6 +33,12 @@
         ? api.get<Label[]>(`/products/${product}/labels`)
         : Promise.resolve([]),
     [],
+  );
+
+  const mayEdit = $derived(
+    canCurateScope({
+      team_slug: products.data.find((p) => p.slug === product)?.team_slug,
+    }),
   );
 
   // A label has no display name of its own - the slug is what people read.
@@ -101,6 +108,9 @@
     addLabel="add label"
     noun="label"
     editTitle={(r) => r.slug}
+    canEdit={() => mayEdit}
+    canDelete={() => mayEdit}
+    canCreate={mayEdit}
     oncreate={(d) =>
       labels.mutate(() =>
         api.post(`/products/${product}/labels`, {

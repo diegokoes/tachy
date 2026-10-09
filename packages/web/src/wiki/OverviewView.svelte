@@ -539,10 +539,10 @@
             {#if isCurator()}
               <a
                 class="mapl"
-                href="/admin/components"
+                href="/console/components"
                 onclick={(e) => {
                   e.preventDefault();
-                  navigate("/admin/components");
+                  navigate("/console/components");
                 }}>open in Components map →</a
               >
             {/if}
