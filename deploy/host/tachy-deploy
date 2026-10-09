@@ -70,6 +70,26 @@ stamp_now() {
   log "schema stamped $hash"
 }
 
+# restore_stamp <stamp before the deploy> <stamp the deploy set>
+#
+# A release reports ready only on the schema it was built against, so after a
+# rollback the previous release would refuse a database stamped for the new
+# one, and Caddy would route to nothing. The schema itself stays as the new
+# release left it, which the previous release accepts as long as the change was
+# additive (deploy/runbooks/schema-change.md).
+restore_stamp() {
+  local before=$1 set_by_deploy=$2
+  [ "$before" != "$set_by_deploy" ] || return 0
+  case "$before" in
+  unstamped)
+    pg_owner -c "delete from schema_meta" >/dev/null
+    log "schema stamp removed, as it was before this deploy"
+    ;;
+  unreachable) ;;
+  *) stamp_now "$before" ;;
+  esac
+}
+
 if [ "$TARGET" = stamp ]; then
   stamp_now
   exit 0
@@ -182,6 +202,7 @@ pg_owner -c "alter extension vector update" >/dev/null
 NEW_SCHEMA=$(git_ show "$COMMIT:db/schema.sql" | sha256sum | cut -d' ' -f1)
 LIVE_SCHEMA=$(live_stamp)
 SCHEMA=unchanged
+DESTRUCTIVE=
 PLAN=$(schema_diff plan --output-format json)
 STATEMENTS=$(jq '.statements | length' <<<"${PLAN:-"{\"statements\":[]}"}")
 if [ "$STATEMENTS" -gt 0 ]; then
@@ -231,6 +252,13 @@ fi
 
 log "deploy failed; rolling back to ${PREV_COMMIT:0:12} ($PREV_IMAGE)"
 dc logs --tail 50 api >&2 || true
+if [ "$SCHEMA" = applied ] && [ -n "$DESTRUCTIVE" ]; then
+  # Something the previous release may read is gone. It stays not ready
+  # instead of serving on a schema it cannot be trusted with.
+  log "the applied plan was destructive ($DESTRUCTIVE): the stamp stays, and the previous release will not report ready. Restore the pre-deploy backup, or fix forward."
+else
+  restore_stamp "$LIVE_SCHEMA" "$NEW_SCHEMA"
+fi
 roll "$PREV_COMMIT" "$PREV_IMAGE"
 if wait_ready; then
   record "$COMMIT" "$IMAGE" "$PREV_IMAGE" "$SCHEMA" "rolled_back"
