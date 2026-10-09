@@ -12,9 +12,11 @@ import {
   listTeamMembers,
   listMemberships,
   setTeamMember,
+  userEmailOf,
 } from "@tachy/core/access";
 import { USER_ROLES, TEAM_ROLES, MIN_PASSWORD_LENGTH } from "@tachy/core";
 import { requireAdmin } from "../auth";
+import { audit } from "../audit";
 import { assertTeamAdmin, isAnyTeamAdminApi } from "../authz";
 
 const createSchema = z.object({
@@ -59,16 +61,20 @@ export const users = new Hono()
 
   .post("/", requireAdmin, zValidator("json", createSchema), async (c) => {
     const body = c.req.valid("json");
-    return c.json(
-      await createUser({
-        email: body.email,
-        displayName: body.display_name,
-        password: body.password,
-        role: body.role,
-        serviceAccount: body.service_account,
-        passwordLoginAllowed: body.password_login_allowed,
-      }),
-    );
+    const created = await createUser({
+      email: body.email,
+      displayName: body.display_name,
+      password: body.password,
+      role: body.role,
+      serviceAccount: body.service_account,
+      passwordLoginAllowed: body.password_login_allowed,
+    });
+    await audit(c, "user_create", created.email, {
+      role: created.role,
+      with_password: created.has_password,
+      service_account: created.service_account,
+    });
+    return c.json(created);
   })
 
   .patch("/:id", requireAdmin, zValidator("json", patchSchema), async (c) => {
@@ -82,6 +88,11 @@ export const users = new Hono()
     await setUserFlags(id, {
       serviceAccount: body.service_account,
       passwordLoginAllowed: body.password_login_allowed,
+    });
+    const { password, ...named } = body;
+    await audit(c, "user_update", await userEmailOf(id), {
+      ...named,
+      ...(password === undefined ? {} : { password: "changed" }),
     });
     return c.json({ ok: true });
   })
@@ -99,6 +110,10 @@ export const users = new Hono()
       await assertTeamAdmin(c, c.req.param("teamSlug"));
       const { email, role } = c.req.valid("json");
       await setTeamMember(c.req.param("teamSlug"), email, role);
+      await audit(c, "team_member_set", email, {
+        team: c.req.param("teamSlug"),
+        role,
+      });
       return c.json({ ok: true });
     },
   );

@@ -17,6 +17,7 @@ import {
 } from "@tachy/core/config";
 import { SLUG_RE } from "@tachy/core";
 import { requireAdmin } from "../../auth";
+import { audit } from "../../audit";
 import { callerScope, requireCaller } from "../../authz";
 
 /** Strict, because it becomes a credential name and an env var suffix. */
@@ -102,11 +103,18 @@ export const sources = new Hono()
           sourceCredentialName(conn.sourceType, conn.slug),
           token,
         );
+      await audit(c, "source_connection_save", conn.slug, {
+        source_type: conn.sourceType,
+        base_url: conn.baseUrl ?? null,
+        token: token ? "set" : "unchanged",
+      });
       return c.json(row);
     },
   )
   .delete("/source-connections/:slug", requireAdmin, async (c) => {
-    return c.json(await deleteSourceConnection(c.req.param("slug")!));
+    const deleted = await deleteSourceConnection(c.req.param("slug")!);
+    await audit(c, "source_connection_delete", c.req.param("slug")!);
+    return c.json(deleted);
   })
   // Cheapest authenticated call the remote API offers, using the caller's own
   // token. Doubles as discovery of the groups worth registering as projects.

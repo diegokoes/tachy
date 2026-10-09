@@ -9,7 +9,7 @@
 # also holds fixtures.sql.
 #
 # 1. load the old schema and fixtures into a fresh database, plan the diff to
-#    the new schema, and apply it;
+#    the new schema, and apply it, then the new roles.sql as tachy-deploy does;
 # 2. a second plan must be empty;
 # 3. a database built fresh from the new schema must also plan empty, which
 #    catches any object the tool does not understand.
@@ -39,6 +39,10 @@ pg-schema-diff plan --from-dsn "$(dsn plan_old)" --to-dir "$new_dir" \
 echo "== apply (allowed hazards: $allow)"
 pg-schema-diff apply --from-dsn "$(dsn plan_old)" --to-dir "$new_dir" \
   --data-pack-new-tables=false --allow-hazards "$allow" --skip-confirm-prompt
+
+# The plan creates a new table under the old default privileges, so a grant
+# narrower than those converges only once roles.sql has run again.
+[ -f "$new_dir/20-roles.sql" ] && psql -v ON_ERROR_STOP=1 -q -d plan_old -f "$new_dir/20-roles.sql"
 
 echo "== re-plan must be empty"
 again=$(pg-schema-diff plan --from-dsn "$(dsn plan_old)" --to-dir "$new_dir" --data-pack-new-tables=false)

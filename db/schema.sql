@@ -1391,3 +1391,23 @@ create table notifications (
 );
 
 create index notifications_user_idx on notifications(user_id, created_at desc);
+
+-- Who did what to the deployment's access and configuration. The application
+-- role can add and read rows but not change or remove them (db/roles.sql), so
+-- a compromised session cannot edit its own trail.
+create table audit_events (
+    id            bigint generated always as identity primary key,
+    at            timestamptz not null default now(),
+    actor_user_id uuid references users(id) on delete set null,
+    -- Beside the id, so a row still names someone after the account is gone.
+    actor_email   text,
+    -- The door the action came through: web, api, agent, mcp.
+    actor         text not null,
+    action        text not null,
+    -- What it was done to, in the action's own terms: an email, a slug, a key.
+    target        text,
+    detail        jsonb not null default '{}'::jsonb,
+    address       text
+);
+
+create index audit_events_at_idx on audit_events(at desc);

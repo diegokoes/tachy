@@ -14,6 +14,7 @@ import {
   updateBucket,
 } from "@tachy/core/buckets";
 import { requireAdmin } from "../../auth";
+import { audit } from "../../audit";
 import { callerUserId, isAdminIdentity, requireCaller } from "../../authz";
 
 const createSchema = z.object({
@@ -41,8 +42,16 @@ const updateSchema = z.object({
  */
 export const buckets = new Hono()
   .get("/buckets", async (c) => c.json(await listBuckets()))
-  .post("/buckets", requireAdmin, zValidator("json", createSchema), async (c) =>
-    c.json(await createBucket(c.req.valid("json"), await callerUserId(c)), 201),
+  .post(
+    "/buckets",
+    requireAdmin,
+    zValidator("json", createSchema),
+    async (c) => {
+      const body = c.req.valid("json");
+      const created = await createBucket(body, await callerUserId(c));
+      await audit(c, "bucket_create", body.slug, { teams: body.teams });
+      return c.json(created, 201);
+    },
   )
   .patch(
     "/buckets/:slug",
@@ -51,11 +60,14 @@ export const buckets = new Hono()
     async (c) =>
       c.json(await updateBucket(c.req.param("slug"), c.req.valid("json"))),
   )
-  .post("/buckets/:slug/token", requireAdmin, async (c) =>
-    c.json(await rotateBucketToken(c.req.param("slug")!)),
-  )
+  .post("/buckets/:slug/token", requireAdmin, async (c) => {
+    const rotated = await rotateBucketToken(c.req.param("slug")!);
+    await audit(c, "bucket_token_rotate", c.req.param("slug")!);
+    return c.json(rotated);
+  })
   .delete("/buckets/:slug", requireAdmin, async (c) => {
     await deleteBucket(c.req.param("slug")!);
+    await audit(c, "bucket_delete", c.req.param("slug")!);
     return c.json({ ok: true });
   })
   .get("/buckets/:slug/docs", async (c) => {

@@ -28,6 +28,7 @@ import { seedActivity, seedTelemetry } from "./activity";
 import { seedLibrary } from "./library";
 import { seedWiki } from "./wiki";
 import { seedReports } from "./reports";
+import { seedAudit } from "./audit";
 import { seedFlows } from "./flows";
 import { seedBuckets } from "./buckets";
 import { seedJobs } from "./jobs";
@@ -64,6 +65,7 @@ const TABLES = [
   "job_definitions",
   "generated_outputs",
   "notifications",
+  "audit_events",
   "report_messages",
   "reports",
   "library_links",
@@ -368,6 +370,7 @@ export async function seed(opts: SeedOptions): Promise<void> {
     );
     await phases.run("wiki", () => seedWiki(tx, org.products, org.users));
     await phases.run("reports", () => seedReports(tx, volumes, org.users));
+    await phases.run("audit", () => seedAudit(tx, org.users));
     await phases.run("jobs", () =>
       seedJobs(tx, volumes, org.users, sources.connections),
     );
