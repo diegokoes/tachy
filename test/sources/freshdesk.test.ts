@@ -158,6 +158,19 @@ describe("freshdesk adapter", () => {
     });
   });
 
+  it("formats a plain-text note as markup, so its line breaks survive", async () => {
+    mockFetch({ "/tickets/7/notes": {} });
+    await source().postNote!(
+      "7",
+      "checked the spooler\n\n- restarted\n- no change",
+    );
+    const request = requests.find((r) => r.path === "/tickets/7/notes")!;
+    expect(JSON.parse(String(request.init?.body)).body).toBe(
+      '<div><p style="margin:0 0 8px 0">checked the spooler</p>' +
+        '<ul style="margin:0 0 8px 0;padding-left:22px"><li>restarted</li><li>no change</li></ul></div>',
+    );
+  });
+
   it("deletes a note by conversation id", async () => {
     mockFetch({ "/conversations/999": {} });
     await source().deleteNote!("999");
