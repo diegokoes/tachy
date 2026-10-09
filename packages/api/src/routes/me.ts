@@ -28,6 +28,7 @@ import {
 } from "@tachy/core/notifications";
 import { listModels, type ModelChoice } from "@tachy/agent";
 import { requireCaller } from "../authz";
+import { audit } from "../audit";
 import { userConfigDir } from "../turn-config";
 
 const valueSchema = z.object({ value: z.string().min(1) });
@@ -80,6 +81,7 @@ export const me = new Hono()
     const name = c.req.param("name");
     const { value } = c.req.valid("json");
     await setCredential(userId, "user", userId, name, value);
+    await audit(c, "credential_set", name, { scope: "user" });
     return c.json({ ok: true });
   })
 
@@ -91,6 +93,10 @@ export const me = new Hono()
       userId,
       c.req.param("name"),
     );
+    if (deleted)
+      await audit(c, "credential_delete", c.req.param("name"), {
+        scope: "user",
+      });
     return c.json({ ok: true, deleted });
   })
 

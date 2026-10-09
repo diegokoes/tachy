@@ -21,6 +21,7 @@ import {
   teamAdminTeams,
   userTeams,
 } from "@tachy/core/access";
+import { recordAudit } from "@tachy/core/audit";
 import { env, log } from "@tachy/core/infra";
 import { type UserRole } from "@tachy/core";
 import { callerAddress, failureThrottle } from "./throttle";
@@ -274,6 +275,12 @@ export function installAuth(
         if (!user || user.disabled || !matches) {
           loginsByAddress.fail(address);
           loginsByAccount.fail(account);
+          await recordAudit({
+            actor: { userId: user?.id ?? null, actor: "web" },
+            action: "login_failed",
+            target: email,
+            address,
+          });
           return c.json({ error: "invalid email or password" }, 401);
         }
         if (oidc && !user.password_login_allowed)
@@ -284,6 +291,12 @@ export function installAuth(
         if (user.password_hash && isWeakerHash(user.password_hash))
           await strengthenPasswordHash(user.id, password);
         await setSessionCookie(c, user.email);
+        await recordAudit({
+          actor: { userId: user.id, actor: "web" },
+          action: "login",
+          target: user.email,
+          address,
+        });
         return c.json({
           email: user.email,
           name: user.display_name,
@@ -299,7 +312,15 @@ export function installAuth(
     if (isCrossSite(c))
       throw new HTTPException(403, { message: "cross-site request refused" });
     const user = await cookieUser(c);
-    if (user) await revokeSessions(user.id);
+    if (user) {
+      await revokeSessions(user.id);
+      await recordAudit({
+        actor: { userId: user.id, actor: "web" },
+        action: "logout",
+        target: user.email,
+        address: callerAddress(c),
+      });
+    }
     deleteCookie(c, COOKIE, { path: "/" });
     if (oidc) await revokeSession(c as Parameters<typeof revokeSession>[0]);
     return c.json({ ok: true });

@@ -9,8 +9,10 @@ import {
 } from "@tachy/core/exports";
 import { parseDateFormat, outputFilename, TABLE_FORMATS } from "@tachy/core";
 import { badInput } from "@tachy/core/infra";
+import { recordAudit } from "@tachy/core/audit";
 import { tool } from "../server";
 import { out } from "../results";
+import { mcpActor } from "../permissions";
 
 tool(
   "export_table",
@@ -94,6 +96,12 @@ tool(
       mime: rendered.mime,
       bytes: rendered.bytes,
       meta: { rows: rows.length, columns: spec.columns.length },
+    });
+    await recordAudit({
+      actor: await mcpActor(),
+      action: "export",
+      target: meta.filename,
+      detail: { rows: rows.length, bytes: meta.byte_size },
     });
 
     return out({

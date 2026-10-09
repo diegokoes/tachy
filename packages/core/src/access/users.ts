@@ -106,6 +106,12 @@ export async function getUserByEmail(email: string): Promise<{
   return (row as never) ?? null;
 }
 
+/** For naming an account in a record that outlives a rename of nothing but its id. */
+export async function userEmailOf(id: string): Promise<string | null> {
+  const [row] = await sql`select email from users where id = ${id}`;
+  return (row?.email as string | undefined) ?? null;
+}
+
 async function requireUser(
   id: string,
 ): Promise<{ role: UserRole; disabled: boolean }> {

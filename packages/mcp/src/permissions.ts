@@ -8,6 +8,8 @@ import {
   assertGlobalAdmin,
 } from "@tachy/core/access";
 import { sql, forbidden, env } from "@tachy/core/infra";
+import type { AuditAction } from "@tachy/core";
+import { recordAudit } from "@tachy/core/audit";
 import type { ActorRef } from "@tachy/core/library";
 import type { EntryScope } from "@tachy/core/access";
 
@@ -29,6 +31,17 @@ export async function mcpActor(): Promise<ActorRef> {
     actor: env.actor === "agent" ? "agent" : "mcp",
     turnId: env.turnId ?? null,
   };
+}
+
+/** Runs the write, then records it: a refused or failed write leaves no row. */
+export async function audited<T>(
+  action: AuditAction,
+  target: string,
+  write: () => Promise<T>,
+): Promise<T> {
+  const result = await write();
+  await recordAudit({ actor: await mcpActor(), action, target });
+  return result;
 }
 
 /**

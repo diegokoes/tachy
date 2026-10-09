@@ -26,6 +26,7 @@
   import ProjectsPanel from "../sources/ProjectsPanel.svelte";
   import ReposPanel from "../code/ReposPanel.svelte";
   import RepoDetail from "../code/RepoDetail.svelte";
+  import AuditPanel from "../audit/AuditPanel.svelte";
   import BucketsPanel from "../buckets/BucketsPanel.svelte";
   import BulkLink from "../code/BulkLink.svelte";
   import TeamsPanel from "../catalog/TeamsPanel.svelte";
@@ -233,6 +234,13 @@
         view: ReportsPanel,
         n: "reports",
         show: admin,
+      },
+      {
+        key: "audit",
+        label: "audit trail",
+        view: AuditPanel,
+        show: admin,
+        present: "modal",
       },
       {
         key: "runtime",
