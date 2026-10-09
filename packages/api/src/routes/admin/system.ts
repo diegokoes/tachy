@@ -10,17 +10,20 @@ import {
 } from "@tachy/core/config";
 import { ANTHROPIC_API_KEY_CREDENTIAL } from "@tachy/core";
 import { requireAdmin } from "../../auth";
+import { audit } from "../../audit";
 import { isAdminIdentity } from "../../authz";
 import { runtimeSnapshot } from "../../runtime";
 import { lifecycle } from "../../lifecycle";
 
 /** Deployment settings and the maintenance switch. */
 export const system = new Hono()
-  // Members read this: the app renders its chrome from the settings and from
-  // whether the environment supplies a fallback agent key. The `env` block
-  // (which secrets are configured, the API port) travels only to an admin.
-  .get("/system", async (c) =>
-    c.json({
+  // Members read this: the app's chrome comes from the settings and the agent
+  // key fallback, the system page from `runtime`. The `env` block and
+  // `runtime.security`, which say how the deployment is secured, are admin-only.
+  .get("/system", async (c) => {
+    const admin = isAdminIdentity(c);
+    const runtime = await runtimeSnapshot();
+    return c.json({
       settings: await effectiveSettings(),
       credentials: {
         vault_enabled: secretsEnabled(),
@@ -29,7 +32,7 @@ export const system = new Hono()
         anthropic_api_key:
           (await credentialSource(ANTHROPIC_API_KEY_CREDENTIAL, {})) ?? null,
       },
-      ...(isAdminIdentity(c)
+      ...(admin
         ? {
             env: {
               auth_mode: env.authMode,
@@ -44,11 +47,11 @@ export const system = new Hono()
               env_badge: env.envBadge ?? null,
               commit: env.commit ?? null,
             },
-            runtime: await runtimeSnapshot(),
           }
         : {}),
-    }),
-  )
+      runtime: admin ? runtime : { ...runtime, security: null },
+    });
+  })
 
   .post(
     "/system/maintenance",
@@ -57,6 +60,9 @@ export const system = new Hono()
     async (c) => {
       lifecycle.refusingChats = c.req.valid("json").refuse_chats;
       log("warn", "maintenance", { refuse_chats: lifecycle.refusingChats });
+      await audit(c, "maintenance_set", null, {
+        refuse_chats: lifecycle.refusingChats,
+      });
       return c.json({ refuse_chats: lifecycle.refusingChats });
     },
   )
@@ -67,6 +73,9 @@ export const system = new Hono()
     zValidator("json", z.object({ value: z.unknown() })),
     async (c) => {
       await setSetting(c.req.param("key")!, c.req.valid("json").value);
+      await audit(c, "setting_set", c.req.param("key")!, {
+        value: c.req.valid("json").value,
+      });
       return c.json({ settings: await effectiveSettings() });
     },
   );

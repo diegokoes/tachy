@@ -2,6 +2,7 @@
  * The systems work items come from, and how their projects map onto products.
  */
 import { z } from "zod";
+import { isSourceBaseUrl } from "@tachy/core";
 import { getProductIdBySlug, getTeamIdBySlug } from "@tachy/core/catalog";
 import {
   listSourceConnections,
@@ -15,6 +16,7 @@ import {
 import { tool } from "../server";
 import { out } from "../results";
 import {
+  audited,
   requireCanEdit,
   requireCanManageTeam,
   requireGlobalAdmin,
@@ -39,19 +41,27 @@ tool(
     inputSchema: {
       source_type: z.enum(["freshdesk", "github", "azure-devops"]),
       slug: z.string(),
-      base_url: z.string().optional(),
+      base_url: z
+        .string()
+        .refine(
+          isSourceBaseUrl,
+          "an http(s) URL with no username or password in it",
+        )
+        .optional(),
       config: z.record(z.string(), z.any()).optional(),
     },
   },
   async (args) => {
     await requireGlobalAdmin();
     return out(
-      await addSourceConnection({
-        sourceType: args.source_type,
-        slug: args.slug,
-        baseUrl: args.base_url,
-        config: args.config,
-      }),
+      await audited("source_connection_save", args.slug, () =>
+        addSourceConnection({
+          sourceType: args.source_type,
+          slug: args.slug,
+          baseUrl: args.base_url,
+          config: args.config,
+        }),
+      ),
     );
   },
 );

@@ -3,10 +3,10 @@
  * else in the app keeps its fixed binding and is listed read-only in Settings ›
  * keybinds.
  *
- * Section keys are stored per nav item, not per slot: navItems() drops `admin`
- * for non-curators, so slot 3 is `admin` for one user and `settings` for the
- * next. Subnav keys are stored per slot, because subnav items differ by section
- * and SHIFT + 1..n is meaningful as a set rather than per destination.
+ * Section keys are stored per nav item, not per slot, so a key follows its
+ * section when the tab bar changes. Subnav keys are stored per slot, because
+ * subnav items differ by section and SHIFT + 1..n is meaningful as a set
+ * rather than per destination.
  */
 
 const KEY = "tachy-keys";

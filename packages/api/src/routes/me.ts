@@ -14,7 +14,12 @@ import {
   deletePref,
   sourceCredentialName,
 } from "@tachy/core/config";
-import { userSoleTeamId } from "@tachy/core/access";
+import {
+  listApiTokens,
+  mintApiToken,
+  revokeApiToken,
+  userSoleTeamId,
+} from "@tachy/core/access";
 import { listSourceConnections } from "@tachy/core/sources";
 import {
   ANTHROPIC_API_KEY_CREDENTIAL,
@@ -28,6 +33,9 @@ import {
 } from "@tachy/core/notifications";
 import { listModels, type ModelChoice } from "@tachy/agent";
 import { requireCaller } from "../authz";
+import { audit } from "../audit";
+import { requireSession } from "../auth";
+import { expiryOf, tokenSchema } from "../tokens";
 import { userConfigDir } from "../turn-config";
 
 const valueSchema = z.object({ value: z.string().min(1) });
@@ -80,6 +88,7 @@ export const me = new Hono()
     const name = c.req.param("name");
     const { value } = c.req.valid("json");
     await setCredential(userId, "user", userId, name, value);
+    await audit(c, "credential_set", name, { scope: "user" });
     return c.json({ ok: true });
   })
 
@@ -91,7 +100,41 @@ export const me = new Hono()
       userId,
       c.req.param("name"),
     );
+    if (deleted)
+      await audit(c, "credential_delete", c.req.param("name"), {
+        scope: "user",
+      });
     return c.json({ ok: true, deleted });
+  })
+
+  .get("/tokens", async (c) =>
+    c.json(await listApiTokens(await requireCaller(c))),
+  )
+
+  .post(
+    "/tokens",
+    requireSession,
+    zValidator("json", tokenSchema),
+    async (c) => {
+      const userId = await requireCaller(c);
+      const body = c.req.valid("json");
+      const { token, row } = await mintApiToken({
+        userId,
+        name: body.name,
+        expiresAt: expiryOf(body.expires_in_days),
+        createdBy: userId,
+      });
+      await audit(c, "api_token_mint", body.name, {
+        expires_at: row.expires_at,
+      });
+      return c.json({ ...row, token }, 201);
+    },
+  )
+
+  .delete("/tokens/:id", async (c) => {
+    const row = await revokeApiToken(c.req.param("id"), await requireCaller(c));
+    await audit(c, "api_token_revoke", row.name);
+    return c.json(row);
   })
 
   .get("/preferences", async (c) => {

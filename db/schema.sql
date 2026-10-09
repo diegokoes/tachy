@@ -63,6 +63,9 @@ create table users (
     -- Honoured only while SSO is configured: then password login works for
     -- these accounts alone (break-glass admin, load-test user).
     password_login_allowed boolean not null default false,
+    -- A session cookie carries the value it was issued under and stops working
+    -- once this moves on: logout, a new password, being disabled.
+    session_epoch int not null default 0,
     created_at    timestamptz not null default now()
 );
 
@@ -1388,3 +1391,42 @@ create table notifications (
 );
 
 create index notifications_user_idx on notifications(user_id, created_at desc);
+
+-- Who did what to the deployment's access and configuration. The application
+-- role can add and read rows but not change or remove them (db/roles.sql), so
+-- a compromised session cannot edit its own trail.
+create table audit_events (
+    id            bigint generated always as identity primary key,
+    at            timestamptz not null default now(),
+    actor_user_id uuid references users(id) on delete set null,
+    -- Beside the id, so a row still names someone after the account is gone.
+    actor_email   text,
+    -- The door the action came through: web, api, agent, mcp.
+    actor         text not null,
+    action        text not null,
+    -- What it was done to, in the action's own terms: an email, a slug, a key.
+    target        text,
+    detail        jsonb not null default '{}'::jsonb,
+    address       text
+);
+
+create index audit_events_at_idx on audit_events(at desc);
+
+-- Bearer tokens for scripts and service accounts. A token acts as its owner,
+-- with the owner's rights. Only the hash is kept: the token is shown once.
+create table api_tokens (
+    id           uuid primary key default gen_random_uuid(),
+    user_id      uuid not null references users(id) on delete cascade,
+    name         text not null,
+    token_hash   bytea not null unique,
+    -- The last characters of the token, to tell one from another in a list.
+    hint         text not null,
+    created_by   uuid references users(id) on delete set null,
+    created_at   timestamptz not null default now(),
+    last_used_at timestamptz,
+    -- Null: no expiry.
+    expires_at   timestamptz,
+    revoked_at   timestamptz
+);
+
+create index api_tokens_user_idx on api_tokens(user_id);

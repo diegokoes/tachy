@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createUser } from "@tachy/core/access";
 import { createApp } from "../../packages/api/src/app";
-import { loginCookie } from "../http";
+import { json, loginCookie } from "../http";
 import { resetData, sql } from "../database";
 
 afterAll(() => {
@@ -124,13 +124,35 @@ describe("Admin > System runtime", () => {
     expect(typeof runtime.eventLoopP99Ms).toBe("number");
   });
 
-  it("keeps the runtime block from members", async () => {
+  it("sends members the runtime without how the deployment is secured", async () => {
     const response = await app.request("/api/system", {
       headers: { Cookie: await cookieFor("dev@example.com", "member") },
     });
     const body = await response.json();
-    expect(body.runtime).toBeUndefined();
+    expect(body.runtime.readiness).toBeDefined();
+    expect(body.runtime.security).toBeNull();
+    expect(body.env).toBeUndefined();
     expect(body.settings).toBeDefined();
+  });
+
+  it("sends an admin the security block and the environment", async () => {
+    const response = await app.request("/api/system", {
+      headers: { Cookie: await cookieFor("ops9@example.com", "admin") },
+    });
+    const body = await response.json();
+    expect(body.runtime.security.vault).toBeDefined();
+    expect(body.env.auth_mode).toBeDefined();
+  });
+
+  it("refuses a member the maintenance switch", async () => {
+    const response = await app.request("/api/system/maintenance", {
+      ...json({ refuse_chats: true }),
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: await cookieFor("dev2@example.com", "member"),
+      },
+    });
+    expect(response.status).toBe(403);
   });
 
   it("pauses new chats for maintenance while everything else stays ready", async () => {

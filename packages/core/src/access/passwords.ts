@@ -10,11 +10,13 @@ const scrypt = promisify(scryptCb) as (
   opts: { N: number; r: number; p: number; maxmem: number },
 ) => Promise<Buffer>;
 
-const SCRYPT_COST = 16384;
+/** OWASP's password storage setting for scrypt: N=2^17, r=8, p=1. */
+const SCRYPT_COST = 2 ** 17;
 const SCRYPT_BLOCK_SIZE = 8;
 const SCRYPT_PARALLELISM = 1;
 const KEYLEN = 64;
-const MAXMEM = 64 * 1024 * 1024;
+/** scrypt needs 128 * N * r bytes; Node refuses a hash whose need exceeds this. */
+const MAXMEM = 256 * 1024 * 1024;
 
 // Owned by the contract: the wizard checks it in the field, this checks it again.
 export { MIN_PASSWORD_LENGTH };
@@ -34,11 +36,28 @@ export async function hashPassword(password: string): Promise<string> {
   return `scrypt$${SCRYPT_COST}$${SCRYPT_BLOCK_SIZE}$${SCRYPT_PARALLELISM}$${salt.toString("base64")}$${hash.toString("base64")}`;
 }
 
+let placeholderHash: Promise<string> | undefined;
+
+/** True when the hash was made at a lower cost than new ones are. */
+export function isWeakerHash(stored: string): boolean {
+  const [scheme, cost] = stored.split("$");
+  return scheme === "scrypt" && Number(cost) < SCRYPT_COST;
+}
+
+/**
+ * An account with no hash is checked against a placeholder, so the answer
+ * takes as long as a wrong password does and timing does not say which
+ * addresses have an account.
+ */
 export async function verifyPassword(
   password: string,
   stored: string | null,
 ): Promise<boolean> {
-  if (!stored) return false;
+  if (!stored) {
+    placeholderHash ??= hashPassword(randomBytes(24).toString("base64"));
+    await verifyPassword(password, await placeholderHash);
+    return false;
+  }
   const parts = stored.split("$");
   if (parts.length !== 6 || parts[0] !== "scrypt") return false;
   const [, cost, blockSize, parallelism, saltB64, hashB64] = parts;

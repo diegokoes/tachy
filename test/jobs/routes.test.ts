@@ -185,15 +185,32 @@ describe("jobs API", () => {
     });
   });
 
-  it("is closed to members", async () => {
+  it("lets a member read jobs and refuses every change", async () => {
     await createUser({
       email: "dev@example.com",
       password: "a-long-password",
       role: "member",
     });
     const member = await loginCookie(app, "dev@example.com", "a-long-password");
-    expect((await call("/definitions", "GET", undefined, member)).status).toBe(
-      403,
-    );
+    const as = (path: string, method = "GET", body?: unknown) =>
+      call(path, method, body, member);
+
+    for (const path of ["/kinds", "/census", "/live", "/definitions", "/runs"])
+      expect((await as(path)).status).toBe(200);
+    expect(
+      (await as("/schedule-preview", "POST", { schedule: "0 6 * * *" })).status,
+    ).toBe(200);
+
+    const id = "00000000-0000-4000-8000-000000000000";
+    const changes: [string, string, unknown?][] = [
+      ["/definitions", "POST", {}],
+      [`/definitions/${id}`, "PATCH", {}],
+      [`/definitions/${id}`, "DELETE"],
+      [`/definitions/${id}/run`, "POST"],
+      ["/runs", "POST", { kind: "anything" }],
+      [`/runs/${id}/cancel`, "POST"],
+    ];
+    for (const [path, method, body] of changes)
+      expect((await as(path, method, body)).status).toBe(403);
   });
 });

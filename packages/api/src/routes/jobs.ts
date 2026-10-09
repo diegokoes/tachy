@@ -45,12 +45,11 @@ const previewSchema = z.object({
 });
 
 /**
- * Global admins configure jobs: definitions of kinds that exist in code. Nothing
- * here uploads or runs code; `params` is validated against the kind's schema.
+ * Anyone signed in reads jobs; app admins configure and run them: definitions
+ * of kinds that exist in code. Nothing here uploads or runs code; `params` is
+ * validated against the kind's schema.
  */
 export const jobs = new Hono()
-  .use("*", requireAdmin)
-
   .get("/kinds", async (c) => {
     const settings = await effectiveSettings();
     return c.json({
@@ -106,15 +105,20 @@ export const jobs = new Hono()
     );
   })
 
-  .post("/definitions", zValidator("json", jobDefinitionInput), async (c) =>
-    c.json(
-      await createJobDefinition(c.req.valid("json"), await callerUserId(c)),
-      201,
-    ),
+  .post(
+    "/definitions",
+    requireAdmin,
+    zValidator("json", jobDefinitionInput),
+    async (c) =>
+      c.json(
+        await createJobDefinition(c.req.valid("json"), await callerUserId(c)),
+        201,
+      ),
   )
 
   .patch(
     "/definitions/:id",
+    requireAdmin,
     zValidator("json", jobDefinitionInput.partial()),
     async (c) =>
       c.json(
@@ -126,8 +130,8 @@ export const jobs = new Hono()
       ),
   )
 
-  .delete("/definitions/:id", async (c) => {
-    await deleteJobDefinition(c.req.param("id"), await callerUserId(c));
+  .delete("/definitions/:id", requireAdmin, async (c) => {
+    await deleteJobDefinition(c.req.param("id")!, await callerUserId(c));
     return c.json({ ok: true });
   })
 
@@ -135,8 +139,8 @@ export const jobs = new Hono()
     c.json(await listJobDefinitionChanges(c.req.param("id"))),
   )
 
-  .post("/definitions/:id/run", async (c) => {
-    const definition = await getJobDefinition(c.req.param("id"));
+  .post("/definitions/:id/run", requireAdmin, async (c) => {
+    const definition = await getJobDefinition(c.req.param("id")!);
     const id = await enqueueRun({
       kind: definition.kind,
       params: definition.params,
@@ -186,6 +190,7 @@ export const jobs = new Hono()
 
   .post(
     "/runs",
+    requireAdmin,
     zValidator(
       "json",
       z.object({
@@ -207,6 +212,6 @@ export const jobs = new Hono()
 
   .get("/runs/:id", async (c) => c.json(await getJobRun(c.req.param("id"))))
 
-  .post("/runs/:id/cancel", async (c) =>
-    c.json(await cancelRun(c.req.param("id"))),
+  .post("/runs/:id/cancel", requireAdmin, async (c) =>
+    c.json(await cancelRun(c.req.param("id")!)),
   );

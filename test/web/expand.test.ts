@@ -59,7 +59,7 @@ const tile = () => {
 
 beforeEach(() => {
   media.reduced = false;
-  navigate("/admin/workers");
+  navigate("/console/workers");
 });
 afterEach(() => {
   delete doc.startViewTransition;
@@ -70,22 +70,22 @@ afterEach(() => {
 
 describe("the expanded tile's route", () => {
   it("is named by the third segment under chart", () => {
-    navigate("/admin/workers/chart/runs");
+    navigate("/console/workers/chart/runs");
     expect(expandedKey()).toBe("runs");
-    expect(router.path).toBe("/admin/workers/chart/runs");
+    expect(router.path).toBe("/console/workers/chart/runs");
   });
 
   it("is nothing on the overview or under a section", () => {
     expect(expandedKey()).toBeUndefined();
-    navigate("/admin/workers/queues/runs");
+    navigate("/console/workers/queues/runs");
     expect(expandedKey()).toBeUndefined();
   });
 
   it("builds the path back to a page's overview without a key", () => {
     expect(tilePath("access", "top-tools")).toBe(
-      "/admin/access/chart/top-tools",
+      "/console/access/chart/top-tools",
     );
-    expect(tilePath("access")).toBe("/admin/access");
+    expect(tilePath("access")).toBe("/console/access");
   });
 });
 
@@ -137,12 +137,12 @@ describe("opening and closing a tile", () => {
     const phases = fakeTransition();
     openTile("workers", "runs", tile());
     await phases.updated;
-    expect(router.path).toBe("/admin/workers/chart/runs");
+    expect(router.path).toBe("/console/workers/chart/runs");
 
     const back = fakeTransition();
     closeTile("workers");
     await back.updated;
-    expect(router.path).toBe("/admin/workers");
+    expect(router.path).toBe("/console/workers");
   });
 });
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Gives tachy_app and tachy_backup a login and password from the environment.
+# Gives tachy_app, tachy_mcp and tachy_backup a login and password from the
+# environment.
 # Runs from docker-entrypoint-initdb.d on a fresh volume, and from tachy-deploy
 # on an existing database. A role whose variable is unset stays nologin.
 set -euo pipefail
@@ -15,4 +16,5 @@ SQL
 }
 
 set_password tachy_app "${TACHY_APP_DB_PASSWORD:-}"
+set_password tachy_mcp "${TACHY_MCP_DB_PASSWORD:-}"
 set_password tachy_backup "${TACHY_BACKUP_DB_PASSWORD:-}"

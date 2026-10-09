@@ -218,6 +218,7 @@ git_ show "$COMMIT:db/roles.sql" |
     -d "$(app_env POSTGRES_DB tachy)" -f /dev/stdin >/dev/null
 git_ show "$COMMIT:deploy/postgres/role-passwords.sh" |
   dc exec -T -e TACHY_APP_DB_PASSWORD="$(app_env TACHY_APP_DB_PASSWORD)" \
+    -e TACHY_MCP_DB_PASSWORD="$(app_env TACHY_MCP_DB_PASSWORD)" \
     -e TACHY_BACKUP_DB_PASSWORD="$(app_env TACHY_BACKUP_DB_PASSWORD)" postgres bash -s >/dev/null
 
 roll "$COMMIT" "$IMAGE"

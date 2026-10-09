@@ -22,7 +22,7 @@ import { getArtifact, listVisibleArtifacts } from "@tachy/core/exports";
 import { saveUpload } from "@tachy/core/chat";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { requireCaller } from "../authz";
-import { sessionEmail } from "../auth";
+import { getIdentity } from "../auth";
 import { lifecycle } from "../lifecycle";
 import { requestIdOf } from "../logging";
 import { AdmissionCancelled, QueueFull } from "../admission";
@@ -66,7 +66,7 @@ const approveSchema = z.object({
 export const agent = new Hono()
 
   .get("/commands", async (c) => {
-    const userEmail = (await sessionEmail(c)) ?? env.userEmail;
+    const userEmail = getIdentity(c)?.email ?? env.userEmail;
     const user = userEmail ? await getUserByEmail(userEmail) : null;
     const ctx: ScopeContext = user
       ? {
@@ -109,7 +109,7 @@ export const agent = new Hono()
     }
     const { message, sessionId, uploadPaths, artifactId, command } =
       c.req.valid("json");
-    const userEmail = (await sessionEmail(c)) ?? env.userEmail;
+    const userEmail = getIdentity(c)?.email ?? env.userEmail;
     const userKey = userEmail ?? "anonymous";
 
     const running = activeByUser.get(userKey);
@@ -146,7 +146,14 @@ export const agent = new Hono()
     // edit made mid-turn records which conversation made it.
     const turnId = randomUUID();
     const settings = await effectiveSettings();
-    const base = await mcpConfig(userEmail, settings, turnId);
+    const identity = getIdentity(c);
+    const base = await mcpConfig(userEmail, settings, {
+      id: turnId,
+      actorRole:
+        // The shared token and open mode are an app admin with no user row;
+        // a minted token has an owner and is gated as them.
+        !identity?.email && identity?.role === "admin" ? "admin" : undefined,
+    });
     const requestId = requestIdOf(c);
     if (requestId) base.mcpEnv.TACHY_REQUEST_ID = requestId;
     const config: AgentConfig = {
@@ -276,7 +283,7 @@ export const agent = new Hono()
     zValidator("json", z.object({ turnId: z.string() })),
     async (c) => {
       const { turnId } = c.req.valid("json");
-      const email = (await sessionEmail(c)) ?? env.userEmail;
+      const email = getIdentity(c)?.email ?? env.userEmail;
       const owner = turns.get(turnId) ?? waiting.get(turnId);
       if (!owner) throw notFound("unknown or finished turn");
       if (owner.email !== email)
@@ -292,7 +299,7 @@ export const agent = new Hono()
     const { turnId, id, approve, message, updatedInput } = c.req.valid("json");
     const entry = turns.get(turnId);
     if (!entry) throw notFound("unknown or finished turn");
-    const email = (await sessionEmail(c)) ?? env.userEmail;
+    const email = getIdentity(c)?.email ?? env.userEmail;
     // Compared even when the turn resolved no email: skipping the check for an
     // unattributed turn would open it to anyone who guesses its id.
     if (entry.email !== email)

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isGlobalAdmin } from "../access/session.svelte";
   import { onDestroy, onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
@@ -93,15 +94,17 @@
           >
         </td>
         <td>
-          <Button
-            variant="ghost"
-            size="sm"
-            {busy}
-            onclick={() => setMaintenance(!runtime.refusingChats)}
-            >{runtime.refusingChats
-              ? "resume chats"
-              : "pause new chats"}</Button
-          >
+          {#if isGlobalAdmin()}
+            <Button
+              variant="ghost"
+              size="sm"
+              {busy}
+              onclick={() => setMaintenance(!runtime.refusingChats)}
+              >{runtime.refusingChats
+                ? "resume chats"
+                : "pause new chats"}</Button
+            >
+          {/if}
           <span class="muted">refuses new chats; running turns finish</span>
         </td>
       </tr>
@@ -184,50 +187,52 @@
     </tbody>
   </table>
 
-  <GroupHead label="security" />
-  <table>
-    <tbody>
-      <tr
-        ><td>Single sign-on</td><td
-          >{runtime.security.sso_configured
-            ? "configured"
-            : "not configured"}</td
-        ><td class="muted"
-          >{runtime.security.sso_configured
-            ? `password allowed: ${runtime.security.password_login_under_sso} account(s)`
-            : "password only"}</td
-        ></tr
-      >
-      <tr>
-        <td>Credential vault</td>
-        <td
-          >{runtime.security.vault.enabled
-            ? (runtime.security.vault.current_key ?? "on")
-            : "disabled"}</td
+  {#if runtime.security}
+    <GroupHead label="security" />
+    <table>
+      <tbody>
+        <tr
+          ><td>Single sign-on</td><td
+            >{runtime.security.sso_configured
+              ? "configured"
+              : "not configured"}</td
+          ><td class="muted"
+            >{runtime.security.sso_configured
+              ? `password allowed: ${runtime.security.password_login_under_sso} account(s)`
+              : "password only"}</td
+          ></tr
         >
-        <td class="muted">
-          {#if runtime.security.vault.enabled}
-            {runtime.security.vault.by_key
-              .map(
-                (k) =>
-                  `${k.key_id ?? "no key id"}: ${k.count}${k.current ? " (current)" : ""}`,
-              )
-              .join(" · ") || "nothing stored"}
-            {#if runtime.security.vault.by_key.some((k) => !k.current)}
-              · run npm run sync rotate-key
-            {/if}
-          {:else}TACHY_SECRET_KEY unset{/if}
-        </td>
-      </tr>
-      <tr
-        ><td>Accounts with a password</td><td
-          >{runtime.security.users_with_password}</td
-        ><td class="muted"
-          >{runtime.security.service_accounts} service account(s)</td
-        ></tr
-      >
-    </tbody>
-  </table>
+        <tr>
+          <td>Credential vault</td>
+          <td
+            >{runtime.security.vault.enabled
+              ? (runtime.security.vault.current_key ?? "on")
+              : "disabled"}</td
+          >
+          <td class="muted">
+            {#if runtime.security.vault.enabled}
+              {runtime.security.vault.by_key
+                .map(
+                  (k) =>
+                    `${k.key_id ?? "no key id"}: ${k.count}${k.current ? " (current)" : ""}`,
+                )
+                .join(" · ") || "nothing stored"}
+              {#if runtime.security.vault.by_key.some((k) => !k.current)}
+                · run npm run sync rotate-key
+              {/if}
+            {:else}TACHY_SECRET_KEY unset{/if}
+          </td>
+        </tr>
+        <tr
+          ><td>Accounts with a password</td><td
+            >{runtime.security.users_with_password}</td
+          ><td class="muted"
+            >{runtime.security.service_accounts} service account(s)</td
+          ></tr
+        >
+      </tbody>
+    </table>
+  {/if}
 
   <GroupHead label="data and retention" />
   <table>

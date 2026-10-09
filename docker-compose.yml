@@ -20,6 +20,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tachy}
       POSTGRES_DB: ${POSTGRES_DB:-tachy}
       TACHY_APP_DB_PASSWORD: ${TACHY_APP_DB_PASSWORD:-}
+      TACHY_MCP_DB_PASSWORD: ${TACHY_MCP_DB_PASSWORD:-}
       TACHY_BACKUP_DB_PASSWORD: ${TACHY_BACKUP_DB_PASSWORD:-}
     ports:
       # localhost-only: nothing on the office LAN needs raw Postgres access
@@ -63,7 +64,10 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "${TACHY_API_PORT:-8787}:8787"
+      # Loopback unless told otherwise: this is plain HTTP, so a session cookie
+      # crosses the network unencrypted. TACHY_API_BIND=0.0.0.0 serves the LAN;
+      # deploy/compose.prod.yml puts Caddy and TLS in front instead.
+      - "${TACHY_API_BIND:-127.0.0.1}:${TACHY_API_PORT:-8787}:8787"
     volumes:
       - ./backups:/app/backups
       # Linked-repo clones for code search - survives redeploys so reindexes

@@ -1,10 +1,16 @@
+import { scrypt } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Hono } from "hono";
+import { setSignedCookie } from "hono/cookie";
 import { createApp } from "../../packages/api/src/app";
+import { sessionSecret } from "../../packages/api/src/auth";
 import {
   hashPassword,
   verifyPassword,
   createUser,
+  isWeakerHash,
   setUserDisabled,
+  setUserPassword,
 } from "@tachy/core/access";
 import { AppError } from "@tachy/core/infra";
 import { cookieOf, json } from "../http";
@@ -127,10 +133,34 @@ describe("password login + role gating", () => {
     });
     expect(write.status).toBe(403);
 
-    const listUsersRes = await app.request("/api/users", {
+    const createUserRes = await app.request("/api/users", {
+      ...json({ email: "sneaky@example.com" }),
+      headers: { "Content-Type": "application/json", cookie: memberCookie },
+    });
+    expect(createUserRes.status).toBe(403);
+  });
+
+  it("shows a member the directory without how each account signs in", async () => {
+    const forMember = await app.request("/api/users", {
       headers: { cookie: memberCookie },
     });
-    expect(listUsersRes.status).toBe(403);
+    expect(forMember.status).toBe(200);
+    const [seenByMember] = await forMember.json();
+    expect(seenByMember.email).toBeDefined();
+    expect(seenByMember).not.toHaveProperty("has_password");
+    expect(seenByMember).not.toHaveProperty("service_account");
+    expect(seenByMember).not.toHaveProperty("password_login_allowed");
+
+    const forAdmin = await app.request("/api/users", {
+      headers: { cookie: adminCookie },
+    });
+    const [seenByAdmin] = await forAdmin.json();
+    expect(seenByAdmin).toHaveProperty("has_password");
+
+    for (const path of ["/api/users/memberships", "/api/users/team-members/x"])
+      expect(
+        (await app.request(path, { headers: { cookie: memberCookie } })).status,
+      ).not.toBe(403);
   });
 
   it("admins can mutate", async () => {
@@ -168,18 +198,190 @@ describe("password login + role gating", () => {
     });
     expect(response.status).toBe(200);
   });
+});
 
-  it("throttles repeated failures per email", async () => {
-    for (let i = 0; i < 5; i++) {
-      await app.request(
-        "/auth/password/login",
-        json({ email: "brute@example.com", password: "guess-number-x" }),
-      );
-    }
-    const response = await app.request(
-      "/auth/password/login",
-      json({ email: "brute@example.com", password: "guess-number-x" }),
+describe("login throttle", () => {
+  const attempt = (address: string, email: string, password: string) =>
+    app.request("/auth/password/login", {
+      ...json({ email, password }),
+      headers: {
+        "Content-Type": "application/json",
+        "X-Forwarded-For": address,
+      },
+    });
+
+  beforeAll(async () => {
+    process.env.TACHY_BEHIND_PROXY = "true";
+    await resetData();
+    await createUser({ email: "kim@example.com", password: "kim-password" });
+  });
+  afterAll(() => {
+    delete process.env.TACHY_BEHIND_PROXY;
+  });
+
+  it("stops an address guessing at one account, and nobody else", async () => {
+    for (let i = 0; i < 5; i++)
+      expect(
+        (await attempt("10.1.0.1", "kim@example.com", "guess-number-x")).status,
+      ).toBe(401);
+    const refused = await attempt(
+      "10.1.0.1",
+      "KIM@example.com",
+      "kim-password",
     );
-    expect(response.status).toBe(429);
+    expect(refused.status).toBe(429);
+    expect(refused.headers.get("Retry-After")).toBe("60");
+
+    expect(
+      (await attempt("10.1.0.2", "kim@example.com", "kim-password")).status,
+    ).toBe(200);
+  });
+
+  it("stops an address trying one password across many accounts", async () => {
+    for (let i = 0; i < 20; i++)
+      expect(
+        (await attempt("10.1.0.3", `user${i}@example.com`, "Winter2026!!"))
+          .status,
+      ).toBe(401);
+    expect(
+      (await attempt("10.1.0.3", "kim@example.com", "kim-password")).status,
+    ).toBe(429);
+  });
+
+  it("ignores a forwarded address when no proxy vouches for it", async () => {
+    delete process.env.TACHY_BEHIND_PROXY;
+    for (let i = 0; i < 5; i++)
+      await attempt(`10.2.0.${i}`, "lee@example.com", "guess-number-x");
+    expect(
+      (await attempt("10.2.0.99", "lee@example.com", "guess-number-x")).status,
+    ).toBe(429);
+    process.env.TACHY_BEHIND_PROXY = "true";
+  });
+});
+
+describe("sessions", () => {
+  const login = async (email: string, password: string) =>
+    cookieOf(
+      await app.request("/auth/password/login", json({ email, password })),
+    );
+  const me = (cookie: string) =>
+    app.request("/api/me/preferences", { headers: { cookie } });
+
+  beforeAll(async () => {
+    await resetData();
+    await createUser({
+      email: "root@example.com",
+      password: "admin-password",
+      role: "admin",
+    });
+  });
+
+  it("ends every open session on logout, so a copied cookie stops working", async () => {
+    const laptop = await login("root@example.com", "admin-password");
+    const phone = await login("root@example.com", "admin-password");
+    expect((await me(phone)).status).toBe(200);
+
+    const out = await app.request("/auth/logout", {
+      method: "POST",
+      headers: { cookie: laptop },
+    });
+    expect(out.status).toBe(200);
+    expect((await me(laptop)).status).toBe(401);
+    expect((await me(phone)).status).toBe(401);
+    expect((await app.request("/auth/logout")).status).toBe(404);
+  });
+
+  it("ends sessions when the password changes", async () => {
+    const before = await login("root@example.com", "admin-password");
+    const [{ id }] =
+      await sql`select id from users where email = 'root@example.com'`;
+    await setUserPassword(id as string, "a-newer-password");
+    expect((await me(before)).status).toBe(401);
+    expect(
+      (await me(await login("root@example.com", "a-newer-password"))).status,
+    ).toBe(200);
+  });
+
+  it("refuses a cookie in the format issued before sessions had an epoch", async () => {
+    const issue = (value: string) =>
+      new Hono()
+        .get("/", async (c) => {
+          await setSignedCookie(c, "tachy_session", value, sessionSecret);
+          return c.body(null);
+        })
+        .request("/");
+    const expiry = Date.now() + 60_000;
+
+    const former = cookieOf(await issue(`${expiry}|root@example.com`));
+    expect((await me(former)).status).toBe(401);
+    const staleEpoch = cookieOf(await issue(`${expiry}|0|root@example.com`));
+    expect((await me(staleEpoch)).status).toBe(401);
+    const expired = cookieOf(await issue(`1|999|root@example.com`));
+    expect((await me(expired)).status).toBe(401);
+  });
+
+  it("refuses a write a browser sends from another site, and allows its own", async () => {
+    const cookie = await login("root@example.com", "a-newer-password");
+    const write = (headers: Record<string, string>) =>
+      app.request("/api/teams", {
+        ...json({
+          slug: `t${Object.values(headers).join("").length}`,
+          name: "T",
+        }),
+        headers: { "Content-Type": "application/json", cookie, ...headers },
+      });
+
+    expect((await write({ "Sec-Fetch-Site": "cross-site" })).status).toBe(403);
+    expect((await write({ "Sec-Fetch-Site": "same-site" })).status).toBe(403);
+    expect(
+      (await write({ Origin: "https://evil.example", Host: "tachy.local" }))
+        .status,
+    ).toBe(403);
+    expect((await write({ Origin: "not a url" })).status).toBe(403);
+
+    expect((await write({ "Sec-Fetch-Site": "same-origin" })).status).toBe(200);
+    expect(
+      (await write({ Origin: "https://tachy.local", Host: "tachy.local" }))
+        .status,
+    ).toBe(200);
+
+    const read = await app.request("/api/teams", {
+      headers: { cookie, "Sec-Fetch-Site": "cross-site" },
+    });
+    expect(read.status).toBe(200);
+
+    const signOut = await app.request("/auth/logout", {
+      method: "POST",
+      headers: { cookie, "Sec-Fetch-Site": "cross-site" },
+    });
+    expect(signOut.status).toBe(403);
+    expect((await me(cookie)).status).toBe(200);
+  });
+
+  it("rehashes a password stored at a lower cost the next time it is used", async () => {
+    const weak =
+      "scrypt$16384$8$1$c2FsdHNhbHRzYWx0c2FsdA==$" +
+      (
+        await new Promise<Buffer>((resolve, reject) =>
+          scrypt(
+            "an-older-password",
+            Buffer.from("c2FsdHNhbHRzYWx0c2FsdA==", "base64"),
+            64,
+            { N: 16384, r: 8, p: 1 },
+            (err, key) => (err ? reject(err) : resolve(key)),
+          ),
+        )
+      ).toString("base64");
+    expect(isWeakerHash(weak)).toBe(true);
+    await sql`update users set password_hash = ${weak} where email = 'root@example.com'`;
+
+    const cookie = await login("root@example.com", "an-older-password");
+    expect((await me(cookie)).status).toBe(200);
+    const [{ password_hash }] =
+      await sql`select password_hash from users where email = 'root@example.com'`;
+    expect(isWeakerHash(password_hash as string)).toBe(false);
+    expect(
+      await verifyPassword("an-older-password", password_hash as string),
+    ).toBe(true);
   });
 });

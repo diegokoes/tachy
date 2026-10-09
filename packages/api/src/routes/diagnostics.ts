@@ -15,10 +15,11 @@ import { orgTimezone } from "@tachy/core/config";
 import { requireAdmin } from "../auth";
 import { callerUserId } from "../authz";
 
-/** The admin page's checks and load runs (DEPLOYMENT-ARCHITECTURE.md §11.3). */
+/**
+ * The system page's checks and load runs (DEPLOYMENT-ARCHITECTURE.md §11.3).
+ * Anyone signed in reads them; app admins start and cancel runs.
+ */
 export const diagnostics = new Hono()
-  .use("*", requireAdmin)
-
   .get("/checks", async (c) => c.json({ checks: await runSystemChecks() }))
 
   .get("/runs", async (c) =>
@@ -36,6 +37,7 @@ export const diagnostics = new Hono()
 
   .post(
     "/runs",
+    requireAdmin,
     zValidator(
       "json",
       z.object({
@@ -60,6 +62,6 @@ export const diagnostics = new Hono()
 
   .get("/runs/:id", async (c) => c.json(await getTestRun(c.req.param("id"))))
 
-  .post("/runs/:id/cancel", async (c) =>
-    c.json(await cancelTestRun(c.req.param("id"))),
+  .post("/runs/:id/cancel", requireAdmin, async (c) =>
+    c.json(await cancelTestRun(c.req.param("id")!)),
   );
