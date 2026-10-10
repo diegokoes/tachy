@@ -17,7 +17,12 @@ import {
   SEM_FLOOR,
   SEM_CEIL,
 } from "@tachy/core/search";
-import { GOLDEN, KNOWLEDGE, NONSENSE } from "../test/fixtures/search-corpus";
+import {
+  GOLDEN,
+  KNOWLEDGE,
+  NONSENSE,
+  TICKET_LEADS_DE,
+} from "../test/fixtures/search-corpus";
 
 const cos = (a: number[], b: number[]) =>
   a.reduce((s, x, i) => s + x * b[i], 0);
@@ -70,15 +75,20 @@ let top1 = 0;
 let mrrSum = 0;
 const perQuery: string[] = [];
 
-for (const golden of GOLDEN) {
-  const queryVector = await embedQuery(golden.q);
+/** Where the expected entry ranks among all of them, and its cosine. */
+async function placeOf(query: string, expect: string) {
+  const queryVector = await embedQuery(query);
   const scored = docs
     .map((d, i) => [keys[i], cos(queryVector, d)] as const)
     .sort((a, b) => b[1] - a[1]);
-  const rank = scored.findIndex(([k]) => k === golden.expect);
+  const rank = scored.findIndex(([k]) => k === expect);
+  return { rank, cosine: scored[rank][1] };
+}
+
+for (const golden of GOLDEN) {
+  const { rank, cosine: mine } = await placeOf(golden.q, golden.expect);
   if (rank === 0) top1++;
-  if (rank >= 0) mrrSum += 1 / (rank + 1);
-  const mine = scored[rank][1];
+  mrrSum += 1 / (rank + 1);
   if (golden.why !== "identifier") {
     if (mine < semanticMin) {
       semanticMin = mine;
@@ -113,6 +123,31 @@ console.log(
   `  top-1  ${top1}/${GOLDEN.length}  (${pct(top1 / GOLDEN.length)})`,
 );
 console.log(`  MRR    ${(mrrSum / GOLDEN.length).toFixed(3)}`);
+
+// Reported, never part of the verdict: search and the entries are English,
+// and a German ticket's opening is the one query of another language.
+const suggestedFloor = (noiseMax + semanticMin) / 2;
+let germanTop1 = 0;
+let germanMrrSum = 0;
+let germanCleared = 0;
+let germanMin = 1;
+console.log("\nGerman ticket openings against the English entries:");
+for (const lead of TICKET_LEADS_DE) {
+  const { rank, cosine } = await placeOf(lead.q, lead.expect);
+  if (rank === 0) germanTop1++;
+  germanMrrSum += 1 / (rank + 1);
+  if (cosine > suggestedFloor) germanCleared++;
+  germanMin = Math.min(germanMin, cosine);
+  console.log(
+    `  ${cosine.toFixed(3)}  rank ${rank + 1}  ${JSON.stringify(lead.q.slice(0, 60))} -> ${lead.expect}`,
+  );
+}
+const leads = TICKET_LEADS_DE.length;
+console.log(`  top-1  ${germanTop1}/${leads}  (${pct(germanTop1 / leads)})`);
+console.log(`  MRR    ${(germanMrrSum / leads).toFixed(3)}`);
+console.log(
+  `  above the suggested floor  ${germanCleared}/${leads}   lowest ${germanMin.toFixed(3)}`,
+);
 
 const ok = SEM_FLOOR > noiseMax && SEM_FLOOR < semanticMin;
 console.log(

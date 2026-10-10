@@ -5,7 +5,7 @@
  */
 import http from "k6/http";
 import { check } from "k6";
-import { BASE_URL, headers, setupSession, pick } from "./session.js";
+import { BASE_URL, headers, setupSeededSession, pick } from "./session.js";
 import { QUERIES } from "./corpus.js";
 
 export const options = {
@@ -34,7 +34,7 @@ export const options = {
   },
 };
 
-export const setup = setupSession;
+export const setup = setupSeededSession;
 
 export default function (data) {
   check(

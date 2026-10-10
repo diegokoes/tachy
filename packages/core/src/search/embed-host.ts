@@ -1,6 +1,6 @@
 import { Worker } from "node:worker_threads";
 import { log } from "../infra/log";
-import { EMBEDDING_DIM, EMBEDDING_SPEC } from "./model";
+import { EMBEDDING_SPEC, vectorRows } from "./model";
 import { EmbedQueue } from "./embed-queue";
 import type { EmbedReply, EmbedRequest } from "./embed-thread";
 import { embedThreads } from "./threads";
@@ -75,14 +75,7 @@ export function startEmbedHost(opts: {
       if (!request) return;
       pending.delete(reply.id);
       if (reply.type === "error") return request.reject(new Error(reply.error));
-      const vectors: number[][] = [];
-      for (let r = 0; r < reply.rows; r++)
-        vectors.push(
-          Array.from(
-            reply.data.subarray(r * EMBEDDING_DIM, (r + 1) * EMBEDDING_DIM),
-          ),
-        );
-      request.resolve(vectors);
+      request.resolve(vectorRows(reply));
     });
     thread.on("error", (err) =>
       log("error", "embedding_thread_error", { error: String(err) }),

@@ -6,7 +6,7 @@
  */
 import http from "k6/http";
 import { check } from "k6";
-import { BASE_URL, headers, setupSession, pick } from "./session.js";
+import { BASE_URL, headers, setupSeededSession, pick } from "./session.js";
 import { QUERIES, DOC_QUERIES } from "./corpus.js";
 
 const STRESS = __ENV.PROFILE === "stress";
@@ -47,7 +47,7 @@ export const options = {
       },
 };
 
-export const setup = setupSession;
+export const setup = setupSeededSession;
 
 export default function (data) {
   const h = headers(data);

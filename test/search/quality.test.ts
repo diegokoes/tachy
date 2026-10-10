@@ -9,6 +9,7 @@ import {
   KNOWLEDGE,
   NONSENSE,
   REFERENCE,
+  TICKET_LEADS_DE,
 } from "../fixtures/search-corpus";
 
 afterAll(() => sql.end());
@@ -83,6 +84,16 @@ describe("golden query set", () => {
     const rows = await searchReferenceDocs("queue does not drain");
     expect(rows[0]?.id).toBe(idByKey.get("deploy-runbook"));
     expect(rows[0].grade).not.toBe("weak");
+  });
+});
+
+describe("a ticket in German", () => {
+  // The entries are English and these share no identifier with them, so the
+  // keyword legs have little to match: the vector leg has to admit the entry.
+  it.each(TICKET_LEADS_DE)("$q -> $expect", async ({ q, expect: key }) => {
+    const [top] = await searchKnowledge(q);
+    expect(top?.id).toBe(idByKey.get(key));
+    expect(Number(top.cos_sim)).toBeGreaterThan(SEM_FLOOR);
   });
 });
 

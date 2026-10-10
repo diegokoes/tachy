@@ -122,6 +122,10 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
         .map((s) => s.trim())
         .filter(Boolean)
     : undefined;
+  // Unset, empty or outside the setting's range: the default stands.
+  const envSlotCap = SETTING_SCHEMAS.agent_slot_cap.safeParse(
+    Number(process.env.TACHY_AGENT_SLOT_CAP),
+  ).data;
 
   return {
     redaction_global: pick(
@@ -142,7 +146,7 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
       undefined,
       "support",
     ),
-    agent_slot_cap: pick(db.agent_slot_cap, undefined, 15),
+    agent_slot_cap: pick(db.agent_slot_cap, envSlotCap, 15),
     agent_queue_max: pick(db.agent_queue_max, undefined, 10),
     org_timezone: pick(
       db.org_timezone,

@@ -69,10 +69,13 @@ services:
       # Caddy overwrites X-Forwarded-For, so it names the client here.
       TACHY_BEHIND_PROXY: "true"
       TACHY_DB_POOL_MAX: ${TACHY_API_DB_POOL_MAX:-15}
+      # Chat turns at once, sized to mem_limit below (§3.2). A cap saved in
+      # Admin › system wins over it.
+      TACHY_AGENT_SLOT_CAP: ${TACHY_AGENT_SLOT_CAP:-12}
     volumes:
       - ${TACHY_STATUS_HOST_DIR:-/srv/tachy/status}:/status:ro
     stop_grace_period: 210s
-    mem_limit: ${TACHY_API_MEM_LIMIT:-7g}
+    mem_limit: ${TACHY_API_MEM_LIMIT:-6000m}
     cpu_shares: 2048
     pids_limit: ${TACHY_API_PIDS_LIMIT:-2048}
     cap_drop: [ALL]
@@ -105,7 +108,7 @@ services:
       interval: 15s
       timeout: 5s
       start_period: 60s
-    mem_limit: ${TACHY_EMBEDDER_MEM_LIMIT:-2560m}
+    mem_limit: ${TACHY_EMBEDDER_MEM_LIMIT:-3700m}
     cpus: ${TACHY_EMBEDDER_CPUS:-6}
     cpu_shares: 2048
     pids_limit: 256

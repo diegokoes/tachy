@@ -8,6 +8,11 @@ import {
   embedQuery,
   toVectorLiteral,
 } from "@tachy/core/search";
+import {
+  EMBEDDING_MODELS,
+  leadingUnit,
+  vectorRows,
+} from "../../packages/core/src/search/model";
 
 // No database. These guard failures that raise nothing: a batch answered in
 // the wrong order, or a spec that disagrees with the vector(N) columns, gives
@@ -76,7 +81,7 @@ describe("the model spec", () => {
   });
 
   it("names a model it has pooling and prefixes for", () => {
-    expect(["cls", "mean"]).toContain(EMBEDDING_SPEC.pooling);
+    expect(["cls", "mean", "last_token"]).toContain(EMBEDDING_SPEC.pooling);
     expect(EMBEDDING_SPEC.maxChars).toBeGreaterThan(0);
     expect(EMBEDDING_MODEL).toBeTruthy();
   });
@@ -89,13 +94,65 @@ describe("the model spec", () => {
   });
 });
 
+describe("the model registry", () => {
+  // A variant's key is its stamp and names no repository, so the files have
+  // to be named beside it.
+  it("names the repository of every variant", () => {
+    for (const [name, spec] of Object.entries(EMBEDDING_MODELS))
+      if (name.includes(":")) expect(spec.source, name).toBeTruthy();
+  });
+
+  // An export held outside the model's own repository is one upload away
+  // from other vectors under the same name.
+  it("reads the default model's export at one commit", () => {
+    expect(EMBEDDING_MODELS["lightonai/mDenseOn"].revision).toMatch(
+      /^[0-9a-f]{40}$/,
+    );
+  });
+
+  it("gives an int8 file a name of its own", () => {
+    for (const [name, spec] of Object.entries(EMBEDDING_MODELS))
+      expect(name.endsWith(":q8"), name).toBe(spec.dtype === "q8");
+  });
+});
+
+describe("leadingUnit", () => {
+  it("keeps the leading values of each row, at unit length", () => {
+    const wide = new Float32Array([3, 4, 9, 9, 0, 5, 7, 7]);
+    const cut = leadingUnit(wide, 4, 2);
+    expect(Array.from(cut)).toEqual([
+      expect.closeTo(0.6, 6),
+      expect.closeTo(0.8, 6),
+      0,
+      1,
+    ]);
+  });
+
+  it("leaves a row of zeros as it is", () => {
+    expect(Array.from(leadingUnit(new Float32Array(4), 4, 2))).toEqual([0, 0]);
+  });
+});
+
+describe("vectorRows", () => {
+  it("splits the values into one vector a row", () => {
+    const data = new Float32Array(2 * EMBEDDING_DIM);
+    data[0] = 1;
+    data[EMBEDDING_DIM] = 2;
+    const rows = vectorRows({ data, rows: 2 });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveLength(EMBEDDING_DIM);
+    expect([rows[0][0], rows[1][0]]).toEqual([1, 2]);
+  });
+});
+
 describe("query vs passage", () => {
   it("embeds a query into the same space as its passage", async () => {
     const query = await embedQuery("printer stops mid-batch");
     const passage = await embedPassage("printer stops mid-batch");
     expect(query).toHaveLength(EMBEDDING_DIM);
     const cos = query.reduce((s, x, i) => s + x * passage[i], 0);
-    expect(cos).toBeGreaterThan(0.9);
+    // Not 1: a model with a prefix per side reads the two as different texts.
+    expect(cos).toBeGreaterThan(EMBEDDING_SPEC.semCeil);
   });
 });
 
