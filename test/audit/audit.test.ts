@@ -7,6 +7,7 @@ import { addTeam } from "@tachy/core/catalog";
 import { createOutput } from "@tachy/core/exports";
 import { rememberSecret } from "@tachy/core/infra";
 import { createApp } from "../../packages/api/src/app";
+import { setupCode } from "../../packages/api/src/setup-code";
 import { server } from "../../packages/mcp/src/index";
 import { detailText } from "../../packages/web/src/audit/rows";
 import { cookieOf, json, loginCookie } from "../http";
@@ -218,7 +219,11 @@ describe("what the API records", () => {
   it("records who ran setup", async () => {
     const response = await app.request(
       "/api/setup",
-      json({ email: "first@example.com", password: "a-long-password" }),
+      json({
+        email: "first@example.com",
+        password: "a-long-password",
+        setup_code: setupCode(),
+      }),
     );
     expect(cookieOf(response)).not.toBe("");
     expect((await listAudit())[0]).toMatchObject({

@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import { setSignedCookie } from "hono/cookie";
 import { createApp } from "../../packages/api/src/app";
-import { sessionSecret } from "../../packages/api/src/auth";
+import { landingPath, sessionSecret } from "../../packages/api/src/auth";
 import {
   hashPassword,
   verifyPassword,
@@ -383,5 +383,32 @@ describe("sessions", () => {
     expect(
       await verifyPassword("an-older-password", password_hash as string),
     ).toBe(true);
+  });
+});
+
+describe("where a sign-in lands", () => {
+  it("keeps a path on this server, with its query and fragment", () => {
+    expect(landingPath("/")).toBe("/");
+    expect(landingPath("/library/wiki?product=lc#gaps")).toBe(
+      "/library/wiki?product=lc#gaps",
+    );
+  });
+
+  it("sends anything that leads to another site to the home page", () => {
+    for (const target of [
+      "https://example.com/",
+      "//example.com/",
+      "/\\example.com/",
+      "/\t/example.com/",
+      "\\\\example.com",
+      "javascript:alert(1)",
+      "http://",
+    ])
+      expect(landingPath(target), target).toBe("/");
+  });
+
+  it("goes home when no target is given", () => {
+    expect(landingPath(undefined)).toBe("/");
+    expect(landingPath("")).toBe("/");
   });
 });

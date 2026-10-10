@@ -26,6 +26,7 @@ import {
   OAUTH_PREFIX,
 } from "@tachy/core";
 import { setSessionCookie, markBootstrapped, sessionEmail } from "../auth";
+import { announceSetupCode, isSetupCode } from "../setup-code";
 import { callerAddress } from "../throttle";
 
 const slugName = z.object({ slug: z.string().min(1), name: z.string().min(1) });
@@ -48,20 +49,34 @@ const setupSchema = z.object({
     })
     .optional(),
   agent_key: z.string().min(1).optional(),
+  /** Optional here so a missing one is refused with the reason, not as a shape. */
+  setup_code: z.string().optional(),
 });
 
 export const setup = new Hono()
-  .get("/status", async (c) =>
-    c.json({ bootstrapped: (await adminCount()) > 0 }),
-  )
+  // The wizard asks this first, so the code is in the log by the time its
+  // field is on screen, whatever the database was doing when the server started.
+  .get("/status", async (c) => {
+    const bootstrapped = (await adminCount()) > 0;
+    if (!bootstrapped) announceSetupCode();
+    return c.json({ bootstrapped });
+  })
 
   .post("/", zValidator("json", setupSchema), async (c) => {
     const body = c.req.valid("json");
+    // Both ahead of the hash: this route is outside the `/api/*` guard, and
+    // the hash is the one costly thing a stranger could ask it for.
+    if ((await adminCount()) > 0)
+      throw conflict("already set up; log in as an admin");
+    if (!isSetupCode(body.setup_code))
+      throw forbidden(
+        "wrong or missing setup code; the server log has it, as the event setup_code",
+      );
     const hash = await hashPassword(body.password);
 
-    // Outside the `/api/*` guard the admin count alone gates this, and under
-    // SSO it never rises: `upsertUser` provisions members. Where SSO can name
-    // the caller it has to, and the wizard promotes that person.
+    // Under SSO the admin count never rises by itself: `upsertUser` provisions
+    // members. Where SSO can name the caller it has to, and the wizard
+    // promotes that person.
     let verified: string | undefined;
     if (env.oidc) {
       verified = await sessionEmail(c);

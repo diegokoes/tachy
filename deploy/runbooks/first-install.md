@@ -44,8 +44,11 @@
 9. **Trust.** Export Caddy's root and follow
    [tls-client-trust.md](tls-client-trust.md). Save a copy as
    `/etc/tachy/caddy-root.crt` for tachy-watch.
-10. **Wizard.** Open `https://<name>/`, create the admin, then in Admin › access › users & roles
-    create the load-test user: member, service account, password under SSO.
+10. **Wizard.** Open `https://<name>/` and create the admin. The wizard asks
+    for the setup code, which the api logs at start while no admin exists:
+    `docker compose logs api | grep setup_code`. A restart replaces the code.
+    Then in Admin › access › users & roles create the load-test user: member,
+    service account, password under SSO.
 11. **Prove the alerts.** `sudo tachy-watch --force disk_srv=fail`, then run it
     plainly; both messages must arrive in Teams. Pull the network cable for
     10 minutes; healthchecks.io must alert.

@@ -239,6 +239,25 @@ export async function requireAdmin(c: Context, next: Next): Promise<void> {
   await next();
 }
 
+/** An origin no request names, to resolve a redirect target against. */
+const NO_ORIGIN = "http://landing.invalid";
+
+/**
+ * Where a sign-in ends: the path it was asked for on this server, or the home
+ * page. Resolved the way a browser resolves it, so `//host`, `/\host` and a
+ * tab inside either count as the other site they lead to.
+ */
+export function landingPath(target: string | undefined): string {
+  if (!target) return "/";
+  try {
+    const resolved = new URL(target, NO_ORIGIN);
+    if (resolved.origin !== NO_ORIGIN) return "/";
+    return resolved.pathname + resolved.search + resolved.hash;
+  } catch {
+    return "/";
+  }
+}
+
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
@@ -272,7 +291,7 @@ export function installAuth(
 
   if (oidc) {
     base.get("/auth/login", oidcAuthMiddleware(), (c) =>
-      c.redirect(c.req.query("redirect") || "/"),
+      c.redirect(landingPath(c.req.query("redirect"))),
     );
     base.get("/auth/callback", oidcAuthMiddleware(), (c) => c.redirect("/"));
   }
