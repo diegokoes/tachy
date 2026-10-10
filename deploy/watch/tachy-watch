@@ -102,23 +102,46 @@ check_memory() {
 }
 
 # The api's runtime block, fetched once for the checks that read it. Sets
-# RUNTIME, or RUNTIME_SKIP to why there is none.
+# RUNTIME, or RUNTIME_SKIP to why there is none, or RUNTIME_REFUSED when the
+# api turned the token away.
 fetch_runtime() {
-  local token host
-  RUNTIME="" RUNTIME_SKIP=""
+  local token host answer code
+  RUNTIME="" RUNTIME_SKIP="" RUNTIME_REFUSED=""
   if [ -n "${WATCH_RUNTIME_FILE:-}" ]; then
     RUNTIME=$(jq -c '.runtime // empty' "$WATCH_RUNTIME_FILE" 2>/dev/null)
   else
-    token=$(app_env TACHY_API_TOKEN)
+    # A token minted for a service account (deploy/runbooks/first-install.md).
+    # The stack's shared admin token still serves a host that has none yet.
+    token=${WATCH_API_TOKEN:-$(app_env TACHY_API_TOKEN)}
     if [ -z "$token" ]; then
-      RUNTIME_SKIP="TACHY_API_TOKEN is not set in .env"
+      RUNTIME_SKIP="WATCH_API_TOKEN is not set in $TACHY_ENV_FILE"
       return
     fi
     host=$(app_env TACHY_HOSTNAME localhost)
-    RUNTIME=$(curl -s -m 10 -k --resolve "$host:443:127.0.0.1" -H "authorization: Bearer $token" \
-      "https://$host/api/system" | jq -c '.runtime // empty' 2>/dev/null)
+    answer=$(curl -s -m 10 -k --resolve "$host:443:127.0.0.1" -H "authorization: Bearer $token" \
+      -w '\n%{http_code}' "https://$host/api/system")
+    code=${answer##*$'\n'}
+    if [ "$code" = 401 ] || [ "$code" = 403 ]; then
+      RUNTIME_REFUSED="the api refused the watch token (HTTP $code): expired or revoked, mint another"
+      RUNTIME_SKIP=$RUNTIME_REFUSED
+      return
+    fi
+    RUNTIME=$(jq -c '.runtime // empty' <<<"${answer%$'\n'*}" 2>/dev/null)
   fi
   [ -n "$RUNTIME" ] || RUNTIME_SKIP="the runtime block did not answer"
+}
+
+# Whether the api let this script read at all. The checks below only skip
+# without a runtime block, and a skip is never posted: a token that stopped
+# working would otherwise blind them in silence.
+check_runtime() {
+  if [ -n "$RUNTIME_REFUSED" ]; then
+    result runtime fail "" "$RUNTIME_REFUSED"
+  elif [ -n "$RUNTIME" ]; then
+    result runtime ok "" "the api answered with its runtime block"
+  else
+    result runtime skip "" "$RUNTIME_SKIP"
+  fi
 }
 
 check_turns_queued() {
@@ -368,7 +391,7 @@ post_teams() {
 }
 
 fetch_runtime
-for check in readyz 5xx memory turns_queued jobs postgres disk backups update downloads certificate thermal power nvme; do
+for check in readyz 5xx memory runtime turns_queued jobs postgres disk backups update downloads certificate thermal power nvme; do
   "check_$check" || result "$check" warn "" "the check itself errored"
 done
 
