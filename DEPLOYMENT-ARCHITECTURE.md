@@ -136,10 +136,13 @@ differently:
     `web:check`, the server build and `coverage`. On a push it also builds and
     pushes the image, and runs gitleaks.
   - `image-gates.yml`, on pull requests that touch the image: a Trivy scan and
-    the container smoke test.
+    the container smoke test, on the base stack and under the production
+    overlay.
   - `schema-plan.yml`, when `db/schema.sql` or `db/roles.sql` changes.
   - `load-scripts.yml`, when `load/` changes: bundles the k6 scripts.
   - `image-cleanup.yml`: keeps the 30 newest images.
+  - `image-scan.yml`, weekly: scans the `main` and `dev` images again.
+  - `codeql.yml`: static analysis of the TypeScript and the workflows.
 - **Only Caddy is published,** on 80 and 443. The overlay removes the api's
   port. Postgres listens on `127.0.0.1:5433`.
 - **The repository can't show what the laptop runs.** The host playbook has
@@ -2402,22 +2405,28 @@ that fails counts as answered, because Postgres being down fails at once
 
 **GitHub Actions**
 
-| Workflow            | Runs on                                                 | Does                                                                                                       |
-| ------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `ci.yml`            | pull requests; pushes to `main` and `dev`               | `build`: typecheck, `web:check`, the server build, `coverage` with its ratchet at 74/72/71/63              |
-|                     | pushes only                                             | builds the image once and pushes `sha-<12 characters>` and the branch tag to GHCR; records the digest      |
-|                     | both                                                    | `secrets`: gitleaks                                                                                        |
-| `image-gates.yml`   | pull requests that touch the image                      | a Buildx build, a Trivy scan that fails on critical findings with a fix, and the container smoke test      |
-| `schema-plan.yml`   | pull requests that touch `db/schema.sql` or `roles.sql` | loads the merge-base schema and fixtures, diffs to the PR's schema, applies, and requires an empty re-diff |
-| `load-scripts.yml`  | pull requests that touch `load/`                        | bundles every k6 script on a pinned k6 image                                                               |
-| `image-cleanup.yml` | a schedule                                              | keeps the 30 newest images                                                                                 |
+| Workflow            | Runs on                                                 | Does                                                                                                                                                          |
+| ------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`            | pull requests; pushes to `main` and `dev`               | `build`: typecheck, `web:check`, the server build, `coverage` with its ratchet at 74/72/71/63                                                                 |
+|                     | pushes only                                             | builds the image once and pushes `sha-<12 characters>` and the branch tag to GHCR; records the digest; attests where it was built and what it holds; scans it |
+|                     | both                                                    | `secrets`: gitleaks                                                                                                                                           |
+| `image-gates.yml`   | pull requests that touch the image                      | a Buildx build, a Trivy scan that fails on critical findings with a fix, and the container smoke test on the base stack and under the production overlay      |
+| `schema-plan.yml`   | pull requests that touch `db/schema.sql` or `roles.sql` | loads the merge-base schema and fixtures, diffs to the PR's schema, applies, and requires an empty re-diff                                                    |
+| `load-scripts.yml`  | pull requests that touch `load/`                        | bundles every k6 script on a pinned k6 image                                                                                                                  |
+| `image-cleanup.yml` | a schedule                                              | keeps the 30 newest images                                                                                                                                    |
+| `image-scan.yml`    | weekly                                                  | the same Trivy scan on the published `main` and `dev` images                                                                                                  |
+| `codeql.yml`        | pull requests; pushes to `main` and `dev`; weekly       | CodeQL over the TypeScript and the workflows. Not a required check                                                                                            |
 
 - **The container smoke test** starts the built image with the base Compose
   file and a CI `.env` (token auth), waits for readyz, seeds a small database
   and runs `load/smoke.js` (`scripts/container-smoke.sh`). It catches what
   vitest can't: file permissions as `node`, missing env, the SPA build, the
-  image layout. It doesn't run the production overlay, so a read-only root
-  filesystem and the `tachy_app` role are never exercised in CI.
+  image layout. It then brings the same database up under
+  `deploy/compose.prod.yml` and runs `smoke.js` again, and one chat turn
+  against the mock model (`load/turns.mjs`): Caddy, the read-only root,
+  `tachy_app`, `tachy_mcp`, the embedder and the workers are exercised on
+  every pull request that touches the image or `deploy/`. The host scripts
+  (`tachy-deploy`, `tachy-backup`, `tachy-watch`) are not.
 - **`schema-plan`** uploads the plan as an artifact. Destructive hazards fail
   the job unless the pull request carries the `schema-destructive` label.
 - **`build`, `image-gates`, `schema-plan` and `secrets` are required checks**
@@ -2427,7 +2436,18 @@ that fails counts as answered, because Postgres being down fails at once
   workflow skipped by a path filter pending, and counts a job skipped by a
   condition as passed
   ([docs](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks)).
-- **Images built on a push aren't scanned.** Trivy runs on pull requests only.
+- **The published image is scanned** when it is pushed and again every week,
+  to the bar of the pull request scan. A red weekly run is how a vulnerability
+  found after the build shows up.
+- **Each pushed image carries two signed attestations** (`actions/attest`):
+  the workflow run and commit that built the digest, and a CycloneDX list of
+  what it holds. Nothing verifies them on the host yet;
+  `gh attestation verify oci://<image>@<digest> --repo diegokoes/tachy` does it
+  by hand.
+- **Images are pinned by digest**: the Node base, k6 and Go in the
+  `Dockerfile`, Postgres and Caddy in the Compose files. `tachy-backup`
+  archives volumes in the Postgres image, so the host pulls no image that is
+  not pinned.
 - **Dependabot** covers npm, Docker, Compose files and GitHub Actions, weekly,
   into `dev`.
 
@@ -2477,16 +2497,16 @@ image accepts the current schema, which is what expand and contract is for.
 
 ## 11. Testing strategy
 
-| Layer                | Tool                                                           | Status                               |
-| -------------------- | -------------------------------------------------------------- | ------------------------------------ |
-| Unit and integration | vitest, testcontainers Postgres, coverage ratchet              | in CI, required                      |
-| Search quality       | `test/search/quality.test.ts`, `scripts/eval-embeddings.ts`    | in CI; 14 golden queries (§4.6)      |
-| Schema drift         | `test/infra/schema-drift.test.ts`, plus `schema-plan` (§10)    | in CI                                |
-| Container smoke      | `image-gates.yml` (§10)                                        | in CI, on the base Compose file only |
-| Load and capacity    | k6, `load/turns.mjs`                                           | scripts built; no laptop numbers yet |
-| Backup restore       | weekly host timer; quarterly drill from a laptop copy (§6.4)   | built; not yet run on the laptop     |
-| Browser end-to-end   | Playwright: login, search, open entry, chat against a mock LLM | not built; optional                  |
-| Chaos drills         | manual, every quarter                                          | not yet run                          |
+| Layer                | Tool                                                           | Status                                                     |
+| -------------------- | -------------------------------------------------------------- | ---------------------------------------------------------- |
+| Unit and integration | vitest, testcontainers Postgres, coverage ratchet              | in CI, required                                            |
+| Search quality       | `test/search/quality.test.ts`, `scripts/eval-embeddings.ts`    | in CI; 14 golden queries (§4.6)                            |
+| Schema drift         | `test/infra/schema-drift.test.ts`, plus `schema-plan` (§10)    | in CI                                                      |
+| Container smoke      | `image-gates.yml` (§10)                                        | in CI, on the base Compose file and the production overlay |
+| Load and capacity    | k6, `load/turns.mjs`                                           | scripts built; no laptop numbers yet                       |
+| Backup restore       | weekly host timer; quarterly drill from a laptop copy (§6.4)   | built; not yet run on the laptop                           |
+| Browser end-to-end   | Playwright: login, search, open entry, chat against a mock LLM | not built; optional                                        |
+| Chaos drills         | manual, every quarter                                          | not yet run                                                |
 
 ### 11.1 k6
 
