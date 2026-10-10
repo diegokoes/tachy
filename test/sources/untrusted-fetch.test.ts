@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { fetchUntrustedUrl } from "../../packages/core/src/sources/fetch";
+import {
+  fetchUntrustedUrl,
+  isBlockedAddress,
+} from "../../packages/core/src/sources/fetch";
 
 // Every case here is refused before any socket is opened, so the suite needs no
 // network. The positive path, a real public host, is not covered: it would make
@@ -34,6 +37,23 @@ describe("fetchUntrustedUrl", () => {
       );
   });
 
+  it("refuses an IPv4 address written as an IPv6 one", async () => {
+    for (const url of [
+      // A URL parser rewrites the dotted form to hex before the check sees it.
+      "http://[::ffff:127.0.0.1]:8787/api/admin/system",
+      "http://[::ffff:7f00:1]:8787/",
+      "http://[::ffff:a9fe:a9fe]/latest/meta-data/",
+      "http://[::ffff:10.1.2.3]/",
+      "http://[::ffff:192.168.1.117]/",
+      "http://[64:ff9b::7f00:1]/",
+      "http://[64:ff9b::a9fe:a9fe]/",
+      "http://[64:ff9b::c0a8:175]/",
+    ])
+      await expect(fetchUntrustedUrl("t", url)).rejects.toThrow(
+        "private or loopback",
+      );
+  });
+
   it("refuses a hostname that does not resolve rather than attempting it", async () => {
     await expect(
       fetchUntrustedUrl("t", "http://tachy-no-such-host.invalid/"),
@@ -44,5 +64,39 @@ describe("fetchUntrustedUrl", () => {
     await expect(fetchUntrustedUrl("t", "not a url")).rejects.toThrow(
       "is not a URL",
     );
+  });
+});
+
+describe("isBlockedAddress", () => {
+  it("lets public addresses through in every spelling", () => {
+    for (const address of [
+      "8.8.8.8",
+      "::ffff:8.8.8.8",
+      "::ffff:808:808",
+      "64:ff9b::808:808",
+      "2606:4700::1111",
+    ])
+      expect(isBlockedAddress(address), address).toBe(false);
+  });
+
+  it("holds each range at its edges", () => {
+    const edges: [inside: string, outside: string][] = [
+      ["172.31.255.255", "172.32.0.1"],
+      ["100.127.255.255", "100.128.0.1"],
+      ["198.19.255.255", "198.20.0.1"],
+      ["224.0.0.1", "223.255.255.255"],
+      ["febf::1", "fec0::1"],
+      ["fdff::1", "fe00::1"],
+      ["64:ff9b::7fff:ffff", "64:ff9b::8000:1"],
+    ];
+    for (const [inside, outside] of edges) {
+      expect(isBlockedAddress(inside), inside).toBe(true);
+      expect(isBlockedAddress(outside), outside).toBe(false);
+    }
+  });
+
+  it("refuses text that is not an address", () => {
+    expect(isBlockedAddress("example.com")).toBe(true);
+    expect(isBlockedAddress("")).toBe(true);
   });
 });

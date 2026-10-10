@@ -38,6 +38,7 @@
   let displayName = $state("");
   let password = $state("");
   let password2 = $state("");
+  let setupCode = $state("");
   let orgName = $state("");
   let teamName = $state("");
   // `id` exists only to key the {#each}: the rows have no identity of their own
@@ -81,10 +82,14 @@
       ? "passwords must match"
       : null,
   );
+  const setupCodeErr = $derived(
+    attempted && !setupCode.trim() ? "the code from the server log" : null,
+  );
   const accountValid = $derived(
     /\S+@\S+\.\S+/.test(email) &&
       password.length >= MIN_PASSWORD_LENGTH &&
-      password === password2,
+      password === password2 &&
+      setupCode.trim().length > 0,
   );
 
   function next() {
@@ -112,6 +117,7 @@
       const body: Record<string, unknown> = {
         email: email.trim(),
         password,
+        setup_code: setupCode.trim(),
         ...(displayName.trim() ? { display_name: displayName.trim() } : {}),
         ...(orgName.trim() ? { org_name: orgName.trim() } : {}),
         settings: {
@@ -177,6 +183,18 @@
                 type="password"
                 autocomplete="new-password"
                 bind:value={password2}
+              />
+            </Field>
+            <Field
+              label="setup code"
+              required
+              error={setupCodeErr}
+              info="The server writes it to its log when it starts, as the event setup_code. With Docker: docker compose logs api."
+            >
+              <input
+                autocomplete="off"
+                spellcheck="false"
+                bind:value={setupCode}
               />
             </Field>
           </div>
