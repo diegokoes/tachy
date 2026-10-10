@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { sql, toDate, jsonb } from "../infra/db";
-import type { RawWorkItem } from "../sources/source";
+import type { RawMessage, RawWorkItem } from "../sources/source";
 import { resolveCustomerByEmail } from "../catalog/customers";
 import { routeIngest } from "../sources/projects";
 
@@ -20,6 +21,23 @@ export interface IngestedItem {
   inserted: boolean;
   /** New, or the source's updated time moved: something happened to it. */
   changed: boolean;
+}
+
+/**
+ * What a message is stored under: the source's own id, or one made from the
+ * message where the source gives none. A stored id of null matches nothing, so
+ * without this each fetch of the ticket would add the message again.
+ */
+export function messageKey(message: RawMessage): string {
+  if (message.externalId) return message.externalId;
+  const digest = createHash("sha256")
+    .update(
+      [message.author ?? "", message.createdAt ?? "", message.bodyText].join(
+        "\u0000",
+      ),
+    )
+    .digest("hex");
+  return `h-${digest.slice(0, 32)}`;
 }
 
 export async function ingestWorkItem(
@@ -74,14 +92,17 @@ export async function ingestWorkItem(
     `;
 
     if (raw.messages.length) {
-      const messages = raw.messages;
+      // One row per key: the same key twice in one statement is an error.
+      const keyed = new Map(raw.messages.map((x) => [messageKey(x), x]));
+      const keys = [...keyed.keys()];
+      const messages = [...keyed.values()];
       await tx`
         insert into work_item_messages
           (work_item_id, external_id, author, visibility, direction, body_text, attachments, created_at)
         select ${item.id}, u.external_id, u.author, u.visibility, u.direction,
                u.body_text, u.attachments::jsonb, u.created_at::timestamptz
         from unnest(
-          ${messages.map((x) => x.externalId ?? null)}::text[],
+          ${keys}::text[],
           ${messages.map((x) => x.author ?? null)}::text[],
           ${messages.map((x) => x.visibility)}::text[],
           ${messages.map((x) => x.direction)}::text[],
@@ -99,6 +120,14 @@ export async function ingestWorkItem(
           body_text = excluded.body_text,
           attachments = excluded.attachments,
           created_at = excluded.created_at
+      `;
+      // A fetch that carries messages carries all of them, so what the stored
+      // copy holds beyond those was deleted at the source. A sync carries
+      // none, and leaves the stored ones alone.
+      await tx`
+        delete from work_item_messages
+        where work_item_id = ${item.id}
+          and (external_id is null or external_id <> all(${keys}::text[]))
       `;
     }
 
