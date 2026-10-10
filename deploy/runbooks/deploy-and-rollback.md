@@ -13,9 +13,17 @@ the stack (the api drains running chat turns for up to 3 minutes), waits for
 `/readyz` through Caddy and runs `smoke.js`. If readiness or smoke fails, it
 rolls back to the previous commit and digest by itself and exits 1.
 
-The smoke run logs in as `SMOKE_EMAIL` from `/etc/tachy/tachy.env`. Without
-that account the deploy refuses to start; `--skip-smoke` deploys anyway and
-the log records `"smoke": "skipped"`.
+A rollback does not undo a schema change. The database keeps the new schema
+and the stamp goes back to the previous release's, so that release reports
+ready and keeps serving. The next deploy finds nothing left to apply and
+stamps again. After a plan applied with `--allow-destructive` the stamp stays:
+the previous release is then not ready, on purpose, and the way back is the
+pre-deploy backup.
+
+The smoke run logs in as `SMOKE_EMAIL` from `/etc/tachy/tachy.env`: a member
+account, no team, marked as a service account. It only reads, and passes on a
+database with no content. Without that account the deploy refuses to start;
+`--skip-smoke` deploys anyway and the log records `"smoke": "skipped"`.
 
 **By itself, at night.** With `TACHY_UPDATE_BRANCH=main` in
 `/etc/tachy/tachy.env`, `tachy-update` runs at 01:15 and 04:45 and deploys the

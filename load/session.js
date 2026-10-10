@@ -22,7 +22,8 @@ export function login() {
   if (response.status !== 200)
     fail(
       `login failed (${response.status}) for ${EMAIL}. ` +
-        `Seed the database first: docker compose -p tachy-dev run --rm cli npm run sync -- seed --scale=medium --reset --yes`,
+        `Check LOGIN_EMAIL and LOGIN_PASSWORD against the account; on a dev ` +
+        `stack the seed creates it: npm run sync -- seed`,
     );
   const cookie = (response.headers["Set-Cookie"] || "").split(";")[0];
   if (!cookie) fail("login returned no session cookie");
@@ -58,14 +59,23 @@ export function collectCorpus(cookie) {
   };
 }
 
+/**
+ * A session and whatever the database holds, which may be nothing: the smoke
+ * run after a deploy has to pass on an installation nobody has written to yet.
+ */
 export function setupSession() {
   const cookie = login();
   warmEmbeddings(cookie);
-  const corpus = collectCorpus(cookie);
-  check(corpus, {
-    "seeded knowledge entries exist": (c) => c.knowledgeIds.length > 0,
+  return { cookie, ...collectCorpus(cookie) };
+}
+
+/** For a load script, which measures nothing without a corpus to read. */
+export function setupSeededSession() {
+  const data = setupSession();
+  check(data, {
+    "seeded knowledge entries exist": (d) => d.knowledgeIds.length > 0,
   });
-  return { cookie, ...corpus };
+  return data;
 }
 
 export const pick = (xs) => xs[Math.floor(Math.random() * xs.length)];

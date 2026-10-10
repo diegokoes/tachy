@@ -18,8 +18,8 @@ trust what a result tells you (`next`, `note`, `retrieval_note`) over any assump
    A denial is the user declining, not an error: read their reason and ask what to change.
 2. **`source` is a connection slug, not a source type.** Call `list_source_connections`
    and pass its `slug` (`osapiens-freshdesk`), never the type (`freshdesk`).
-3. **Never post publicly.** `post_private_note` and `compact_work_item` are the only
-   writes back to a ticket and both write privately. If the user wants a customer-facing
+3. **Never post publicly.** `post_private_note`, `post_work_item_summary` and
+   `compact_work_item` are the only writes back to a ticket and all write privately. If the user wants a customer-facing
    reply, draft it in chat for them to send.
 4. **Never invent.** If the root cause is unknown, say so and set `confidence: "low"`.
    An empty search result is an answer, not a cue to reword the query - read `grade`, and

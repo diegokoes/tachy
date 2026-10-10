@@ -29,7 +29,7 @@ const costOf = (rows: Priced[]) =>
 const REPORTED = sql`nullif((meta->>'cost_usd')::numeric, 0)`;
 
 /**
- * What flows spent on the model: each `agent.ask` step records a run of mode
+ * What flows spent on the model: each model step records a run of mode
  * `flow` naming its flow. A flow deleted since still counts, under no name.
  */
 async function flowUsage(days: number): Promise<AgentUsage["flows"]> {

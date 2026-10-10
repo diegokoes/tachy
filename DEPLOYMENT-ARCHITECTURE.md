@@ -80,10 +80,10 @@ cli            profile "tools", ad hoc: sync, backup, restore, reembed, seed
   hourly. `source.sync` has none: an admin adds a definition per connection.
 - **Model calls outside turns.** `completeOnce` (`agent/src/complete.ts`)
   runs one prompt through `query()` with no tools and no MCP child. Report
-  review and ticket review call it in the api, and the `agent.ask` flow step
-  calls it in `worker-light`. None of them takes a chat slot (§2.4). Each
-  call the `agent.ask` step makes counts against its flow's daily limit
-  (§5.3.7).
+  review and ticket review call it in the api, and the `agent.ask` and
+  `agent.summarize_item` flow steps call it in `worker-light`. None of them
+  takes a chat slot (§2.4). Each call those steps make counts against their
+  flow's daily limit (§5.3.7).
 - **Usage counting** writes to Postgres without waiting: library views, tool
   calls from each MCP child and source traffic, all through `inBackground`
   (`core/src/infra/background.ts`). The api waits up to 5 s for them when it
@@ -239,31 +239,36 @@ the scratch database:
   40 turns added 5.5 GiB. Its 4 cores are: 40 turns starting at once wait 10 s
   for their first event.
 - A one-shot call added 110 MiB at 1, 2 and 4 at once.
-- With the default cap of 15, turns 16 to 25 queued and finished, and past the
+- With the cap at 15, turns 16 to 25 queued and finished, and past the
   queue of 10 the rest were refused, as designed.
 
-**The model itself** is gte-modernbert-base (§5.4). Measured 2026-10-05 on the
-workstation in the production image, fp32, on tachý's own code chunks at their
-longest, 2400 characters. The embedder ran under the overlay's limits, 6 CPUs
-and 2560 MB, which on that host is 6 threads (§3.3).
+**The model itself** is mDenseOn (§5.4, §5.15). Measured 2026-10-10 on the
+workstation, fp32, on tachý's own code chunks at their longest, 2400
+characters. The embedder ran the release's bundle in the image's base under
+the overlay's limits, 6 CPUs and 3700 MB, on 4 threads, the laptop's count
+(§3.3). `scripts/bench-embedder.ts` times a running embedder on the same texts.
 
-| The embedder service                                    | Container at peak | Full chunks a second |
-| ------------------------------------------------------- | ----------------: | -------------------: |
-| loaded and idle                                         |          1283 MiB |                    - |
-| embedding 192 full chunks, a search every few seconds   |          1551 MiB |                  2.3 |
-| the same on 4 threads, the laptop's count               |          1552 MiB |                  1.8 |
-| the heaviest input the queue admits, two rounds (below) |          1757 MiB |                    - |
+| The embedder service                                              | Container at peak | Full chunks a second |
+| ----------------------------------------------------------------- | ----------------: | -------------------: |
+| loaded and idle                                                   |          1957 MiB |                    - |
+| embedding 192 texts of 350 to 2400 characters, a search every 2 s |          2838 MiB |           1.5 to 1.7 |
+| the heaviest input the queue admits, two rounds (below)           |          2884 MiB |                    - |
 
-- One query alone takes 16 ms. The CPU quota throttled nothing.
+- One query alone takes 23 ms. The CPU quota throttled nothing, the container
+  never reached its limit (`memory.events`), and the model loads in 3 s.
+- A run under an 8 GB limit read 1847, 2565 and 2877 MiB for the same three
+  rows: the first two vary between runs, and the heaviest input does not.
 - **An input is read for 1024 tokens** (`maxTokens` in
   `core/src/search/model.ts`). Attention costs memory by the square of an
-  input's tokens, and the model's own files set no limit: 8000 characters are
-  1551 tokens of prose, 5945 of base64 and 13442 of Chinese. Uncapped, forty
-  code passages of 8000 characters had the embedder OOM-killed at 2560 MB.
-  Of this repository's 3089 code chunks one is longer than 1024 tokens.
+  input's tokens, and the model's own limit is 8192: 8000 characters are 2420
+  tokens of this document, 5092 of base64 and 5337 of Japanese. Uncapped,
+  forty code passages of 8000 characters had the embedder OOM-killed at
+  2560 MB with gte-modernbert-base, which has the same encoder. Of this
+  repository's 3440 code chunks two are longer than 1024 tokens.
 - **A batch is at most eight texts and 2500 bytes** (`batchBytes`), queries
   and passages alike. Bytes, because a token is at least a byte and can be
-  less than a character. A full code chunk goes alone:
+  less than a character. A full code chunk goes alone. Measured with
+  gte-modernbert-base:
 
   | One batch of full chunks | Holds the model for | Chunks a second | Container at peak |
   | -----------------------: | ------------------: | --------------: | ----------------: |
@@ -276,16 +281,17 @@ and 2560 MB, which on that host is 6 threads (§3.3).
   more. Shorter texts gain too: 1000 characters embed at 6.2 a second two at
   a time against 5.4 in fives, and 600 at 9.8 in fours against 8.7 in eights.
 
-- **The heaviest input** was 40 code passages of 8000 characters, 24 of
-  Chinese and 24 of base64 at 8000 characters and again cut to fill a batch
-  exactly, and 32 queries of 8000 characters at once. The second round added
-  19 MiB to the first, and nothing was killed.
-- bge-base-en-v1.5, the model until then, embedded the same chunks at about
-  twice the rate (§5.15).
-- **On the laptop,** measured 2026-10-05 in the running embedder: 1.08 full
-  chunks a second on the runtime's own 4 threads, 3.2 texts of 1000 characters
-  and 8.6 of 350, one query in 26 ms, 1533 MiB at peak, nothing throttled, and
-  89 °C while it ran.
+- **The heaviest input** is 40 code passages, 24 of Japanese and 24 of base64,
+  each of 8000 characters, and 32 queries of 8000 characters, all at once
+  (`--heaviest`). Two rounds peaked at 2884 MiB and nothing was killed.
+- gte-modernbert-base embeds at the same rate in 1.3 GiB less, and
+  bge-base-en-v1.5 at about twice the rate (§5.15).
+- **On the laptop** mDenseOn has not been measured (§15.2).
+  gte-modernbert-base measured there 2026-10-05 in the running embedder: 1.08
+  full chunks a second on the runtime's own 4 threads, 3.2 texts of 1000
+  characters and 8.6 of 350, one query in 26 ms, 1533 MiB at peak, nothing
+  throttled, and 89 °C while it ran. On the workstation mDenseOn embeds at 1.1
+  times that model's rate.
 
 **Why batches are small,** measured 2026-09-17 with bge-base (on the
 workstation, in one process):
@@ -342,10 +348,10 @@ child is what made 15 possible (§5.4).
 | OS, Docker, journald, page-cache floor                          |     1.5 |
 | postgres (`shared_buffers` 1 GB; the database was 148 MB)       |     2.0 |
 | caddy, the api without its turns, worker-light                  |     0.9 |
-| embedder: one model                                             |     1.8 |
+| embedder: one model                                             |     3.0 |
 | backup and weekly restore test (a scratch Postgres, night only) |     0.6 |
 | headroom (the kernel, bursts, a deploy overlapping a drain)     |     1.1 |
-| **left for turns**                                              | **7.4** |
+| **left for turns**                                              | **6.2** |
 
 §4.6 carries the same table for bigger hosts.
 
@@ -353,12 +359,12 @@ child is what made 15 possible (§5.4).
 | ------------------------------------------------------------- | -----: |
 | budgeted: Claude Code 0.40, the MCP child 0.15, summed as RSS |   0.55 |
 | measured: what a short turn adds to the container (§3.1)      |   0.17 |
-| **Global cap**                                                | **15** |
+| **Global cap**                                                | **12** |
 
-At the budgeted figure the 7.4 GB hold 13 turns, and at the measured one 43.
-The cap is still 15, set before the container was measured. The laptop's load
-window held 40 short turns (§3.1), so raising it is a choice about latency and
-longer conversations, made in Admin › system.
+At the budgeted figure the 6.2 GB hold 11 turns, and at the measured one 36.
+The cap is 12: what the api's limit holds at 0.44 GB a turn (below). The
+laptop's load window held 40 short turns in 5.5 GiB (§3.1), so raising it is a
+choice about latency and longer conversations, made in Admin › system.
 
 A heavy job run isn't in the first table: it holds 3 chat slots while it runs
 (§5.3.4), so it comes out of the turn budget.
@@ -368,47 +374,56 @@ ceilings, and each is a variable in `.env` (§4.3):
 
 | Service      | `mem_limit` |
 | ------------ | ----------: |
-| api          |          7g |
+| api          |       6000m |
 | postgres     |          2g |
-| embedder     |       2560m |
+| embedder     |       3700m |
 | worker-heavy |       1536m |
 | worker-light |        512m |
 | caddy        |        256m |
-| **sum**      |  **13.75g** |
+| **sum**      |  **13.72g** |
 
 - That is what the laptop has left after 1.5 GB for the OS. The restore test's
   scratch Postgres has a 1 GB limit of its own and runs at night, in the
   headroom.
-- The api's 7g holds its own 0.3 GB and 15 turns at 0.44 GB each, which is
+- The api's 6000m holds its own 0.3 GB and 12 turns at 0.44 GB each, which is
   between the two figures above.
-- The embedder's 2560m holds its 1757 MiB peak on the heaviest input its
+- The embedder's 3700m holds its 2884 MiB peak on the heaviest input its
   queue admits, measured in the container (§3.1), with 800 MiB to spare.
+- The two move together: what a model needs more, the turns give up. §5.15
+  has the pair for three models.
 
 **Admission.**
 
-- The global cap starts at **15** Claude turns, with **1 per user** (§5.5).
+- The global cap starts at **12** Claude turns, with **1 per user** (§5.5).
+- Measured 2026-10-10 on the workstation, the api under 6000m with the cap
+  from `TACHY_AGENT_SLOT_CAP`: 12 turns at once each added 143 MiB and peaked
+  at 2070 MiB, a third of the limit. Of 16 at once, 4 queued and all finished.
+  The embedder beside them embedded passages meanwhile and peaked at 2855 MiB.
 - `load/turns.mjs` then runs on the laptop itself, in a load window (§11.1),
   with realistic tool results. If the p95 per-turn peak stays under 0.35 GB,
-  the cap goes to 18.
+  the cap goes to 15.
 - `tachy-watch` warns when the api container passes 85% of its limit (§8.2).
   An operator then lowers the cap; nothing lowers it automatically.
 - The cap counts slots, not turns, and it lives in one setting, so it can be
-  changed without a deploy.
+  changed without a deploy. `TACHY_AGENT_SLOT_CAP` in `.env` is the host's
+  default for it, beside the api's limit it is sized from, and a value saved
+  in Admin › system wins.
 
-**Beyond 15–18 turns: more RAM, not a shared MCP server.**
+**Beyond 12–15 turns: more RAM, not a shared MCP server.**
 
 - The laptop has one DDR4 SO-DIMM slot, holding a single 16 GB module
   (`dmidecode`: Samsung M471A2K43EB1, DDR4-3200), and no soldered memory.
   Lenovo lists "Up to 32GB DDR4-3200" and "One DDR4 SO-DIMM slot"
   ([PSREF](https://psref.lenovo.com/syspool/Sys/PDF/ThinkPad/ThinkPad_E14_Gen_2_Intel/ThinkPad_E14_Gen_2_Intel_Spec.pdf)).
 - Replacing it with one 32 GB DDR4-3200 SO-DIMM leaves about 22 GB for turns,
-  which is **40 slots** at 0.55 GB (§4.6). It's a module swap, not a project.
+  which is **40 slots** at 0.55 GB, costed with a smaller model: about 35
+  with mDenseOn (§4.6). It's a module swap, not a project.
 - A shared MCP server would save only the compiled child, 0.15 GB per turn,
   which is about 6 more turns on 16 GB. It was reviewed and rejected (§5.12).
 
 **Expected demand:** 30 users × ~10 turns a day gives about 60 turns in the
 peak hour. At ~2 minutes per turn that averages 2 concurrent, with bursts of
-5–6. A cap of 15 leaves room for a whole team starting chats at once after a
+5–6. A cap of 12 leaves room for a whole team starting chats at once after a
 meeting. Confirm the real peak once `turns` has start and end timestamps.
 `analysis_runs` records only the finished result.
 
@@ -423,9 +438,12 @@ about 90% of its peak frequency (§12).
 
 - `postgres`, `api` and `embedder` each get 2048 `cpu_shares`.
 - The embedder is capped at 6 CPUs. It runs one batch at a time, queries
-  first, so a search never waits behind more than one passage batch: 0.43 s
-  for a full code chunk on the workstation and up to 0.8 s for an input of
-  1024 tokens, and about 0.9 s for a full code chunk on the laptop. A burst of searches from 15 turns costs about 16 ms each.
+  first, so a search never waits behind more than one passage batch. A full
+  code chunk holds the model for about 0.6 s on the workstation at 4 threads,
+  and a search sent while chunks embed returned in 0.37 to 0.41 s at the
+  median (§5.15). gte-modernbert-base, the same encoder, took about 0.9 s for
+  a full code chunk on the laptop. A burst of searches from 12 turns costs
+  about 23 ms each.
 - **The model's threads follow the CPU limit** (`core/src/search/threads.ts`).
   ONNX Runtime starts one thread per physical core of the host and pins each
   to its core, whatever the container's quota or mask
@@ -509,18 +527,19 @@ value shown is its default, the laptop's. `0` lifts a memory or CPU limit
 | Service      | mem_limit                              | CPU                                                                                  | pids_limit                        | Other                                                                               |
 | ------------ | -------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------- | ----------------------------------------------------------------------------------- |
 | caddy        | 256m (`TACHY_CADDY_MEM_LIMIT`)         | 1024 shares                                                                          | 256                               | the only published ports, 80 and 443                                                |
-| api          | 7g (`TACHY_API_MEM_LIMIT`)             | 2048 shares, no cap                                                                  | 2048 (`TACHY_API_PIDS_LIMIT`)     | `init: true`, `stop_grace_period` 210 s (the drain plus 30 s)                       |
-| embedder     | 2560m (`TACHY_EMBEDDER_MEM_LIMIT`)     | `cpus: 6` (`TACHY_EMBEDDER_CPUS`), 2048 shares; the model's threads follow it (§3.3) | 256                               | healthcheck on its `/readyz`                                                        |
+| api          | 6000m (`TACHY_API_MEM_LIMIT`)          | 2048 shares, no cap                                                                  | 2048 (`TACHY_API_PIDS_LIMIT`)     | `init: true`, `stop_grace_period` 210 s (the drain plus 30 s)                       |
+| embedder     | 3700m (`TACHY_EMBEDDER_MEM_LIMIT`)     | `cpus: 6` (`TACHY_EMBEDDER_CPUS`), 2048 shares; the model's threads follow it (§3.3) | 256                               | healthcheck on its `/readyz`                                                        |
 | worker-light | 512m (`TACHY_WORKER_LIGHT_MEM_LIMIT`)  | `cpus: 1` (`TACHY_WORKER_LIGHT_CPUS`), 512 shares                                    | 256                               | 4 runs at once (`TACHY_WORKER_LIGHT_CONCURRENCY`), `stop_grace_period` 90 s         |
 | worker-heavy | 1536m (`TACHY_WORKER_HEAVY_MEM_LIMIT`) | `cpus: 4` (`TACHY_WORKER_HEAVY_CPUS`), 256 shares                                    | 256                               | 1 run at a time (`TACHY_WORKER_HEAVY_CONCURRENCY`); runs k6 for `load.test` (§11.3) |
 | postgres     | 2g (`TACHY_POSTGRES_MEM_LIMIT`)        | 2048 shares                                                                          | 512 (`TACHY_POSTGRES_PIDS_LIMIT`) | `shm_size: 1gb`; its conf (§5.9) is replaced with `TACHY_POSTGRES_CONF`             |
 
-- The memory limits sum to 13.75 GiB (§3.2).
-- `pids_limit` is 2048 on the api because 15 turn trees each hold dozens of
-  threads.
+- The memory limits sum to 13.72 GiB (§3.2).
+- `pids_limit` is 2048 on the api because every turn's process tree holds
+  dozens of threads.
 - The pools are variables too: `TACHY_API_DB_POOL_MAX` (15) and
   `TACHY_WORKER_DB_POOL_MAX` (5).
-- The chat slot cap is a setting, changed in the admin page (§5.5).
+- The chat slot cap's default is a variable too, `TACHY_AGENT_SLOT_CAP` (12),
+  sized to the api's limit (§3.2). A cap saved in the admin page wins (§5.5).
 - **On another host,** set these from its own budget (§4.6) and point
   `TACHY_POSTGRES_CONF` at a `postgresql.conf` sized for it. Nothing else in
   the overlay names the laptop. `.env.example` lists the variables.
@@ -573,7 +592,7 @@ each of its application hosts.
 | B-gpu | B-cpu plus one NVIDIA GPU of the Turing generation or newer, with 16 GB of VRAM or more | B, C    |
 
 **Demand decides what the memory is for.** §3.2 expects bursts of 5–6
-concurrent turns from 30 users, and tier A's cap of 15 already covers them.
+concurrent turns from 30 users, and tier A's cap of 12 already covers them.
 Up to A+, more memory buys turns. Past A+ it buys search quality and latency,
 until the number of users grows.
 
@@ -588,15 +607,17 @@ instead of being listed here.
 | OS, Docker, journald, page-cache floor       |     1.5 |    1.5 |      2.0 |      2.0 |
 | postgres                                     |     2.0 |    2.0 | own host | own host |
 | caddy, api (two replicas on B), worker-light |     0.9 |    0.9 |      1.2 |      1.2 |
-| embedder (models below)                      |     1.8 |    2.0 |      4.0 |      4.0 |
+| embedder (models below)                      |     3.0 |    2.0 |      4.0 |      4.0 |
 | backup and restore test                      |     0.6 |    0.6 | own host | own host |
 | headroom                                     |     1.1 |    2.0 |      4.0 |      4.0 |
-| **left for turns**                           | **7.4** | **22** |  **~50** |  **~50** |
-| **slots at 0.55 GB**                         |  **13** | **40** |  **~90** |  **~90** |
+| **left for turns**                           | **6.2** | **22** |  **~50** |  **~50** |
+| **slots at 0.55 GB**                         |  **11** | **40** |  **~90** |  **~90** |
 
-The A+ and B columns were costed with bge-base: each embedder instance is
-0.8 GB larger with gte-modernbert-base, and the code model in them is no longer
-planned. Tier A's cap stays at 15 (§3.2).
+The A+ and B columns were costed with bge-base. With mDenseOn an instance
+that embeds passages holds about 2 GB more and one that serves only queries
+about 1 GB more, which is about 5 of A+'s 40 slots, and the code model in them
+is no longer planned. Tier A's column is as measured, and its cap is 12
+(§3.2).
 
 The B-gpu embedder row is host memory for the process that drives the GPU,
 **to verify** on the card chosen.
@@ -605,13 +626,13 @@ The B-gpu embedder row is host memory for the process that drives the GPU,
 
 | Concern                    | A                                       | A+                                     | B-cpu                                                           | B-gpu                                                      |
 | -------------------------- | --------------------------------------- | -------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------- |
-| chat slot cap              | 15                                      | 40                                     | set from demand; memory allows ~90                              | same as B-cpu                                              |
+| chat slot cap              | 12                                      | 40                                     | set from demand; memory allows ~90                              | same as B-cpu                                              |
 | Postgres `max_connections` | 100                                     | 150                                    | 250, or PgBouncer in front of MCP children only                 | same as B-cpu                                              |
 | Postgres memory            | §5.9                                    | §5.9                                   | `shared_buffers` 25% of the database host's RAM                 | same as B-cpu                                              |
 | embedder instances         | one, queries ahead of passages          | two: one for queries, one for passages | two instances and the reranker                                  | one GPU process for all models                             |
 | runtime                    | transformers.js on CPU, fp32            | same                                   | same                                                            | TEI's CUDA image, or transformers.js with `device: "cuda"` |
 | passage batch              | 8 texts or 2500 bytes                   | same                                   | same                                                            | measured on the card                                       |
-| text and code model        | gte-modernbert-base                     | same                                   | same                                                            | same                                                       |
+| text and code model        | mDenseOn                                | same                                   | same                                                            | same                                                       |
 | reranker (§5.14)           | none                                    | none                                   | ms-marco-MiniLM-L-6-v2 over the top 20, text cut to ~256 tokens | bge-reranker-base over the top 30                          |
 | candidates per leg         | 50 (`search/rank.ts`)                   | same                                   | same                                                            | same                                                       |
 | HNSW                       | m 16, ef_construction 64, ef_search 100 | same                                   | same                                                            | same                                                       |
@@ -620,7 +641,7 @@ The B-gpu embedder row is host memory for the process that drives the GPU,
 **The arithmetic behind the connection row.** The pools are the api's 15, 5
 each for the two workers and the cli, and 2 per MCP child
 (`api/src/turn-config.ts`), against `max_connections = 100`
-(`deploy/postgres/postgresql.conf`). At 15 slots that is 60. At 40 it is 110,
+(`deploy/postgres/postgresql.conf`). At 12 slots that is 54. At 40 it is 110,
 over the limit before anyone opens `psql`. At 90 it is about 215 with two api
 replicas.
 
@@ -646,7 +667,7 @@ On A+ raising `max_connections` is enough.
 - **A query instance of its own (A+).** A search never waits behind a passage
   batch. Today it can wait about 0.7 s behind a code chunk and up to about
   1.2 s behind the longest passage (§3.3).
-  - Costs about 0.9 GB.
+  - Costs about 1.9 GB with mDenseOn.
   - The two instances still share 8 threads, so each needs an explicit
     thread count: about 2 for queries, the rest for passages.
     `TACHY_EMBED_THREADS` sets it per instance (§3.3).
@@ -693,10 +714,10 @@ On A+ raising `max_connections` is enough.
 - A passage batch capped by characters on CPU (§3.1).
 - One model for tickets and code, and the lexical leg of code search (§5.15).
 
-**The golden sets are small.** Tickets have 14 queries
-(`test/fixtures/search-corpus.ts`) and code has 45 questions about tachý's own
-source (`test/fixtures/code-golden.ts`). Both were written by the people who
-built the search, which is the weakest kind. Load runs on a synthetic seed
+**The golden sets are small.** Tickets have 14 queries and 8 German ticket
+openings (`test/fixtures/search-corpus.ts`) and code has 45 questions about
+tachý's own source (`test/fixtures/code-golden.ts`). All were written by the
+people who built the search, which is the weakest kind. Load runs on a synthetic seed
 don't help: there "the vector leg of hybrid search contributes **nothing**"
 (`load/README.md`).
 
@@ -974,9 +995,9 @@ that adds to operations:
   DevOps item, change tags and start jobs. They act with the flow owner's
   tokens, so the worker decrypts vault credentials and holds
   `TACHY_SECRET_KEY`.
-- **Flows call the model.** The `agent.ask` step runs one prompt with the
-  owner's model credential and no tools (`agent/src/flow-actions.ts`). It
-  takes no chat slot (§2.4).
+- **Flows call the model.** The `agent.ask` and `agent.summarize_item` steps
+  each run one prompt with the owner's model credential and no tools
+  (`agent/src/flow-actions.ts`). They take no chat slot (§2.4).
 - **A flow's model calls are limited.** Each flow has `model_calls_per_day`,
   100 by default and set in the flow editor. Once it has made that many in 24
   hours the step refuses and the run fails saying so. A call is counted when it
@@ -993,7 +1014,7 @@ never runs on an event loop that serves requests.
 - **In production** the model lives in the `embedder` service
   (`api/src/embedder.ts`). It serves `POST /internal/embed` on the Compose
   network only, and Caddy answers 404 for `/internal`.
-- **The model is gte-modernbert-base,** for tickets and code alike (§5.15).
+- **The model is mDenseOn,** for tickets and code alike (§5.15).
 - **One queue** (`core/src/search/embed-queue.ts`): queries always go first,
   and passages go in small batches (§3.1), one batch per caller in turn. Background
   jobs send theirs at low priority (`TACHY_EMBED_PRIORITY`).
@@ -1021,7 +1042,7 @@ never runs on an event loop that serves requests.
   it restarts (`embed-host.ts`). Searches fail with a retryable 503 until it is
   back, and `/readyz` goes red. A model that fails to load three times exits
   the process.
-- **The model is always in memory,** about 1.1 GB even when nobody searches.
+- **The model is always in memory,** about 1.9 GB even when nobody searches.
 
 §4.6 says what changes on bigger hosts, and §5.15 how to change the model.
 
@@ -1029,8 +1050,10 @@ never runs on an event loop that serves requests.
 
 **Built, in the api process:**
 
-- **A global cap of 15 slots,** held in a setting (`core/src/config/settings.ts`).
-  A turn is 1 slot. A running heavy job takes 3 slots from the same cap (`api/src/turns.ts`).
+- **A global cap of 12 slots** on the laptop, held in a setting
+  (`core/src/config/settings.ts`). A host's default for it is
+  `TACHY_AGENT_SLOT_CAP` (§3.2), and with neither it is 15. A turn is 1 slot.
+  A running heavy job takes 3 slots from the same cap (`api/src/turns.ts`).
 - **One active turn per user.** A new message from a user with a turn still
   running returns 409 with that turn's id, and the UI offers to stop it
   (`api/src/routes/agent.ts`).
@@ -1042,12 +1065,12 @@ never runs on an event loop that serves requests.
   carries a `queued` event with its position. Past 10 waiting, the api answers
   429 with `Retry-After`.
 - **The MCP child is small:** compiled to JavaScript (`dist/mcp.js`), a 256 MB
-  heap cap, and a pool of 2 with a 30 s idle timeout. 15 turns × 2 is 30
+  heap cap, and a pool of 2 with a 30 s idle timeout. 12 turns × 2 is 24
   connections.
 - **An SSE keepalive** comment every 20 s, because approvals can wait 15
   minutes (`agent/src/turn.ts`) and idle connections get cut.
 
-**Not counted by the cap:** one-shot model calls and the `agent.ask` flow step
+**Not counted by the cap:** one-shot model calls and the model flow steps
 (§2.4).
 
 **Profile B, an `agent` service that owns turns.** Not built:
@@ -1541,15 +1564,24 @@ through TEI's `/rerank` or transformers.js on CUDA (§4.6).
 
 ### 5.15 The embedding model, and changing it
 
-**Decision.** One model embeds tickets and code: gte-modernbert-base, 768
+**Decision.** One model embeds tickets and code: mDenseOn
+([lightonai](https://huggingface.co/lightonai/mDenseOn), Apache-2.0), 768
 dimensions, read for 1024 of its 8192 tokens (§3.1), fp32 through
-transformers.js on CPU. Every
-stored vector names the model that made it, so changing the model is a deploy
-and a backfill, with no window.
+transformers.js on CPU. Every stored vector names the model that made it, so
+changing the model is a deploy and a backfill, with no window.
 
-**Why this model.** Measured 2026-10-05 on tachý's own repository at `dev`
-(766 files), with the 45 questions of `test/fixtures/code-golden.ts`, each
-naming the file that answers it. The vector leg alone, by file:
+**Why this model.** It is gte-modernbert-base's encoder under a multilingual
+vocabulary. Of the eight models measured below on tachý's own tickets and
+code, it puts the right file first most often, with the vector leg alone and
+end to end, and it is ahead of gte-modernbert-base on every count at the same
+rate. It costs memory only: 1.3 GiB, which is 3 chat slots (§3.2). It finds an
+English entry from a German ticket opening, which an English model does only
+on the words the two share.
+
+**A general model with a long window, against a short window and a code
+model.** Measured 2026-10-05 on tachý's own repository at `dev` (766 files),
+with the 45 questions of `test/fixtures/code-golden.ts`, each naming the file
+that answers it. The vector leg alone, by file:
 
 | Model                            | Right file first | In the top 3 | In the top 8 | Chunks a second |
 | -------------------------------- | ---------------: | -----------: | -----------: | --------------: |
@@ -1569,27 +1601,23 @@ naming the file that answers it. The vector leg alone, by file:
 - gte-modernbert-base and jina-embeddings-v2-base-code are Apache-2.0. The
   newer code models (jina-code-embeddings, SFR-Embedding-Code) are CC-BY-NC
   and were not candidates.
-- The cost is speed: half of bge-base's rate. The rates in the table are
-  batches of eight on all 14 cores of the workstation, to compare the models;
-  §3.1 has the rate in service.
-- **Its floors are measured, per kind of text.** Against tickets nonsense
-  reaches 0.541 and a terse paraphrase 0.592, so the vector leg's floor is
-  0.57. Against code nonsense reaches 0.579 and a question's own file 0.637 at
-  the 25th percentile, so code search's floor is 0.6
-  (`semFloor`, `codeSemFloor`).
+- The cost of the long window is speed: half of bge-base's rate. The rates in
+  the table are batches of eight on all 14 cores of the workstation, to
+  compare the models; §3.1 has the rate in service.
 
 **Code search, end to end** (`scripts/eval-code-search.ts`, the same 45
-questions through `searchCode`):
+questions through `searchCode`), first / on the page. The first two columns
+are of 2026-10-05 and 766 files, the last two of 2026-10-10 and 857:
 
-| Kind of question                  | Before: first / on the page | Now: first / on the page |
-| --------------------------------- | --------------------------: | -----------------------: |
-| a symbol as written (10)          |                       1 / 2 |                  10 / 10 |
-| the symbol typed as words (10)    |                       1 / 7 |                  10 / 10 |
-| a description in other words (20) |                      6 / 12 |                  11 / 17 |
-| a file asked for by name (5)      |                       3 / 4 |                    2 / 5 |
-| **all 45**                        |                 **11 / 25** |              **33 / 42** |
+| Kind of question                  | bge-base, vector leg only | gte-modernbert-base | gte-modernbert-base, 857 files | mDenseOn, 857 files |
+| --------------------------------- | ------------------------: | ------------------: | -----------------------------: | ------------------: |
+| a symbol as written (10)          |                     1 / 2 |             10 / 10 |                        10 / 10 |              9 / 10 |
+| the symbol typed as words (10)    |                     1 / 7 |             10 / 10 |                          9 / 9 |               9 / 9 |
+| a description in other words (20) |                    6 / 12 |             11 / 17 |                         9 / 17 |             11 / 18 |
+| a file asked for by name (5)      |                     3 / 4 |               2 / 5 |                          2 / 5 |               3 / 4 |
+| **all 45**                        |               **11 / 25** |         **33 / 42** |                    **30 / 41** |         **32 / 41** |
 
-Three things changed between the columns:
+Three things changed between the first two columns:
 
 - **The model,** above.
 - **A lexical leg.** `code_blob_chunks.search_tsv` holds each chunk's words
@@ -1607,6 +1635,141 @@ Three things changed between the columns:
 The chunker also fills its budget now and repeats a quarter of a short chunk
 at most: cut to 1300 characters, the old one produced 7394 chunks from this
 repository, and the new one 4675.
+
+**Candidates for a stronger model,** measured 2026-10-10 on the workstation
+while it was in use, so a rate is read against gte-modernbert-base's from the
+same session. It was the model in use. The repository at `dev` had 857 files in 3440 chunks. Every model
+embedded the same chunks (`sync embed-backfill` per model over one index), and
+the end-to-end figures use each model's own floor.
+
+| Model                                  | Tickets first |   Gap | German openings: first / over the floor | Code, vector leg: first / top 3 / top 8 | Code, end to end: first / top 3 / page |
+| -------------------------------------- | ------------: | ----: | --------------------------------------: | --------------------------------------: | -------------------------------------: |
+| gte-modernbert-base                    |      13 of 13 | 0.114 |                              7 / 6 of 8 |                      25 / 35 / 42 of 45 |                     30 / 36 / 41 of 45 |
+| lightonai/mDenseOn                     |            13 | 0.209 |                                   8 / 8 |                            31 / 37 / 43 |                           32 / 36 / 41 |
+| Qwen3-Embedding-0.6B, cut to 768       |            13 | 0.135 |                                   8 / 8 |                            18 / 29 / 40 |                           27 / 32 / 35 |
+| granite-embedding-311m-multilingual-r2 |            12 | 0.046 |                                   8 / 8 |                            28 / 35 / 43 |                           28 / 38 / 41 |
+| gte-modernbert-base, int8              |            12 | 0.091 |                                   8 / 6 |                                       - |                                      - |
+| Qwen3-Embedding-0.6B, int8             |            13 | 0.081 |                                   8 / 6 |                                       - |                                      - |
+| lightonai/DenseOn                      |            13 | 0.183 |                                   8 / 7 |                            21 / 32 / 37 |                           30 / 36 / 39 |
+| voyage-4-nano, cut to 768              |            13 | 0.138 |                                   8 / 8 |                            22 / 39 / 45 |                           29 / 35 / 41 |
+| pplx-embed-v1-0.6b, cut to 768         |            13 | 0.311 |                                   8 / 8 |                            23 / 33 / 38 |                           28 / 32 / 39 |
+| embeddinggemma-2, its text encoder     |            12 | 0.030 |                                   8 / 8 |                            28 / 37 / 41 |                           27 / 33 / 42 |
+
+The embedder service from the production image at 6 CPUs and 4 threads
+(`scripts/bench-embedder.ts`):
+
+| Model                      | Full chunks a second | Against gte-modernbert-base | One query | A query behind full chunks | Loaded and idle | Peak on the heaviest input |
+| -------------------------- | -------------------: | --------------------------: | --------: | -------------------------: | --------------: | -------------------------: |
+| gte-modernbert-base        |         1.35 to 1.58 |                           1 |     21 ms |              239 to 452 ms |        1112 MiB |                   1584 MiB |
+| mDenseOn                   |                 1.50 |                         1.1 |     23 ms |                     366 ms |        1847 MiB |                   2877 MiB |
+| Qwen3-Embedding-0.6B       |                 0.51 |                        0.38 |    114 ms |                    1618 ms |        2545 MiB |           4892 MiB or more |
+| gte-modernbert-base, int8  |                 2.57 |                         1.6 |     10 ms |                     298 ms |         553 MiB |                    not run |
+| Qwen3-Embedding-0.6B, int8 |                 0.75 |                        0.47 |     61 ms |                     703 ms |        1401 MiB |                    not run |
+
+Three of the last four were timed in a second session with the machine idle,
+beside gte-modernbert-base and mDenseOn. DenseOn was not: it is
+gte-modernbert-base's encoder. Memory was not measured in that session:
+
+| Model               | Full chunks a second | Against gte-modernbert-base | One query | A query behind full chunks |
+| ------------------- | -------------------: | --------------------------: | --------: | -------------------------: |
+| gte-modernbert-base |         1.51 to 1.53 |                           1 |     21 ms |              413 to 458 ms |
+| mDenseOn            |                 1.67 |                         1.1 |     23 ms |                     412 ms |
+| embeddinggemma-2    |                 1.36 |                         0.9 |     32 ms |                     234 ms |
+| voyage-4-nano       |                 1.33 |                         0.9 |     35 ms |                     261 ms |
+| pplx-embed-v1-0.6b  |                 0.59 |                        0.39 |     68 ms |                    1396 ms |
+
+- **mDenseOn is ahead of gte-modernbert-base on every count and costs memory
+  only.** It has that model's encoder, 22 layers of 768, under a vocabulary of
+  256,000 tokens, so it embeds at the same rate. Its peak is 1.3 GiB higher.
+- **Its floors are measured, per kind of text.** Against tickets nonsense
+  reaches 0.303 and the lowest real match 0.512, so the vector leg's floor is
+  0.41. Against code nonsense reaches 0.352 and a question's own file 0.437 at
+  the 25th percentile, so code search's floor is 0.4 (`semFloor`,
+  `codeSemFloor`).
+- **A ticket's opening keeps that separation.** It is the long query
+  `fetch_work_item` sends. Six in English and the eight in German score their
+  entry 0.58 to 0.75 and the next entry 0.31 to 0.48. One on a subject no
+  entry covers tops at 0.46, which grades weak.
+- **Its repository holds no ONNX file.** tachý reads an export of it from
+  [diegomo123/mDenseOn-ONNX](https://huggingface.co/diegomo123/mDenseOn-ONNX)
+  at a pinned commit (`source` and `revision` in its entry): `optimum-cli` at
+  opset 17, output `last_hidden_state`, beside the original's tokenizer files.
+  That repository's README has the command and the versions. Every figure
+  here was measured with that file.
+- **Qwen3 is slower and no better here.** It embeds at 0.38 of the rate in
+  service, and its code backfill took 48 minutes against mDenseOn's 17.
+  - Its query instruction decides the result. With its card's a meaningless
+    query stays 0.135 under a real match. With none it outscores one, and 11 of
+    13 tickets rank first.
+  - An instruction that names code lifts its code vector leg to 21 / 36 / 43
+    and leaves nonsense as high as a question's own file (0.580 and 0.581).
+  - The cut to 768 values is not what costs it. Against a pool of 460 chunks
+    it ranks 30 / 44 / 45 at 1024 values and the same at 768, and 26 / 42 / 44
+    at 512.
+  - Its heaviest round did not finish: a request of 64 long passages outlasted
+    the 5 minutes `fetch` waits for a response's headers. `HTTP_CHUNK` in
+    `search/embeddings.ts` is sized for gte-modernbert-base's rate.
+- **granite packs its cosines** between 0.82 and 0.91, and one ticket ranks
+  second. Against code a meaningless query reaches 0.874 and a question's own
+  file 0.856, so no floor separates them: its end-to-end figure is with the
+  vector leg ungated. It has no entry in `EMBEDDING_MODELS`.
+- **Four more models, picked on their published scores, are not ahead of
+  mDenseOn.** None has an entry in `EMBEDDING_MODELS`.
+  - **pplx-embed-v1-0.6b** has the widest ticket gap and ranks code under
+    gte-modernbert-base, at 0.39 of its rate. It is trained with tanh over each
+    pooled value. Leaving that out moves its gap from 0.311 to 0.313.
+  - **voyage-4-nano** has every question's file in its top 8 and the fewest
+    first. Its floor has 0.02 to sit in: nonsense reaches 0.438 against code
+    and a question's own file 0.458. With the floor at 0.40, 43 are on the
+    page. The cut from 2048 values is not the cause: against a pool of 460
+    chunks it ranks 35 / 44 / 45 at 2048 and 35 / 45 / 45 at 768.
+  - **embeddinggemma-2** packs its cosines. Against tickets nonsense reaches
+    0.691 and a real match 0.721, one ticket ranks second, and against code
+    nonsense is above a question's own file (0.766 and 0.737), so its
+    end-to-end figure is ungated. With its code prompt on the query the vector
+    leg ranks 30 / 37 / 40. It needs transformers.js 4.3.1, and its config
+    without `vision_config` and `audio_config`, or the image and audio
+    encoders load too.
+  - **DenseOn** is mDenseOn's English sibling at gte-modernbert-base's size.
+    It ranks tickets as well as that model and code worse.
+- **Published scores did not predict the order here.** On MTEB Code the cards
+  give embeddinggemma-2 78.68, voyage-4-nano 76.43, pplx-embed-v1-0.6b 75.18,
+  Qwen3-Embedding-0.6B 73.75 and mDenseOn 71.53
+  ([embeddinggemma-2](https://huggingface.co/google/embeddinggemma-2),
+  [mDenseOn](https://huggingface.co/lightonai/mDenseOn)).
+- **The ticket set no longer tells models apart:** all but three rank every
+  query first. A further comparison needs more queries, from real tickets.
+- **An int8 file trades rank for speed:** 1.5 to 1.6 times the rate at about
+  half the memory. gte-modernbert-base loses a ticket. Qwen3 loses 0.054 of
+  its gap, and two German openings fall under its floor. Only
+  gte-modernbert-base's has an entry.
+- **German.** gte-modernbert-base ranks 7 of the 8 openings first, because
+  they share words with the English entries (Scanner, PDF, Update). Two score under
+  its floor, so the vector leg drops them, and the keyword legs match a German
+  text only on its identifiers. Each multilingual model ranks all 8 first.
+- **The questions' own file is left out of the code results.** It is part of
+  the indexed repository and matches every question word for word
+  (`scripts/eval-code-search.ts`).
+- **Not candidates:** models trained on code alone, which at this size publish
+  lower code scores than the general ones (jina's lost above); Qwen3-Embedding
+  and pplx-embed at 4B and larger, out of reach of 4 cores; the first
+  EmbeddingGemma (Gemma terms); jina v3 and v5 (CC-BY-NC); harrier-oss-v1,
+  under mDenseOn on BEIR and MTEB Code in mDenseOn's card; models that store
+  a vector per token (mLateOn), which a `vector(768)` column does not hold;
+  hosted APIs (§1).
+
+**What each costs in chat slots,** by §3.2's method. The embedder's limit is
+its peak plus 800 MiB, which the api's limit gives up, and a turn is budgeted
+at 0.44 GB:
+
+| Model                | Embedder limit | Api limit | Slot cap | While a heavy job runs |
+| -------------------- | -------------: | --------: | -------: | ---------------------: |
+| gte-modernbert-base  |          2560m |        7g |       15 |                     12 |
+| mDenseOn             |          3700m |     6000m |       12 |                      9 |
+| Qwen3-Embedding-0.6B |          5700m |     4000m |        8 |                      5 |
+
+mDenseOn's row is what `deploy/compose.prod.yml` defaults to
+(`TACHY_EMBEDDER_MEM_LIMIT`, `TACHY_API_MEM_LIMIT`, `TACHY_AGENT_SLOT_CAP`).
 
 **How a vector names its model.** `embedding_model` sits beside every
 `embedding`, on `knowledge_entries`, `reference_doc_chunks`,
@@ -1628,9 +1791,10 @@ bge-base, the only model before the column existed.
 
 1. The release names the model: `TACHY_EMBED_MODEL`, or the default in
    `core/src/search/model.ts`. Its entry in `EMBEDDING_MODELS` carries pooling,
-   prefixes, window, batch size, and the floor and ceiling
-   `scripts/eval-embeddings.ts` prints. `test/search/quality.test.ts` fails
-   until they fit.
+   prefixes, window, batch size, where its ONNX file is, at which commit and
+   which one, and the floor and ceiling `scripts/eval-embeddings.ts` prints.
+   `scripts/eval-code-search.ts` prints what the code floor is set from.
+   `test/search/quality.test.ts` fails until they fit.
 2. Deploy. From then on meaning-based search finds only what has been embedded
    again.
 3. Run `embeddings.backfill`. Rows divided by the rate (§3.1) is how long it
@@ -1638,6 +1802,9 @@ bge-base, the only model before the column existed.
 4. For code, a full reindex (`repos.refresh` with `full: true`) also cuts the
    chunks again to the new model's window. A reindex otherwise skips files
    that did not change.
+
+A model of another size also moves the embedder's limit, the api's and the
+slot cap, together (§3.2). The runbook has the three variables.
 
 A chunking change for prose is not a backfill: reference docs are re-saved
 from `reference_docs.body`, and buckets are re-ingested from `bucket_docs`.
@@ -1658,14 +1825,18 @@ HNSW indexes, backfill, recreate the indexes, maintenance off.
 **Keep in mind:**
 
 - **A runtime swap still needs a check.** Moving the same model between
-  runtimes (transformers.js to TEI, CPU to GPU, fp32 to a quantized file)
-  keeps the weights and the name but not the arithmetic. Compare vectors for a
-  sample of stored texts against a cosine threshold chosen beforehand, before
-  deciding a backfill can be skipped.
+  runtimes (transformers.js to TEI, CPU to GPU) keeps the weights and the name
+  but not the arithmetic. Compare vectors for a sample of stored texts against
+  a cosine threshold chosen beforehand, before deciding a backfill can be
+  skipped.
+- **An int8 file is an entry of its own** (`…:q8`, with `dtype` and `source`),
+  so its vectors carry their own name and a switch to it is a backfill.
 - **A restore can cross a model change.** A dump taken before a change carries
   the old vectors, and the stamp is what shows that.
-- **The model entry can't express every model.** nomic-embed-text-v1.5 applies
-  `layer_norm` before normalizing
+- **The model entry can't express every model.** It holds CLS, mean and
+  last-token pooling, a prefix for each side, and a vector cut to the schema's
+  width for a model trained for that (`matryoshka`). nomic-embed-text-v1.5
+  applies `layer_norm` before normalizing
   ([model card](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5)).
 - **Not built:** a second model beside the first. `EMBEDDING_SPEC` is one
   value, and an embed request carries only `kind` and `texts`.
@@ -2675,10 +2846,14 @@ All in `deploy/runbooks/`. `README.md` there is the index.
   current dump size.
 - **A GPU for profile B.** It decides between tier B-cpu and B-gpu (§4.6), and
   so whether bge-reranker-base is affordable at all (§5.14).
-- **Languages in tickets.** If tickets arrive in languages other than English,
-  a multilingual model such as bge-m3 becomes a candidate (§5.15).
-  gte-modernbert-base is an English model, and BAAI lists bge-reranker-base
-  for Chinese and English.
+- **Languages in tickets.** Some tickets may arrive in German. Search in the
+  app, chat and the knowledge base are English, so the one place German text
+  is a query is the search `fetch_work_item` runs with a ticket's title and
+  the start of its first message. The embedding model is multilingual and
+  ranks the 8 German openings of the test set first (§5.15); the keyword legs
+  match a German text only on its identifiers. Open: which other languages
+  arrive, and a reranker for them. BAAI lists bge-reranker-base for Chinese
+  and English.
 - **The golden set.** Who collects 50 or more real queries with their expected
   answers (§5.15). Every model and reranker decision waits on it.
 
@@ -2686,10 +2861,14 @@ All in `deploy/runbooks/`. `README.md` there is the index.
 
 None of these blocks a deploy.
 
-- **The slot cap is still 15.** The laptop's load window (§3.1) held 40 short
-  turns in memory, with first events slowing from 3.4 s at 15 to 5.5 s at 25.
-  Raising it is a setting in Admin › system; real conversations are longer
-  than the test's.
+- **The slot cap is 12, by the budgeted figure** (§3.2). The laptop's load
+  window (§3.1) held 40 short turns in 5.5 GiB, with first events slowing from
+  3.4 s at 15 to 5.5 s at 25. Raising it is a setting in Admin › system; real
+  conversations are longer than the test's.
+- **mDenseOn has not been measured on the laptop.** Its rate, its peak and the
+  embedder's 3700m come from the workstation at the laptop's thread count
+  (§3.1). `scripts/bench-embedder.ts` against the laptop's embedder, in a load
+  window, gives the laptop's.
 - **One-shot model calls take no slot** (§2.4). In the api each adds about
   100 MiB outside the turn budget.
 - **`tachy_owner` does not exist** (§5.9), so the schema is applied as the
