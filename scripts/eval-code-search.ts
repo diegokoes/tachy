@@ -12,16 +12,28 @@
  */
 import { searchCode } from "@tachy/core/code";
 import { sql } from "@tachy/core/infra";
-import { EMBEDDING_MODEL, embedQueryLiteral } from "@tachy/core/search";
+import {
+  CODE_SEM_FLOOR,
+  EMBEDDING_MODEL,
+  embedQueryLiteral,
+} from "@tachy/core/search";
 import {
   CODE_GOLDEN,
   type CodeQuestionKind,
 } from "../test/fixtures/code-golden";
+import { NONSENSE } from "../test/fixtures/search-corpus";
 
 const args = process.argv.slice(2);
 const json = args.includes("--json");
 const repoSlug = args.find((a) => !a.startsWith("--")) ?? "tachy";
 const PAGE = 8;
+/**
+ * The questions are asked of the repository that holds them. The file they
+ * are written in matches every one word for word, so it is never a hit, and
+ * a page is asked for with room for the two chunks it could take.
+ */
+const QUESTIONS_FILE = "test/fixtures/code-golden.ts";
+const FILE_CHUNKS_ON_PAGE = 2;
 
 const [corpus] = await sql`
   select count(distinct f.path)::int as files,
@@ -45,8 +57,13 @@ const indexed = new Set(
   ).map((r) => r.path as string),
 );
 
-/** What the vector leg alone puts first, with no floor: the model's own opinion. */
-async function vectorOnly(query: string): Promise<string[]> {
+/**
+ * Every file by its nearest chunk to the query, nearest first, with no floor:
+ * the model's own opinion.
+ */
+async function vectorOnly(
+  query: string,
+): Promise<{ path: string; cosine: number }[]> {
   const qvec = await embedQueryLiteral(query);
   const rows = await sql`
     select distinct on (c.id) f.path, c.embedding <=> ${qvec}::vector as dist
@@ -54,15 +71,18 @@ async function vectorOnly(query: string): Promise<string[]> {
     join repos r on r.id = c.repo_id
     join repo_line_files f on f.repo_id = c.repo_id and f.blob_sha = c.blob_sha
     where r.slug = ${repoSlug} and c.embedding is not null
+      and f.path <> ${QUESTIONS_FILE}
     order by c.id, f.path
   `;
   const seen = new Set<string>();
   return [...rows]
     .sort((a, b) => (a.dist as number) - (b.dist as number))
-    .map((r) => r.path as string)
-    .filter((p) => !seen.has(p) && seen.add(p))
-    .slice(0, 50);
+    .filter((r) => !seen.has(r.path as string) && seen.add(r.path as string))
+    .map((r) => ({ path: r.path as string, cosine: 1 - (r.dist as number) }));
 }
+
+/** Files the vector leg hands to the fusion at most. */
+const VECTOR_CANDIDATES = 50;
 
 interface Outcome {
   q: string;
@@ -71,23 +91,35 @@ interface Outcome {
   /** 1-based rank of the first expected file on the page; null when absent. */
   rank: number | null;
   vectorRank: number | null;
+  /** Cosine of the nearest chunk of an expected file; null when none is indexed. */
+  ownCosine: number | null;
   top: string[];
   stale: boolean;
 }
 
 const outcomes: Outcome[] = [];
 for (const golden of CODE_GOLDEN) {
-  const hits = await searchCode(golden.q, { repoSlug, limit: PAGE });
-  const paths = hits.map((h) => (h as { path: string }).path);
+  const hits = await searchCode(golden.q, {
+    repoSlug,
+    limit: PAGE + FILE_CHUNKS_ON_PAGE,
+  });
+  const paths = hits
+    .map((h) => (h as { path: string }).path)
+    .filter((path) => path !== QUESTIONS_FILE)
+    .slice(0, PAGE);
   const at = paths.findIndex((p) => golden.expect.includes(p));
   const vec = await vectorOnly(golden.q);
-  const vecAt = vec.findIndex((p) => golden.expect.includes(p));
+  const vecAt = vec
+    .slice(0, VECTOR_CANDIDATES)
+    .findIndex((v) => golden.expect.includes(v.path));
+  const own = vec.find((v) => golden.expect.includes(v.path));
   outcomes.push({
     q: golden.q,
     why: golden.why,
     expect: golden.expect,
     rank: at < 0 ? null : at + 1,
     vectorRank: vecAt < 0 ? null : vecAt + 1,
+    ownCosine: own?.cosine ?? null,
     top: paths.slice(0, 3),
     stale: !golden.expect.some((p) => indexed.has(p)),
   });
@@ -97,15 +129,38 @@ const summarise = (list: Outcome[]) => {
   const n = list.length;
   const within = (k: number) =>
     list.filter((o) => o.rank !== null && o.rank <= k).length;
+  const vectorWithin = (k: number) =>
+    list.filter((o) => o.vectorRank !== null && o.vectorRank <= k).length;
   return {
     n,
     top1: within(1),
     top3: within(3),
     page: within(PAGE),
     mrr: n ? list.reduce((s, o) => s + (o.rank ? 1 / o.rank : 0), 0) / n : 0,
-    vectorTop3: list.filter((o) => o.vectorRank !== null && o.vectorRank <= 3)
-      .length,
+    vectorTop1: vectorWithin(1),
+    vectorTop3: vectorWithin(3),
+    vectorPage: vectorWithin(PAGE),
   };
+};
+
+/**
+ * What `codeSemFloor` is set from: the highest a meaningless query scores
+ * against the code, and what a question's own file scores at the 25th
+ * percentile. The floor belongs between the two.
+ */
+let nonsenseCeiling = 0;
+for (const query of NONSENSE)
+  nonsenseCeiling = Math.max(
+    nonsenseCeiling,
+    (await vectorOnly(query))[0]?.cosine ?? 0,
+  );
+const ownCosines = outcomes
+  .flatMap((o) => (o.ownCosine === null ? [] : [o.ownCosine]))
+  .sort((a, b) => a - b);
+const floor = {
+  nonsenseCeiling,
+  ownFileP25: ownCosines[Math.floor(ownCosines.length / 4)] ?? 0,
+  inUse: CODE_SEM_FLOOR,
 };
 
 const kinds = [...new Set(CODE_GOLDEN.map((g) => g.why))];
@@ -113,6 +168,7 @@ const summary = {
   model: EMBEDDING_MODEL,
   repo: repoSlug,
   ...corpus,
+  floor,
   overall: summarise(outcomes),
   byKind: Object.fromEntries(
     kinds.map((k) => [k, summarise(outcomes.filter((o) => o.why === k))]),
@@ -128,11 +184,14 @@ if (json) {
   );
   const row = (label: string, s: ReturnType<typeof summarise>) =>
     console.log(
-      `  ${label.padEnd(11)} n=${String(s.n).padStart(2)}  top1 ${String(s.top1).padStart(2)}  top3 ${String(s.top3).padStart(2)}  page ${String(s.page).padStart(2)}  MRR ${s.mrr.toFixed(3)}  vector-only top3 ${String(s.vectorTop3).padStart(2)}`,
+      `  ${label.padEnd(11)} n=${String(s.n).padStart(2)}  top1 ${String(s.top1).padStart(2)}  top3 ${String(s.top3).padStart(2)}  page ${String(s.page).padStart(2)}  MRR ${s.mrr.toFixed(3)}  vector-only ${s.vectorTop1}/${s.vectorTop3}/${s.vectorPage}`,
     );
   console.log("\nexpected file found, by kind of question:");
   for (const kind of kinds) row(kind, summary.byKind[kind]);
   row("all", summary.overall);
+  console.log(
+    `\nvector leg: nonsense reaches ${floor.nonsenseCeiling.toFixed(3)}, a question's own file ${floor.ownFileP25.toFixed(3)} at the 25th percentile; codeSemFloor in use ${floor.inUse}`,
+  );
 
   const misses = outcomes.filter((o) => o.rank !== 1);
   if (misses.length) console.log("\nnot first:");

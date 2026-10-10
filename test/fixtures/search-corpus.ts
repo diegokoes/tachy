@@ -158,3 +158,44 @@ export const GOLDEN: { q: string; expect: string; why: string }[] = [
 
 /** Queries that must return nothing. */
 export const NONSENSE = ["ñ", "zzzzzz", "asdfgh", "qqqq wwww", "..."];
+
+/**
+ * German ticket openings, each a title and the start of the first message
+ * joined as `fetch_work_item` joins them for its search, with the English
+ * entry that should come back first. None carries an error code: an
+ * identifier matches by its letters in any language.
+ */
+export const TICKET_LEADS_DE: { q: string; expect: string }[] = [
+  {
+    q: "Etikettendrucker bricht Druckauftrag mit Fehlermeldung ab Guten Tag, seit gestern lehnt unser Drucker Etiketten mit vielen variablen Textfeldern ab. Auf dem Display erscheint eine Fehlermeldung und der Auftrag wird verworfen.",
+    expect: "printer-023",
+  },
+  {
+    q: "Handscanner verbindet sich nach Update nicht mehr Hallo, nach dem Software-Update von letzter Woche wird unser Barcode-Handscanner als offline angezeigt. Der Dialog zum Koppeln erscheint gar nicht mehr.",
+    expect: "scanner-pairing",
+  },
+  {
+    q: "Scanner geht nicht Scanner lässt sich seit dem Update nicht mehr koppeln, bitte um Hilfe.",
+    expect: "scanner-pairing",
+  },
+  {
+    q: "Maschinen erhalten keine Vorlagen mehr von der Liniensteuerung Seit der Konfigurationsänderung heute Morgen stehen die nachgelagerten Maschinen still. Die Liniensteuerung verteilt keine Vorlagen mehr.",
+    expect: "lc-template-cache",
+  },
+  {
+    q: "Monatlicher Rechnungsexport liefert leere PDF-Datei Der Export läuft ohne Fehlermeldung durch, aber die erzeugte PDF-Datei hat null Byte und lässt sich nicht öffnen.",
+    expect: "export-empty-pdf",
+  },
+  {
+    q: "PDF leer Rechnungen vom letzten Monat exportiert, Datei ist leer.",
+    expect: "export-empty-pdf",
+  },
+  {
+    q: "Warteschlange läuft seit Neustart des Brokers voll Nach dem Neustart des Message-Brokers wächst die Eingangswarteschlange immer weiter an. Die Verarbeiter tun nichts.",
+    expect: "queue-backlog",
+  },
+  {
+    q: "Maschinenagenten verlieren jede Nacht die Verbindung Jede Nacht um Mitternacht trennen sich alle Agenten gleichzeitig vom Server und versuchen danach endlos, sich neu zu verbinden.",
+    expect: "cert-expiry",
+  },
+];
