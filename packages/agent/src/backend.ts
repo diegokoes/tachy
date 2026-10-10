@@ -41,7 +41,7 @@ export interface AgentConfig {
 
   /**
    * The caller's credential. Unset, only a login stored under `configDir`
-   * authenticates: `claudeEnv` strips the host's own from the environment.
+   * authenticates: `claudeEnv` passes on none of the host's own.
    */
   agentAuth?: AgentAuth;
 
