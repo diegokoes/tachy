@@ -1690,10 +1690,12 @@ gte-modernbert-base's encoder. Memory was not measured in that session:
   `fetch_work_item` sends. Six in English and the eight in German score their
   entry 0.58 to 0.75 and the next entry 0.31 to 0.48. One on a subject no
   entry covers tops at 0.46, which grades weak.
-- **Its repository holds no ONNX file.** The run used an `optimum-cli` export
-  (opset 17, `last_hidden_state`) placed in the model cache beside the
-  repository's tokenizer files. An image needs that file published where the
-  Dockerfile's warm-up step can fetch it.
+- **Its repository holds no ONNX file.** tachý reads an export of it from
+  [diegomo123/mDenseOn-ONNX](https://huggingface.co/diegomo123/mDenseOn-ONNX)
+  at a pinned commit (`source` and `revision` in its entry): `optimum-cli` at
+  opset 17, output `last_hidden_state`, beside the original's tokenizer files.
+  That repository's README has the command and the versions. Every figure
+  here was measured with that file.
 - **Qwen3 is slower and no better here.** It embeds at 0.38 of the rate in
   service, and its code backfill took 48 minutes against mDenseOn's 17.
   - Its query instruction decides the result. With its card's a meaningless
@@ -1789,8 +1791,8 @@ bge-base, the only model before the column existed.
 
 1. The release names the model: `TACHY_EMBED_MODEL`, or the default in
    `core/src/search/model.ts`. Its entry in `EMBEDDING_MODELS` carries pooling,
-   prefixes, window, batch size, where its ONNX file is and which one, and the
-   floor and ceiling `scripts/eval-embeddings.ts` prints.
+   prefixes, window, batch size, where its ONNX file is, at which commit and
+   which one, and the floor and ceiling `scripts/eval-embeddings.ts` prints.
    `scripts/eval-code-search.ts` prints what the code floor is set from.
    `test/search/quality.test.ts` fails until they fit.
 2. Deploy. From then on meaning-based search finds only what has been embedded

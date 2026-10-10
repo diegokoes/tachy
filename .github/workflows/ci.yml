@@ -45,11 +45,11 @@ jobs:
 
       # Every fork that touches knowledge or reference loads the embedding
       # model. Cached and warmed once here, they share the download instead of
-      # racing for it; the key carries the model name so a swap re-fetches.
+      # racing for it; the key follows the model registry so a swap re-fetches.
       - uses: actions/cache@v6
         with:
           path: .model-cache
-          key: model-lightonai-mDenseOn
+          key: model-${{ hashFiles('packages/core/src/search/model.ts') }}
 
       - run: npx tsx scripts/warmup-embeddings.ts
 

@@ -27,7 +27,10 @@ and not by its meaning. The design is in DEPLOYMENT-ARCHITECTURE.md §5.15.
 `core/src/search/model.ts`. The model needs an entry in `EMBEDDING_MODELS` with
 its pooling, its window and the floor and ceiling `scripts/eval-embeddings.ts`
 prints for it; `test/search/quality.test.ts` fails until they fit.
-`scripts/eval-code-search.ts` measures the same change on code.
+`scripts/eval-code-search.ts` measures the same change on code. A model
+published without an ONNX file needs an export in a repository the build can
+read, named in its entry with the commit to read it at (`source`, `revision`);
+§5.15 has how mDenseOn's was made.
 
 **Its memory moves with it.** A model of another size changes what the
 embedder holds at its peak: `scripts/bench-embedder.ts --heaviest` against a

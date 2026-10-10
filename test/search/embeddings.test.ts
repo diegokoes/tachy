@@ -102,6 +102,14 @@ describe("the model registry", () => {
       if (name.includes(":")) expect(spec.source, name).toBeTruthy();
   });
 
+  // An export held outside the model's own repository is one upload away
+  // from other vectors under the same name.
+  it("reads the default model's export at one commit", () => {
+    expect(EMBEDDING_MODELS["lightonai/mDenseOn"].revision).toMatch(
+      /^[0-9a-f]{40}$/,
+    );
+  });
+
   it("gives an int8 file a name of its own", () => {
     for (const [name, spec] of Object.entries(EMBEDDING_MODELS))
       expect(name.endsWith(":q8"), name).toBe(spec.dtype === "q8");
