@@ -153,6 +153,7 @@ async function restore(opts: { file?: string; yes?: boolean }) {
 }
 
 import { seed, SCALE_NAMES, type ScaleName } from "./seed";
+import { lifetimeDaysOf, mintTokenFor } from "./tokens";
 import type { EmbedMode } from "./seed/embed";
 
 const USAGE = `usage:
@@ -163,6 +164,8 @@ const USAGE = `usage:
                                                    --full redoes every file (new chunk size or model)
   backup [--out=DIR]                               pg_dump -Fc to DIR (default ./backups)
   restore --file=PATH [--yes]                      pg_restore (overwrites the DB)
+  mint-token <email> <name> [--days=N|--never]     a bearer token for an account, shown once
+                                                   (90 days unless told otherwise)
   seed [--scale=NAME] [--reset] [--yes]            fill a dev database with plausible data
        [--embed[=search|all]]                      real vectors: search = knowledge + reference,
                                                    all also does code (most of the time cost)
@@ -213,6 +216,18 @@ async function main() {
         // settings table may not exist yet
       }
       return indexRepoCmd(positional[0], !!args.full);
+    }
+    case "mint-token": {
+      const [email, name] = positional;
+      if (!email || !name) throw new Error("mint-token needs <email> <name>");
+      const minted = await mintTokenFor(email, name, lifetimeDaysOf(args));
+      console.log(minted.token);
+      console.error(
+        minted.expiresAt
+          ? `expires ${new Date(minted.expiresAt).toISOString()}; it is not shown again`
+          : "never expires; it is not shown again",
+      );
+      return;
     }
     case "backup":
       return backup({ out: args.out });
