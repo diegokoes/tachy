@@ -66,10 +66,9 @@ export interface EmbeddingModelSpec {
 }
 
 /**
- * The default: a general text model that also ranks code, so tickets and
- * code share one. CLS-pooled, no prefixes
- * (https://huggingface.co/Alibaba-NLP/gte-modernbert-base). Its figures
- * against the other models are in DEPLOYMENT-ARCHITECTURE.md.
+ * English only: a ticket in another language is matched on the words it
+ * shares with an entry. CLS-pooled, no prefixes
+ * (https://huggingface.co/Alibaba-NLP/gte-modernbert-base).
  */
 const GTE_MODERNBERT: EmbeddingModelSpec = {
   dim: 768,
@@ -91,7 +90,7 @@ const GTE_MODERNBERT: EmbeddingModelSpec = {
 };
 
 /**
- * What a candidate starts from: the default model's window, batch size and
+ * What a candidate starts from: gte-modernbert-base's window, batch size and
  * floors. An entry that sets no floor of its own is unmeasured: run
  * `scripts/eval-embeddings.ts` and `scripts/eval-code-search.ts` before
  * selecting it.
@@ -108,9 +107,11 @@ const UNMEASURED = {
 } as const;
 
 /**
- * The default's encoder with a multilingual vocabulary. CLS-pooled, and both
- * sides take a prefix (https://huggingface.co/lightonai/mDenseOn). The
- * repository holds no ONNX file: the model cache has to hold an export.
+ * The default: one general model for tickets and code, and multilingual, so
+ * a ticket finds an entry written in another language. It is
+ * gte-modernbert-base's encoder under a larger vocabulary. CLS-pooled, and
+ * both sides take a prefix (https://huggingface.co/lightonai/mDenseOn). Its
+ * figures against the other models are in DEPLOYMENT-ARCHITECTURE.md.
  */
 const MDENSEON: EmbeddingModelSpec = {
   ...UNMEASURED,
@@ -145,8 +146,8 @@ const QWEN3_SMALL: EmbeddingModelSpec = {
 export const EMBEDDING_MODELS: Record<string, EmbeddingModelSpec> = {
   "Alibaba-NLP/gte-modernbert-base": GTE_MODERNBERT,
   /**
-   * The default's int8 file: faster and smaller, and it ranks tickets a
-   * little worse. Its code floor is the fp32 file's, unmeasured.
+   * The int8 file of the entry above: faster and smaller, and it ranks
+   * tickets a little worse. Its code floor is the fp32 file's, unmeasured.
    */
   "Alibaba-NLP/gte-modernbert-base:q8": {
     ...GTE_MODERNBERT,
@@ -211,7 +212,7 @@ export const EMBEDDING_MODELS: Record<string, EmbeddingModelSpec> = {
 };
 
 export const EMBEDDING_MODEL =
-  process.env.TACHY_EMBED_MODEL ?? "Alibaba-NLP/gte-modernbert-base";
+  process.env.TACHY_EMBED_MODEL ?? "lightonai/mDenseOn";
 
 /** A row with no `embedding_model` holds a vector from this model. */
 export const LEGACY_EMBEDDING_MODEL = "Xenova/bge-base-en-v1.5";

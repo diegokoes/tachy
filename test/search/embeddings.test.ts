@@ -143,7 +143,8 @@ describe("query vs passage", () => {
     const passage = await embedPassage("printer stops mid-batch");
     expect(query).toHaveLength(EMBEDDING_DIM);
     const cos = query.reduce((s, x, i) => s + x * passage[i], 0);
-    expect(cos).toBeGreaterThan(0.9);
+    // Not 1: a model with a prefix per side reads the two as different texts.
+    expect(cos).toBeGreaterThan(EMBEDDING_SPEC.semCeil);
   });
 });
 

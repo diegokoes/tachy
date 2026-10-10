@@ -49,7 +49,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: .model-cache
-          key: model-Alibaba-NLP-gte-modernbert-base
+          key: model-lightonai-mDenseOn
 
       - run: npx tsx scripts/warmup-embeddings.ts
 

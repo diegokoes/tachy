@@ -40,7 +40,7 @@ const REAL_KINDS: Record<EmbedMode, Set<string>> = {
 /**
  * Rates measured on a 20-core workstation with fp32 bge-base through
  * onnxruntime-node, on the text this seeder writes, then scaled by 0.45: what
- * gte-modernbert-base manages beside bge-base on code chunks. The model
+ * a ModernBERT-base encoder manages beside bge-base on code chunks. The model
  * saturates the cores it is given, so batching changes the constant and not the
  * order.
  */
