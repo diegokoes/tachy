@@ -60,7 +60,7 @@ prod)
   # are the runner's, which has fewer cores than the overlay's defaults ask for.
   cat >>.env <<ENV
 TACHY_HOSTNAME=$host
-TACHY_INTERNAL_SECRET=ci-internal-secret
+TACHY_INTERNAL_SECRET=$(openssl rand -hex 32)
 TACHY_SECRET_KEY=$(openssl rand -base64 32)
 TACHY_STATUS_HOST_DIR=$PWD/.smoke-status
 TACHY_EMBEDDER_CPUS=2
