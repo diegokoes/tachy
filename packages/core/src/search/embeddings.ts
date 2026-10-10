@@ -2,7 +2,13 @@ import { env } from "../infra/env";
 import { badInput } from "../infra/errors";
 import { logContext } from "../infra/log";
 import { EmbedQueue, type EmbedKind, type EmbedPriority } from "./embed-queue";
-import { model, EMBEDDING_DIM, EMBEDDING_MODEL, EMBEDDING_SPEC } from "./model";
+import {
+  encode,
+  vectorRows,
+  EMBEDDING_DIM,
+  EMBEDDING_MODEL,
+  EMBEDDING_SPEC,
+} from "./model";
 
 export {
   EMBEDDING_DIM,
@@ -30,14 +36,8 @@ export type EmbedBackend = (
 const prepare = (text: string, prefix: string) =>
   prefix + text.slice(0, EMBEDDING_SPEC.maxChars);
 
-async function runModel(texts: string[]): Promise<number[][]> {
-  const extractor = await model();
-  const tensor = (await extractor(texts, {
-    pooling: EMBEDDING_SPEC.pooling,
-    normalize: true,
-  })) as { tolist(): number[][] };
-  return tensor.tolist();
-}
+const runModel = async (texts: string[]): Promise<number[][]> =>
+  vectorRows(await encode(texts));
 
 /** Texts per request to the embed endpoint, so its passage queue can interleave callers. */
 const HTTP_CHUNK = 64;
