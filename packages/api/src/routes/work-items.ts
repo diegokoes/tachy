@@ -3,9 +3,13 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { resolveSource } from "@tachy/core/sources";
 import {
+  deleteStoredItems,
+  filterForAudit,
   ingestWorkItem,
+  previewStoredItems,
   workItemScope,
   externalWorkItemScope,
+  type StoredItemFilter,
 } from "@tachy/core/work-items";
 import { recordRun } from "@tachy/core/analytics";
 import {
@@ -15,6 +19,8 @@ import {
   setObservedVersion,
 } from "@tachy/core/catalog";
 import { badInput } from "@tachy/core/infra";
+import { audit } from "../audit";
+import { requireAdmin } from "../auth";
 import { assertScopeEditor, callerScope } from "../authz";
 
 const customerSchema = z.object({
@@ -25,7 +31,62 @@ const customerSchema = z.object({
 const versionSchema = z.object({ version: z.string().nullable() });
 const noteSchema = z.object({ body: z.string().min(1) });
 
+const storedFilterSchema = z.object({
+  connection: z.string().min(1).optional(),
+  statuses: z.array(z.string().min(1)).optional(),
+  product: z.string().min(1).optional(),
+  team: z.string().min(1).optional(),
+  customer: z.string().min(1).optional(),
+  requester: z.string().min(1).optional(),
+  changed_before: z.string().min(1).optional(),
+  include_learned_from: z.boolean().optional(),
+});
+const storedDeleteSchema = storedFilterSchema.extend({
+  /** The `matched` a preview of the same filter returned. */
+  expected: z.number().int().min(0),
+});
+
+const storedFilter = (
+  body: z.infer<typeof storedFilterSchema>,
+): StoredItemFilter => ({
+  connection: body.connection,
+  statuses: body.statuses,
+  product: body.product,
+  team: body.team,
+  customer: body.customer,
+  requester: body.requester,
+  changedBefore: body.changed_before,
+  includeLearnedFrom: body.include_learned_from,
+});
+
 export const workItems = new Hono()
+  // The stored copies of tickets, by filter. A preview first: the delete takes
+  // the count the preview gave and refuses when it no longer holds.
+  .post(
+    "/stored/preview",
+    requireAdmin,
+    zValidator("json", storedFilterSchema),
+    async (c) =>
+      c.json(await previewStoredItems(storedFilter(c.req.valid("json")))),
+  )
+  .post(
+    "/stored/delete",
+    requireAdmin,
+    zValidator("json", storedDeleteSchema),
+    async (c) => {
+      const { expected, ...body } = c.req.valid("json");
+      const filter = storedFilter(body);
+      const cleanup = await deleteStoredItems(filter, expected);
+      await audit(
+        c,
+        "work_items_cleanup",
+        filter.connection ?? "every connection",
+        { ...filterForAudit(filter), ...cleanup },
+      );
+      return c.json(cleanup);
+    },
+  )
+
   .post("/:source/:id/fetch", async (c) => {
     const { source, id } = c.req.param();
     const { conn, source: src } = await resolveSource(
