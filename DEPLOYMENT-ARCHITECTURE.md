@@ -246,6 +246,7 @@ the scratch database:
 workstation in the production image, fp32, on tachý's own code chunks at their
 longest, 2400 characters. The embedder ran under the overlay's limits, 6 CPUs
 and 2560 MB, which on that host is 6 threads (§3.3).
+`scripts/bench-embedder.ts` times a running embedder on the same texts.
 
 | The embedder service                                    | Container at peak | Full chunks a second |
 | ------------------------------------------------------- | ----------------: | -------------------: |
@@ -693,10 +694,10 @@ On A+ raising `max_connections` is enough.
 - A passage batch capped by characters on CPU (§3.1).
 - One model for tickets and code, and the lexical leg of code search (§5.15).
 
-**The golden sets are small.** Tickets have 14 queries
-(`test/fixtures/search-corpus.ts`) and code has 45 questions about tachý's own
-source (`test/fixtures/code-golden.ts`). Both were written by the people who
-built the search, which is the weakest kind. Load runs on a synthetic seed
+**The golden sets are small.** Tickets have 14 queries and 8 German ticket
+openings (`test/fixtures/search-corpus.ts`) and code has 45 questions about
+tachý's own source (`test/fixtures/code-golden.ts`). All were written by the
+people who built the search, which is the weakest kind. Load runs on a synthetic seed
 don't help: there "the vector leg of hybrid search contributes **nothing**"
 (`load/README.md`).
 
@@ -1608,6 +1609,82 @@ The chunker also fills its budget now and repeats a quarter of a short chunk
 at most: cut to 1300 characters, the old one produced 7394 chunks from this
 repository, and the new one 4675.
 
+**Candidates for a stronger model,** measured 2026-10-10 on the workstation
+while it was in use, so a rate is read against the current model's from the
+same session. The repository at `dev` had 857 files in 3440 chunks. Every model
+embedded the same chunks (`sync embed-backfill` per model over one index), and
+the end-to-end figures use each model's own floor.
+
+| Model                                  | Tickets first |   Gap | German openings: first / over the floor | Code, vector leg: first / top 3 / top 8 | Code, end to end: first / top 3 / page |
+| -------------------------------------- | ------------: | ----: | --------------------------------------: | --------------------------------------: | -------------------------------------: |
+| gte-modernbert-base, in use            |      13 of 13 | 0.114 |                              7 / 6 of 8 |                      25 / 35 / 42 of 45 |                     30 / 36 / 41 of 45 |
+| lightonai/mDenseOn                     |            13 | 0.209 |                                   8 / 8 |                            31 / 37 / 43 |                           32 / 36 / 41 |
+| Qwen3-Embedding-0.6B, cut to 768       |            13 | 0.135 |                                   8 / 8 |                            18 / 29 / 40 |                           27 / 32 / 35 |
+| granite-embedding-311m-multilingual-r2 |            12 | 0.046 |                                   8 / 8 |                            28 / 35 / 43 |                           28 / 38 / 41 |
+| gte-modernbert-base, int8              |            12 | 0.091 |                                   8 / 6 |                                       - |                                      - |
+| Qwen3-Embedding-0.6B, int8             |            13 | 0.081 |                                   8 / 6 |                                       - |                                      - |
+
+The embedder service from the production image at 6 CPUs and 4 threads
+(`scripts/bench-embedder.ts`):
+
+| Model                      | Full chunks a second | Against the current model | One query | A query behind full chunks | Loaded and idle | Peak on the heaviest input |
+| -------------------------- | -------------------: | ------------------------: | --------: | -------------------------: | --------------: | -------------------------: |
+| gte-modernbert-base        |         1.35 to 1.58 |                         1 |     21 ms |              239 to 452 ms |        1112 MiB |                   1584 MiB |
+| mDenseOn                   |                 1.50 |                       1.1 |     23 ms |                     366 ms |        1847 MiB |                   2877 MiB |
+| Qwen3-Embedding-0.6B       |                 0.51 |                      0.38 |    114 ms |                    1618 ms |        2545 MiB |           4892 MiB or more |
+| gte-modernbert-base, int8  |                 2.57 |                       1.6 |     10 ms |                     298 ms |         553 MiB |                    not run |
+| Qwen3-Embedding-0.6B, int8 |                 0.75 |                      0.47 |     61 ms |                     703 ms |        1401 MiB |                    not run |
+
+- **mDenseOn is ahead on every count and costs memory only.** It has the
+  current model's encoder, 22 layers of 768, under a vocabulary of 256,000
+  tokens, so it embeds at the same rate. Its peak is 1.3 GiB higher.
+- **Its repository holds no ONNX file.** The run used an `optimum-cli` export
+  (opset 17, `last_hidden_state`) placed in the model cache beside the
+  repository's tokenizer files. An image needs that file published where the
+  Dockerfile's warm-up step can fetch it.
+- **Qwen3 is slower and no better here.** It embeds at 0.38 of the rate in
+  service, and its code backfill took 48 minutes against mDenseOn's 17.
+  - Its query instruction decides the result. With its card's a meaningless
+    query stays 0.135 under a real match. With none it outscores one, and 11 of
+    13 tickets rank first.
+  - An instruction that names code lifts its code vector leg to 21 / 36 / 43
+    and leaves nonsense as high as a question's own file (0.580 and 0.581).
+  - The cut to 768 values is not what costs it. Against a pool of 460 chunks
+    it ranks 30 / 44 / 45 at 1024 values and the same at 768, and 26 / 42 / 44
+    at 512.
+  - Its heaviest round did not finish: a request of 64 long passages outlasted
+    the 5 minutes `fetch` waits for a response's headers. `HTTP_CHUNK` in
+    `search/embeddings.ts` is sized for the current model's rate.
+- **granite packs its cosines** between 0.82 and 0.91, and one ticket ranks
+  second. Against code a meaningless query reaches 0.874 and a question's own
+  file 0.856, so no floor separates them: its end-to-end figure is with the
+  vector leg ungated. It has no entry in `EMBEDDING_MODELS`.
+- **An int8 file trades rank for speed:** 1.5 to 1.6 times the rate at about
+  half the memory. gte-modernbert-base loses a ticket. Qwen3 loses 0.054 of
+  its gap, and two German openings fall under its floor. Only
+  gte-modernbert-base's has an entry.
+- **German.** The current model ranks 7 of the 8 openings first, because they
+  share words with the English entries (Scanner, PDF, Update). Two score under
+  its floor, so the vector leg drops them, and the keyword legs match a German
+  text only on its identifiers. Each multilingual candidate ranks all 8 first.
+- **The questions' own file is left out of the code results.** It is part of
+  the indexed repository and matches every question word for word
+  (`scripts/eval-code-search.ts`).
+- **Not candidates:** models trained on code alone, which at this size publish
+  lower code scores than the general ones (jina's lost above); Qwen3-Embedding
+  4B and larger, out of reach of 4 cores; EmbeddingGemma (Gemma terms); jina
+  v3 and v5 (CC-BY-NC); hosted APIs (§1).
+
+**What each costs in chat slots,** by §3.2's method. The embedder's limit is
+its peak plus 800 MiB, which the api's limit gives up, and a turn is budgeted
+at 0.44 GB:
+
+| Model                | Embedder limit | Api limit | Slot cap | While a heavy job runs |
+| -------------------- | -------------: | --------: | -------: | ---------------------: |
+| gte-modernbert-base  |          2560m |        7g |       15 |                     12 |
+| mDenseOn             |          3700m |     6000m |       12 |                      9 |
+| Qwen3-Embedding-0.6B |          5700m |     4000m |        8 |                      5 |
+
 **How a vector names its model.** `embedding_model` sits beside every
 `embedding`, on `knowledge_entries`, `reference_doc_chunks`,
 `bucket_doc_chunks` and `code_blob_chunks`. A row with none was made by
@@ -1628,9 +1705,10 @@ bge-base, the only model before the column existed.
 
 1. The release names the model: `TACHY_EMBED_MODEL`, or the default in
    `core/src/search/model.ts`. Its entry in `EMBEDDING_MODELS` carries pooling,
-   prefixes, window, batch size, and the floor and ceiling
-   `scripts/eval-embeddings.ts` prints. `test/search/quality.test.ts` fails
-   until they fit.
+   prefixes, window, batch size, where its ONNX file is and which one, and the
+   floor and ceiling `scripts/eval-embeddings.ts` prints.
+   `scripts/eval-code-search.ts` prints what the code floor is set from.
+   `test/search/quality.test.ts` fails until they fit.
 2. Deploy. From then on meaning-based search finds only what has been embedded
    again.
 3. Run `embeddings.backfill`. Rows divided by the rate (§3.1) is how long it
@@ -1658,14 +1736,18 @@ HNSW indexes, backfill, recreate the indexes, maintenance off.
 **Keep in mind:**
 
 - **A runtime swap still needs a check.** Moving the same model between
-  runtimes (transformers.js to TEI, CPU to GPU, fp32 to a quantized file)
-  keeps the weights and the name but not the arithmetic. Compare vectors for a
-  sample of stored texts against a cosine threshold chosen beforehand, before
-  deciding a backfill can be skipped.
+  runtimes (transformers.js to TEI, CPU to GPU) keeps the weights and the name
+  but not the arithmetic. Compare vectors for a sample of stored texts against
+  a cosine threshold chosen beforehand, before deciding a backfill can be
+  skipped.
+- **An int8 file is an entry of its own** (`…:q8`, with `dtype` and `source`),
+  so its vectors carry their own name and a switch to it is a backfill.
 - **A restore can cross a model change.** A dump taken before a change carries
   the old vectors, and the stamp is what shows that.
-- **The model entry can't express every model.** nomic-embed-text-v1.5 applies
-  `layer_norm` before normalizing
+- **The model entry can't express every model.** It holds CLS, mean and
+  last-token pooling, a prefix for each side, and a vector cut to the schema's
+  width for a model trained for that (`matryoshka`). nomic-embed-text-v1.5
+  applies `layer_norm` before normalizing
   ([model card](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5)).
 - **Not built:** a second model beside the first. `EMBEDDING_SPEC` is one
   value, and an embed request carries only `kind` and `texts`.
@@ -2675,10 +2757,12 @@ All in `deploy/runbooks/`. `README.md` there is the index.
   current dump size.
 - **A GPU for profile B.** It decides between tier B-cpu and B-gpu (§4.6), and
   so whether bge-reranker-base is affordable at all (§5.14).
-- **Languages in tickets.** If tickets arrive in languages other than English,
-  a multilingual model such as bge-m3 becomes a candidate (§5.15).
-  gte-modernbert-base is an English model, and BAAI lists bge-reranker-base
-  for Chinese and English.
+- **Languages in tickets.** Some tickets may arrive in German. Search in the
+  app, chat and the knowledge base are English, so the one place German text
+  is a query is the search `fetch_work_item` runs with a ticket's title and
+  the start of its first message. gte-modernbert-base is an English model;
+  §5.15 has what it and the multilingual candidates do with German openings.
+  BAAI lists bge-reranker-base for Chinese and English.
 - **The golden set.** Who collects 50 or more real queries with their expected
   answers (§5.15). Every model and reranker decision waits on it.
 
