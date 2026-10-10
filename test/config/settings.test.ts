@@ -112,6 +112,37 @@ describe("settings store", () => {
     }
   });
 
+  it("reads the slot cap from the setting, then TACHY_AGENT_SLOT_CAP, then 15", async () => {
+    await sql`delete from settings`;
+    clearSettingsCache();
+    try {
+      expect((await effectiveSettings()).agent_slot_cap).toEqual({
+        value: 15,
+        source: "default",
+      });
+
+      for (const unusable of ["", "twelve", "0", "12.5", "501"]) {
+        process.env.TACHY_AGENT_SLOT_CAP = unusable;
+        expect((await effectiveSettings()).agent_slot_cap.source).toBe(
+          "default",
+        );
+      }
+      process.env.TACHY_AGENT_SLOT_CAP = "12";
+      expect((await effectiveSettings()).agent_slot_cap).toEqual({
+        value: 12,
+        source: "env",
+      });
+
+      await setSetting("agent_slot_cap", 9);
+      expect((await effectiveSettings()).agent_slot_cap).toEqual({
+        value: 9,
+        source: "db",
+      });
+    } finally {
+      delete process.env.TACHY_AGENT_SLOT_CAP;
+    }
+  });
+
   it("precedence: db > env > default", async () => {
     await sql`delete from settings`;
     clearSettingsCache();

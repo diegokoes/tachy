@@ -18,4 +18,5 @@ weekends.
    `tachy-load` network with k6.
 4. `docker compose -f load/turns.compose.yml down -v`.
 5. Write the numbers in DEPLOYMENT-ARCHITECTURE.md §3 with the date and commit.
-   If a Claude turn stays under 0.45 GB at p95, raise `agent_slot_cap` to 18.
+   If a Claude turn stays under 0.35 GB at p95, raise `agent_slot_cap` to 15
+   (§3.2).
