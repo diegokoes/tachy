@@ -153,6 +153,8 @@ async function restore(opts: { file?: string; yes?: boolean }) {
 }
 
 import { seed, SCALE_NAMES, type ScaleName } from "./seed";
+import { cleanTicketsCommand } from "./tickets";
+import { mintTokenCommand } from "./tokens";
 import type { EmbedMode } from "./seed/embed";
 
 const USAGE = `usage:
@@ -163,6 +165,13 @@ const USAGE = `usage:
                                                    --full redoes every file (new chunk size or model)
   backup [--out=DIR]                               pg_dump -Fc to DIR (default ./backups)
   restore --file=PATH [--yes]                      pg_restore (overwrites the DB)
+  mint-token <email> <name> [--days=N|--never]     a bearer token for an account, shown once
+                                                   (90 days unless told otherwise)
+  clean-tickets [--connection=SLUG] [--status=A,B] delete stored tickets that match every filter given;
+       [--product=SLUG] [--team=SLUG]              prints what matches and deletes only with --yes.
+       [--customer=SLUG] [--requester=WHO]         Tickets a knowledge entry was learned from are left
+       [--before=ISO] [--include-learned-from]     unless --include-learned-from says otherwise
+       [--yes]
   seed [--scale=NAME] [--reset] [--yes]            fill a dev database with plausible data
        [--embed[=search|all]]                      real vectors: search = knowledge + reference,
                                                    all also does code (most of the time cost)
@@ -213,6 +222,16 @@ async function main() {
         // settings table may not exist yet
       }
       return indexRepoCmd(positional[0], !!args.full);
+    }
+    case "mint-token": {
+      const { token, note } = await mintTokenCommand(positional, args);
+      console.log(token);
+      console.error(note);
+      return;
+    }
+    case "clean-tickets": {
+      for (const line of await cleanTicketsCommand(args)) console.log(line);
+      return;
     }
     case "backup":
       return backup({ out: args.out });

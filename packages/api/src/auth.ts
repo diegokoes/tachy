@@ -23,8 +23,9 @@ import {
   userTeams,
 } from "@tachy/core/access";
 import { recordAudit } from "@tachy/core/audit";
+import { effectiveSettings } from "@tachy/core/config";
 import { env, log } from "@tachy/core/infra";
-import { API_TOKEN_PREFIX, type UserRole } from "@tachy/core";
+import { API_TOKEN_PREFIX, NOT_INVITED, type UserRole } from "@tachy/core";
 import { callerAddress, failureThrottle } from "./throttle";
 
 export interface OidcConfig {
@@ -110,15 +111,45 @@ function tokenMatches(header: string | undefined, token: string): boolean {
   return got.length === want.length && timingSafeEqual(got, want);
 }
 
-export async function sessionEmail(c: Context): Promise<string | undefined> {
-  const fromCookie = await cookieUser(c);
-  if (fromCookie) return fromCookie.email;
+/** Who the identity provider says is signed in, if anyone. */
+async function ssoSession(
+  c: Context,
+): Promise<{ email: string; name?: string } | undefined> {
   try {
     const auth = await getAuth(c as Parameters<typeof getAuth>[0]);
-    return auth?.email;
+    if (!auth?.email) return undefined;
+    return {
+      email: auth.email,
+      name: (auth.name as string | undefined) ?? undefined,
+    };
   } catch {
     return undefined;
   }
+}
+
+export async function sessionEmail(c: Context): Promise<string | undefined> {
+  const fromCookie = await cookieUser(c);
+  if (fromCookie) return fromCookie.email;
+  return (await ssoSession(c))?.email;
+}
+
+/**
+ * The refusal for someone the provider signed in and nobody added here. A 403
+ * with its own code and not a 401: the SPA answers a 401 by sending the browser
+ * to sign in, which this person has just done.
+ */
+function notInvited(email: string): HTTPException {
+  return new HTTPException(403, {
+    message: `${email} signed in with SSO and has no account here`,
+    res: Response.json(
+      {
+        error: "this account has not been added; ask an app admin",
+        code: NOT_INVITED,
+        email,
+      },
+      { status: 403 },
+    ),
+  });
 }
 
 let bootstrappedCache = false;
@@ -188,20 +219,18 @@ async function resolveIdentity(
       via: "password",
     };
 
-  if (opts.oidc) {
-    try {
-      const auth = await getAuth(c as Parameters<typeof getAuth>[0]);
-      if (auth?.email) {
-        const user = await getUserByEmail(auth.email);
-        if (user?.disabled) return null;
-        return {
-          email: auth.email,
-          name: (auth.name as string | undefined) ?? undefined,
-          role: user?.role ?? "member",
-          via: "sso",
-        };
-      }
-    } catch {}
+  const sso = opts.oidc ? await ssoSession(c) : undefined;
+  if (sso) {
+    const user = await getUserByEmail(sso.email);
+    if (user?.disabled) return null;
+    const { sso_admission } = await effectiveSettings();
+    if (!user && sso_admission.value === "invited") throw notInvited(sso.email);
+    return {
+      email: sso.email,
+      name: sso.name,
+      role: user?.role ?? "member",
+      via: "sso",
+    };
   }
 
   const passwordGate = opts.passwordAuth && (await isBootstrapped());
@@ -239,6 +268,25 @@ export async function requireAdmin(c: Context, next: Next): Promise<void> {
   await next();
 }
 
+/** An origin no request names, to resolve a redirect target against. */
+const NO_ORIGIN = "http://landing.invalid";
+
+/**
+ * Where a sign-in ends: the path it was asked for on this server, or the home
+ * page. Resolved the way a browser resolves it, so `//host`, `/\host` and a
+ * tab inside either count as the other site they lead to.
+ */
+export function landingPath(target: string | undefined): string {
+  if (!target) return "/";
+  try {
+    const resolved = new URL(target, NO_ORIGIN);
+    if (resolved.origin !== NO_ORIGIN) return "/";
+    return resolved.pathname + resolved.search + resolved.hash;
+  } catch {
+    return "/";
+  }
+}
+
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
@@ -272,7 +320,7 @@ export function installAuth(
 
   if (oidc) {
     base.get("/auth/login", oidcAuthMiddleware(), (c) =>
-      c.redirect(c.req.query("redirect") || "/"),
+      c.redirect(landingPath(c.req.query("redirect"))),
     );
     base.get("/auth/callback", oidcAuthMiddleware(), (c) => c.redirect("/"));
   }

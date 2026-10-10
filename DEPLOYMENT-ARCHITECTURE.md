@@ -52,7 +52,7 @@ api            node dist/api.js
 `-- one tree per chat turn:
     Claude Code CLI (agent SDK query())
     `-- MCP server: node dist/mcp.js
-        |-- a postgres.js pool of 2, as tachy_app
+        |-- a postgres.js pool of 2, as tachy_mcp
         `-- embeds over HTTP at the embedder
 embedder       node dist/embedder.js: the one embedding model (§5.4)
 worker-light   node dist/worker.js: queues sync, flows, maintenance; 4 runs
@@ -101,30 +101,30 @@ differently:
 
 ### 2.2 Where state lives
 
-| State                                    | Location                                                                                                              | Durable?                             | With two API replicas                                      |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------- |
-| System of record                         | Postgres volume                                                                                                       | yes                                  | fine                                                       |
-| Generated exports                        | `generated_outputs.bytes`, TTL 24 h; deleted daily by `retention.sweep`                                               | until TTL                            | fine                                                       |
-| Chat uploads                             | `chat_uploads.bytes`, TTL 24 h (`TACHY_UPLOAD_TTL_HOURS`), readable only by their owner                               | until TTL                            | fine                                                       |
-| Library images                           | `library_assets.bytes`, deduplicated by sha256, 5 MB cap; orphans removed after 7 days                                | yes                                  | fine                                                       |
-| Usage counters                           | `library_views`, `mcp_tool_calls`: per person per day for 13 months, then monthly; `source_calls` is kept             | yes                                  | fine; upserts                                              |
-| Jobs                                     | `job_definitions`, `job_runs` (90 days, failed 180), `job_workers`, `job_definition_changes`                          | yes                                  | fine; claims take turns under an advisory lock             |
-| Wiki gaps                                | `wiki_gaps`, refreshed hourly by the `wiki.gaps` job                                                                  | yes                                  | fine                                                       |
-| Buckets                                  | `buckets`, `bucket_docs`, `bucket_doc_chunks`; the ingest token is stored as a hash                                   | yes                                  | fine                                                       |
-| Flows and notifications                  | `flows`, `flow_runs`, `notifications`; old runs and notifications are swept (§7)                                      | yes                                  | fine                                                       |
-| Audit trail                              | `audit_events`: sign-ins, account, credential and settings changes, exports. Append-only for `tachy_app`; never swept | yes                                  | fine                                                       |
-| Active turns, approvals, admission queue | in-process `Map`s (`api/src/turns.ts`, `api/src/admission.ts`); resolvers in `agent/src/turn.ts`                      | no; a restart drains for up to 180 s | **breaks**: `/approve` must reach the owning process       |
-| Maintenance switch                       | an in-process flag (`api/src/lifecycle.ts`)                                                                           | no; a restart clears it              | per replica                                                |
-| Claude session transcripts               | `tachy-agent-home` volume, `users/<id>`; pruned after 90 days                                                         | yes                                  | **breaks** `resume` unless shared or routed sticky by user |
-| Throttles                                | `Map`s (`api/src/throttle.ts`): failed logins by email, failed ingest tokens by bucket and address                    | no                                   | weaken to per replica                                      |
-| Settings                                 | `settings` table; each process re-reads it within 15 s (`core/src/config/settings.ts`)                                | yes                                  | fine                                                       |
-| Permission cache                         | 60 s `Map` (`core/src/access/permissions.ts`)                                                                         | no                                   | a role change is stale for up to 60 s elsewhere            |
-| Repo clones                              | `tachy-repo-data` volume, mounted in the api and both workers                                                         | rebuildable cache                    | per host                                                   |
-| Embedding model                          | image layer (`/app/.model-cache`)                                                                                     | rebuildable                          | fine                                                       |
-| Container logs                           | Docker `local` driver, 20 MB × 10 files per container                                                                 | bounded by size, not by age          | -                                                          |
-| Backups                                  | age ciphertext in `/srv/tachy/backup-export`, on the same disk until someone downloads it (§6)                        | off-host only once downloaded        | -                                                          |
-| Host status                              | `/srv/tachy/status/*.json`, written by backups, the watch script and deploys; mounted read-only in the api            | rebuildable                          | -                                                          |
-| Deploy log                               | `/srv/tachy/deploy.log`; in the daily file backup (§6)                                                                | off-host only once downloaded        | -                                                          |
+| State                                    | Location                                                                                                                                                                                 | Durable?                             | With two API replicas                                      |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------- |
+| System of record                         | Postgres volume                                                                                                                                                                          | yes                                  | fine                                                       |
+| Generated exports                        | `generated_outputs.bytes`, TTL 24 h; deleted daily by `retention.sweep`                                                                                                                  | until TTL                            | fine                                                       |
+| Chat uploads                             | `chat_uploads.bytes`, TTL 24 h (`TACHY_UPLOAD_TTL_HOURS`), readable only by their owner                                                                                                  | until TTL                            | fine                                                       |
+| Library images                           | `library_assets.bytes`, deduplicated by sha256, 5 MB cap; orphans removed after 7 days                                                                                                   | yes                                  | fine                                                       |
+| Usage counters                           | `library_views`, `mcp_tool_calls`: per person per day for 13 months, then monthly; `source_calls` is kept                                                                                | yes                                  | fine; upserts                                              |
+| Jobs                                     | `job_definitions`, `job_runs` (90 days, failed 180), `job_workers`, `job_definition_changes`                                                                                             | yes                                  | fine; claims take turns under an advisory lock             |
+| Wiki gaps                                | `wiki_gaps`, refreshed hourly by the `wiki.gaps` job                                                                                                                                     | yes                                  | fine                                                       |
+| Buckets                                  | `buckets`, `bucket_docs`, `bucket_doc_chunks`; the ingest token is stored as a hash                                                                                                      | yes                                  | fine                                                       |
+| Flows and notifications                  | `flows`, `flow_runs`, `notifications`; old runs and notifications are swept (§7)                                                                                                         | yes                                  | fine                                                       |
+| Audit trail                              | `audit_events`: sign-ins, account, credential and settings changes, exports, catalogue, repo, source project and flow changes, ticket cleanups. Append-only for `tachy_app`; never swept | yes                                  | fine                                                       |
+| Active turns, approvals, admission queue | in-process `Map`s (`api/src/turns.ts`, `api/src/admission.ts`); resolvers in `agent/src/turn.ts`                                                                                         | no; a restart drains for up to 180 s | **breaks**: `/approve` must reach the owning process       |
+| Maintenance switch                       | an in-process flag (`api/src/lifecycle.ts`)                                                                                                                                              | no; a restart clears it              | per replica                                                |
+| Claude session transcripts               | `tachy-agent-home` volume, `users/<id>`; pruned after 90 days                                                                                                                            | yes                                  | **breaks** `resume` unless shared or routed sticky by user |
+| Throttles                                | `Map`s (`api/src/throttle.ts`): failed logins by email, failed ingest tokens by bucket and address                                                                                       | no                                   | weaken to per replica                                      |
+| Settings                                 | `settings` table; each process re-reads it within 15 s (`core/src/config/settings.ts`)                                                                                                   | yes                                  | fine                                                       |
+| Permission cache                         | 60 s `Map` (`core/src/access/permissions.ts`)                                                                                                                                            | no                                   | a role change is stale for up to 60 s elsewhere            |
+| Repo clones                              | `tachy-repo-data` volume, mounted in the api and both workers                                                                                                                            | rebuildable cache                    | per host                                                   |
+| Embedding model                          | image layer (`/app/.model-cache`)                                                                                                                                                        | rebuildable                          | fine                                                       |
+| Container logs                           | Docker `local` driver, 20 MB × 10 files per container                                                                                                                                    | bounded by size, not by age          | -                                                          |
+| Backups                                  | age ciphertext in `/srv/tachy/backup-export`, on the same disk until someone downloads it (§6)                                                                                           | off-host only once downloaded        | -                                                          |
+| Host status                              | `/srv/tachy/status/*.json`, written by backups, the watch script and deploys; mounted read-only in the api                                                                               | rebuildable                          | -                                                          |
+| Deploy log                               | `/srv/tachy/deploy.log`; in the daily file backup (§6)                                                                                                                                   | off-host only once downloaded        | -                                                          |
 
 ### 2.3 How it is deployed
 
@@ -136,10 +136,13 @@ differently:
     `web:check`, the server build and `coverage`. On a push it also builds and
     pushes the image, and runs gitleaks.
   - `image-gates.yml`, on pull requests that touch the image: a Trivy scan and
-    the container smoke test.
+    the container smoke test, on the base stack and under the production
+    overlay.
   - `schema-plan.yml`, when `db/schema.sql` or `db/roles.sql` changes.
   - `load-scripts.yml`, when `load/` changes: bundles the k6 scripts.
   - `image-cleanup.yml`: keeps the 30 newest images.
+  - `image-scan.yml`, weekly: scans the `main` and `dev` images again.
+  - `codeql.yml`: static analysis of the TypeScript and the workflows.
 - **Only Caddy is published,** on 80 and 443. The overlay removes the api's
   port. Postgres listens on `127.0.0.1:5433`.
 - **The repository can't show what the laptop runs.** The host playbook has
@@ -1187,13 +1190,13 @@ sets them from `.env`, on a fresh volume and on every deploy. `roles.sql` also
 sets default privileges, so a table the schema plan adds is granted to
 `tachy_app` as it is created.
 
-| Role           | Used by                                                         | Rights                                                                                                                 |
-| -------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `tachy_owner`  | schema apply                                                    | meant to own every object. Not created: `tachy-deploy` applies the schema as the bootstrap superuser                   |
-| `tachy_app`    | api, workers, MCP children                                      | DML on application tables, `pg_read_all_stats`, and a 60 s `statement_timeout`                                         |
-| `tachy_mcp`    | the chat tools' subprocess, when `TACHY_MCP_DB_PASSWORD` is set | DML as `tachy_app`, except: no `credentials`, no `api_tokens`, no `users.password_hash`, insert-only on `audit_events` |
-| `tachy_backup` | `pg_dump`                                                       | `pg_read_all_data` (Postgres 14+)                                                                                      |
-| `tachy_watch`  | `tachy-watch`                                                   | `pg_monitor`. No password: it logs in only where `pg_hba` trusts, inside the postgres container                        |
+| Role           | Used by                                                                      | Rights                                                                                                                 |
+| -------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `tachy_owner`  | schema apply                                                                 | meant to own every object. Not created: `tachy-deploy` applies the schema as the bootstrap superuser                   |
+| `tachy_app`    | api, workers                                                                 | DML on application tables, `pg_read_all_stats`, and a 60 s `statement_timeout`                                         |
+| `tachy_mcp`    | the chat tools' subprocess; the overlay requires its `TACHY_MCP_DB_PASSWORD` | DML as `tachy_app`, except: no `credentials`, no `api_tokens`, no `users.password_hash`, insert-only on `audit_events` |
+| `tachy_backup` | `pg_dump`                                                                    | `pg_read_all_data` (Postgres 14+)                                                                                      |
+| `tachy_watch`  | `tachy-watch`                                                                | `pg_monitor`. No password: it logs in only where `pg_hba` trusts, inside the postgres container                        |
 
 **Why the roles.** The MCP child is driven by a model and inherits the api's
 `DATABASE_URL` (`api/src/turn-config.ts`). A superuser can run
@@ -2115,6 +2118,10 @@ and the SFTP pull keeps working as it is.
   `password_login_allowed`: one break-glass admin and the load-test user.
   Service accounts (`service_account`) are left out of engagement figures. Its
   throttle is an in-process `Map`.
+- An SSO sign-in is let in only where an admin has added the account
+  (`sso_admission`, Admin › system). A person the provider authenticates and
+  nobody added gets a 403 with the code `not_invited` and no user row; `anyone`
+  provisions a member on first sign-in instead.
 - **The ingest endpoint is the one route a session doesn't open.**
   `POST /ingest/buckets/:slug/batches` (`api/src/routes/ingest.ts`) takes
   documents pushed by a script outside tachý, such as the Document360 sync on
@@ -2195,6 +2202,7 @@ and the SFTP pull keeps working as it is.
   | orphaned library images           | 7 days                                         |
   | container logs                    | 200 MB per container (§8.1)                    |
   | `source_calls`, `analysis_runs`   | forever: they hold counts, not content         |
+  | stored tickets and their messages | until deleted by filter (`clean-tickets`)      |
   | flow runs                         | 90 days, failed ones 180                       |
   | notifications                     | 90 days once opened, 180 if never              |
 
@@ -2303,7 +2311,8 @@ run every minute by a systemd timer, as root.
 | readyz through Caddy | `curl https://<name>/readyz`                                          | 1 failure                                                             | 2 consecutive failures                                      |
 | 5xx rate             | `docker compose logs --since 10m api`, `status >= 500`                | > 1%                                                                  | > 5%                                                        |
 | api memory           | `docker stats` for the container, against its limit                   | > 85%                                                                 | an OOM kill in `docker events`                              |
-| turns queued         | `/api/system` with the API token                                      | queued > 2 min                                                        | queued > 5 min                                              |
+| runtime              | whether the api accepted `WATCH_API_TOKEN`                            | -                                                                     | the token was refused: expired or revoked                   |
+| turns queued         | `/api/system` with the watch token                                    | queued > 2 min                                                        | queued > 5 min                                              |
 | jobs                 | the same response's job health                                        | a last run failed, a run queued over 15 min, or a definition disabled | a schedule overdue, or a queue with runs and no live worker |
 | Postgres connections | `psql` as `tachy_watch`: `pg_stat_activity` count / `max_connections` | > 80%                                                                 | > 95%                                                       |
 | long transaction     | `pg_stat_activity`                                                    | > 5 min                                                               | > 10 min                                                    |
@@ -2401,22 +2410,28 @@ that fails counts as answered, because Postgres being down fails at once
 
 **GitHub Actions**
 
-| Workflow            | Runs on                                                 | Does                                                                                                       |
-| ------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `ci.yml`            | pull requests; pushes to `main` and `dev`               | `build`: typecheck, `web:check`, the server build, `coverage` with its ratchet at 74/72/71/63              |
-|                     | pushes only                                             | builds the image once and pushes `sha-<12 characters>` and the branch tag to GHCR; records the digest      |
-|                     | both                                                    | `secrets`: gitleaks                                                                                        |
-| `image-gates.yml`   | pull requests that touch the image                      | a Buildx build, a Trivy scan that fails on critical findings with a fix, and the container smoke test      |
-| `schema-plan.yml`   | pull requests that touch `db/schema.sql` or `roles.sql` | loads the merge-base schema and fixtures, diffs to the PR's schema, applies, and requires an empty re-diff |
-| `load-scripts.yml`  | pull requests that touch `load/`                        | bundles every k6 script on a pinned k6 image                                                               |
-| `image-cleanup.yml` | a schedule                                              | keeps the 30 newest images                                                                                 |
+| Workflow            | Runs on                                                 | Does                                                                                                                                                          |
+| ------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`            | pull requests; pushes to `main` and `dev`               | `build`: typecheck, `web:check`, the server build, `coverage` with its ratchet at 74/72/71/63                                                                 |
+|                     | pushes only                                             | builds the image once and pushes `sha-<12 characters>` and the branch tag to GHCR; records the digest; attests where it was built and what it holds; scans it |
+|                     | both                                                    | `secrets`: gitleaks                                                                                                                                           |
+| `image-gates.yml`   | pull requests that touch the image                      | a Buildx build, a Trivy scan that fails on critical findings with a fix, and the container smoke test on the base stack and under the production overlay      |
+| `schema-plan.yml`   | pull requests that touch `db/schema.sql` or `roles.sql` | loads the merge-base schema and fixtures, diffs to the PR's schema, applies, and requires an empty re-diff                                                    |
+| `load-scripts.yml`  | pull requests that touch `load/`                        | bundles every k6 script on a pinned k6 image                                                                                                                  |
+| `image-cleanup.yml` | a schedule                                              | keeps the 30 newest images                                                                                                                                    |
+| `image-scan.yml`    | weekly                                                  | the same Trivy scan on the published `main` and `dev` images                                                                                                  |
+| `codeql.yml`        | pull requests; pushes to `main` and `dev`; weekly       | CodeQL over the TypeScript and the workflows. Not a required check                                                                                            |
 
 - **The container smoke test** starts the built image with the base Compose
   file and a CI `.env` (token auth), waits for readyz, seeds a small database
   and runs `load/smoke.js` (`scripts/container-smoke.sh`). It catches what
   vitest can't: file permissions as `node`, missing env, the SPA build, the
-  image layout. It doesn't run the production overlay, so a read-only root
-  filesystem and the `tachy_app` role are never exercised in CI.
+  image layout. It then brings the same database up under
+  `deploy/compose.prod.yml` and runs `smoke.js` again, and one chat turn
+  against the mock model (`load/turns.mjs`): Caddy, the read-only root,
+  `tachy_app`, `tachy_mcp`, the embedder and the workers are exercised on
+  every pull request that touches the image or `deploy/`. The host scripts
+  (`tachy-deploy`, `tachy-backup`, `tachy-watch`) are not.
 - **`schema-plan`** uploads the plan as an artifact. Destructive hazards fail
   the job unless the pull request carries the `schema-destructive` label.
 - **`build`, `image-gates`, `schema-plan` and `secrets` are required checks**
@@ -2426,7 +2441,18 @@ that fails counts as answered, because Postgres being down fails at once
   workflow skipped by a path filter pending, and counts a job skipped by a
   condition as passed
   ([docs](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks)).
-- **Images built on a push aren't scanned.** Trivy runs on pull requests only.
+- **The published image is scanned** when it is pushed and again every week,
+  to the bar of the pull request scan. A red weekly run is how a vulnerability
+  found after the build shows up.
+- **Each pushed image carries two signed attestations** (`actions/attest`):
+  the workflow run and commit that built the digest, and a CycloneDX list of
+  what it holds. Nothing verifies them on the host yet;
+  `gh attestation verify oci://<image>@<digest> --repo diegokoes/tachy` does it
+  by hand.
+- **Images are pinned by digest**: the Node base, k6 and Go in the
+  `Dockerfile`, Postgres and Caddy in the Compose files. `tachy-backup`
+  archives volumes in the Postgres image, so the host pulls no image that is
+  not pinned.
 - **Dependabot** covers npm, Docker, Compose files and GitHub Actions, weekly,
   into `dev`.
 
@@ -2476,16 +2502,16 @@ image accepts the current schema, which is what expand and contract is for.
 
 ## 11. Testing strategy
 
-| Layer                | Tool                                                           | Status                               |
-| -------------------- | -------------------------------------------------------------- | ------------------------------------ |
-| Unit and integration | vitest, testcontainers Postgres, coverage ratchet              | in CI, required                      |
-| Search quality       | `test/search/quality.test.ts`, `scripts/eval-embeddings.ts`    | in CI; 14 golden queries (§4.6)      |
-| Schema drift         | `test/infra/schema-drift.test.ts`, plus `schema-plan` (§10)    | in CI                                |
-| Container smoke      | `image-gates.yml` (§10)                                        | in CI, on the base Compose file only |
-| Load and capacity    | k6, `load/turns.mjs`                                           | scripts built; no laptop numbers yet |
-| Backup restore       | weekly host timer; quarterly drill from a laptop copy (§6.4)   | built; not yet run on the laptop     |
-| Browser end-to-end   | Playwright: login, search, open entry, chat against a mock LLM | not built; optional                  |
-| Chaos drills         | manual, every quarter                                          | not yet run                          |
+| Layer                | Tool                                                           | Status                                                     |
+| -------------------- | -------------------------------------------------------------- | ---------------------------------------------------------- |
+| Unit and integration | vitest, testcontainers Postgres, coverage ratchet              | in CI, required                                            |
+| Search quality       | `test/search/quality.test.ts`, `scripts/eval-embeddings.ts`    | in CI; 14 golden queries (§4.6)                            |
+| Schema drift         | `test/infra/schema-drift.test.ts`, plus `schema-plan` (§10)    | in CI                                                      |
+| Container smoke      | `image-gates.yml` (§10)                                        | in CI, on the base Compose file and the production overlay |
+| Load and capacity    | k6, `load/turns.mjs`                                           | scripts built; no laptop numbers yet                       |
+| Backup restore       | weekly host timer; quarterly drill from a laptop copy (§6.4)   | built; not yet run on the laptop                           |
+| Browser end-to-end   | Playwright: login, search, open entry, chat against a mock LLM | not built; optional                                        |
+| Chaos drills         | manual, every quarter                                          | not yet run                                                |
 
 ### 11.1 k6
 

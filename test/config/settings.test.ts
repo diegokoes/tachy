@@ -112,6 +112,23 @@ describe("settings store", () => {
     }
   });
 
+  it("lets only invited accounts in through SSO until the setting says anyone", async () => {
+    await sql`delete from settings`;
+    clearSettingsCache();
+    expect((await effectiveSettings()).sso_admission).toEqual({
+      value: "invited",
+      source: "default",
+    });
+    await expect(setSetting("sso_admission", "everyone")).rejects.toThrow(
+      /invalid value/,
+    );
+    await setSetting("sso_admission", "anyone");
+    expect((await effectiveSettings()).sso_admission).toEqual({
+      value: "anyone",
+      source: "db",
+    });
+  });
+
   it("reads the slot cap from the setting, then TACHY_AGENT_SLOT_CAP, then 15", async () => {
     await sql`delete from settings`;
     clearSettingsCache();

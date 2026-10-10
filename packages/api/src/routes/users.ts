@@ -15,12 +15,13 @@ import {
   userEmailOf,
   listApiTokens,
   mintApiToken,
+  tokenExpiry,
   revokeApiToken,
 } from "@tachy/core/access";
 import { notFound } from "@tachy/core/infra";
 import { USER_ROLES, TEAM_ROLES, MIN_PASSWORD_LENGTH } from "@tachy/core";
 import { requireAdmin, requireSession } from "../auth";
-import { expiryOf, tokenSchema } from "../tokens";
+import { tokenSchema } from "../tokens";
 import { audit } from "../audit";
 import { assertTeamAdmin, callerUserId, isAnyTeamAdminApi } from "../authz";
 
@@ -120,7 +121,7 @@ export const users = new Hono()
       const { token, row } = await mintApiToken({
         userId: c.req.param("id")!,
         name: body.name,
-        expiresAt: expiryOf(body.expires_in_days),
+        expiresAt: tokenExpiry(body.expires_in_days),
         createdBy: await callerUserId(c),
       });
       await audit(c, "api_token_mint", body.name, {

@@ -73,11 +73,14 @@ describe("database roles", () => {
   });
 
   it("keeps tachy_app from changing or removing the audit trail", async () => {
+    // Counted against what is already there: the schema is shared with the
+    // files this worker ran before, and some of them leave rows behind.
     await asRole("tachy_app", async (tx) => {
+      const rows = async () =>
+        (await tx`select count(*)::int as n from audit_events`)[0].n as number;
+      const before = await rows();
       await tx`insert into audit_events (actor, action) values ('api', 'setup')`;
-      expect((await tx`select count(*)::int as n from audit_events`)[0].n).toBe(
-        1,
-      );
+      expect(await rows()).toBe(before + 1);
     });
     for (const statement of [
       "update audit_events set action = 'login'",

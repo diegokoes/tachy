@@ -7,6 +7,7 @@ import { addTeam } from "@tachy/core/catalog";
 import { createOutput } from "@tachy/core/exports";
 import { rememberSecret } from "@tachy/core/infra";
 import { createApp } from "../../packages/api/src/app";
+import { setupCode } from "../../packages/api/src/setup-code";
 import { server } from "../../packages/mcp/src/index";
 import { detailText } from "../../packages/web/src/audit/rows";
 import { cookieOf, json, loginCookie } from "../http";
@@ -218,7 +219,11 @@ describe("what the API records", () => {
   it("records who ran setup", async () => {
     const response = await app.request(
       "/api/setup",
-      json({ email: "first@example.com", password: "a-long-password" }),
+      json({
+        email: "first@example.com",
+        password: "a-long-password",
+        setup_code: setupCode(),
+      }),
     );
     expect(cookieOf(response)).not.toBe("");
     expect((await listAudit())[0]).toMatchObject({
@@ -274,5 +279,187 @@ describe("an event's detail as text", () => {
     );
     expect(detailText({ teams: ["a", "b"] })).toBe('teams: ["a","b"]');
     expect(detailText({})).toBe("");
+  });
+});
+
+describe("what a change in the admin pages records", () => {
+  const send = (cookie: string, method: string, path: string, body?: unknown) =>
+    app.request(`/api${path}`, {
+      method,
+      headers: {
+        cookie,
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+
+  /** Oldest first, without the sign-ins the test's own cookies made. */
+  const changes = async () =>
+    (await listAudit())
+      .filter((e) => e.action !== "login")
+      .reverse()
+      .map((e) => `${e.action} ${e.target}`);
+
+  it("records the catalogue: teams, products, components, labels and patterns", async () => {
+    const { admin } = await seedPeople();
+    const steps: [string, string, unknown?][] = [
+      ["POST", "/teams", { slug: "ops", name: "Ops" }],
+      ["PATCH", "/teams/ops", { name: "Operations" }],
+      ["POST", "/products", { team_slug: "ops", slug: "gw", name: "Gateway" }],
+      ["PATCH", "/products/gw", { name: "Gateway 2" }],
+      ["POST", "/products/gw/components", { slug: "relay", name: "Relay" }],
+      ["PATCH", "/products/gw/components/relay", { name: "Relay box" }],
+      ["POST", "/products/gw/components/relay/rename", { to: "relay-box" }],
+      ["DELETE", "/products/gw/components/relay-box"],
+      ["POST", "/products/gw/labels", { slug: "urgent" }],
+      ["PATCH", "/products/gw/labels/urgent", { description: "drop the rest" }],
+      ["POST", "/products/gw/labels/urgent/rename", { to: "hot" }],
+      ["DELETE", "/products/gw/labels/hot"],
+      ["POST", "/resolution-patterns", { slug: "restart", description: "x" }],
+      ["PATCH", "/resolution-patterns/restart", { description: "y" }],
+      ["POST", "/resolution-patterns/restart/rename", { to: "reboot" }],
+      ["DELETE", "/resolution-patterns/reboot"],
+      ["DELETE", "/products/gw"],
+      ["DELETE", "/teams/ops"],
+    ];
+    for (const [method, path, body] of steps) {
+      const response = await send(admin, method, path, body);
+      expect(response.status, `${method} ${path}`).toBe(200);
+    }
+
+    expect(await changes()).toEqual([
+      "catalog_add team:ops",
+      "catalog_update team:ops",
+      "catalog_add product:ops/gw",
+      "catalog_update product:gw",
+      "catalog_add component:gw/relay",
+      "catalog_update component:gw/relay",
+      "catalog_update component:gw/relay",
+      "catalog_delete component:gw/relay-box",
+      "catalog_add label:gw/urgent",
+      "catalog_update label:gw/urgent",
+      "catalog_update label:gw/urgent",
+      "catalog_delete label:gw/hot",
+      "catalog_add pattern:restart",
+      "catalog_update pattern:restart",
+      "catalog_update pattern:restart",
+      "catalog_delete pattern:reboot",
+      "catalog_delete product:gw",
+      "catalog_delete team:ops",
+    ]);
+    const renamed = (await listAudit()).filter((e) => e.detail.renamed_to);
+    expect(renamed.map((e) => e.detail.renamed_to).sort()).toEqual([
+      "hot",
+      "reboot",
+      "relay-box",
+    ]);
+  });
+
+  it("records customers and what is set on them, without a fact's value", async () => {
+    const { admin } = await seedPeople();
+    await setTeamMember("test-team", "root@example.com", "admin");
+    const steps: [string, string, unknown?][] = [
+      ["POST", "/customers", { name: "Acme", slug: "acme" }],
+      ["PATCH", "/customers/acme", { notes: "pilot" }],
+      [
+        "PUT",
+        "/customers/acme/units",
+        { slug: "plant-1", name: "Plant 1", kind: "site" },
+      ],
+      ["PATCH", "/customers/acme/units/plant-1", { name: "Plant one" }],
+      [
+        "PUT",
+        "/customers/acme/facts",
+        { kind: "version", label: "controller", value: "9.4.1-internal" },
+      ],
+      ["DELETE", "/customers/acme/units/plant-1"],
+      ["DELETE", "/customers/acme"],
+    ];
+    for (const [method, path, body] of steps) {
+      const response = await send(admin, method, path, body);
+      expect(response.status, `${method} ${path}`).toBe(200);
+    }
+
+    expect(await changes()).toEqual([
+      "catalog_add customer:acme",
+      "catalog_update customer:acme",
+      "catalog_add unit:acme/plant-1",
+      "catalog_update unit:acme/plant-1",
+      "catalog_update customer:acme",
+      "catalog_delete unit:acme/plant-1",
+      "catalog_delete customer:acme",
+    ]);
+    const fact = (await listAudit()).find((e) => e.detail.fact_set);
+    expect(fact?.detail).toMatchObject({
+      fact_set: "version",
+      label: "controller",
+    });
+    expect(JSON.stringify(await listAudit())).not.toContain("9.4.1-internal");
+  });
+
+  it("records repos, source projects and flows", async () => {
+    const { admin } = await seedPeople();
+
+    const linked = await send(admin, "PUT", "/repos", {
+      slug: "driver",
+      url: "https://deploy:hunter2@example.invalid/driver.git",
+      product: "tpd",
+    });
+    expect(linked.status).toBe(200);
+    expect((await send(admin, "DELETE", "/repos/driver")).status).toBe(200);
+
+    const project = await send(admin, "POST", "/source-projects", {
+      source_slug: "test-freshdesk",
+      external_key: "777",
+      product_slug: "tpd",
+    });
+    expect(project.status).toBe(200);
+    const projectId = (await project.json()).id as string;
+    expect(
+      (
+        await send(admin, "PATCH", `/source-projects/${projectId}`, {
+          name: "Second line",
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await send(admin, "DELETE", `/source-projects/${projectId}`)).status,
+    ).toBe(200);
+
+    const flow = await send(admin, "POST", "/flows", {
+      name: "triage",
+      team: null,
+      enabled: false,
+      graph: { triggers: [{ id: "m", kind: "manual" }], steps: [] },
+    });
+    expect(flow.status).toBe(201);
+    const flowId = (await flow.json()).id as string;
+    expect((await send(admin, "DELETE", `/flows/${flowId}`)).status).toBe(204);
+
+    expect(await changes()).toEqual([
+      "repo_link driver",
+      "repo_delete driver",
+      "source_project_save test-freshdesk/777",
+      "source_project_save test-freshdesk/777",
+      "source_project_delete test-freshdesk/777",
+      "flow_save triage",
+      "flow_delete triage",
+    ]);
+    const link = (await listAudit()).find((e) => e.action === "repo_link");
+    expect(link?.detail.url).toBe("https://example.invalid/driver.git");
+    expect(link?.actor_email).toBe("root@example.com");
+  });
+
+  it("records nothing for a change that was refused or failed", async () => {
+    const { admin, member } = await seedPeople();
+    expect(
+      (await send(member, "POST", "/teams", { slug: "ops", name: "Ops" }))
+        .status,
+    ).toBe(403);
+    expect((await send(member, "DELETE", "/customers/acme")).status).toBe(403);
+    expect(
+      (await send(admin, "DELETE", "/teams/no-such-team")).status,
+    ).not.toBe(200);
+    expect(await changes()).toEqual([]);
   });
 });

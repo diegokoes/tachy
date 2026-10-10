@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { ingestWorkItem } from "@tachy/core/work-items";
+import { ingestWorkItem, messageKey } from "@tachy/core/work-items";
 import { addCustomer, setWorkItemCustomer } from "@tachy/core/catalog";
-import type { RawWorkItem } from "@tachy/core/sources";
+import type { RawMessage, RawWorkItem } from "@tachy/core/sources";
 import {
   resetData,
   seededFreshdeskConnId,
@@ -166,5 +166,108 @@ describe("customer attribution precedence", () => {
       requesterEmail: "buyer@logista.com",
     });
     expect(item.customerId).toBe(logista.id);
+  });
+});
+
+describe("one stored copy of each message", () => {
+  beforeEach(resetData);
+
+  const message = (over: Partial<RawMessage> = {}): RawMessage => ({
+    externalId: "m1",
+    author: "alice",
+    visibility: "public",
+    direction: "incoming",
+    bodyText: "it broke",
+    createdAt: "2026-04-01T10:00:00Z",
+    ...over,
+  });
+  const stored = (itemId: string) => sql<
+    { external_id: string; body_text: string }[]
+  >`
+    select external_id, body_text from work_item_messages
+    where work_item_id = ${itemId} order by external_id
+  `;
+
+  it("keeps one row for a message the source gives no id for, however often it is fetched", async () => {
+    const connId = await seededFreshdeskConnId();
+    const unnamed = message({ externalId: undefined });
+    const item = await ingestWorkItem(connId, rawItem({ messages: [unnamed] }));
+    await ingestWorkItem(connId, rawItem({ messages: [unnamed] }));
+    await ingestWorkItem(connId, rawItem({ messages: [unnamed] }));
+
+    const rows = await stored(item.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].external_id).toBe(messageKey(unnamed));
+    expect(rows[0].external_id).toMatch(/^h-[0-9a-f]{32}$/);
+  });
+
+  it("tells two messages without ids apart by who wrote them, when and what", () => {
+    const first = message({ externalId: undefined });
+    expect(messageKey(first)).toBe(messageKey({ ...first }));
+    expect(messageKey(first)).not.toBe(
+      messageKey({ ...first, bodyText: "it broke again" }),
+    );
+    expect(messageKey(first)).not.toBe(messageKey({ ...first, author: "bob" }));
+    expect(messageKey(message())).toBe("m1");
+  });
+
+  it("stores one row when a fetch carries the same message twice", async () => {
+    const connId = await seededFreshdeskConnId();
+    const item = await ingestWorkItem(
+      connId,
+      rawItem({ messages: [message(), message({ bodyText: "edited" })] }),
+    );
+    expect(await stored(item.id)).toEqual([
+      { external_id: "m1", body_text: "edited" },
+    ]);
+  });
+
+  it("drops a stored message the source no longer has", async () => {
+    const connId = await seededFreshdeskConnId();
+    const summary = message({ externalId: "note-1", bodyText: "summary v1" });
+    const item = await ingestWorkItem(
+      connId,
+      rawItem({ messages: [message(), summary] }),
+    );
+    // The note was replaced at the source: the old one is gone, a new one is there.
+    await ingestWorkItem(
+      connId,
+      rawItem({
+        messages: [
+          message(),
+          message({ externalId: "note-2", bodyText: "summary v2" }),
+        ],
+      }),
+    );
+    expect(await stored(item.id)).toEqual([
+      { external_id: "m1", body_text: "it broke" },
+      { external_id: "note-2", body_text: "summary v2" },
+    ]);
+  });
+
+  it("clears a message stored without an id on the next full fetch", async () => {
+    const connId = await seededFreshdeskConnId();
+    const item = await ingestWorkItem(
+      connId,
+      rawItem({ messages: [message()] }),
+    );
+    await sql`
+      insert into work_item_messages (work_item_id, external_id, body_text)
+      values (${item.id}, null, 'a copy from before messages were keyed')
+    `;
+    await ingestWorkItem(connId, rawItem({ messages: [message()] }));
+    expect(await stored(item.id)).toEqual([
+      { external_id: "m1", body_text: "it broke" },
+    ]);
+  });
+
+  it("leaves the stored messages alone when a sync brings the ticket without any", async () => {
+    const connId = await seededFreshdeskConnId();
+    const item = await ingestWorkItem(
+      connId,
+      rawItem({ messages: [message()] }),
+    );
+    await ingestWorkItem(connId, rawItem({ title: "renamed", messages: [] }));
+    expect(await stored(item.id)).toHaveLength(1);
   });
 });

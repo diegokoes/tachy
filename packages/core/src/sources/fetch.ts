@@ -1,3 +1,4 @@
+import { BlockList, isIP } from "node:net";
 import { countSourceCall } from "./traffic";
 
 /**
@@ -99,40 +100,71 @@ export async function sourceFetch(
   }
 }
 
+type Subnet = [network: string, prefixBits: number];
+
 /**
- * Blocks that must never be reachable from a URL someone typed into the product
- * or a model composed from ticket text: loopback, link-local (which includes
- * the cloud metadata endpoint at 169.254.169.254), and the private ranges the
- * server itself sits in. Not applied to `sourceFetch`: a self-hosted GitHub
+ * Loopback, link-local (which includes the cloud metadata endpoint at
+ * 169.254.169.254), the private and carrier ranges the server itself sits in,
+ * benchmarking, and everything from multicast up.
+ */
+const BLOCKED_IPV4_SUBNETS: Subnet[] = [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.168.0.0", 16],
+  ["198.18.0.0", 15],
+  ["224.0.0.0", 3],
+];
+
+/** Unspecified, loopback, unique-local and link-local. */
+const BLOCKED_IPV6_SUBNETS: Subnet[] = [
+  ["::", 128],
+  ["::1", 128],
+  ["fc00::", 7],
+  ["fe80::", 10],
+];
+
+/** RFC 6052: a NAT64 gateway forwards to the IPv4 address in the last 32 bits. */
+const NAT64_PREFIX = "64:ff9b::";
+const NAT64_PREFIX_BITS = 96;
+
+/** An IPv4 network as the NAT64 address that reaches it. */
+function nat64Network(ipv4: string): string {
+  const [first, second, third, fourth] = ipv4.split(".").map(Number);
+  const hextet = (high: number, low: number) =>
+    ((high << 8) | low).toString(16);
+  return `${NAT64_PREFIX}${hextet(first, second)}:${hextet(third, fourth)}`;
+}
+
+/**
+ * Where a URL someone typed into the product, or a model composed from ticket
+ * text, must never reach. Not applied to `sourceFetch`: a self-hosted GitHub
  * Enterprise or Azure DevOps server is legitimately on a private address.
  */
-function isBlockedAddress(ip: string): boolean {
-  if (ip.includes(":")) {
-    const v6 = ip.toLowerCase().replace(/^\[|\]$/g, "");
-    if (v6 === "::" || v6 === "::1") return true;
-    // Unique-local (fc00::/7) and link-local (fe80::/10).
-    if (/^f[cd]/.test(v6) || /^fe[89ab]/.test(v6)) return true;
-    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(v6);
-    return mapped ? isBlockedAddress(mapped[1]) : false;
-  }
-  const octets = ip.split(".").map(Number);
-  if (
-    octets.length !== 4 ||
-    octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)
-  )
-    return true;
-  const [first, second] = octets;
-  return (
-    first === 0 ||
-    first === 10 ||
-    first === 127 ||
-    (first === 100 && second >= 64 && second <= 127) ||
-    (first === 169 && second === 254) ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 168) ||
-    (first === 198 && (second === 18 || second === 19)) ||
-    first >= 224
+const blockedAddresses = new BlockList();
+for (const [network, prefixBits] of BLOCKED_IPV4_SUBNETS) {
+  blockedAddresses.addSubnet(network, prefixBits, "ipv4");
+  blockedAddresses.addSubnet(
+    nat64Network(network),
+    NAT64_PREFIX_BITS + prefixBits,
+    "ipv6",
   );
+}
+for (const [network, prefixBits] of BLOCKED_IPV6_SUBNETS)
+  blockedAddresses.addSubnet(network, prefixBits, "ipv6");
+
+/**
+ * `BlockList` reads an IPv4-mapped IPv6 address as the IPv4 address it stands
+ * for, in the dotted form and in the hex form (`::ffff:7f00:1`) a URL parser
+ * rewrites it to. Text that is not an address is refused.
+ */
+export function isBlockedAddress(ip: string): boolean {
+  const family = isIP(ip);
+  if (family === 0) return true;
+  return blockedAddresses.check(ip, family === 6 ? "ipv6" : "ipv4");
 }
 
 const MAX_REDIRECTS = 3;
@@ -165,7 +197,7 @@ export async function fetchUntrustedUrl(
 
     const host = parsed.hostname.replace(/^\[|\]$/g, "");
     const addresses =
-      /^[\d.]+$/.test(host) || host.includes(":")
+      isIP(host) !== 0
         ? [{ address: host }]
         : await lookup(host, { all: true }).catch(() => {
             throw new Error(`${label}: cannot resolve '${host}'`);

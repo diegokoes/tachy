@@ -3,7 +3,8 @@
 #   docker compose -f docker-compose.yml -f deploy/compose.prod.yml up -d
 #
 # Needs in .env: TACHY_IMAGE (by digest), TACHY_HOSTNAME, POSTGRES_PASSWORD,
-# TACHY_APP_DB_PASSWORD, TACHY_BACKUP_DB_PASSWORD, plus the app secrets.
+# TACHY_APP_DB_PASSWORD, TACHY_MCP_DB_PASSWORD, TACHY_BACKUP_DB_PASSWORD, plus
+# the app secrets.
 #
 # Every size below is a variable whose default fits the 16 GB laptop (§3.2):
 # the memory limits sum to what that host has left after the OS. Another host
@@ -21,7 +22,7 @@ x-logging: &logging
 
 services:
   caddy:
-    image: caddy:2.11.4-alpine
+    image: caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
     container_name: ${COMPOSE_PROJECT_NAME:-tachy}-caddy
     restart: unless-stopped
     depends_on:
@@ -64,8 +65,9 @@ services:
       # The model runs in the embedder service below, not in the api.
       TACHY_EMBED_URL: http://embedder:8790/internal/embed
       TACHY_INTERNAL_SECRET: ${TACHY_INTERNAL_SECRET:?set TACHY_INTERNAL_SECRET (openssl rand -hex 32)}
-      # Set: the chat tools connect as tachy_mcp. Unset: as tachy_app, as before.
-      TACHY_MCP_DB_PASSWORD: ${TACHY_MCP_DB_PASSWORD:-}
+      # The chat tools connect as tachy_mcp, which a model drives: no vault, no
+      # API tokens, no password hashes (db/roles.sql).
+      TACHY_MCP_DB_PASSWORD: ${TACHY_MCP_DB_PASSWORD:?set TACHY_MCP_DB_PASSWORD (openssl rand -hex 32)}
       # Caddy overwrites X-Forwarded-For, so it names the client here.
       TACHY_BEHIND_PROXY: "true"
       TACHY_DB_POOL_MAX: ${TACHY_API_DB_POOL_MAX:-15}

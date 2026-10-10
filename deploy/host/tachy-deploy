@@ -140,12 +140,14 @@ resolve_image() {
   echo "${digest:-$tag}"
 }
 
-# roll <commit> <image>: check out the commit, point .env at the image, recreate
+# roll <commit> <image>: check out the commit, point .env at the image, recreate.
+# One step that fails as a whole: a stack Compose will not bring up, such as a
+# release that needs a variable .env lacks, is rolled back like an unready one.
 roll() {
-  git_ checkout -q --detach "$1"
-  set_env TACHY_IMAGE "$2"
-  set_env TACHY_COMMIT "${1:0:12}"
-  dc up -d --remove-orphans
+  git_ checkout -q --detach "$1" &&
+    set_env TACHY_IMAGE "$2" &&
+    set_env TACHY_COMMIT "${1:0:12}" &&
+    dc up -d --remove-orphans
 }
 
 record() {
@@ -242,9 +244,7 @@ git_ show "$COMMIT:deploy/postgres/role-passwords.sh" |
     -e TACHY_MCP_DB_PASSWORD="$(app_env TACHY_MCP_DB_PASSWORD)" \
     -e TACHY_BACKUP_DB_PASSWORD="$(app_env TACHY_BACKUP_DB_PASSWORD)" postgres bash -s >/dev/null
 
-roll "$COMMIT" "$IMAGE"
-
-if wait_ready && smoke; then
+if roll "$COMMIT" "$IMAGE" && wait_ready && smoke; then
   record "$COMMIT" "$IMAGE" "$PREV_IMAGE" "$SCHEMA" "deployed"
   log "deployed $COMMIT"
   exit 0
@@ -261,8 +261,7 @@ else
   restore_stamp "$LIVE_SCHEMA" "$NEW_SCHEMA" ||
     log "could not restore the schema stamp; the previous release may not report ready"
 fi
-roll "$PREV_COMMIT" "$PREV_IMAGE"
-if wait_ready; then
+if roll "$PREV_COMMIT" "$PREV_IMAGE" && wait_ready; then
   record "$COMMIT" "$IMAGE" "$PREV_IMAGE" "$SCHEMA" "rolled_back"
   log "rolled back to ${PREV_COMMIT:0:12}"
 else
