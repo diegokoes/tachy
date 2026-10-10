@@ -63,13 +63,18 @@ null_embeddings() {
       (select count(*) from bucket_doc_chunks where embedding is null))"
 }
 
+# The Postgres image the stack names, by the digest the Compose file pins.
+pg_image() {
+  echo "${TACHY_PG_IMAGE:-$(dc config --format json | jq -r '.services.postgres.image')}"
+}
+
 # restore_test <dump>: restores into a throwaway Postgres with no network and
 # compares it with production. Prints a JSON object; fails on any mismatch.
 restore_test() {
   local dump=$1 name="tachy-restore-test-$$" started ended image
   local problems=()
   # The image production runs, so a pgvector bump cannot leave the test behind.
-  image=${TACHY_PG_IMAGE:-$(dc config --format json | jq -r '.services.postgres.image')}
+  image=$(pg_image)
   started=$(date +%s)
   docker run -d --rm --name "$name" --network none --shm-size 1g \
     --memory "${TACHY_RESTORE_MEM_LIMIT:-1g}" \
@@ -171,17 +176,20 @@ cmd_db() {
 }
 
 cmd_files() {
-  local ts proj
+  local ts proj archive_image
   ts=$(stamp)
   proj=$(project)
+  archive_image=$(pg_image)
   for vol in tachy-agent-home caddy-data; do
     local plain="$STAGING/tachy-$vol-$ts.tar.zst"
     docker volume inspect "${proj}_$vol" >/dev/null 2>&1 || {
       log "skipping missing volume ${proj}_$vol"
       continue
     }
-    docker run --rm --network none -v "${proj}_$vol:/data:ro" busybox \
-      tar -C /data -cf - . | zstd -q -T0 -o "$plain"
+    # In the Postgres image, which the host already holds at a pinned digest,
+    # so that the archive does not depend on pulling one more image.
+    docker run --rm --network none -v "${proj}_$vol:/data:ro" --entrypoint tar \
+      "$archive_image" -C /data -cf - . | zstd -q -T0 -o "$plain"
     publish "$plain" "tachy-$vol-$ts.tar.zst" >/dev/null
   done
   # What was deployed and when: the record of what can be rolled back to.

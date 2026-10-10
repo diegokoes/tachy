@@ -18,10 +18,10 @@ WORKDIR /app
 RUN npm i -g npm@12.0.2
 
 # k6, for the load runs an admin starts from the tests page (§11.3).
-FROM grafana/k6:2.3.0 AS k6
+FROM grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34 AS k6
 
 # The schema diff tool tachy-deploy runs from the new image (§5.10).
-FROM golang:1.27 AS schema-diff
+FROM golang:1.27@sha256:e432b43af23a9328d56a7c499be0476810aa344acbcf65fc7c455d4ff5a40602 AS schema-diff
 RUN CGO_ENABLED=0 go install github.com/stripe/pg-schema-diff/cmd/pg-schema-diff@v1.0.9
 
 # Build stage: devDependencies, the model download, the SPA and the bundles.
