@@ -25,7 +25,7 @@ export interface CompletionResult {
  * One prompt in, one answer out - no tools, no MCP subprocess, no streaming to a
  * caller. For utility calls (classifying, reviewing a draft) that would be
  * wasteful to run through the full agent loop. Credential handling matches the
- * turn path: `claudeEnv` strips every outranking credential before setting the
+ * turn path: `claudeEnv` passes on no credential of the server's and sets the
  * caller's own, so a one-shot never bills the server's account.
  */
 export async function completeOnce(

@@ -22,20 +22,31 @@ interface ContentBlock {
 }
 
 /**
- * Credential sources Claude Code consults ahead of CLAUDE_CODE_OAUTH_TOKEN.
- * Any one left in the inherited environment outranks the caller's credential
- * and bills the wrong account.
+ * What the Claude Code process inherits from the server, named rather than
+ * copied. It hands its whole environment on to the MCP child, so a copy puts
+ * the vault key, the session secret and every server token in both. No
+ * credential source is listed: one left in outranks the caller's own and bills
+ * the wrong account.
  */
-const OUTRANKING_CREDENTIAL_VARS = [
-  "ANTHROPIC_API_KEY",
-  "ANTHROPIC_AUTH_TOKEN",
-  "CLAUDE_CODE_OAUTH_TOKEN",
-  "ANTHROPIC_PROFILE",
-  "ANTHROPIC_FEDERATION_RULE_ID",
-  "ANTHROPIC_ORGANIZATION_ID",
-  "CLAUDE_CODE_USE_BEDROCK",
-  "CLAUDE_CODE_USE_VERTEX",
-  "CLAUDE_CODE_USE_FOUNDRY",
+const INHERITED_ENV = [
+  "PATH",
+  "HOME",
+  "LANG",
+  "LC_ALL",
+  "TZ",
+  "TMPDIR",
+  // A proxy on the way out, and the certificates it re-signs with.
+  "HTTPS_PROXY",
+  "HTTP_PROXY",
+  "NO_PROXY",
+  "https_proxy",
+  "http_proxy",
+  "no_proxy",
+  "NODE_EXTRA_CA_CERTS",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+  // Where the model answers, when that is not Anthropic's own endpoint.
+  "ANTHROPIC_BASE_URL",
 ];
 
 /**
@@ -71,16 +82,17 @@ export function explainFailure(raw: string): {
 
 /**
  * Environment for the spawned `claude` process. The SDK replaces the child
- * environment wholesale, so the inherited one is copied, then every credential
- * source is stripped before the caller's own is set.
+ * environment wholesale, so this is all of it: the named variables the server
+ * has set, then the caller's own credential.
  */
 export function claudeEnv(
   config: Pick<AgentConfig, "agentAuth" | "configDir">,
 ): Record<string, string> {
   const env: Record<string, string> = {};
-  for (const [name, value] of Object.entries(process.env))
+  for (const name of INHERITED_ENV) {
+    const value = process.env[name];
     if (typeof value === "string") env[name] = value;
-  for (const name of OUTRANKING_CREDENTIAL_VARS) delete env[name];
+  }
 
   if (config.agentAuth?.kind === "anthropic_api_key")
     env.ANTHROPIC_API_KEY = config.agentAuth.value;
