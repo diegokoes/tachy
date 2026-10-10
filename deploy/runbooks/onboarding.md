@@ -1,7 +1,14 @@
-# Adding a team, a source, a linked repo or a bucket
+# Adding a person, a team, a source, a linked repo or a bucket
 
 All of it is done in the admin page by an app admin. None of it needs the host
 or a deploy.
+
+**A person.** Under SSO only accounts an admin has added are let in. Admin ›
+access › users & roles adds one by email, with no password; the person then
+signs in with SSO. Someone who signs in first is told to ask an admin, and gets
+no account. Admin › system › `SSO sign-in` set to `anyone the provider lets in`
+gives every person the provider authenticates a member account on first
+sign-in.
 
 **A team.** Admin › structure › teams creates it. Admin › users › teams puts
 people in it and names its admins. A team with no admin is listed as an issue

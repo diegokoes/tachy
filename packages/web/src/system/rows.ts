@@ -1,4 +1,4 @@
-import type { DeploymentProfile } from "@tachy/contract";
+import type { DeploymentProfile, SsoAdmission } from "@tachy/contract";
 
 export type Setting<T> = { value: T; source: "db" | "env" | "default" };
 export type RuntimeInfo = {
@@ -65,6 +65,7 @@ export type SystemInfo = {
     agent_slot_cap: Setting<number>;
     agent_queue_max: Setting<number>;
     org_timezone: Setting<string>;
+    sso_admission: Setting<SsoAdmission>;
   };
   credentials: {
     vault_enabled: boolean;

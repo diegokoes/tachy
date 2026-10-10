@@ -262,6 +262,24 @@
             ></td
           >
         </tr>
+        <tr>
+          <td class="tip">SSO sign-in</td>
+          <td>
+            <AsciiSelect
+              value={system.settings.sso_admission.value}
+              options={[
+                { value: "invited", label: "accounts an admin added" },
+                { value: "anyone", label: "anyone the provider lets in" },
+              ]}
+              onchange={(v) => saveSetting("sso_admission", v)}
+            />
+          </td>
+          <td
+            ><span class="badge src-{system.settings.sso_admission.source}"
+              >{system.settings.sso_admission.source}</span
+            ></td
+          >
+        </tr>
       </tbody>
     </table>
   </fieldset>
