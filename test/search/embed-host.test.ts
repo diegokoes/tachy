@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import {
+  EMBEDDING_SPEC,
   embedQuery,
   setEmbedBackend,
   startEmbedHost,
@@ -29,11 +30,13 @@ const ready = (h: EmbedHost) =>
 
 describe("embedding in a worker thread", () => {
   it("returns the same vector as the in-process model", async () => {
-    const local = await embedQuery("printer queue stalls after reboot");
+    const text = "printer queue stalls after reboot";
+    const local = await embedQuery(text);
     host = startEmbedHost({});
     await ready(host);
+    // The queue takes a text as embedQuery hands it over: prefixed.
     const [threaded] = await host.queue.embed("query", [
-      "printer queue stalls after reboot",
+      EMBEDDING_SPEC.queryPrefix + text,
     ]);
     expect(threaded).toHaveLength(local.length);
     local.forEach((v, i) => expect(threaded[i]).toBeCloseTo(v, 5));
