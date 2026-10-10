@@ -1,5 +1,6 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../packages/api/src/app";
+import { isSetupCode, setupCode } from "../../packages/api/src/setup-code";
 import {
   getSettings,
   clearSettingsCache,
@@ -14,15 +15,89 @@ afterAll(() => sql.end());
 
 const app = createApp({ passwordAuth: true });
 
+/** A setup request from someone who has read the server's log. */
+const withCode = (body: Record<string, unknown>) =>
+  json({ setup_code: setupCode(), ...body });
+
 describe("first-run setup wizard", () => {
   beforeAll(resetData);
 
   it("reports un-bootstrapped on a fresh instance, /api stays open", async () => {
+    const written = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
     const status = await app.request("/api/setup/status");
+    await app.request("/api/setup/status");
+    const announcements = written.mock.calls
+      .map(([line]) => String(line))
+      .filter((line) => line.includes('"event":"setup_code"'));
+    written.mockRestore();
+
     expect(await status.json()).toEqual({ bootstrapped: false });
+    // Once per process, however often the wizard asks.
+    expect(announcements).toHaveLength(1);
+    expect(announcements[0]).toContain(setupCode());
 
     const teams = await app.request("/api/teams");
     expect(teams.status).toBe(200);
+  });
+
+  it("refuses setup without the code from the server's log", async () => {
+    const founder = {
+      email: "stranger@example.com",
+      password: "a-long-password",
+    };
+    for (const body of [
+      founder,
+      { ...founder, setup_code: "" },
+      { ...founder, setup_code: "0".repeat(setupCode().length) },
+    ]) {
+      const response = await app.request("/api/setup", json(body));
+      expect(response.status).toBe(403);
+      expect((await response.json()).error).toMatch(/setup code/);
+      expect(response.headers.get("set-cookie")).toBeNull();
+    }
+    expect(await sql`select 1 from users`).toHaveLength(0);
+  });
+
+  it("asks for the code where a token or SSO already opened the port", async () => {
+    const founder = {
+      email: "stranger@example.com",
+      password: "a-long-password",
+    };
+    const withToken = createApp({
+      passwordAuth: true,
+      apiToken: "install-token",
+    });
+    const withSso = createApp({
+      passwordAuth: true,
+      oidc: {
+        issuer: "https://login.example.com",
+        clientId: "tachy",
+        clientSecret: "secret",
+        sessionSecret: "s".repeat(40),
+      },
+    });
+    for (const deployment of [withToken, withSso]) {
+      const response = await deployment.request("/api/setup", json(founder));
+      expect(response.status).toBe(403);
+    }
+    // The token opens the api, and still does not stand in for the code.
+    const response = await withToken.request("/api/setup", {
+      ...json(founder),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer install-token",
+      },
+    });
+    expect(response.status).toBe(403);
+    expect(await sql`select 1 from users`).toHaveLength(0);
+  });
+
+  it("takes the code as it is copied from a log line", () => {
+    expect(isSetupCode(`  ${setupCode().toUpperCase()}\n`)).toBe(true);
+    expect(isSetupCode(setupCode().slice(1))).toBe(false);
+    expect(isSetupCode(undefined)).toBe(false);
   });
 
   it("refuses to take over an account that already exists", async () => {
@@ -33,7 +108,7 @@ describe("first-run setup wizard", () => {
 
     const response = await app.request(
       "/api/setup",
-      json({
+      withCode({
         email: "colleague@example.com",
         password: "attacker-chosen-password",
       }),
@@ -52,7 +127,7 @@ describe("first-run setup wizard", () => {
   it("bootstraps admin + settings + workspace in one POST", async () => {
     const response = await app.request(
       "/api/setup",
-      json({
+      withCode({
         email: "founder@example.com",
         password: "a-long-password",
         display_name: "Founder",
@@ -137,7 +212,7 @@ describe("first-run setup with an agent key", () => {
   it("stores the agent key encrypted, as the first admin's own", async () => {
     const response = await app.request(
       "/api/setup",
-      json({
+      withCode({
         email: "keyed@example.com",
         password: "a-long-password",
         settings: { agent_effort: "high" },
