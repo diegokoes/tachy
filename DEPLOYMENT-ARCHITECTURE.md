@@ -1623,6 +1623,10 @@ the end-to-end figures use each model's own floor.
 | granite-embedding-311m-multilingual-r2 |            12 | 0.046 |                                   8 / 8 |                            28 / 35 / 43 |                           28 / 38 / 41 |
 | gte-modernbert-base, int8              |            12 | 0.091 |                                   8 / 6 |                                       - |                                      - |
 | Qwen3-Embedding-0.6B, int8             |            13 | 0.081 |                                   8 / 6 |                                       - |                                      - |
+| lightonai/DenseOn                      |            13 | 0.183 |                                   8 / 7 |                            21 / 32 / 37 |                           30 / 36 / 39 |
+| voyage-4-nano, cut to 768              |            13 | 0.138 |                                   8 / 8 |                            22 / 39 / 45 |                           29 / 35 / 41 |
+| pplx-embed-v1-0.6b, cut to 768         |            13 | 0.311 |                                   8 / 8 |                            23 / 33 / 38 |                           28 / 32 / 39 |
+| embeddinggemma-2, its text encoder     |            12 | 0.030 |                                   8 / 8 |                            28 / 37 / 41 |                           27 / 33 / 42 |
 
 The embedder service from the production image at 6 CPUs and 4 threads
 (`scripts/bench-embedder.ts`):
@@ -1634,6 +1638,18 @@ The embedder service from the production image at 6 CPUs and 4 threads
 | Qwen3-Embedding-0.6B       |                 0.51 |                      0.38 |    114 ms |                    1618 ms |        2545 MiB |           4892 MiB or more |
 | gte-modernbert-base, int8  |                 2.57 |                       1.6 |     10 ms |                     298 ms |         553 MiB |                    not run |
 | Qwen3-Embedding-0.6B, int8 |                 0.75 |                      0.47 |     61 ms |                     703 ms |        1401 MiB |                    not run |
+
+Three of the last four were timed in a second session with the machine idle,
+beside the current model and mDenseOn. DenseOn was not: it is the current
+model's encoder. Memory was not measured in that session:
+
+| Model               | Full chunks a second | Against the current model | One query | A query behind full chunks |
+| ------------------- | -------------------: | ------------------------: | --------: | -------------------------: |
+| gte-modernbert-base |         1.51 to 1.53 |                         1 |     21 ms |              413 to 458 ms |
+| mDenseOn            |                 1.67 |                       1.1 |     23 ms |                     412 ms |
+| embeddinggemma-2    |                 1.36 |                       0.9 |     32 ms |                     234 ms |
+| voyage-4-nano       |                 1.33 |                       0.9 |     35 ms |                     261 ms |
+| pplx-embed-v1-0.6b  |                 0.59 |                      0.39 |     68 ms |                    1396 ms |
 
 - **mDenseOn is ahead on every count and costs memory only.** It has the
   current model's encoder, 22 layers of 768, under a vocabulary of 256,000
@@ -1659,6 +1675,32 @@ The embedder service from the production image at 6 CPUs and 4 threads
   second. Against code a meaningless query reaches 0.874 and a question's own
   file 0.856, so no floor separates them: its end-to-end figure is with the
   vector leg ungated. It has no entry in `EMBEDDING_MODELS`.
+- **Four more models, picked on their published scores, are not ahead of
+  mDenseOn.** None has an entry in `EMBEDDING_MODELS`.
+  - **pplx-embed-v1-0.6b** has the widest ticket gap and ranks code under the
+    current model, at 0.39 of its rate. It is trained with tanh over each
+    pooled value. Leaving that out moves its gap from 0.311 to 0.313.
+  - **voyage-4-nano** has every question's file in its top 8 and the fewest
+    first. Its floor has 0.02 to sit in: nonsense reaches 0.438 against code
+    and a question's own file 0.458. With the floor at 0.40, 43 are on the
+    page. The cut from 2048 values is not the cause: against a pool of 460
+    chunks it ranks 35 / 44 / 45 at 2048 and 35 / 45 / 45 at 768.
+  - **embeddinggemma-2** packs its cosines. Against tickets nonsense reaches
+    0.691 and a real match 0.721, one ticket ranks second, and against code
+    nonsense is above a question's own file (0.766 and 0.737), so its
+    end-to-end figure is ungated. With its code prompt on the query the vector
+    leg ranks 30 / 37 / 40. It needs transformers.js 4.3.1, and its config
+    without `vision_config` and `audio_config`, or the image and audio
+    encoders load too.
+  - **DenseOn** is mDenseOn's English sibling at the current model's size. It
+    ranks tickets as well and code worse than the current model.
+- **Published scores did not predict the order here.** On MTEB Code the cards
+  give embeddinggemma-2 78.68, voyage-4-nano 76.43, pplx-embed-v1-0.6b 75.18,
+  Qwen3-Embedding-0.6B 73.75 and mDenseOn 71.53
+  ([embeddinggemma-2](https://huggingface.co/google/embeddinggemma-2),
+  [mDenseOn](https://huggingface.co/lightonai/mDenseOn)).
+- **The ticket set no longer tells models apart:** all but three rank every
+  query first. A further comparison needs more queries, from real tickets.
 - **An int8 file trades rank for speed:** 1.5 to 1.6 times the rate at about
   half the memory. gte-modernbert-base loses a ticket. Qwen3 loses 0.054 of
   its gap, and two German openings fall under its floor. Only
@@ -1672,8 +1714,11 @@ The embedder service from the production image at 6 CPUs and 4 threads
   (`scripts/eval-code-search.ts`).
 - **Not candidates:** models trained on code alone, which at this size publish
   lower code scores than the general ones (jina's lost above); Qwen3-Embedding
-  4B and larger, out of reach of 4 cores; EmbeddingGemma (Gemma terms); jina
-  v3 and v5 (CC-BY-NC); hosted APIs (§1).
+  and pplx-embed at 4B and larger, out of reach of 4 cores; the first
+  EmbeddingGemma (Gemma terms); jina v3 and v5 (CC-BY-NC); harrier-oss-v1,
+  under mDenseOn on BEIR and MTEB Code in mDenseOn's card; models that store
+  a vector per token (mLateOn), which a `vector(768)` column does not hold;
+  hosted APIs (§1).
 
 **What each costs in chat slots,** by §3.2's method. The embedder's limit is
 its peak plus 800 MiB, which the api's limit gives up, and a turn is budgeted
