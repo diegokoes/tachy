@@ -1,6 +1,14 @@
 import { z } from "zod";
-import { AGENT_EFFORTS, DEPLOYMENT_PROFILES } from "@tachy/contract";
-import type { AgentEffort, DeploymentProfile } from "@tachy/contract";
+import {
+  AGENT_EFFORTS,
+  DEPLOYMENT_PROFILES,
+  SSO_ADMISSIONS,
+} from "@tachy/contract";
+import type {
+  AgentEffort,
+  DeploymentProfile,
+  SsoAdmission,
+} from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
 import { badInput } from "../infra/errors";
 
@@ -32,6 +40,7 @@ const SETTING_SCHEMAS = {
   org_timezone: z
     .string()
     .refine(isTimezone, "not an IANA timezone, e.g. Europe/Madrid"),
+  sso_admission: z.enum(SSO_ADMISSIONS),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;
@@ -98,6 +107,7 @@ export interface EffectiveSettings {
   agent_slot_cap: { value: number; source: SettingSource };
   agent_queue_max: { value: number; source: SettingSource };
   org_timezone: { value: string; source: SettingSource };
+  sso_admission: { value: SsoAdmission; source: SettingSource };
 }
 
 export async function effectiveSettings(): Promise<EffectiveSettings> {
@@ -155,6 +165,9 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
         : undefined,
       "UTC",
     ),
+    // Invited by default: who reads every ticket is then decided here, and not
+    // only by how the provider's app registration is assigned.
+    sso_admission: pick(db.sso_admission, undefined, "invited"),
   };
 }
 

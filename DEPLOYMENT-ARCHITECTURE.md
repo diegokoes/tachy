@@ -2115,6 +2115,10 @@ and the SFTP pull keeps working as it is.
   `password_login_allowed`: one break-glass admin and the load-test user.
   Service accounts (`service_account`) are left out of engagement figures. Its
   throttle is an in-process `Map`.
+- An SSO sign-in is let in only where an admin has added the account
+  (`sso_admission`, Admin › system). A person the provider authenticates and
+  nobody added gets a 403 with the code `not_invited` and no user row; `anyone`
+  provisions a member on first sign-in instead.
 - **The ingest endpoint is the one route a session doesn't open.**
   `POST /ingest/buckets/:slug/batches` (`api/src/routes/ingest.ts`) takes
   documents pushed by a script outside tachý, such as the Document360 sync on
