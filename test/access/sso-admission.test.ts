@@ -1,10 +1,13 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAuth } from "@hono/oidc-auth";
+import { Hono } from "hono";
 import { createUser, setUserDisabled } from "@tachy/core/access";
 import { clearSettingsCache, setSetting } from "@tachy/core/config";
 import { NOT_INVITED } from "@tachy/core";
 import { createApp } from "../../packages/api/src/app";
+import { sessionEmail } from "../../packages/api/src/auth";
 import { uninvitedFrom } from "../../packages/web/src/access/uninvited";
+import { loginCookie } from "../http";
 import { resetData, sql } from "../database";
 
 // The provider's half of a sign-in. Everything after it, which is what decides
@@ -37,10 +40,12 @@ const usersNamed = (email: string) =>
 beforeEach(async () => {
   await resetData();
   clearSettingsCache();
+  // The break-glass admin: under SSO a password works for flagged accounts only.
   await createUser({
     email: "root@example.com",
     password: "a-long-password",
     role: "admin",
+    passwordLoginAllowed: true,
   });
 });
 
@@ -105,6 +110,41 @@ describe("who an SSO sign-in lets in", () => {
     signedInAs("founder@example.com");
     const status = await app.request("/api/setup/status");
     expect(await status.json()).toEqual({ bootstrapped: false });
+  });
+});
+
+describe("who setup takes the caller to be", () => {
+  const who = new Hono().get("/who", async (c) =>
+    c.json({ email: (await sessionEmail(c)) ?? null }),
+  );
+  const ask = async (cookie?: string) =>
+    (
+      await (
+        await who.request("/who", cookie ? { headers: { cookie } } : {})
+      ).json()
+    ).email as string | null;
+
+  it("is the provider's account when no password session is open", async () => {
+    signedInAs("founder@example.com");
+    expect(await ask()).toBe("founder@example.com");
+  });
+
+  it("is the password session's account ahead of the provider's", async () => {
+    signedInAs("founder@example.com");
+    const cookie = await loginCookie(
+      app,
+      "root@example.com",
+      "a-long-password",
+    );
+    expect(cookie).not.toBe("");
+    expect(await ask(cookie)).toBe("root@example.com");
+  });
+
+  it("is nobody when the provider has no session, or cannot say", async () => {
+    signedInAs(null);
+    expect(await ask()).toBeNull();
+    vi.mocked(getAuth).mockRejectedValue(new Error("no session cookie"));
+    expect(await ask()).toBeNull();
   });
 });
 
