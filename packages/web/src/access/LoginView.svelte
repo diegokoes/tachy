@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { session, login } from "./session.svelte";
+  import { session, login, logout } from "./session.svelte";
   import { errText } from "../resource.svelte";
   import AuthShell from "./AuthShell.svelte";
   import { Button, Field, Note, Panel } from "../tui";
@@ -63,7 +63,13 @@
         </form>
       {/if}
 
-      {#if session.config?.sso}
+      {#if session.uninvited}
+        <Note tone="warn">
+          {session.uninvited.email ?? "This account"} is signed in with SSO but has
+          not been added to tachy. Ask an app admin to add it under Admin › access.
+        </Note>
+        <button class="sso" onclick={logout}>sign out of SSO</button>
+      {:else if session.config?.sso}
         <a class="sso" href="/auth/login?redirect=%2F">sign in with SSO →</a>
       {/if}
 
@@ -103,5 +109,12 @@
     display: inline-block;
     margin-top: var(--pad-3);
     font-size: var(--fs-sm);
+  }
+  button.sso {
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
   }
 </style>

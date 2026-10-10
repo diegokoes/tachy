@@ -19,6 +19,7 @@ import {
   repoToken,
   readCodeFile,
   repoFileUrl,
+  withoutUrlCredentials,
 } from "@tachy/core/code";
 import {
   globalRedactionEnabled,
@@ -35,6 +36,7 @@ import {
   requireCaller,
 } from "../authz";
 import type { Context } from "hono";
+import { audit } from "../audit";
 
 const linkSchema = z.object({
   slug: z.string().min(1),
@@ -203,6 +205,9 @@ export const repos = new Hono()
       lines: body.lines,
       config: body.config,
     });
+    await audit(c, "repo_link", body.slug, {
+      url: withoutUrlCredentials(body.url),
+    });
     return c.json({ ok: true, repo: linked });
   })
 
@@ -252,6 +257,9 @@ export const repos = new Hono()
           componentSlug: repo.component,
           customerSlug: repo.customer,
           defaultBranch: repo.branch,
+        });
+        await audit(c, "repo_link", repo.slug, {
+          url: withoutUrlCredentials(repo.url),
         });
         results.push({ slug: repo.slug, ok: true });
       } catch (e) {
@@ -339,5 +347,6 @@ export const repos = new Hono()
     const slug = c.req.param("slug");
     await assertCanWriteRepo(c, {}, slug);
     await deleteRepo(slug);
+    await audit(c, "repo_delete", slug);
     return c.json({ ok: true });
   });

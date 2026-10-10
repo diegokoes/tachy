@@ -30,12 +30,16 @@
 6. **App settings.** As `tachy`, in `/opt/tachy`: `cp .env.example .env`,
    `chmod 600 .env`, and set `TACHY_IMAGE` (a digest from CI),
    `TACHY_HOSTNAME` (without DNS, `tachy.local` resolves by mDNS on most
-   clients, and `TACHY_HOST_IP` adds the host's address), `POSTGRES_PASSWORD`, `TACHY_APP_DB_PASSWORD`,
-   `TACHY_BACKUP_DB_PASSWORD`, `TACHY_SECRET_KEY`, `TACHY_SESSION_SECRET`,
-   `TACHY_INTERNAL_SECRET`, `TACHY_API_TOKEN` (tachy-watch reads the runtime
-   block with it). Generate each with `openssl rand -base64 32` and store it in
-   the password manager. The memory and CPU limits default to the 16 GB
-   laptop's; on another host set the `Host sizing` block of `.env.example`.
+   clients, and `TACHY_HOST_IP` adds the host's address), `POSTGRES_PASSWORD`,
+   `TACHY_APP_DB_PASSWORD`, `TACHY_MCP_DB_PASSWORD`, `TACHY_BACKUP_DB_PASSWORD`,
+   `TACHY_SECRET_KEY`, `TACHY_SESSION_SECRET`, `TACHY_INTERNAL_SECRET` and
+   `TACHY_API_TOKEN`. Generate each with `openssl rand -base64 32` and store it
+   in the password manager. The stack does not start without the three role
+   passwords. `TACHY_API_TOKEN` is for the first start only: until an admin
+   exists the api listens beyond its container only when a token or OIDC is
+   configured. Step 11 removes it. The memory and CPU limits default to the
+   16 GB laptop's; on another host set the `Host sizing` block of
+   `.env.example`.
 7. **Registry login.** Only if the image package is private. As `tachy`:
    `docker login ghcr.io -u <github user>` with a classic token carrying only
    `read:packages`.
@@ -44,9 +48,27 @@
 9. **Trust.** Export Caddy's root and follow
    [tls-client-trust.md](tls-client-trust.md). Save a copy as
    `/etc/tachy/caddy-root.crt` for tachy-watch.
-10. **Wizard.** Open `https://<name>/`, create the admin, then in Admin › access › users & roles
-    create the load-test user: member, service account, password under SSO.
-11. **Prove the alerts.** `sudo tachy-watch --force disk_srv=fail`, then run it
+10. **Wizard.** Open `https://<name>/` and create the admin. The wizard asks
+    for the setup code, which the api logs at start while no admin exists:
+    `docker compose logs api | grep setup_code`. A restart replaces the code.
+    Then in Admin › access › users & roles create the load-test user: member,
+    service account, password under SSO.
+11. **Watch token.** tachy-watch reads the api as a service account of its own,
+    not with the shared admin token. In Admin › access › users & roles create
+    `watch@<name>`: member, service account, no password. Mint its token:
+
+    ```sh
+    cd /opt/tachy
+    docker compose -f docker-compose.yml -f deploy/compose.prod.yml run --rm cli \
+      node dist/cli.js mint-token watch@<name> tachy-watch --days=365
+    ```
+
+    The token is the line it prints. Put it in `/etc/tachy/tachy.env` as
+    `WATCH_API_TOKEN` and in the password manager. Then delete
+    `TACHY_API_TOKEN` from `/opt/tachy/.env` and `sudo systemctl restart tachy`.
+    `sudo tachy-watch --dry-run` must list `runtime` as `ok`.
+
+12. **Prove the alerts.** `sudo tachy-watch --force disk_srv=fail`, then run it
     plainly; both messages must arrive in Teams. Pull the network cable for
     10 minutes; healthchecks.io must alert.
 

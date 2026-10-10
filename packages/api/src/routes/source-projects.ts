@@ -6,6 +6,7 @@ import { badInput, notFound, sql, errorText } from "@tachy/core/infra";
 import {
   addSourceProject,
   deleteProjectAreaMap,
+  getSourceProject,
   deleteSourceProject,
   listProjectAreaMap,
   listSourceProjects,
@@ -18,6 +19,7 @@ import { getProductIdBySlug, getTeamIdBySlug } from "@tachy/core/catalog";
 import { connectionToken, releaseBranch } from "@tachy/core/code";
 import { workItemDefaults, workItemSchema } from "@tachy/source-azure-devops";
 import { assertScopeEditor, assertTeamAdmin, callerUserId } from "../authz";
+import { audited } from "../audit";
 import { adoClientFor } from "../azure-devops";
 import type { Context } from "hono";
 
@@ -59,6 +61,12 @@ const areaSchema = z.object({
 });
 
 /** A project with a product is scoped by it; one without, by its team. */
+/** A project as the trail names it: its connection and the source's own key. */
+async function projectName(id: string): Promise<string> {
+  const project = await getSourceProject(id);
+  return `${project.source_slug}/${project.external_key}`;
+}
+
 async function assertCanWriteProject(
   c: Context,
   productSlug?: string | null,
@@ -128,17 +136,23 @@ export const sourceProjects = new Hono()
     const body = c.req.valid("json");
     await assertCanWriteProject(c, body.product_slug, body.team_slug);
     return c.json(
-      await addSourceProject({
-        sourceSlug: body.source_slug,
-        externalKey: body.external_key,
-        name: body.name,
-        productSlug: body.product_slug,
-        teamSlug: body.team_slug,
-        customerSlug: body.customer_slug,
-        wikis: body.wikis,
-        config: body.config,
-        notes: body.notes,
-      }),
+      await audited(
+        c,
+        "source_project_save",
+        `${body.source_slug}/${body.external_key}`,
+        () =>
+          addSourceProject({
+            sourceSlug: body.source_slug,
+            externalKey: body.external_key,
+            name: body.name,
+            productSlug: body.product_slug,
+            teamSlug: body.team_slug,
+            customerSlug: body.customer_slug,
+            wikis: body.wikis,
+            config: body.config,
+            notes: body.notes,
+          }),
+      ),
     );
   })
 
@@ -153,15 +167,17 @@ export const sourceProjects = new Hono()
       if (body.product_slug !== undefined || body.team_slug)
         await assertCanWriteProject(c, body.product_slug, body.team_slug);
       return c.json(
-        await updateSourceProject(id, {
-          name: body.name,
-          productSlug: body.product_slug,
-          teamSlug: body.team_slug,
-          customerSlug: body.customer_slug,
-          wikis: body.wikis,
-          config: body.config,
-          notes: body.notes,
-        }),
+        await audited(c, "source_project_save", await projectName(id), () =>
+          updateSourceProject(id, {
+            name: body.name,
+            productSlug: body.product_slug,
+            teamSlug: body.team_slug,
+            customerSlug: body.customer_slug,
+            wikis: body.wikis,
+            config: body.config,
+            notes: body.notes,
+          }),
+        ),
       );
     },
   )
@@ -169,7 +185,11 @@ export const sourceProjects = new Hono()
   .delete("/source-projects/:id", async (c) => {
     const id = c.req.param("id");
     await assertScopeEditor(c, await sourceProjectScope(id));
-    return c.json(await deleteSourceProject(id));
+    return c.json(
+      await audited(c, "source_project_delete", await projectName(id), () =>
+        deleteSourceProject(id),
+      ),
+    );
   })
 
   .get("/source-projects/:id/areas", async (c) =>
@@ -184,18 +204,33 @@ export const sourceProjects = new Hono()
       await assertScopeEditor(c, await sourceProjectScope(id));
       const { area_prefix, component_slug } = c.req.valid("json");
       return c.json(
-        await setProjectAreaMap({
-          sourceProjectId: id,
-          areaPrefix: area_prefix,
-          componentSlug: component_slug,
-        }),
+        await audited(
+          c,
+          "source_project_save",
+          await projectName(id),
+          () =>
+            setProjectAreaMap({
+              sourceProjectId: id,
+              areaPrefix: area_prefix,
+              componentSlug: component_slug,
+            }),
+          { area: area_prefix, component: component_slug },
+        ),
       );
     },
   )
 
   .delete("/source-projects/:id/areas/:areaId", async (c) => {
     await assertScopeEditor(c, await sourceProjectScope(c.req.param("id")));
-    return c.json(await deleteProjectAreaMap(c.req.param("areaId")));
+    return c.json(
+      await audited(
+        c,
+        "source_project_save",
+        await projectName(c.req.param("id")),
+        () => deleteProjectAreaMap(c.req.param("areaId")),
+        { area_deleted: c.req.param("areaId") },
+      ),
+    );
   })
 
   // The field schema behind the chat approval box. Guarded, unlike the

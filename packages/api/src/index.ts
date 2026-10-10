@@ -15,6 +15,7 @@ import { registerAgentFlowActions } from "@tachy/agent";
 import { createApp } from "./app";
 import { isBootstrapped } from "./auth";
 import { setInternalEndpoint } from "./internal-endpoint";
+import { announceSetupCode } from "./setup-code";
 import type { InternalOptions } from "./routes/internal";
 import { lifecycle, watchPool } from "./lifecycle";
 import { setEmbedDepth } from "./runtime";
@@ -103,6 +104,12 @@ const server = serve({
   port: env.port,
   hostname: authConfigured ? undefined : "127.0.0.1",
 });
+// Not awaited: a database that is not up yet must not hold up the server. The
+// wizard's status call announces the code in that case.
+void isBootstrapped().then(
+  (bootstrapped) => bootstrapped || announceSetupCode(),
+  () => {},
+);
 
 const DRAIN_MS = (Number(process.env.TACHY_DRAIN_SECONDS) || 180) * 1000;
 

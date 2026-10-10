@@ -16,7 +16,7 @@ name: tachy-load
 
 services:
   pg-load:
-    image: pgvector/pgvector:0.8.6-pg16
+    image: pgvector/pgvector:0.8.6-pg16@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
     shm_size: 1gb
     environment:
       POSTGRES_USER: tachy
@@ -30,7 +30,7 @@ services:
       retries: 20
 
   mock-llm:
-    image: node:26-slim
+    image: node:26-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0
     command: ["node", "/mock/server.mjs"]
     environment:
       MOCK_PORT: "4010"

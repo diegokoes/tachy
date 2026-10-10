@@ -23,6 +23,7 @@ import {
   deleteCustomer,
 } from "@tachy/core/catalog";
 import { badInput } from "@tachy/core/infra";
+import { audited } from "../../audit";
 import { assertAnyTeamAdminApi } from "../../authz";
 import { slugField } from "./catalog";
 
@@ -80,21 +81,34 @@ export const customers = new Hono()
   .get("/customers", async (c) => c.json(await listCustomers()))
   .post("/customers", zValidator("json", customerSchema), async (c) => {
     await assertAnyTeamAdminApi(c);
-    return c.json(await addCustomer(c.req.valid("json")));
+    const body = c.req.valid("json");
+    return c.json(
+      await audited(c, "catalog_add", `customer:${body.slug}`, () =>
+        addCustomer(body),
+      ),
+    );
   })
   .patch(
     "/customers/:slug",
     zValidator("json", customerPatchSchema),
     async (c) => {
       await assertAnyTeamAdminApi(c);
+      const slug = c.req.param("slug");
       return c.json(
-        await updateCustomer(c.req.param("slug"), c.req.valid("json")),
+        await audited(c, "catalog_update", `customer:${slug}`, () =>
+          updateCustomer(slug, c.req.valid("json")),
+        ),
       );
     },
   )
   .delete("/customers/:slug", async (c) => {
     await assertAnyTeamAdminApi(c);
-    return c.json(await deleteCustomer(c.req.param("slug")));
+    const slug = c.req.param("slug");
+    return c.json(
+      await audited(c, "catalog_delete", `customer:${slug}`, () =>
+        deleteCustomer(slug),
+      ),
+    );
   })
 
   // The customer's own install: their specifics, plus the records that are theirs.
@@ -120,16 +134,22 @@ export const customers = new Hono()
       await assertAnyTeamAdminApi(c);
       const body = c.req.valid("json");
       return c.json(
-        await addCustomerUnit({
-          customerSlug: c.req.param("slug"),
-          slug: body.slug,
-          name: body.name,
-          kind: body.kind,
-          parentSlug: body.parent,
-          profileSlug: body.profile,
-          aliases: body.aliases,
-          notes: body.notes,
-        }),
+        await audited(
+          c,
+          "catalog_add",
+          `unit:${c.req.param("slug")}/${body.slug}`,
+          () =>
+            addCustomerUnit({
+              customerSlug: c.req.param("slug"),
+              slug: body.slug,
+              name: body.name,
+              kind: body.kind,
+              parentSlug: body.parent,
+              profileSlug: body.profile,
+              aliases: body.aliases,
+              notes: body.notes,
+            }),
+        ),
       );
     },
   )
@@ -139,28 +159,34 @@ export const customers = new Hono()
     async (c) => {
       await assertAnyTeamAdminApi(c);
       const body = c.req.valid("json");
+      const target = `unit:${c.req.param("slug")}/${c.req.param("unit")}`;
       return c.json(
-        await updateCustomerUnit(
-          await getCustomerIdBySlug(c.req.param("slug")),
-          c.req.param("unit"),
-          {
-            ...(body.name !== undefined ? { name: body.name } : {}),
-            ...(body.kind !== undefined ? { kind: body.kind } : {}),
-            ...("parent" in body ? { parentSlug: body.parent } : {}),
-            ...("profile" in body ? { profileSlug: body.profile } : {}),
-            ...(body.aliases !== undefined ? { aliases: body.aliases } : {}),
-            ...("notes" in body ? { notes: body.notes } : {}),
-          },
+        await audited(c, "catalog_update", target, async () =>
+          updateCustomerUnit(
+            await getCustomerIdBySlug(c.req.param("slug")),
+            c.req.param("unit"),
+            {
+              ...(body.name !== undefined ? { name: body.name } : {}),
+              ...(body.kind !== undefined ? { kind: body.kind } : {}),
+              ...("parent" in body ? { parentSlug: body.parent } : {}),
+              ...("profile" in body ? { profileSlug: body.profile } : {}),
+              ...(body.aliases !== undefined ? { aliases: body.aliases } : {}),
+              ...("notes" in body ? { notes: body.notes } : {}),
+            },
+          ),
         ),
       );
     },
   )
   .delete("/customers/:slug/units/:unit", async (c) => {
     await assertAnyTeamAdminApi(c);
+    const target = `unit:${c.req.param("slug")}/${c.req.param("unit")}`;
     return c.json(
-      await deleteCustomerUnit(
-        await getCustomerIdBySlug(c.req.param("slug")),
-        c.req.param("unit"),
+      await audited(c, "catalog_delete", target, async () =>
+        deleteCustomerUnit(
+          await getCustomerIdBySlug(c.req.param("slug")),
+          c.req.param("unit"),
+        ),
       ),
     );
   })
@@ -184,26 +210,43 @@ export const customers = new Hono()
     async (c) => {
       await assertAnyTeamAdminApi(c);
       const body = c.req.valid("json");
+      // The kind and label name the fact; its value is the customer's own
+      // data and stays out of the trail.
       return c.json(
-        await setCustomerFact({
-          customerSlug: c.req.param("slug"),
-          unit: body.unit,
-          kind: body.kind,
-          label: body.label,
-          value: body.value,
-          notes: body.notes,
-          source: body.source,
-          componentSlug: body.component,
-          productId: body.product_slug
-            ? await getProductIdBySlug(body.product_slug)
-            : null,
-        }),
+        await audited(
+          c,
+          "catalog_update",
+          `customer:${c.req.param("slug")}`,
+          async () =>
+            setCustomerFact({
+              customerSlug: c.req.param("slug"),
+              unit: body.unit,
+              kind: body.kind,
+              label: body.label,
+              value: body.value,
+              notes: body.notes,
+              source: body.source,
+              componentSlug: body.component,
+              productId: body.product_slug
+                ? await getProductIdBySlug(body.product_slug)
+                : null,
+            }),
+          { fact_set: body.kind, label: body.label, unit: body.unit },
+        ),
       );
     },
   )
   .delete("/customers/:slug/facts/:id", async (c) => {
     await assertAnyTeamAdminApi(c);
-    return c.json(await deleteCustomerFact(c.req.param("id")));
+    return c.json(
+      await audited(
+        c,
+        "catalog_update",
+        `customer:${c.req.param("slug")}`,
+        () => deleteCustomerFact(c.req.param("id")),
+        { fact_deleted: c.req.param("id") },
+      ),
+    );
   })
   .put(
     "/customers/:slug/components",
@@ -212,11 +255,18 @@ export const customers = new Hono()
       await assertAnyTeamAdminApi(c);
       const body = c.req.valid("json");
       return c.json(
-        await linkCustomerComponent(
-          c.req.param("slug"),
-          await getProductIdBySlug(body.product_slug),
-          body.component,
-          body.notes,
+        await audited(
+          c,
+          "catalog_update",
+          `customer:${c.req.param("slug")}`,
+          async () =>
+            linkCustomerComponent(
+              c.req.param("slug"),
+              await getProductIdBySlug(body.product_slug),
+              body.component,
+              body.notes,
+            ),
+          { component_linked: `${body.product_slug}/${body.component}` },
         ),
       );
     },
@@ -228,10 +278,17 @@ export const customers = new Hono()
     if (!productSlug || !component)
       throw badInput("product_slug and component are required");
     return c.json(
-      await unlinkCustomerComponent(
-        c.req.param("slug"),
-        await getProductIdBySlug(productSlug),
-        component,
+      await audited(
+        c,
+        "catalog_update",
+        `customer:${c.req.param("slug")}`,
+        async () =>
+          unlinkCustomerComponent(
+            c.req.param("slug"),
+            await getProductIdBySlug(productSlug),
+            component,
+          ),
+        { component_unlinked: `${productSlug}/${component}` },
       ),
     );
   });

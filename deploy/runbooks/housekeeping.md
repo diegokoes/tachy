@@ -19,7 +19,32 @@ under Admin › workers › jobs holds `transcript_days` and `usage_months`.
 | Orphaned library images   | 7 days                                    | `retention.sweep`      |
 | Container logs            | 200 MB per container                      | the `local` log driver |
 | Journal                   | 1 GB                                      | journald               |
+| Stored tickets            | until someone cleans them up              | `clean-tickets`        |
 | Backups on the host       | 2 days all, 14 days daily, 8 weeks weekly | `tachy-backup prune`   |
+
+**Stored tickets.** Every ticket tachy reads is kept: one row per connection
+and ticket id, and one row per message. Fetching a ticket again updates those
+rows, and removes a message the source no longer has. Nothing deletes them by
+age. To delete some, as `tachy` in `/opt/tachy`:
+
+```sh
+C="docker compose -f docker-compose.yml -f deploy/compose.prod.yml"
+$C run --rm cli node dist/cli.js clean-tickets --connection=<slug> --status=closed,resolved --before=2026-01-01
+```
+
+It prints how many tickets and messages match, by status, with the ten oldest,
+and deletes nothing. The same line with `--yes` deletes them. Every filter given
+has to hold: `--connection`, `--status`, `--product`, `--team`, `--customer`,
+`--requester`, `--before`. A ticket a knowledge entry was learned from is left
+unless `--include-learned-from` is given; deleting it leaves the entry without
+its link to the ticket. `--requester=<as stored>` removes what one person
+raised. The run is in the audit trail, without the requester. A deleted ticket
+is still in the backups taken before it.
+
+An app admin can do the same over the API: `POST
+/api/work-items/stored/preview` with the filter, then `POST
+/api/work-items/stored/delete` with the filter and `expected` set to the
+`matched` the preview returned.
 
 **Incidents.** Whoever sees the Teams alert first acknowledges it in the thread
 and owns it until they hand it over there. The workflow needs a co-owner so

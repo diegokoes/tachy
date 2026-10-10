@@ -1,9 +1,10 @@
 name: Image gates
 
 # What vitest cannot see: the built image itself. It must start, answer
-# readiness, pass smoke.js against seeded data, and carry no critical
-# vulnerability that already has a fix. Only pull requests that can change the
-# image or the stack it starts in pay for the build.
+# readiness, pass smoke.js against seeded data, do the same under the
+# production overlay with one chat turn, and carry no critical vulnerability
+# that already has a fix. Only pull requests that can change the image or the
+# stack it starts in pay for the build.
 on:
   pull_request:
 
@@ -31,7 +32,7 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          if git diff --name-only "origin/$BASE_REF...HEAD" | grep -qE '^(Dockerfile|\.dockerignore|docker-compose\.yml|package\.json|package-lock\.json|packages/|db/|load/|scripts/|\.github/workflows/image-gates\.yml)'; then
+          if git diff --name-only "origin/$BASE_REF...HEAD" | grep -qE '^(Dockerfile|\.dockerignore|docker-compose\.yml|package\.json|package-lock\.json|packages/|db/|deploy/|load/|scripts/|\.github/workflows/image-gates\.yml)'; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
           else
             echo "relevant=false" >> "$GITHUB_OUTPUT"
@@ -70,6 +71,17 @@ jobs:
       - name: Seed and smoke
         run: scripts/container-smoke.sh smoke
 
+      # The stack a host runs: Caddy, the read-only root, the least-privilege
+      # roles, the embedder and the workers, and one chat turn through them.
+      - name: Production overlay
+        id: overlay
+        run: scripts/container-smoke.sh prod
+
       - name: Logs
         if: failure() && steps.stack.outcome != 'skipped'
-        run: docker compose logs --tail 200
+        run: |
+          if [ "${{ steps.overlay.outcome }}" = skipped ]; then
+            docker compose logs --tail 200
+          else
+            docker compose -f docker-compose.yml -f deploy/compose.prod.yml logs --tail 200
+          fi

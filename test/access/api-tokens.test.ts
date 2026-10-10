@@ -4,14 +4,31 @@ import {
   listApiTokens,
   mintApiToken,
   setUserDisabled,
+  tokenExpiry,
   userByApiToken,
 } from "@tachy/core/access";
-import { API_TOKEN_PREFIX } from "@tachy/core";
+import {
+  API_TOKEN_PREFIX,
+  DEFAULT_TOKEN_DAYS,
+  TOKEN_LIFETIME_DAYS,
+} from "@tachy/core";
 import { listAudit } from "@tachy/core/audit";
 import { AppError } from "@tachy/core/infra";
 import { createApp } from "../../packages/api/src/app";
 import { toolsDatabaseUrl } from "../../packages/api/src/turn-config";
-import { tokenState } from "../../packages/web/src/settings/tokens";
+import {
+  lifetimeDaysOf,
+  mintTokenCommand,
+  mintTokenFor,
+} from "../../packages/cli/src/tokens";
+import {
+  DEFAULT_LIFETIME,
+  LIFETIME_OPTIONS,
+  NEVER,
+  expiryNote,
+  lifetimeDays,
+  tokenState,
+} from "../../packages/web/src/settings/tokens";
 import { json, loginCookie } from "../http";
 import { resetData, sql } from "../database";
 
@@ -270,5 +287,147 @@ describe("a token's state in the list", () => {
     expect(tokenState({ revoked_at: past, expires_at: past }, now)).toBe(
       "revoked",
     );
+  });
+});
+
+describe("how long a token lasts", () => {
+  const DAY_MS = 86_400_000;
+  const daysFromNow = (iso: string) =>
+    Math.round((Date.parse(iso) - Date.now()) / DAY_MS);
+
+  it("is the default when the request names none, and forever only when asked", async () => {
+    const { memberCookie } = await people();
+    const mint = async (body: Record<string, unknown>) =>
+      (await post("/api/me/tokens", { cookie: memberCookie }, body)).json();
+
+    expect(daysFromNow((await mint({ name: "unsaid" })).expires_at)).toBe(
+      DEFAULT_TOKEN_DAYS,
+    );
+    expect(
+      daysFromNow(
+        (await mint({ name: "a year", expires_in_days: 365 })).expires_at,
+      ),
+    ).toBe(365);
+    expect(
+      (await mint({ name: "forever", expires_in_days: null })).expires_at,
+    ).toBeNull();
+  });
+
+  it("applies the same default when an admin mints for a service account", async () => {
+    const { adminCookie } = await people();
+    const robot = await createUser({
+      email: "robot@example.com",
+      serviceAccount: true,
+    });
+    const minted = await post(
+      `/api/users/${robot.id}/tokens`,
+      { cookie: adminCookie },
+      { name: "sync" },
+    );
+    expect(daysFromNow((await minted.json()).expires_at)).toBe(
+      DEFAULT_TOKEN_DAYS,
+    );
+  });
+
+  it("counts the lifetime from the moment of minting", () => {
+    const now = Date.parse("2026-10-10T00:00:00Z");
+    expect(tokenExpiry(30, now)?.toISOString()).toBe(
+      "2026-11-09T00:00:00.000Z",
+    );
+    expect(tokenExpiry(undefined, now)?.getTime()).toBe(
+      now + DEFAULT_TOKEN_DAYS * DAY_MS,
+    );
+    expect(tokenExpiry(null, now)).toBeNull();
+  });
+
+  it("offers the form the contract's lifetimes, starting on the default", () => {
+    expect(LIFETIME_OPTIONS.map((o) => o.value)).toEqual([
+      ...TOKEN_LIFETIME_DAYS,
+      NEVER,
+    ]);
+    expect(DEFAULT_LIFETIME).toBe(DEFAULT_TOKEN_DAYS);
+    expect(TOKEN_LIFETIME_DAYS).toContain(DEFAULT_TOKEN_DAYS);
+    expect(lifetimeDays(365)).toBe(365);
+    expect(lifetimeDays(NEVER)).toBeNull();
+  });
+
+  it("says on a token's row when it ends", () => {
+    const day = (iso: string) => iso.slice(0, 10);
+    expect(expiryNote({ expires_at: "2027-01-08T00:00:00Z" }, day)).toBe(
+      "expires 2027-01-08",
+    );
+    expect(expiryNote({ expires_at: null }, day)).toBe("never expires");
+  });
+});
+
+describe("minting from the command line", () => {
+  it("reads the lifetime from its flags", () => {
+    expect(lifetimeDaysOf({})).toBe(DEFAULT_TOKEN_DAYS);
+    expect(lifetimeDaysOf({ days: "365" })).toBe(365);
+    expect(lifetimeDaysOf({ never: "true" })).toBeNull();
+    for (const days of ["0", "-3", "1.5", "soon"])
+      expect(() => lifetimeDaysOf({ days }), days).toThrow(/whole number/);
+  });
+
+  it("mints for a service account, as that account, and records it", async () => {
+    const robot = await createUser({
+      email: "watch@example.com",
+      serviceAccount: true,
+    });
+    const { token, expiresAt } = await mintTokenFor(
+      "watch@example.com",
+      "tachy-watch",
+      365,
+    );
+    expect(Date.parse(expiresAt!)).toBeGreaterThan(Date.now());
+    expect(await userByApiToken(token)).toMatchObject({
+      id: robot.id,
+      role: "member",
+    });
+    expect((await listAudit())[0]).toMatchObject({
+      action: "api_token_mint",
+      target: "tachy-watch",
+      actor_email: null,
+      detail: { for: "watch@example.com", by: "cli" },
+    });
+
+    // What tachy-watch reads: the runtime block, without how the host is secured.
+    const system = await app.request("/api/system", {
+      headers: withBearer(token),
+    });
+    expect(system.status).toBe(200);
+    const body = await system.json();
+    expect(body.runtime.turns).toBeDefined();
+    expect(body.runtime.security).toBeNull();
+    expect(body.env).toBeUndefined();
+  });
+
+  it("gives the token alone, and says beside it when it ends", async () => {
+    await createUser({ email: "watch@example.com", serviceAccount: true });
+    const dated = await mintTokenCommand(["watch@example.com", "tachy-watch"], {
+      days: "365",
+    });
+    expect(dated.token.startsWith(API_TOKEN_PREFIX)).toBe(true);
+    expect(dated.note).toMatch(/^expires \d{4}-.*it is not shown again$/);
+    const forever = await mintTokenCommand(
+      ["watch@example.com", "tachy-watch"],
+      { never: "true" },
+    );
+    expect(forever.note).toBe("never expires; it is not shown again");
+    await expect(mintTokenCommand(["watch@example.com"], {})).rejects.toThrow(
+      /needs <email> <name>/,
+    );
+  });
+
+  it("refuses an account that does not exist or is disabled", async () => {
+    await expect(mintTokenFor("nobody@example.com", "x", 30)).rejects.toThrow(
+      /no account/,
+    );
+    const gone = await createUser({ email: "gone@example.com" });
+    await setUserDisabled(gone.id, true);
+    await expect(mintTokenFor("gone@example.com", "x", 30)).rejects.toThrow(
+      /disabled/,
+    );
+    expect(await sql`select 1 from api_tokens`).toHaveLength(0);
   });
 });

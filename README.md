@@ -28,7 +28,9 @@ docker compose up -d --build
 ```
 
 The first visit to the web UI on `:8787` runs the setup wizard; until an admin
-exists the server listens on `127.0.0.1` only. Without Docker: Node 26.10+,
+exists the server listens on `127.0.0.1` only. The wizard asks for the setup
+code the api logs at start: `docker compose logs api | grep setup_code`.
+Without Docker: Node 26.10+,
 PostgreSQL 14+ with `vector`, `pg_trgm` and `pgcrypto`, and `git` on PATH, then
 `psql -f db/schema.sql` and `npm run web:build && npm run api`. MCP clients pick
 up `.mcp.json` (Claude Code) or `.vscode/mcp.json` (VS Code); others run
