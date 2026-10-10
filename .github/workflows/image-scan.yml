@@ -1,0 +1,40 @@
+name: Image scan
+
+# An image is scanned when it is built. What is known about it changes
+# afterwards, so the two a host deploys from are scanned again every week, to
+# the same bar as a pull request: a critical vulnerability that has a fix.
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        tag: [main, dev]
+    steps:
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: name
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/tachy" >> "$GITHUB_OUTPUT"
+
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.name.outputs.image }}:${{ matrix.tag }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

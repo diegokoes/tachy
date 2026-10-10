@@ -76,6 +76,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # For the signed records below: the token asks Sigstore for a signing
+      # certificate, and GitHub stores what was signed.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v7
 
@@ -115,6 +119,44 @@ jobs:
         with:
           name: image-ref
           path: image-ref.txt
+
+      - name: List what the image holds
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.name.outputs.image }}@${{ steps.push.outputs.digest }}
+          format: cyclonedx
+          output: sbom.cdx.json
+
+      # Signed statements kept beside the image: which workflow run built this
+      # digest from which commit, and what it holds. Nothing verifies them yet:
+      # `gh attestation verify oci://<image>@<digest> --repo <owner>/tachy` does.
+      # A storage record is for organisation-owned repositories.
+      - name: Attest where it was built
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.name.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest what it holds
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.name.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: sbom.cdx.json
+          push-to-registry: true
+          create-storage-record: false
+
+      # The pull request scanned a build of the same tree; this is the image a
+      # host pulls, against what is known today.
+      - name: Scan the published image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.name.outputs.image }}@${{ steps.push.outputs.digest }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
 
   secrets:
     runs-on: ubuntu-latest
