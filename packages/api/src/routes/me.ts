@@ -17,6 +17,7 @@ import {
 import {
   listApiTokens,
   mintApiToken,
+  tokenExpiry,
   revokeApiToken,
   userSoleTeamId,
 } from "@tachy/core/access";
@@ -35,7 +36,7 @@ import { listModels, type ModelChoice } from "@tachy/agent";
 import { requireCaller } from "../authz";
 import { audit } from "../audit";
 import { requireSession } from "../auth";
-import { expiryOf, tokenSchema } from "../tokens";
+import { tokenSchema } from "../tokens";
 import { userConfigDir } from "../turn-config";
 
 const valueSchema = z.object({ value: z.string().min(1) });
@@ -121,7 +122,7 @@ export const me = new Hono()
       const { token, row } = await mintApiToken({
         userId,
         name: body.name,
-        expiresAt: expiryOf(body.expires_in_days),
+        expiresAt: tokenExpiry(body.expires_in_days),
         createdBy: userId,
       });
       await audit(c, "api_token_mint", body.name, {

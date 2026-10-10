@@ -3,13 +3,21 @@
   import type { ApiTokenRow } from "@tachy/contract";
   import { api } from "../api";
   import { fmtDate } from "../dates.svelte";
-  import { Button, DeleteButton, Note } from "../tui";
+  import { Button, DeleteButton, Note, Select } from "../tui";
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";
-  import { tokenState } from "./tokens";
+  import {
+    DEFAULT_LIFETIME,
+    LIFETIME_OPTIONS,
+    expiryNote,
+    lifetimeDays,
+    tokenState,
+    type Lifetime,
+  } from "./tokens";
 
   let tokens = $state<ApiTokenRow[]>([]);
   let name = $state("");
+  let lifetime = $state<Lifetime>(DEFAULT_LIFETIME);
   // The one moment a token exists in the clear: the answer to minting it.
   let issued = $state<{ name: string; token: string } | null>(null);
   let copied = $state(false);
@@ -35,10 +43,11 @@
     attempt(async () => {
       const made = await api.post<ApiTokenRow & { token: string }>(
         "/me/tokens",
-        { name: name.trim() },
+        { name: name.trim(), expires_in_days: lifetimeDays(lifetime) },
       );
       issued = { name: made.name, token: made.token };
       name = "";
+      lifetime = DEFAULT_LIFETIME;
     });
 
   const revoke = (token: ApiTokenRow) =>
@@ -81,9 +90,11 @@
   {#each live as token (token.id)}
     <Row
       label={token.name}
-      hint={token.last_used_at
-        ? `ends in ${token.hint} · last used ${fmtDate(token.last_used_at)}`
-        : `ends in ${token.hint} · never used`}
+      hint={`ends in ${token.hint} · ${
+        token.last_used_at
+          ? `last used ${fmtDate(token.last_used_at)}`
+          : "never used"
+      } · ${expiryNote(token, fmtDate)}`}
     >
       <DeleteButton
         label={`revoke ${token.name}`}
@@ -92,13 +103,21 @@
       />
     </Row>
   {/each}
-  <Row label="new token" hint="Acts as you, with your rights, until revoked.">
+  <Row
+    label="new token"
+    hint="Acts as you, with your rights, until it expires or is revoked."
+  >
     <div class="field">
       <input
         aria-label="token name"
         placeholder="what it is for"
         maxlength="100"
         bind:value={name}
+      />
+      <Select
+        bind:value={lifetime}
+        options={LIFETIME_OPTIONS}
+        aria-label="token lifetime"
       />
       <Button
         variant="ghost"
