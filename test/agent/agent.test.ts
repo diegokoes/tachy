@@ -383,8 +383,47 @@ describe("claude subprocess environment (per-user credential isolation)", () => 
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
   });
 
-  it("keeps inherited non-credential vars such as PATH", () => {
+  it("keeps the named basics such as PATH", () => {
     expect(claudeEnv(base).PATH).toBe(process.env.PATH);
+  });
+
+  // Claude Code hands its environment on to the MCP child, so whatever reaches
+  // this process reaches the tools a model drives.
+  it("leaves everything else the server holds behind", () => {
+    const serverOnly = [
+      "TACHY_SECRET_KEY",
+      "TACHY_SECRET_KEY_PREVIOUS",
+      "TACHY_SESSION_SECRET",
+      "TACHY_INTERNAL_SECRET",
+      "TACHY_API_TOKEN",
+      "DATABASE_URL",
+      "POSTGRES_PASSWORD",
+      "TACHY_APP_DB_PASSWORD",
+      "OIDC_CLIENT_SECRET",
+      "FRESHDESK_TOKEN",
+      "GITHUB_TOKEN_ACME",
+      "AZURE_DEVOPS_TOKEN",
+      "A_SECRET_ADDED_NEXT_YEAR",
+    ];
+    for (const name of serverOnly) setHost(name, "server-value");
+    const env = claudeEnv({
+      ...base,
+      agentAuth: { kind: "anthropic_api_key", value: "sk-ant-api03-x" },
+      configDir: "/state/users/u1",
+    });
+    for (const name of serverOnly) expect(env[name], name).toBeUndefined();
+    expect(Object.values(env)).not.toContain("server-value");
+  });
+
+  it("passes on a proxy, its certificates and the model endpoint", () => {
+    const network = {
+      HTTPS_PROXY: "http://proxy.office.lan:3128",
+      NO_PROXY: "localhost,.office.lan",
+      NODE_EXTRA_CA_CERTS: "/etc/ssl/office-root.pem",
+      ANTHROPIC_BASE_URL: "http://mock-llm:4010",
+    };
+    for (const [name, value] of Object.entries(network)) setHost(name, value);
+    expect(claudeEnv(base)).toMatchObject(network);
   });
 
   it("isolates config dir and auto memory", () => {
