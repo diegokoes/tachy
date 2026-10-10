@@ -12,6 +12,12 @@ export interface UserCensus {
 /** Starts every API token, so a bearer says which kind it is before a lookup. */
 export const API_TOKEN_PREFIX = "tachy_pat_";
 
+/** The lifetimes the token form offers, in days. */
+export const TOKEN_LIFETIME_DAYS = [30, 90, 365] as const;
+
+/** What a token gets when nobody chose: one that never expires is asked for. */
+export const DEFAULT_TOKEN_DAYS = 90;
+
 export interface ApiTokenRow {
   id: string;
   name: string;
