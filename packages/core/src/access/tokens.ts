@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import {
   API_TOKEN_PREFIX,
+  DEFAULT_TOKEN_DAYS,
   type ApiTokenRow,
   type UserRole,
 } from "@tachy/contract";
@@ -17,6 +18,20 @@ const hashToken = (token: string) =>
 const TOKEN_COLUMNS = sql`
   id, name, hint, created_at, last_used_at, expires_at, revoked_at
 `;
+
+const DAY_MS = 86_400_000;
+
+/**
+ * When a token minted now stops working. Null is a token that never does, and
+ * has to be asked for: a lifetime left out is the default one.
+ */
+export function tokenExpiry(
+  lifetimeDays: number | null | undefined,
+  now = Date.now(),
+): Date | null {
+  if (lifetimeDays === null) return null;
+  return new Date(now + (lifetimeDays ?? DEFAULT_TOKEN_DAYS) * DAY_MS);
+}
 
 export interface ApiTokenInput {
   userId: string;

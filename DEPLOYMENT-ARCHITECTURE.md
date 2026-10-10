@@ -52,7 +52,7 @@ api            node dist/api.js
 `-- one tree per chat turn:
     Claude Code CLI (agent SDK query())
     `-- MCP server: node dist/mcp.js
-        |-- a postgres.js pool of 2, as tachy_app
+        |-- a postgres.js pool of 2, as tachy_mcp
         `-- embeds over HTTP at the embedder
 embedder       node dist/embedder.js: the one embedding model (§5.4)
 worker-light   node dist/worker.js: queues sync, flows, maintenance; 4 runs
@@ -1187,13 +1187,13 @@ sets them from `.env`, on a fresh volume and on every deploy. `roles.sql` also
 sets default privileges, so a table the schema plan adds is granted to
 `tachy_app` as it is created.
 
-| Role           | Used by                                                         | Rights                                                                                                                 |
-| -------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `tachy_owner`  | schema apply                                                    | meant to own every object. Not created: `tachy-deploy` applies the schema as the bootstrap superuser                   |
-| `tachy_app`    | api, workers, MCP children                                      | DML on application tables, `pg_read_all_stats`, and a 60 s `statement_timeout`                                         |
-| `tachy_mcp`    | the chat tools' subprocess, when `TACHY_MCP_DB_PASSWORD` is set | DML as `tachy_app`, except: no `credentials`, no `api_tokens`, no `users.password_hash`, insert-only on `audit_events` |
-| `tachy_backup` | `pg_dump`                                                       | `pg_read_all_data` (Postgres 14+)                                                                                      |
-| `tachy_watch`  | `tachy-watch`                                                   | `pg_monitor`. No password: it logs in only where `pg_hba` trusts, inside the postgres container                        |
+| Role           | Used by                                                                      | Rights                                                                                                                 |
+| -------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `tachy_owner`  | schema apply                                                                 | meant to own every object. Not created: `tachy-deploy` applies the schema as the bootstrap superuser                   |
+| `tachy_app`    | api, workers                                                                 | DML on application tables, `pg_read_all_stats`, and a 60 s `statement_timeout`                                         |
+| `tachy_mcp`    | the chat tools' subprocess; the overlay requires its `TACHY_MCP_DB_PASSWORD` | DML as `tachy_app`, except: no `credentials`, no `api_tokens`, no `users.password_hash`, insert-only on `audit_events` |
+| `tachy_backup` | `pg_dump`                                                                    | `pg_read_all_data` (Postgres 14+)                                                                                      |
+| `tachy_watch`  | `tachy-watch`                                                                | `pg_monitor`. No password: it logs in only where `pg_hba` trusts, inside the postgres container                        |
 
 **Why the roles.** The MCP child is driven by a model and inherits the api's
 `DATABASE_URL` (`api/src/turn-config.ts`). A superuser can run
@@ -2303,7 +2303,8 @@ run every minute by a systemd timer, as root.
 | readyz through Caddy | `curl https://<name>/readyz`                                          | 1 failure                                                             | 2 consecutive failures                                      |
 | 5xx rate             | `docker compose logs --since 10m api`, `status >= 500`                | > 1%                                                                  | > 5%                                                        |
 | api memory           | `docker stats` for the container, against its limit                   | > 85%                                                                 | an OOM kill in `docker events`                              |
-| turns queued         | `/api/system` with the API token                                      | queued > 2 min                                                        | queued > 5 min                                              |
+| runtime              | whether the api accepted `WATCH_API_TOKEN`                            | -                                                                     | the token was refused: expired or revoked                   |
+| turns queued         | `/api/system` with the watch token                                    | queued > 2 min                                                        | queued > 5 min                                              |
 | jobs                 | the same response's job health                                        | a last run failed, a run queued over 15 min, or a definition disabled | a schedule overdue, or a queue with runs and no live worker |
 | Postgres connections | `psql` as `tachy_watch`: `pg_stat_activity` count / `max_connections` | > 80%                                                                 | > 95%                                                       |
 | long transaction     | `pg_stat_activity`                                                    | > 5 min                                                               | > 10 min                                                    |

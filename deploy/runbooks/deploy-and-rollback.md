@@ -10,8 +10,21 @@ ssh tachy@<host> tachy-deploy main          # or a commit sha
 It resolves the commit to an image digest, refuses a schema change it cannot
 apply, takes an encrypted pre-deploy backup, checks out that commit, recreates
 the stack (the api drains running chat turns for up to 3 minutes), waits for
-`/readyz` through Caddy and runs `smoke.js`. If readiness or smoke fails, it
-rolls back to the previous commit and digest by itself and exits 1.
+`/readyz` through Caddy and runs `smoke.js`. If the stack does not come up, or
+readiness or smoke fails, it rolls back to the previous commit and digest by
+itself and exits 1.
+
+A release that needs a variable `.env` does not have is one Compose refuses to
+start: the deploy rolls back and its output names the variable. The production
+overlay requires `POSTGRES_PASSWORD`, `TACHY_APP_DB_PASSWORD`,
+`TACHY_MCP_DB_PASSWORD`, `TACHY_INTERNAL_SECRET` and `TACHY_HOSTNAME`. Add what
+is missing to `/opt/tachy/.env` and deploy again; the role passwords are set
+from it on every deploy.
+
+A deploy does not update the host's own scripts. `tachy-deploy`,
+`tachy-update`, `tachy-backup` and `tachy-watch` are copies the playbook
+installs, so a release that changes `deploy/host`, `deploy/backup` or
+`deploy/watch` needs the playbook run again.
 
 A rollback does not undo a schema change. The database keeps the new schema
 and the stamp goes back to the previous release's, so that release reports
