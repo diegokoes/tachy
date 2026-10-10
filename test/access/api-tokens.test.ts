@@ -16,7 +16,11 @@ import { listAudit } from "@tachy/core/audit";
 import { AppError } from "@tachy/core/infra";
 import { createApp } from "../../packages/api/src/app";
 import { toolsDatabaseUrl } from "../../packages/api/src/turn-config";
-import { lifetimeDaysOf, mintTokenFor } from "../../packages/cli/src/tokens";
+import {
+  lifetimeDaysOf,
+  mintTokenCommand,
+  mintTokenFor,
+} from "../../packages/cli/src/tokens";
 import {
   DEFAULT_LIFETIME,
   LIFETIME_OPTIONS,
@@ -396,6 +400,23 @@ describe("minting from the command line", () => {
     expect(body.runtime.turns).toBeDefined();
     expect(body.runtime.security).toBeNull();
     expect(body.env).toBeUndefined();
+  });
+
+  it("gives the token alone, and says beside it when it ends", async () => {
+    await createUser({ email: "watch@example.com", serviceAccount: true });
+    const dated = await mintTokenCommand(["watch@example.com", "tachy-watch"], {
+      days: "365",
+    });
+    expect(dated.token.startsWith(API_TOKEN_PREFIX)).toBe(true);
+    expect(dated.note).toMatch(/^expires \d{4}-.*it is not shown again$/);
+    const forever = await mintTokenCommand(
+      ["watch@example.com", "tachy-watch"],
+      { never: "true" },
+    );
+    expect(forever.note).toBe("never expires; it is not shown again");
+    await expect(mintTokenCommand(["watch@example.com"], {})).rejects.toThrow(
+      /needs <email> <name>/,
+    );
   });
 
   it("refuses an account that does not exist or is disabled", async () => {

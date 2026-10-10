@@ -41,3 +41,22 @@ export async function mintTokenFor(
   });
   return { token, expiresAt: row.expires_at };
 }
+
+/**
+ * The whole command. The token is for stdout, alone, so a script can capture
+ * it; the note about it is for stderr.
+ */
+export async function mintTokenCommand(
+  positional: string[],
+  flags: Record<string, string>,
+): Promise<{ token: string; note: string }> {
+  const [email, name] = positional;
+  if (!email || !name) throw new Error("mint-token needs <email> <name>");
+  const minted = await mintTokenFor(email, name, lifetimeDaysOf(flags));
+  return {
+    token: minted.token,
+    note: minted.expiresAt
+      ? `expires ${new Date(minted.expiresAt).toISOString()}; it is not shown again`
+      : "never expires; it is not shown again",
+  };
+}
