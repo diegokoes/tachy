@@ -1,4 +1,5 @@
 import type { DeploymentProfile, UserRole } from "@tachy/contract";
+import { uninvitedFrom } from "./uninvited";
 
 export interface Me {
   email: string | null;
@@ -26,12 +27,18 @@ export const session = $state<{
   bootstrapped: boolean | null;
   /** Set when boot could not reach the API at all, so the shell can say so. */
   unreachable: boolean;
+  /**
+   * Set when the provider signed someone in and no account here is theirs. The
+   * email is the one the provider gave.
+   */
+  uninvited: { email: string | null } | null;
 }>({
   loading: true,
   me: null,
   config: null,
   bootstrapped: null,
   unreachable: false,
+  uninvited: null,
 });
 
 export async function initSession(): Promise<void> {
@@ -46,7 +53,9 @@ export async function initSession(): Promise<void> {
     session.bootstrapped = statusRes.ok
       ? (await statusRes.json()).bootstrapped
       : null;
-    session.me = meRes.ok ? await meRes.json() : null;
+    const me = await meRes.json().catch(() => null);
+    session.me = meRes.ok ? me : null;
+    session.uninvited = uninvitedFrom(meRes.status, me);
     session.unreachable = false;
   } catch {
     // Every field, not only `config`: with `me` and `bootstrapped` left as they
@@ -55,6 +64,7 @@ export async function initSession(): Promise<void> {
     session.config = null;
     session.me = null;
     session.bootstrapped = null;
+    session.uninvited = null;
     session.unreachable = true;
   } finally {
     session.loading = false;
