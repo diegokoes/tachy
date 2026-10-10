@@ -3,6 +3,7 @@ import type { Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { badInput } from "@tachy/core/infra";
+import { audit } from "../audit";
 import {
   createFlow,
   deleteFlow,
@@ -90,7 +91,12 @@ export const flows = new Hono()
 
   .post("/", zValidator("json", flowSchema), async (c) => {
     const body = await input(c, c.req.valid("json"));
-    return c.json(await createFlow(body, await callerUserId(c)), 201);
+    const created = await createFlow(body, await callerUserId(c));
+    await audit(c, "flow_save", created.name, {
+      id: created.id,
+      created: true,
+    });
+    return c.json(created, 201);
   })
 
   .get("/:id", async (c) => {
@@ -103,13 +109,17 @@ export const flows = new Hono()
     const id = c.req.param("id");
     await assertScopeEditor(c, await flowScope(id));
     const body = await input(c, c.req.valid("json"));
-    return c.json(await updateFlow(id, body, await callerUserId(c)));
+    const updated = await updateFlow(id, body, await callerUserId(c));
+    await audit(c, "flow_save", updated.name, { id, enabled: updated.enabled });
+    return c.json(updated);
   })
 
   .delete("/:id", async (c) => {
     const id = c.req.param("id");
     await assertScopeEditor(c, await flowScope(id));
+    const { name } = await getFlow(id);
     await deleteFlow(id, await callerUserId(c));
+    await audit(c, "flow_delete", name, { id });
     return c.body(null, 204);
   })
 

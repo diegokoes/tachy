@@ -32,6 +32,7 @@ import {
 } from "@tachy/core/catalog";
 import { CATALOG_SLUG_RE, CATALOG_SLUG_HINT } from "@tachy/core";
 import { requireAdmin } from "../../auth";
+import { audited } from "../../audit";
 import {
   assertAnyTeamAdminApi,
   assertScopeEditor,
@@ -100,7 +101,11 @@ export const catalog = new Hono()
     async (c) => {
       await assertAnyTeamAdminApi(c);
       const { slug, description } = c.req.valid("json");
-      return c.json(await addResolutionPattern(slug, description));
+      return c.json(
+        await audited(c, "catalog_add", `pattern:${slug}`, () =>
+          addResolutionPattern(slug, description),
+        ),
+      );
     },
   )
   .patch(
@@ -108,17 +113,22 @@ export const catalog = new Hono()
     zValidator("json", patternPatchSchema),
     async (c) => {
       await assertAnyTeamAdminApi(c);
+      const slug = c.req.param("slug");
       return c.json(
-        await addResolutionPattern(
-          c.req.param("slug"),
-          c.req.valid("json").description,
+        await audited(c, "catalog_update", `pattern:${slug}`, () =>
+          addResolutionPattern(slug, c.req.valid("json").description),
         ),
       );
     },
   )
   .delete("/resolution-patterns/:slug", async (c) => {
     await assertAnyTeamAdminApi(c);
-    return c.json(await deleteResolutionPattern(c.req.param("slug")));
+    const slug = c.req.param("slug");
+    return c.json(
+      await audited(c, "catalog_delete", `pattern:${slug}`, () =>
+        deleteResolutionPattern(slug),
+      ),
+    );
   })
   .get("/resolution-patterns/:slug/rename-impact", async (c) => {
     await assertAnyTeamAdminApi(c);
@@ -129,10 +139,15 @@ export const catalog = new Hono()
     zValidator("json", renameSchema),
     async (c) => {
       await assertAnyTeamAdminApi(c);
+      const slug = c.req.param("slug");
+      const { to } = c.req.valid("json");
       return c.json(
-        await renameResolutionPattern(
-          c.req.param("slug"),
-          c.req.valid("json").to,
+        await audited(
+          c,
+          "catalog_update",
+          `pattern:${slug}`,
+          () => renameResolutionPattern(slug, to),
+          { renamed_to: to },
         ),
       );
     },
@@ -153,7 +168,14 @@ export const catalog = new Hono()
       const body = c.req.valid("json");
       const productId = await getProductIdBySlug(c.req.param("slug"));
       await assertScopeEditor(c, { productId });
-      return c.json(await addComponent({ ...body, productId }));
+      return c.json(
+        await audited(
+          c,
+          "catalog_add",
+          `component:${c.req.param("slug")}/${body.slug}`,
+          () => addComponent({ ...body, productId }),
+        ),
+      );
     },
   )
   .patch(
@@ -162,11 +184,14 @@ export const catalog = new Hono()
     async (c) => {
       const productId = await getProductIdBySlug(c.req.param("slug"));
       await assertScopeEditor(c, { productId });
+      const target = `component:${c.req.param("slug")}/${c.req.param("componentSlug")}`;
       return c.json(
-        await updateComponent(
-          productId,
-          c.req.param("componentSlug"),
-          c.req.valid("json"),
+        await audited(c, "catalog_update", target, () =>
+          updateComponent(
+            productId,
+            c.req.param("componentSlug"),
+            c.req.valid("json"),
+          ),
         ),
       );
     },
@@ -174,8 +199,11 @@ export const catalog = new Hono()
   .delete("/products/:slug/components/:componentSlug", async (c) => {
     const productId = await getProductIdBySlug(c.req.param("slug"));
     await assertScopeEditor(c, { productId });
+    const target = `component:${c.req.param("slug")}/${c.req.param("componentSlug")}`;
     return c.json(
-      await deleteComponent(productId, c.req.param("componentSlug")),
+      await audited(c, "catalog_delete", target, () =>
+        deleteComponent(productId, c.req.param("componentSlug")),
+      ),
     );
   })
   .get("/products/:slug/components/:componentSlug/rename-impact", async (c) => {
@@ -191,11 +219,14 @@ export const catalog = new Hono()
     async (c) => {
       const productId = await getProductIdBySlug(c.req.param("slug"));
       await assertScopeEditor(c, { productId });
+      const { to } = c.req.valid("json");
       return c.json(
-        await renameComponent(
-          productId,
-          c.req.param("componentSlug"),
-          c.req.valid("json").to,
+        await audited(
+          c,
+          "catalog_update",
+          `component:${c.req.param("slug")}/${c.req.param("componentSlug")}`,
+          () => renameComponent(productId, c.req.param("componentSlug"), to),
+          { renamed_to: to },
         ),
       );
     },
@@ -212,7 +243,14 @@ export const catalog = new Hono()
       const { slug, description } = c.req.valid("json");
       const productId = await getProductIdBySlug(c.req.param("slug"));
       await assertScopeEditor(c, { productId });
-      return c.json(await addLabel(productId, slug, description));
+      return c.json(
+        await audited(
+          c,
+          "catalog_add",
+          `label:${c.req.param("slug")}/${slug}`,
+          () => addLabel(productId, slug, description),
+        ),
+      );
     },
   )
   .patch(
@@ -221,11 +259,14 @@ export const catalog = new Hono()
     async (c) => {
       const productId = await getProductIdBySlug(c.req.param("slug"));
       await assertScopeEditor(c, { productId });
+      const target = `label:${c.req.param("slug")}/${c.req.param("labelSlug")}`;
       return c.json(
-        await updateLabel(
-          productId,
-          c.req.param("labelSlug"),
-          c.req.valid("json").description,
+        await audited(c, "catalog_update", target, () =>
+          updateLabel(
+            productId,
+            c.req.param("labelSlug"),
+            c.req.valid("json").description,
+          ),
         ),
       );
     },
@@ -233,7 +274,12 @@ export const catalog = new Hono()
   .delete("/products/:slug/labels/:labelSlug", async (c) => {
     const productId = await getProductIdBySlug(c.req.param("slug"));
     await assertScopeEditor(c, { productId });
-    return c.json(await deleteLabel(productId, c.req.param("labelSlug")));
+    const target = `label:${c.req.param("slug")}/${c.req.param("labelSlug")}`;
+    return c.json(
+      await audited(c, "catalog_delete", target, () =>
+        deleteLabel(productId, c.req.param("labelSlug")),
+      ),
+    );
   })
   .get("/products/:slug/labels/:labelSlug/rename-impact", async (c) => {
     const productId = await getProductIdBySlug(c.req.param("slug"));
@@ -246,11 +292,14 @@ export const catalog = new Hono()
     async (c) => {
       const productId = await getProductIdBySlug(c.req.param("slug"));
       await assertScopeEditor(c, { productId });
+      const { to } = c.req.valid("json");
       return c.json(
-        await renameLabel(
-          productId,
-          c.req.param("labelSlug"),
-          c.req.valid("json").to,
+        await audited(
+          c,
+          "catalog_update",
+          `label:${c.req.param("slug")}/${c.req.param("labelSlug")}`,
+          () => renameLabel(productId, c.req.param("labelSlug"), to),
+          { renamed_to: to },
         ),
       );
     },
@@ -258,20 +307,32 @@ export const catalog = new Hono()
   .get("/teams", async (c) => c.json(await listTeams()))
   .post("/teams", requireAdmin, zValidator("json", teamSchema), async (c) => {
     const { slug, name } = c.req.valid("json");
-    return c.json(await addTeam(slug, name));
+    return c.json(
+      await audited(c, "catalog_add", `team:${slug}`, () =>
+        addTeam(slug, name),
+      ),
+    );
   })
   .patch(
     "/teams/:slug",
     requireAdmin,
     zValidator("json", teamPatchSchema),
     async (c) => {
+      const slug = c.req.param("slug")!;
       return c.json(
-        await updateTeam(c.req.param("slug")!, c.req.valid("json")),
+        await audited(c, "catalog_update", `team:${slug}`, () =>
+          updateTeam(slug, c.req.valid("json")),
+        ),
       );
     },
   )
   .delete("/teams/:slug", requireAdmin, async (c) => {
-    return c.json(await deleteTeam(c.req.param("slug")!));
+    const slug = c.req.param("slug")!;
+    return c.json(
+      await audited(c, "catalog_delete", `team:${slug}`, () =>
+        deleteTeam(slug),
+      ),
+    );
   })
   .get("/products", async (c) =>
     c.json(await listProducts(c.req.query("team_slug"))),
@@ -279,7 +340,11 @@ export const catalog = new Hono()
   .post("/products", zValidator("json", productSchema), async (c) => {
     const { team_slug, slug, name, aliases } = c.req.valid("json");
     await assertTeamAdmin(c, team_slug);
-    return c.json(await addProduct(team_slug, slug, name, aliases));
+    return c.json(
+      await audited(c, "catalog_add", `product:${team_slug}/${slug}`, () =>
+        addProduct(team_slug, slug, name, aliases),
+      ),
+    );
   })
   .patch(
     "/products/:slug",
@@ -291,17 +356,28 @@ export const catalog = new Hono()
       // Moving a product needs rights on the team it lands in, too.
       if (body.team_slug) await assertTeamAdmin(c, body.team_slug);
       return c.json(
-        await updateProduct(productId, {
-          name: body.name,
-          aliases: body.aliases,
-          slug: body.slug,
-          teamSlug: body.team_slug,
-        }),
+        await audited(
+          c,
+          "catalog_update",
+          `product:${c.req.param("slug")}`,
+          () =>
+            updateProduct(productId, {
+              name: body.name,
+              aliases: body.aliases,
+              slug: body.slug,
+              teamSlug: body.team_slug,
+            }),
+          { renamed_to: body.slug, moved_to: body.team_slug },
+        ),
       );
     },
   )
   .delete("/products/:slug", async (c) => {
     const productId = await getProductIdBySlug(c.req.param("slug"));
     await assertScopeEditor(c, { productId });
-    return c.json(await deleteProduct(productId));
+    return c.json(
+      await audited(c, "catalog_delete", `product:${c.req.param("slug")}`, () =>
+        deleteProduct(productId),
+      ),
+    );
   });
