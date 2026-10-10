@@ -29,6 +29,20 @@ its pooling, its window and the floor and ceiling `scripts/eval-embeddings.ts`
 prints for it; `test/search/quality.test.ts` fails until they fit.
 `scripts/eval-code-search.ts` measures the same change on code.
 
+**Its memory moves with it.** A model of another size changes what the
+embedder holds at its peak: `scripts/bench-embedder.ts --heaviest` against a
+running embedder, read from the container's `memory.peak`. Three host
+variables follow, together (DEPLOYMENT-ARCHITECTURE.md §3.2):
+
+- `TACHY_EMBEDDER_MEM_LIMIT` is that peak plus 800 MiB;
+- `TACHY_API_MEM_LIMIT` gives up what the embedder gained;
+- `TACHY_AGENT_SLOT_CAP` is what the api's limit holds at 0.44 GB a turn,
+  after 0.3 GB for the api itself.
+
+A host that sets any of them in its `.env` keeps its own value, so check them
+before the deploy. A cap saved in Admin › system wins over the variable (its
+badge reads `db`): change it there.
+
 **After the deploy:**
 
 1. Admin › system lists "vectors from another embedding model", with a count
