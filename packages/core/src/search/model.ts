@@ -16,6 +16,11 @@ export interface EmbeddingModelSpec {
    */
   source?: string;
   /**
+   * The commit of that repository the files are read at. Unset, its `main`:
+   * an upload there then changes the vectors under the same name.
+   */
+  revision?: string;
+  /**
    * Which ONNX file computes: full precision unless set. An int8 file gives
    * other vectors than its fp32 parent, so it is an entry of its own.
    */
@@ -115,6 +120,10 @@ const UNMEASURED = {
  */
 const MDENSEON: EmbeddingModelSpec = {
   ...UNMEASURED,
+  // lightonai publishes no ONNX file. This repository holds an export of
+  // theirs, and its README says how it was made.
+  source: "diegomo123/mDenseOn-ONNX",
+  revision: "5efec33f513509644b7e7093d572f72fea1e09b7",
   pooling: "cls",
   queryPrefix: "query: ",
   passagePrefix: "document: ",
@@ -250,6 +259,7 @@ export function model(): Promise<FeatureExtractionPipeline> {
         EMBEDDING_SPEC.source ?? EMBEDDING_MODEL,
         {
           dtype: EMBEDDING_SPEC.dtype ?? "fp32",
+          revision: EMBEDDING_SPEC.revision ?? "main",
           session_options: {
             ...(threads && { intraOpNumThreads: threads }),
             // An idle thread spins before it sleeps, and a CPU quota counts
