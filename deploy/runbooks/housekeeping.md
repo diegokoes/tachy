@@ -13,6 +13,7 @@ under Admin › workers › jobs holds `transcript_days` and `usage_months`.
 | Chat uploads              | 24 h (`TACHY_UPLOAD_TTL_HOURS`)           | `retention.sweep`      |
 | Generated exports         | 24 h (`TACHY_OUTPUT_TTL_HOURS`)           | `retention.sweep`      |
 | Claude transcripts        | 90 days from last activity                | `retention.sweep`      |
+| Images a tool showed      | 90 days, with the transcripts             | `retention.sweep`      |
 | Usage counters per person | 13 months, then monthly without the user  | `retention.sweep`      |
 | Job runs, flow runs       | 90 days, failed ones 180                  | `retention.sweep`      |
 | Notifications             | 90 days once opened, 180 if never         | `retention.sweep`      |

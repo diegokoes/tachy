@@ -13,6 +13,7 @@ export const READ_TOOLS = [
   "list_wiki_gaps",
   "draft_wiki_page",
   "ingest_context",
+  "read_file",
   "list_resolution_patterns",
   "list_environments",
   "list_components",

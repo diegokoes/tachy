@@ -30,6 +30,7 @@ export function isTimezone(zone: string | undefined): zone is string {
 
 const SETTING_SCHEMAS = {
   redaction_global: z.boolean(),
+  redaction_images: z.boolean(),
   agent_model: z.string().min(1),
   agent_effort: z.enum(AGENT_EFFORTS),
   allowed_models: z.array(z.string().min(1)),
@@ -96,6 +97,8 @@ export type SettingSource = "db" | "env" | "default";
 
 export interface EffectiveSettings {
   redaction_global: { value: boolean; source: SettingSource };
+  /** Under redaction, whether an attached image may still go to the model. */
+  redaction_images: { value: boolean; source: SettingSource };
   agent_model: { value: string; source: SettingSource };
   agent_effort: {
     value: (typeof AGENT_EFFORTS)[number];
@@ -143,6 +146,11 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
       process.env.TACHY_REDACT === "true" ? true : undefined,
       false,
     ),
+    redaction_images: pick(
+      db.redaction_images,
+      process.env.TACHY_REDACT_IMAGES === "true" ? true : undefined,
+      false,
+    ),
     agent_model: pick(
       db.agent_model,
       process.env.TACHY_AGENT_MODEL || undefined,
@@ -188,6 +196,8 @@ export async function loadSettingsIntoEnv(): Promise<void> {
   const eff = await effectiveSettings();
   if (eff.redaction_global.value) process.env.TACHY_REDACT = "true";
   else delete process.env.TACHY_REDACT;
+  if (eff.redaction_images.value) process.env.TACHY_REDACT_IMAGES = "true";
+  else delete process.env.TACHY_REDACT_IMAGES;
 }
 
 export function clearSettingsCache(): void {

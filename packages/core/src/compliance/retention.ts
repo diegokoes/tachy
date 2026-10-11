@@ -1,6 +1,6 @@
 import { readdir, rm, stat } from "node:fs/promises";
 import { agentHome } from "../infra/env";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { z } from "zod";
 import { sweepExpiredOutputs } from "../exports/outputs";
 import { sql } from "../infra/db";
@@ -13,10 +13,14 @@ import { sweepNotifications } from "../notifications/notifications";
 
 const DAY = 86_400_000;
 
+/** Where Claude Code keeps the files a session's tool calls returned. */
+const TOOL_RESULTS_DIR = "tool-results";
+
 /**
  * Claude Code session files: every prompt, tool call and tool result of a chat,
- * customer text included. Removed a set time after they were last written; the
- * chat's record and counts in analysis_runs stay.
+ * customer text included, and beside them the images a tool showed the model.
+ * Each is removed a set time after it was last written; the chat's record and
+ * counts in analysis_runs stay. Returns the transcripts removed.
  */
 export async function sweepTranscripts(
   days: number,
@@ -25,18 +29,21 @@ export async function sweepTranscripts(
   const root = join(agentHome(), "users");
   let removed = 0;
   const walk = async (dir: string): Promise<void> => {
+    const holdsToolResults = basename(dir) === TOOL_RESULTS_DIR;
     for (const entry of await readdir(dir, { withFileTypes: true }).catch(
       () => [],
     )) {
       const path = join(dir, entry.name);
-      if (entry.isDirectory()) await walk(path);
-      else if (entry.isFile() && entry.name.endsWith(".jsonl")) {
-        const { mtimeMs } = await stat(path);
-        if (now - mtimeMs > days * DAY) {
-          await rm(path, { force: true });
-          removed++;
-        }
+      if (entry.isDirectory()) {
+        await walk(path);
+        continue;
       }
+      const isTranscript = entry.name.endsWith(".jsonl");
+      if (!entry.isFile() || (!isTranscript && !holdsToolResults)) continue;
+      const { mtimeMs } = await stat(path);
+      if (now - mtimeMs <= days * DAY) continue;
+      await rm(path, { force: true });
+      if (isTranscript) removed++;
     }
   };
   for (const user of await readdir(root, { withFileTypes: true }).catch(

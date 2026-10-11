@@ -216,6 +216,28 @@ describe("retention", () => {
     }
   });
 
+  it("deletes the images a tool showed the model along with the transcripts", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tachy-agent-"));
+    process.env.TACHY_AGENT_HOME = home;
+    const session = join(home, "users", "u1", "projects", "app", "session-1");
+    const shown = join(session, "tool-results");
+    await mkdir(shown, { recursive: true });
+    await writeFile(join(shown, "old.png"), "x");
+    await writeFile(join(shown, "new.png"), "x");
+    await writeFile(join(session, "notes.txt"), "x");
+    const old = new Date(Date.now() - 91 * 86_400_000);
+    await utimes(join(shown, "old.png"), old, old);
+    await utimes(join(session, "notes.txt"), old, old);
+    try {
+      // Counted are transcripts; an image is not one.
+      expect(await sweepTranscripts(90)).toBe(0);
+      expect(await readdir(shown)).toEqual(["new.png"]);
+      expect(await readdir(session)).toEqual(["notes.txt", "tool-results"]);
+    } finally {
+      delete process.env.TACHY_AGENT_HOME;
+    }
+  });
+
   it("removes week-old images nothing references", async () => {
     const png = (seed: number) =>
       new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, seed]);
