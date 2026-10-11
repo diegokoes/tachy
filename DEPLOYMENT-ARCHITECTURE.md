@@ -1142,8 +1142,15 @@ both live in Postgres with a TTL.
   is held to what an upload is, the same kinds and the same limits. To a
   browser an image is served fitted and without its metadata, and anything
   else only as a download. Azure DevOps files open: attached files, and the
-  pictures pasted into a field or a comment. Freshdesk files are listed and
-  do not open yet.
+  pictures pasted into a field or a comment. Freshdesk's attached files open.
+  Its listing gives each an address signed for five minutes and good without
+  the API key, so every open reads the ticket again, and its conversations up
+  to the page that lists the file, for a fresh one; the key is not sent with
+  it. A picture pasted into a Freshdesk message is not in that listing. The
+  message's HTML addresses it by a token that opens without the key, through
+  two redirects, so it is listed from the HTML and found again the same way,
+  by reading the messages. A picture a message only links from elsewhere is
+  left out.
 - **Under a connection's redaction** a file's name is scrubbed, its text is
   scrubbed when read, and an image is withheld from the model unless that
   connection's own switch (`config.redaction.images`) allows it.
