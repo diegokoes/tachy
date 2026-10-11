@@ -1,6 +1,12 @@
 import { z } from "zod";
+import { parseAttachmentRef } from "@tachy/contract";
+import { userSoleTeamId } from "../access/users";
 import { ANONYMOUS_UPLOADS, readUpload } from "../chat/uploads";
+import { redactionPolicy, type RedactionPolicy } from "../compliance/redaction";
+import { effectiveSettings } from "../config/settings";
 import { badInput } from "../infra/errors";
+import { resolveSource } from "../sources/registry";
+import { readAttachment } from "../work-items/attachments";
 import { count } from "../jobs/present";
 import { defineJob, hasJobKind } from "../jobs/registry";
 import { enqueueRun } from "../jobs/runs";
@@ -28,6 +34,45 @@ function outcome(output: Record<string, unknown>): string {
   return parts.join(", ");
 }
 
+const GONE =
+  "the PDF this doc was saved from can no longer be read: an upload is kept for a day, and a ticket's file for as long as the ticket lists it. Attach it again and save the doc as a new version";
+
+/**
+ * The PDF a doc was saved from, read again as whoever saved it: their upload,
+ * or a ticket's file through their own source token. With it, the redaction
+ * that applies to it: the connection's for a ticket's file, else the global
+ * one, both read from the settings since a worker's environment is not kept
+ * in step with them.
+ */
+async function savedPdf(
+  path: string,
+  userId: string | null,
+): Promise<{ bytes: Uint8Array; policy: RedactionPolicy }> {
+  const settings = await effectiveSettings();
+  const globalOn = settings.redaction_global.value;
+  const attachment = parseAttachmentRef(path);
+  if (!attachment) {
+    const upload = await readUpload(path, userId ?? ANONYMOUS_UPLOADS);
+    return {
+      bytes: upload.bytes,
+      policy: {
+        enabled: globalOn,
+        images: !globalOn || settings.redaction_images.value,
+      },
+    };
+  }
+  const scope = userId
+    ? { userId, teamId: (await userSoleTeamId(userId)) ?? undefined }
+    : {};
+  const { conn, source } = await resolveSource(attachment.source, scope);
+  const file = await readAttachment(
+    source,
+    attachment.externalId,
+    attachment.attachmentId,
+  );
+  return { bytes: file.bytes, policy: redactionPolicy(conn.config, globalOn) };
+}
+
 export function defineReferenceJobs() {
   defineJob({
     kind: EXTRACT_KIND,
@@ -43,19 +88,15 @@ export function defineReferenceJobs() {
     outcome,
     timeout: "1h",
     run: async (ctx, params) => {
-      const upload = await readUpload(
-        params.path,
-        params.user_id ?? ANONYMOUS_UPLOADS,
-      ).catch(() => {
-        throw badInput(
-          "the PDF this doc was saved from is no longer held: an upload is kept for a day. Attach it again and save the doc as a new version",
-        );
+      const saved = await savedPdf(params.path, params.user_id).catch(() => {
+        throw badInput(GONE);
       });
       return {
         ...(await completeDocFromPdf({
           docId: params.doc_id,
-          pdf: upload.bytes,
+          pdf: saved.bytes,
           userId: params.user_id,
+          policy: saved.policy,
           signal: ctx.signal,
         })),
       };

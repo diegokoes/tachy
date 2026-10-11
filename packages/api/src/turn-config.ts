@@ -85,6 +85,9 @@ const INHERITED_ENV = [
   "TACHY_MODEL_CACHE",
   "TACHY_EMBED_MODEL",
   "TACHY_OUTPUT_TTL_HOURS",
+  // What a file read off a ticket may weigh: the host's upload limits.
+  "TACHY_UPLOAD_MAX_MB",
+  "TACHY_UPLOAD_IMAGE_MAX_MB",
   // Set per test worker; the subprocess reads the same schema as its parent.
   "TEST_SCHEMA",
 ];

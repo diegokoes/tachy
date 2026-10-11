@@ -1,6 +1,6 @@
 import type { CompactStats } from "./CompactPanel.svelte";
 import type { OutputFile } from "./OutputCard.svelte";
-import type { CreatedTicket } from "@tachy/contract";
+import type { CreatedTicket, WorkItemFile } from "@tachy/contract";
 import type { ShownStep, WalkStep } from "../code/walkthrough";
 
 export type EntryData =
@@ -15,6 +15,8 @@ export type EntryData =
   | { kind: "tools"; calls: string[] }
   | { kind: "compact"; id: string; title: string; stats?: CompactStats }
   | { kind: "output"; id: string; file?: OutputFile }
+  // What a ticket the agent just read has attached.
+  | { kind: "files"; files: WorkItemFile[] }
   | {
       kind: "walkthrough";
       id: string;

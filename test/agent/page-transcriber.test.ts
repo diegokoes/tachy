@@ -35,6 +35,7 @@ async function complete(userId: string | null) {
     docId: saved.id,
     pdf: scan,
     userId,
+    policy: { enabled: false, images: true },
     signal: new AbortController().signal,
   });
   return { saved, completion };

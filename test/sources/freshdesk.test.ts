@@ -76,6 +76,48 @@ describe("freshdesk adapter", () => {
     ]);
   });
 
+  it("lists each message's files by id and name, and leaves their signed addresses behind", async () => {
+    mockFetch({
+      "/tickets/7?include=requester": {
+        ...ticket,
+        attachments: [
+          {
+            id: 900,
+            name: "screen.png",
+            content_type: "image/png",
+            size: 2048,
+            attachment_url: "https://s3.example/signed?X-Amz-Expires=300",
+          },
+        ],
+      },
+      "/tickets/7/conversations?page=1": [
+        {
+          ...convo(1),
+          attachments: [
+            // The name the docs give the size on a note's own response.
+            { id: 901, name: "app.log", file_size: 77 },
+            { name: "no id, so nothing to open it by" },
+          ],
+        },
+      ],
+    });
+    const item = await source().fetchItem("7");
+    expect(item.messages.map((m) => m.attachments)).toEqual([
+      [
+        {
+          id: "900",
+          name: "screen.png",
+          contentType: "image/png",
+          sizeBytes: 2048,
+        },
+      ],
+      [{ id: "901", name: "app.log", sizeBytes: 77 }],
+    ]);
+    expect(JSON.stringify(item.messages)).not.toContain("signed");
+    // Opening one waits on what Freshdesk does not document.
+    expect(source().openAttachment).toBeUndefined();
+  });
+
   it("pages through tickets with more than 30 conversations", async () => {
     const page1 = Array.from({ length: 30 }, (_, i) => convo(i + 1));
     mockFetch({

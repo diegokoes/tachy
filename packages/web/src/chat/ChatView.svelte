@@ -27,7 +27,12 @@
   import { ArtifactMark, Button, Caret, caretSide, G, Icon, tip } from "../tui";
   import { pushScope } from "../keys/keys.svelte";
   import { CHAT_UPLOAD_ACCEPT, uploadRefusal } from "@tachy/contract";
-  import type { WorkItemTypeOption, CreatedTicket } from "@tachy/contract";
+  import type {
+    WorkItemTypeOption,
+    CreatedTicket,
+    WorkItemFile,
+  } from "@tachy/contract";
+  import FileTray from "../work-items/FileTray.svelte";
   import TicketComposer from "../work-items/TicketComposer.svelte";
   import TicketCard from "../work-items/TicketCard.svelte";
   import {
@@ -147,6 +152,20 @@
     const last = chat.entries[chat.entries.length - 1];
     if (last?.kind === "tools") last.calls.push(tool);
     else addEntry({ kind: "tools", calls: [tool] });
+  }
+
+  /** The tools whose result lists the files of the ticket they read. */
+  const TICKET_READS = new Set([
+    "fetch_work_item",
+    "get_context",
+    "compact_work_item",
+  ]);
+
+  function showFiles(data: Record<string, unknown>) {
+    if (!TICKET_READS.has(short(data.tool as string))) return;
+    const files = toolPayload(data.result)?.files;
+    if (Array.isArray(files) && files.length)
+      addEntry({ kind: "files", files: files as WorkItemFile[] });
   }
 
   function appendAssistant(text: string) {
@@ -452,6 +471,7 @@
       )) {
         chat.queuePosition =
           event === "queued" ? (data.position as number) : null;
+        if (event === "tool_result") showFiles(data);
         if (event === "start") chat.turnId = data.turnId as string;
         else if (event === "text") appendAssistant(data.text as string);
         else if (event === "tool_use") {
@@ -762,6 +782,8 @@
             <CompactPanel title={entry.title} stats={entry.stats} />
           {:else if entry.kind === "output"}
             <OutputCard file={entry.file} />
+          {:else if entry.kind === "files"}
+            <FileTray files={entry.files} />
           {:else if entry.kind === "walkthrough"}
             <Walkthrough
               title={entry.title}

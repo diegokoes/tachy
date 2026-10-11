@@ -41,6 +41,7 @@ import { limitField, sourceSlug } from "../fields";
 import {
   capTurns,
   withCompaction,
+  withFiles,
   withLinkedAdoItems,
   workItemFacts,
 } from "../context";
@@ -77,6 +78,7 @@ tool(
       team_id: item.teamId,
       ...(await workItemFacts(item, raw)),
       ...withCompaction(forLlm),
+      ...withFiles(forLlm, conn.slug, src),
       ...(await withLinkedAdoItems(raw, item.id)),
     });
   },
@@ -127,21 +129,16 @@ tool(
       }
     }
 
-    const forLlm = resolveRedactionPolicy(conn.config).enabled
-      ? compactWorkItem(
-          redactForLlm(
-            raw,
-            src.redactRaw,
-            await getCustomerSlug(item.customerId),
-          ),
-          opts,
-        )
-      : full;
+    const redacted = resolveRedactionPolicy(conn.config).enabled
+      ? redactForLlm(raw, src.redactRaw, await getCustomerSlug(item.customerId))
+      : raw;
+    const forLlm = redacted === raw ? full : compactWorkItem(redacted, opts);
 
     const { turns, ...summary } = forLlm;
     return out({
       work_item_id: item.id,
       ...summary,
+      ...withFiles(redacted, conn.slug, src),
       ...(return_turns === true ? capTurns(turns) : {}),
       ...(posted
         ? {
@@ -227,6 +224,7 @@ tool(
         ? {}
         : { retrieval_note: NO_MATCHES }),
       ...(await workItemFacts(item, raw)),
+      ...withFiles(forLlm, conn.slug, src),
       ...(context.length ? { project_context: context } : {}),
       ...(await withLinkedAdoItems(raw, item.id)),
     });

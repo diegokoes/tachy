@@ -2,12 +2,7 @@ import { Hono } from "hono";
 import { getOutput, listOutputs, deleteOutput } from "@tachy/core/exports";
 import { requireCaller } from "../authz";
 import { audit } from "../audit";
-
-/** RFC 5987, so a filename with non-ASCII survives the header. */
-function contentDisposition(filename: string): string {
-  const ascii = filename.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "'");
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
-}
+import { contentDisposition } from "../downloads";
 
 export const outputs = new Hono()
 
