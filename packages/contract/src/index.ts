@@ -161,6 +161,12 @@ export type {
   FileFamily,
 } from "./files";
 export {
+  attachmentPath,
+  attachmentRef,
+  parseAttachmentRef,
+} from "./attachments";
+export type { AttachmentRef, WorkItemFile } from "./attachments";
+export {
   CHAT_UPLOAD_ACCEPT,
   DEFAULT_UPLOAD_LIMITS,
   largestUploadBytes,

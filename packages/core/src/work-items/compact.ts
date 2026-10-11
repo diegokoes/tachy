@@ -20,9 +20,13 @@ import {
  * the same ticket a transcript is posted to.
  */
 export interface CompactAttachment {
+  /** The source's id for it, when the stored message kept one. */
+  id?: string;
   name: string;
   size?: number;
   type?: string;
+  /** Placed in the message's body, as a pasted screenshot is. */
+  inline?: boolean;
 }
 
 export interface CompactTurn {
@@ -184,10 +188,18 @@ const MONTHS: Record<string, number> = {
 const nonEmpty = (v: unknown): string | undefined =>
   typeof v === "string" && v.trim() ? v.trim() : undefined;
 
+const sizeOf = (fields: Record<string, unknown>): number | undefined =>
+  [fields.sizeBytes, fields.size, fields.file_size].find(
+    (size): size is number => typeof size === "number" && size >= 0,
+  );
+
+const idOf = (id: unknown): string | undefined =>
+  typeof id === "number" ? String(id) : nonEmpty(id);
+
 /**
- * Attachment payloads differ per source (Freshdesk `name`/`content_type`/`size`,
- * Jira `filename`/`mimeType`/`size`), so the shape is duck-typed rather than
- * imported - a new adapter needs no change here.
+ * A message's files, whatever wrote them: an adapter's `RawAttachment`, or a
+ * row stored when a source's own payload was kept as it came (Freshdesk
+ * `name`/`content_type`/`size`), which is why the shape is duck-typed.
  */
 export function normalizeAttachments(input: unknown): CompactAttachment[] {
   if (!Array.isArray(input)) return [];
@@ -200,19 +212,19 @@ export function normalizeAttachments(input: unknown): CompactAttachment[] {
       nonEmpty(fields.filename) ??
       nonEmpty(fields.file_name);
     if (!name) continue;
-    const size =
-      typeof fields.size === "number" && fields.size >= 0
-        ? fields.size
-        : undefined;
+    const id = idOf(fields.id);
+    const size = sizeOf(fields);
     const type =
-      nonEmpty(fields.content_type) ??
       nonEmpty(fields.contentType) ??
+      nonEmpty(fields.content_type) ??
       nonEmpty(fields.mimeType) ??
       nonEmpty(fields.mime_type);
     attachments.push({
+      ...(id ? { id } : {}),
       name,
       ...(size != null ? { size } : {}),
       ...(type ? { type } : {}),
+      ...(fields.inline === true ? { inline: true } : {}),
     });
   }
   return attachments;
@@ -222,6 +234,7 @@ export const describeAttachment = (attachment: CompactAttachment): string => {
   const meta = [
     attachment.size != null ? formatBytes(attachment.size) : null,
     attachment.type,
+    attachment.inline ? "in the message" : null,
   ]
     .filter(Boolean)
     .join(", ");
@@ -607,7 +620,9 @@ export function compactMessages(
   let attachmentCount = 0;
   messages.forEach((msg, idx) => {
     const body = bodies[idx];
-    if (!body || skipped[idx]) return;
+    // A message that is only a file still gets a turn, so the file is listed.
+    const onlyFiles = !body && normalizeAttachments(msg.attachments).length > 0;
+    if (skipped[idx] || (!body && !onlyFiles)) return;
     const internal = msg.visibility !== "public";
     const ownKind = internal ? "internal_note" : "reply";
     // `authorLabel` is the adapter's display name; `author` (a login or id) is

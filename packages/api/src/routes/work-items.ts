@@ -1,12 +1,15 @@
 import { Hono } from "hono";
 import { validate } from "../validation";
 import { z } from "zod";
+import { checkFile, fileFamily } from "@tachy/core";
+import { imageForModel } from "@tachy/core/files";
 import { resolveSource } from "@tachy/core/sources";
 import {
   deleteStoredItems,
   filterForAudit,
   ingestWorkItem,
   previewStoredItems,
+  readAttachmentBytes,
   workItemScope,
   externalWorkItemScope,
   type StoredItemFilter,
@@ -22,6 +25,10 @@ import { badInput } from "@tachy/core/infra";
 import { audit } from "../audit";
 import { requireAdmin } from "../auth";
 import { assertScopeEditor, callerScope } from "../authz";
+import { INERT_HEADERS, contentDisposition } from "../downloads";
+
+/** The longest edge of a file's picture in a list of files. */
+const THUMBNAIL_EDGE_PX = 320;
 
 const customerSchema = z.object({
   customer_slug: z.string().nullable(),
@@ -105,6 +112,31 @@ export const workItems = new Hono()
       customer_name: customerName,
       observed_version: item.observedVersion,
       item: raw,
+    });
+  })
+  // A file of a ticket, read from its source with the reader's own token on
+  // each open: none of it is kept here. An image is served as a picture,
+  // fitted and without its metadata; anything else only as a download.
+  .get("/:source/:id/attachments/:attachmentId", async (c) => {
+    const { source, id, attachmentId } = c.req.param();
+    const { source: src } = await resolveSource(source, await callerScope(c));
+    const file = await readAttachmentBytes(src, id, attachmentId);
+    const check = checkFile(file.filename, file.bytes);
+    if ("refusal" in check || fileFamily(check.contentType) !== "image")
+      return c.body(new Uint8Array(file.bytes), 200, {
+        ...INERT_HEADERS,
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": contentDisposition(file.filename),
+        "Cache-Control": "private, no-store",
+      });
+    const image = await imageForModel(
+      file.bytes,
+      c.req.query("thumb") ? THUMBNAIL_EDGE_PX : undefined,
+    );
+    return c.body(new Uint8Array(image.bytes), 200, {
+      ...INERT_HEADERS,
+      "Content-Type": image.mimeType,
+      "Cache-Control": "private, max-age=3600",
     });
   })
   // A note goes onto the customer's own ticket, under the org's shared
