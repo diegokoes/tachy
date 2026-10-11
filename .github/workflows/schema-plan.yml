@@ -12,8 +12,11 @@ on:
 permissions:
   contents: read
 
+# A label event runs in a group of its own. Dependabot labels a pull request as
+# it opens it, and a run cancelled in a shared group leaves the required check
+# cancelled.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.label.name }}
   cancel-in-progress: true
 
 jobs:
