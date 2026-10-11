@@ -21,6 +21,15 @@ export interface ModelImage {
   heightPx: number;
 }
 
+/** Decoded pixels, row by row, as a PDF hands over a picture it holds. */
+export interface RawImage {
+  data: Uint8Array;
+  widthPx: number;
+  heightPx: number;
+  /** 1 grey, 3 RGB, 4 RGBA. */
+  channels: 1 | 3 | 4;
+}
+
 let loading: Promise<typeof import("sharp")> | undefined;
 
 /**
@@ -98,4 +107,35 @@ export async function imageWithin(
       `the image is still ${Math.ceil(lossy.length / 1024 / 1024)} MB once fitted, over the ${maxBytes / 1024 / 1024} MB an image may be`,
     );
   return { ...fitted, mimeType: "image/webp", bytes: lossy };
+}
+
+/**
+ * Decoded pixels as an image for a model or the library: fitted like
+ * `imageForModel`, and lossy, which is what a scan or a figure out of a PDF
+ * was before it was decoded.
+ */
+export async function rawImageForModel(image: RawImage): Promise<ModelImage> {
+  const sharp = await loadSharp();
+  const { data, info } = await sharp(image.data, {
+    raw: {
+      width: image.widthPx,
+      height: image.heightPx,
+      channels: image.channels,
+    },
+    limitInputPixels: IMAGE_MAX_PIXELS,
+  })
+    .resize({
+      width: MODEL_IMAGE_MAX_EDGE_PX,
+      height: MODEL_IMAGE_MAX_EDGE_PX,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .webp({ quality: LOSSY_QUALITY })
+    .toBuffer({ resolveWithObject: true });
+  return {
+    mimeType: "image/webp",
+    bytes: data,
+    widthPx: info.width,
+    heightPx: info.height,
+  };
 }
