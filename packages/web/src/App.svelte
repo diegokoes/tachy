@@ -9,6 +9,8 @@
   import SetupWizard from "./access/SetupWizard.svelte";
   import LoginView from "./access/LoginView.svelte";
   import NotificationHost from "./notifications/NotificationHost.svelte";
+  import Palette from "./palette/Palette.svelte";
+  import { openFeedback } from "./reports/feedback";
   import { session, initSession } from "./access/session.svelte";
   import { navItems } from "./shell/nav";
   import { jellyPress, reflow } from "./motion/motion";
@@ -17,12 +19,7 @@
   import { loadThemeFromStorage, themeState } from "./theme/theme.svelte";
   import { loadFonts } from "./theme/fonts.svelte";
   import { loadDateFormat } from "./dates.svelte";
-  import {
-    router,
-    openSection,
-    section,
-    startRouter,
-  } from "./shell/router.svelte";
+  import { openSection, section, startRouter } from "./shell/router.svelte";
   import {
     refreshNotifications,
     startNotifications,
@@ -56,6 +53,12 @@
     session.bootstrapped !== false &&
       !session.me &&
       Boolean(session.config?.passwordLogin || session.config?.sso),
+  );
+
+  let paletteOpen = $state(false);
+  /** Anywhere a session is in use: not while it resolves, nor before it starts. */
+  const paletteAllowed = $derived(
+    !session.loading && !showWizard && !showLogin,
   );
 
   function skipWizard() {
@@ -207,7 +210,7 @@
   });
 
   // Settings is not a tab, so navItems() assigns it no digit. It registers
-  // its own hidden binding.
+  // its own hidden binding, as do feedback and the palette.
   $effect(() =>
     pushScope([
       {
@@ -222,10 +225,14 @@
         label: "",
         hidden: true,
         inFields: true,
-        run: () => {
-          sessionStorage.setItem("tachy-feedback-from", router.path);
-          openSection("feedback");
-        },
+        run: openFeedback,
+      },
+      {
+        key: actionKey("palette"),
+        label: "",
+        hidden: true,
+        inFields: true,
+        run: () => (paletteOpen = paletteAllowed && !paletteOpen),
       },
     ]),
   );
@@ -336,8 +343,7 @@
       aria-label="feedback"
       use:tip={"feedback"}
       onclick={(e) => {
-        sessionStorage.setItem("tachy-feedback-from", router.path);
-        openSection("feedback");
+        openFeedback();
         if (e.detail !== 0) e.currentTarget.blur();
       }}
       use:jellyPress
@@ -411,6 +417,10 @@
 
     <NotificationHost />
   </div>
+{/if}
+
+{#if paletteOpen && paletteAllowed}
+  <Palette onclose={() => (paletteOpen = false)} />
 {/if}
 
 <TipHost />
