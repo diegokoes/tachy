@@ -1,5 +1,5 @@
 import { onUnauthorized } from "../access/session.svelte";
-import { isProblemType } from "@tachy/contract";
+import { isProblemType, type UploadLimits } from "@tachy/contract";
 import { readError } from "../problems";
 
 export interface ChatBody {
@@ -33,10 +33,14 @@ export interface CommandArtifactMeta {
   scope: string;
 }
 
-export async function getCommands(): Promise<{
+export interface ChatCommands {
   builtins: BuiltinCommandMeta[];
   artifacts: CommandArtifactMeta[];
-}> {
+  /** This server's own; absent until it answers, when the defaults apply. */
+  uploadLimits?: UploadLimits;
+}
+
+export async function getCommands(): Promise<ChatCommands> {
   const response = await fetch("/api/agent/commands");
   if (response.status === 401) {
     onUnauthorized();

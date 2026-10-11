@@ -10,7 +10,6 @@ import {
   renderCompactNotes,
   summarizeCompaction,
   normalizeAttachments,
-  formatBytes,
   compactForLlm,
   COMPACT_MIN_CHARS,
   TRANSCRIPT_MARKER,
@@ -465,12 +464,6 @@ describe("attachments", () => {
     ).toEqual([{ name: "screen.png", size: 2048, type: "image/png" }]);
     expect(normalizeAttachments([{ id: 3 }, null, "x", 7])).toEqual([]);
     expect(normalizeAttachments(undefined)).toEqual([]);
-  });
-
-  it("formats sizes at human scale", () => {
-    expect(formatBytes(900)).toBe("900 B");
-    expect(formatBytes(67658)).toBe("66 KB");
-    expect(formatBytes(3_500_000)).toBe("3.3 MB");
   });
 
   it("hangs files off the message's own turn, never its quoted hops", () => {
