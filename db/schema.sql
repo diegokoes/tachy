@@ -179,6 +179,9 @@ create table chat_uploads (
     id           uuid primary key default gen_random_uuid(),
     user_id      uuid references users(id) on delete cascade,
     filename     text not null,
+    -- What the upload route found in the bytes. Null: stored unchecked.
+    content_type text
+                     check (content_type in ('image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain','text/markdown','text/csv','application/json')),
     byte_size    integer not null,
     bytes        bytea not null,
     created_at   timestamptz not null default now(),

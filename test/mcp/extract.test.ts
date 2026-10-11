@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createUser } from "@tachy/core/access";
 import { ANONYMOUS_UPLOADS, saveUpload, sweepUploads } from "@tachy/core/chat";
-import { extractSource, isPdf } from "../../packages/mcp/src/extract";
+import { extractSource } from "../../packages/mcp/src/extract";
 import { resetData, sql } from "../database";
 
 afterAll(() => sql.end());
@@ -35,18 +35,32 @@ function minimalPdf(text: string): Buffer {
 }
 
 describe("extractSource", () => {
-  it("detects PDFs by extension and by magic bytes", () => {
-    const pdf = minimalPdf("x");
-    expect(isPdf("doc.pdf", Buffer.from("junk"))).toBe(true);
-    expect(isPdf("doc.PDF", Buffer.from("junk"))).toBe(true);
-    expect(isPdf("renamed.bin", pdf)).toBe(true);
-    expect(isPdf("notes.txt", Buffer.from("plain text"))).toBe(false);
+  it("names an image as having no text, and does not decode it", async () => {
+    const image = await saveUpload({
+      userId: null,
+      filename: "screen.png",
+      contentType: "image/png",
+      bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    });
+    await expect(extractSource(image.ref)).rejects.toThrow(
+      /screen\.png is an image/,
+    );
+  });
+
+  it("sniffs a row stored without a content type", async () => {
+    const [unchecked] = await sql`
+      insert into chat_uploads (filename, byte_size, bytes, expires_at)
+      values ('legacy.bin', 3, ${Buffer.from("old")}, now() + interval '1 hour')
+      returning id`;
+    const extracted = await extractSource(`upload:${unchecked.id}/legacy.bin`);
+    expect(extracted.text).toBe("old");
   });
 
   it("extracts text and page count from an uploaded PDF, and passes text through", async () => {
     const pdf = await saveUpload({
       userId: null,
       filename: "runbook.pdf",
+      contentType: "application/pdf",
       bytes: minimalPdf("Line controller failover heartbeat"),
     });
     const got = await extractSource(pdf.ref);
@@ -56,6 +70,7 @@ describe("extractSource", () => {
     const txt = await saveUpload({
       userId: null,
       filename: "notes.txt",
+      contentType: "text/plain",
       bytes: Buffer.from("plain utf8 notes\n"),
     });
     const extracted = await extractSource(txt.ref);
@@ -81,11 +96,13 @@ describe("extractSource", () => {
     const a = await saveUpload({
       userId: alice.id,
       filename: "a.txt",
+      contentType: "text/plain",
       bytes: Buffer.from("alice's"),
     });
     const b = await saveUpload({
       userId: bob.id,
       filename: "b.txt",
+      contentType: "text/plain",
       bytes: Buffer.from("bob's"),
     });
 
@@ -111,11 +128,13 @@ describe("a turn with no user", () => {
     const hers = await saveUpload({
       userId: alice.id,
       filename: "a.txt",
+      contentType: "text/plain",
       bytes: Buffer.from("alice's"),
     });
     const ownerless = await saveUpload({
       userId: null,
       filename: "n.txt",
+      contentType: "text/plain",
       bytes: Buffer.from("nobody's"),
     });
 
@@ -137,11 +156,13 @@ describe("sweepUploads", () => {
     const old = await saveUpload({
       userId: null,
       filename: "old.txt",
+      contentType: "text/plain",
       bytes: Buffer.from("x"),
     });
     await saveUpload({
       userId: null,
       filename: "new.txt",
+      contentType: "text/plain",
       bytes: Buffer.from("y"),
     });
     await sql`update chat_uploads set expires_at = now() - interval '1 minute' where id = ${old.id}`;
