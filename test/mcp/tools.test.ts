@@ -911,6 +911,26 @@ describe("notes written back to a ticket", () => {
     });
   });
 
+  it("lists the files the summary names, with what each shows", async () => {
+    const answer = await call("post_work_item_summary", {
+      source: "notes-conn",
+      external_id: "n-1",
+      ...summary,
+      files: [
+        {
+          name: "screen.png",
+          from: "Ana",
+          date: "2026-06-16",
+          shows: "The spooler error E-209.",
+        },
+      ],
+    });
+    expect(answer.isError).toBe(false);
+    expect(posted[0]).toContain("<strong>Files</strong>");
+    expect(posted[0]).toContain("<strong>screen.png</strong>");
+    expect(posted[0]).toContain("The spooler error E-209.");
+  });
+
   it("deletes the summary an earlier call left, and nothing else", async () => {
     thread.push(
       {

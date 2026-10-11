@@ -55,9 +55,35 @@ export const ticketSummarySchema = z.object({
     .describe(
       "What was already attempted or ruled out, including work tracked in linked Azure DevOps items. Empty when nothing was.",
     ),
+  files: z
+    .array(
+      z.object({
+        name: z
+          .string()
+          .min(1)
+          .describe("The file's name, as the ticket lists it."),
+        from: z
+          .string()
+          .optional()
+          .describe("Who sent it, as named in the thread."),
+        date: z.string().optional().describe("YYYY-MM-DD it was sent."),
+        shows: z
+          .string()
+          .optional()
+          .describe(
+            "One sentence on what it shows or holds: the error on a screenshot, what a log says at the failure. Only for a file you opened, or one the thread itself describes; leave it out otherwise.",
+          ),
+      }),
+    )
+    .default([])
+    .describe(
+      "The files on the ticket that bear on the problem: screenshots, logs, exports. Not signatures, logos or a mail's own images. Empty when there are none.",
+    ),
 });
 
 export type TicketSummary = z.infer<typeof ticketSummarySchema>;
+/** A summary as it is handed in: `files` may be left out. */
+export type TicketSummaryInput = z.input<typeof ticketSummarySchema>;
 
 export interface SummarizedTicket {
   external_id: string;
@@ -83,11 +109,29 @@ function triedHtml(tried: TicketSummary["tried"]): string {
   return `<ul style="margin:0 0 8px 0;padding-left:22px">${items.join("")}</ul>`;
 }
 
+/** Who sent a file and when, where the summary says. */
+const sentBy = (file: TicketSummary["files"][number]) =>
+  [file.from, file.date].filter(Boolean).join(", ");
+
+function filesHtml(files: TicketSummary["files"]): string {
+  const items = files.map((file) => {
+    const sent = sentBy(file);
+    return (
+      `<li style="margin:0 0 4px 0"><strong>${escapeHtml(file.name)}</strong>` +
+      (sent ? ` <span style="color:#777">${escapeHtml(sent)}</span>` : "") +
+      (file.shows ? `<br>${escapeHtml(file.shows)}` : "") +
+      "</li>"
+    );
+  });
+  return `<ul style="margin:0 0 8px 0;padding-left:22px">${items.join("")}</ul>`;
+}
+
 /** The summary as one private-note body, stamped so the next one replaces it. */
 export function renderSummaryHtml(
   ticket: SummarizedTicket,
-  summary: TicketSummary,
+  summary: TicketSummaryInput,
 ): string {
+  const files = summary.files ?? [];
   const sections = [
     noteHeader("Summary", ticket.title, ticket.external_id),
     sectionRule("Problem"),
@@ -99,6 +143,7 @@ export function renderSummaryHtml(
     sections.push(sectionRule("Timeline"), timelineHtml(summary.timeline));
   if (summary.tried.length)
     sections.push(sectionRule("Tried / ruled out"), triedHtml(summary.tried));
+  if (files.length) sections.push(sectionRule("Files"), filesHtml(files));
   sections.push(
     mutedLine(
       "Written by a model from the ticket thread; check it against the thread before acting on it.",
@@ -109,7 +154,7 @@ export function renderSummaryHtml(
 }
 
 /** The summary as plain text, for a flow step that reads it. */
-export function renderSummaryText(summary: TicketSummary): string {
+export function renderSummaryText(summary: TicketSummaryInput): string {
   const lines = [`Problem: ${summary.problem}`, `Status: ${summary.status}`];
   if (summary.timeline.length) {
     lines.push("Timeline:");
@@ -122,6 +167,16 @@ export function renderSummaryText(summary: TicketSummary): string {
     lines.push("Tried / ruled out:");
     for (const attempt of summary.tried)
       lines.push(`- ${attempt.action} -> ${attempt.outcome}`);
+  }
+  const files = summary.files ?? [];
+  if (files.length) {
+    lines.push("Files:");
+    for (const file of files) {
+      const sent = sentBy(file);
+      lines.push(
+        `- ${file.name}${sent ? ` (${sent})` : ""}${file.shows ? `: ${file.shows}` : ""}`,
+      );
+    }
   }
   return lines.join("\n");
 }

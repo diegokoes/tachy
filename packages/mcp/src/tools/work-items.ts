@@ -235,7 +235,7 @@ tool(
   "post_work_item_summary",
   {
     description:
-      "Post a summary of a ticket onto it as a private note, replacing the summary an earlier call posted. Read the whole thread first (fetch_work_item), then pass the content only: the note's layout and markup are produced here, so write plain sentences with no markdown or HTML. Summarise what the thread says; where it does not say, leave it out.",
+      "Post a summary of a ticket onto it as a private note, replacing the summary an earlier call posted. Read the whole thread first (fetch_work_item), and open the files that bear on the problem (read_file), then pass the content only: the note's layout and markup are produced here, so write plain sentences with no markdown or HTML. Summarise what the thread and the files you opened say; where they do not say, leave it out.",
     inputSchema: {
       source: sourceSlug,
       external_id: z.string(),
