@@ -59,3 +59,23 @@ export function uploadRefusal(
   const limitBytes = uploadLimitBytes(family, limits);
   return bytes > limitBytes ? tooLargeReason(bytes, limitBytes, family) : null;
 }
+
+/**
+ * How an upload is named to the agent and its tools: a reference, not a file
+ * path, so it resolves the same on every replica and can never name a file on
+ * the host.
+ */
+export const uploadRef = (id: string, filename: string) =>
+  `upload:${id}/${filename}`;
+
+const UPLOAD_REF_RE = /^upload:([0-9a-f-]{36})(?:\/(.*))?$/;
+
+export function parseUploadRef(
+  ref: string,
+): { id: string; filename: string } | null {
+  const match = UPLOAD_REF_RE.exec(ref.trim());
+  return match ? { id: match[1], filename: match[2] ?? "" } : null;
+}
+
+/** Where the SPA loads the picture an image upload holds, for its owner. */
+export const uploadPreviewPath = (id: string) => `/api/agent/uploads/${id}`;

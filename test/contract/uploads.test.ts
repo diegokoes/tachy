@@ -3,7 +3,10 @@ import {
   CHAT_UPLOAD_ACCEPT,
   DEFAULT_UPLOAD_LIMITS,
   largestUploadBytes,
+  parseUploadRef,
   uploadLimitBytes,
+  uploadPreviewPath,
+  uploadRef,
   uploadRefusal,
 } from "../../packages/contract/src";
 
@@ -41,5 +44,28 @@ describe("what a chat attachment may be", () => {
     expect(uploadRefusal("screen.png", 3 * MEGABYTE, limits)).toMatch(
       /over the 2 MB upload limit/,
     );
+  });
+});
+
+describe("an upload's reference", () => {
+  const id = "0f8fad5b-d9cb-469f-a165-70867728950e";
+
+  it("names the upload and its file, and reads back", () => {
+    const ref = uploadRef(id, "screen shot.png");
+    expect(ref).toBe(`upload:${id}/screen shot.png`);
+    expect(parseUploadRef(` ${ref} `)).toEqual({
+      id,
+      filename: "screen shot.png",
+    });
+    expect(parseUploadRef(`upload:${id}`)).toEqual({ id, filename: "" });
+  });
+
+  it("is nothing else: not a path, not a shorter id", () => {
+    for (const other of ["/etc/passwd", "upload:not-a-uuid/x", "../x", ""])
+      expect(parseUploadRef(other)).toBeNull();
+  });
+
+  it("gives the address the picture of an image upload loads from", () => {
+    expect(uploadPreviewPath(id)).toBe(`/api/agent/uploads/${id}`);
   });
 });

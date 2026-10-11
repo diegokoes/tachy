@@ -164,8 +164,11 @@ export {
   CHAT_UPLOAD_ACCEPT,
   DEFAULT_UPLOAD_LIMITS,
   largestUploadBytes,
+  parseUploadRef,
   tooLargeReason,
   uploadLimitBytes,
+  uploadPreviewPath,
+  uploadRef,
   uploadRefusal,
 } from "./uploads";
 export type { UploadLimits } from "./uploads";

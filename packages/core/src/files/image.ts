@@ -77,3 +77,25 @@ export async function imageForModel(bytes: Uint8Array): Promise<ModelImage> {
     throw badInput(`the image cannot be read: ${errorText(e)}`);
   }
 }
+
+/**
+ * `imageForModel`, held to `maxBytes`. A picture still over it once fitted is
+ * a photograph kept lossless, so it is written again as lossy WebP; one over
+ * it even then is refused.
+ */
+export async function imageWithin(
+  bytes: Uint8Array,
+  maxBytes: number,
+): Promise<ModelImage> {
+  const fitted = await imageForModel(bytes);
+  if (fitted.bytes.length <= maxBytes) return fitted;
+  const sharp = await loadSharp();
+  const lossy = await sharp(fitted.bytes)
+    .webp({ quality: LOSSY_QUALITY })
+    .toBuffer();
+  if (lossy.length > maxBytes)
+    throw badInput(
+      `the image is still ${Math.ceil(lossy.length / 1024 / 1024)} MB once fitted, over the ${maxBytes / 1024 / 1024} MB an image may be`,
+    );
+  return { ...fitted, mimeType: "image/webp", bytes: lossy };
+}

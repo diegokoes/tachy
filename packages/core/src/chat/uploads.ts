@@ -1,5 +1,7 @@
 import {
   DEFAULT_UPLOAD_LIMITS,
+  parseUploadRef,
+  uploadRef,
   type FileContentType,
   type UploadLimits,
 } from "@tachy/contract";
@@ -25,23 +27,6 @@ export const uploadLimits = (): UploadLimits => ({
     DEFAULT_UPLOAD_LIMITS.fileBytes,
   ),
 });
-
-/**
- * How an upload is named to the agent and its tools: a reference, not a file
- * path, so it resolves the same on every replica and can never name a file on
- * the host.
- */
-export const uploadRef = (id: string, filename: string) =>
-  `upload:${id}/${filename}`;
-
-const REF_RE = /^upload:([0-9a-f-]{36})(?:\/(.*))?$/;
-
-export function parseUploadRef(
-  ref: string,
-): { id: string; filename: string } | null {
-  const match = REF_RE.exec(ref.trim());
-  return match ? { id: match[1], filename: match[2] ?? "" } : null;
-}
 
 export async function saveUpload(input: {
   userId: string | null;

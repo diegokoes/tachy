@@ -330,6 +330,7 @@ export interface ContextSource {
   source: string;
   text: string;
   pages?: number;
+  scannedPages?: number[];
   members?: ArchiveMember[];
   /** Set for an image, which is shown and has no text. */
   image?: StoredFile;
@@ -353,13 +354,7 @@ export async function loadContextSources(input: {
       sources.push({ source, text: "", image: file });
       continue;
     }
-    const { text, pages, members } = await extractFile(file);
-    sources.push({
-      source,
-      text,
-      ...(pages != null ? { pages } : {}),
-      ...(members ? { members } : {}),
-    });
+    sources.push({ source, ...(await extractFile(file)) });
   }
   for (const url of input.urls ?? []) {
     const response = await fetchUntrustedUrl("ingest_context", url);

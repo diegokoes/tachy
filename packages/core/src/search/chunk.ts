@@ -1,3 +1,5 @@
+import { splitPages } from "../files/pages";
+
 export interface ChunkOptions {
   maxChars?: number;
   overlap?: number;
@@ -46,5 +48,25 @@ export function chunkText(text: string, opts: ChunkOptions = {}): string[] {
     c.length <= maxChars * OVERSIZE_FACTOR
       ? [c]
       : hardSplit(c, maxChars, overlap),
+  );
+}
+
+export interface PagedChunk {
+  text: string;
+  /** The page of the source document it came from, where the text marks any. */
+  page: number | null;
+}
+
+/**
+ * `chunkText` within each page of a text that marks its pages, so a chunk
+ * never spans two and each knows its own. A text with no marks is one run
+ * with no page.
+ */
+export function chunkPages(
+  text: string,
+  opts: ChunkOptions = {},
+): PagedChunk[] {
+  return splitPages(text).flatMap(({ page, text: pageText }) =>
+    chunkText(pageText, opts).map((chunk) => ({ text: chunk, page })),
   );
 }

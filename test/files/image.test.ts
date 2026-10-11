@@ -1,6 +1,11 @@
+import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
-import { MODEL_IMAGE_MAX_EDGE_PX, imageForModel } from "@tachy/core/files";
+import {
+  MODEL_IMAGE_MAX_EDGE_PX,
+  imageForModel,
+  imageWithin,
+} from "@tachy/core/files";
 import { picture } from "../fixtures/files";
 
 describe("imageForModel", () => {
@@ -61,6 +66,38 @@ describe("imageForModel", () => {
     expect(bomb.length).toBeLessThan(1024 * 1024);
     await expect(imageForModel(bomb)).rejects.toThrow(
       /the image cannot be read/,
+    );
+  });
+});
+
+describe("imageWithin", () => {
+  /** Noise does not compress, so a lossless copy of it is as large as it gets. */
+  async function noise(edgePx: number): Promise<Uint8Array> {
+    const raw = randomBytes(edgePx * edgePx * 3);
+    return new Uint8Array(
+      await sharp(raw, { raw: { width: edgePx, height: edgePx, channels: 3 } })
+        .png()
+        .toBuffer(),
+    );
+  }
+
+  it("returns an image already under the limit as it was fitted", async () => {
+    const image = await imageWithin(await picture(300, 200), 1024 * 1024);
+    expect(image).toMatchObject({ mimeType: "image/png", widthPx: 300 });
+  });
+
+  it("writes a lossless image over the limit again as lossy", async () => {
+    const large = await noise(600);
+    expect(large.length).toBeGreaterThan(1024 * 1024);
+    const image = await imageWithin(large, 1024 * 1024);
+    expect(image.mimeType).toBe("image/webp");
+    expect(image.bytes.length).toBeLessThanOrEqual(1024 * 1024);
+    expect(image.widthPx).toBe(600);
+  });
+
+  it("refuses an image that is over the limit even then", async () => {
+    await expect(imageWithin(await noise(600), 1024)).rejects.toThrow(
+      /over the .* MB an image may be/,
     );
   });
 });
