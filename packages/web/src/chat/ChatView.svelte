@@ -27,6 +27,7 @@
   import Launcher from "./Launcher.svelte";
   import { ArtifactMark, Button, Caret, caretSide, G, Icon, tip } from "../tui";
   import { pushScope } from "../keys/keys.svelte";
+  import { CHAT_UPLOAD_ACCEPT, uploadRefusal } from "@tachy/contract";
   import type { WorkItemTypeOption, CreatedTicket } from "@tachy/contract";
   import TicketComposer from "../work-items/TicketComposer.svelte";
   import TicketCard from "../work-items/TicketCard.svelte";
@@ -610,6 +611,11 @@
 
   async function addFiles(files: FileList | null | undefined) {
     for (const file of Array.from(files ?? [])) {
+      const refusal = uploadRefusal(file.name, file.size);
+      if (refusal) {
+        addEntry({ kind: "error", text: refusal });
+        continue;
+      }
       try {
         chat.uploads.push(await uploadDoc(file));
       } catch (err) {
@@ -866,7 +872,7 @@
         {/if}
         <label class="upload" use:tip={"Attach a document"}>
           <Icon name="attach" label="Attach a document" />
-          <input type="file" onchange={onFile} />
+          <input type="file" accept={CHAT_UPLOAD_ACCEPT} onchange={onFile} />
         </label>
         <span class="field">
           <textarea
