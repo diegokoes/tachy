@@ -181,7 +181,7 @@ create table chat_uploads (
     filename     text not null,
     -- What the upload route found in the bytes. Null: stored unchecked.
     content_type text
-                     check (content_type in ('image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain','text/markdown','text/csv','application/json')),
+                     check (content_type in ('image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain','text/markdown','text/csv','text/tab-separated-values','application/json','application/xml','application/yaml','text/html','message/rfc822','application/zip','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')),
     byte_size    integer not null,
     bytes        bytea not null,
     created_at   timestamptz not null default now(),

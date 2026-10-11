@@ -13,7 +13,9 @@
     "dotenv": "^18.0.6",
     "fflate": "^0.8.2",
     "material-icon-theme": "^5.39.0",
+    "postal-mime": "^4.0.5",
     "postgres": "^3.4.5",
+    "unpdf": "^1.8.1",
     "zod": "^4.6.5"
   }
 }

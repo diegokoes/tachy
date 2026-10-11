@@ -34,7 +34,7 @@ import {
   requireCaller,
 } from "../authz";
 import { reviewTicket } from "@tachy/agent";
-import { MAX_UPLOAD_BYTES, tooLarge } from "../upload-limit";
+import { requestLimitBytes, tooLarge } from "../upload-limit";
 
 const draftSchema = z.object({
   type: z.string().min(1),
@@ -261,7 +261,7 @@ export const compose = new Hono()
   // and one `image:<key>` file per image the HTML fields refer to.
   .post("/projects/:id/items", async (c) => {
     const declared = Number(c.req.header("content-length") ?? 0);
-    if (declared > MAX_UPLOAD_BYTES) throw tooLarge(declared);
+    if (declared > requestLimitBytes()) throw tooLarge(declared);
     const { project, composer } = await composeIn(c, c.req.param("id"));
     const body = await c.req.parseBody();
     if (typeof body.draft !== "string")

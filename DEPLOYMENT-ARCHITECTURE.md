@@ -1097,11 +1097,13 @@ both live in Postgres with a TTL.
 - **Uploads** are rows in `chat_uploads`. They expire after 24 h
   (`TACHY_UPLOAD_TTL_HOURS`), only their owner's turn can read them
   (`core/src/chat/uploads.ts`), and `retention.sweep` deletes them.
+- **An upload** weighs at most 25 MB, an image at most 10 MB
+  (`TACHY_UPLOAD_MAX_MB`, `TACHY_UPLOAD_IMAGE_MAX_MB`). The types taken are
+  the ones `contract/src/files.ts` lists; `core/src/files` reads each as text.
 - **Neither table's data is in the dumps** (`deploy/backup/tachy-backup`).
 
-**Revisit.** If uploads regularly approach the 25 MB limit
-(`api/src/upload-limit.ts`), or several hundred MB a day, then the database is
-the wrong home for them.
+**Revisit.** If uploads regularly approach the 25 MB limit, or several hundred
+MB a day, then the database is the wrong home for them.
 
 ### 5.7 Caddy at the edge
 
@@ -1122,9 +1124,10 @@ image carries no DNS module. It would need a custom Caddy build (§15.1).
 - HSTS for a year, `nosniff`, `X-Frame-Options DENY`, a referrer policy, and no
   `Server` header. There is no Content-Security-Policy.
 - `/internal` answers 404.
-- One body limit of 26 MB for every path: the 25 MB upload cap plus multipart
-  overhead. The api enforces the smaller caps itself: 5 MB for library images
-  and 16 MB for a bucket batch.
+- One body limit for every path, 26 MB (`TACHY_REQUEST_BODY_MAX`): the 25 MB
+  upload cap plus multipart overhead. A host that raises the upload cap raises
+  this with it. The api enforces the smaller caps itself: 10 MB for a chat
+  image, 5 MB for library images and 16 MB for a bucket batch.
 - Its upstream health check is `/readyz`.
 
 **Why TLS is not optional.** Entra requires it: "Redirect URIs must begin with

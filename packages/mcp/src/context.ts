@@ -29,6 +29,7 @@ import {
 import { resolveRedactionPolicy, redactForLlm } from "@tachy/core/compliance";
 import type { IngestedItem } from "@tachy/core/work-items";
 import type { RawWorkItem } from "@tachy/core/sources";
+import type { ArchiveMember } from "@tachy/core/files";
 import { extractSource } from "./extract";
 
 /**
@@ -320,16 +321,34 @@ export async function componentIntoFilter(
   };
 }
 
+export interface ContextSource {
+  source: string;
+  text: string;
+  pages?: number;
+  members?: ArchiveMember[];
+}
+
 export async function loadContextSources(input: {
   text?: string;
   paths?: string[];
   urls?: string[];
-}) {
-  const sources: { source: string; text: string; pages?: number }[] = [];
+  /** One file of an archive; only read with a single path. */
+  member?: string;
+}): Promise<ContextSource[]> {
+  if (input.member && input.paths?.length !== 1)
+    throw badInput("member names a file inside one zip: pass exactly one path");
+  const sources: ContextSource[] = [];
   if (input.text?.trim()) sources.push({ source: "inline", text: input.text });
   for (const path of input.paths ?? []) {
-    const { text, pages } = await extractSource(path);
-    sources.push({ source: path, text, ...(pages != null ? { pages } : {}) });
+    const { text, pages, members } = await extractSource(path, {
+      member: input.member,
+    });
+    sources.push({
+      source: input.member ? `${path} > ${input.member}` : path,
+      text,
+      ...(pages != null ? { pages } : {}),
+      ...(members ? { members } : {}),
+    });
   }
   for (const url of input.urls ?? []) {
     const response = await fetchUntrustedUrl("ingest_context", url);

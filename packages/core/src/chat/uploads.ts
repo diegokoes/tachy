@@ -1,9 +1,30 @@
-import type { ChatUploadContentType } from "@tachy/contract";
+import {
+  DEFAULT_UPLOAD_LIMITS,
+  type FileContentType,
+  type UploadLimits,
+} from "@tachy/contract";
 import { sql } from "../infra/db";
 import { badInput } from "../infra/errors";
 
 export const uploadTtlMs = () =>
   (Number(process.env.TACHY_UPLOAD_TTL_HOURS) || 24) * 60 * 60_000;
+
+const megabytesFrom = (variable: string, fallbackBytes: number) => {
+  const megabytes = Number(process.env[variable]);
+  return megabytes > 0 ? megabytes * 1024 * 1024 : fallbackBytes;
+};
+
+/** This host's upload limits: the contract's defaults unless it sets its own. */
+export const uploadLimits = (): UploadLimits => ({
+  imageBytes: megabytesFrom(
+    "TACHY_UPLOAD_IMAGE_MAX_MB",
+    DEFAULT_UPLOAD_LIMITS.imageBytes,
+  ),
+  fileBytes: megabytesFrom(
+    "TACHY_UPLOAD_MAX_MB",
+    DEFAULT_UPLOAD_LIMITS.fileBytes,
+  ),
+});
 
 /**
  * How an upload is named to the agent and its tools: a reference, not a file
@@ -25,7 +46,7 @@ export function parseUploadRef(
 export async function saveUpload(input: {
   userId: string | null;
   filename: string;
-  contentType: ChatUploadContentType;
+  contentType: FileContentType;
   bytes: Uint8Array;
 }): Promise<{ id: string; ref: string }> {
   const [row] = await sql`
@@ -58,7 +79,7 @@ export async function readUpload(
   owner: string | undefined,
 ): Promise<{
   filename: string;
-  contentType: ChatUploadContentType | null;
+  contentType: FileContentType | null;
   bytes: Buffer;
 }> {
   const parsed = parseUploadRef(ref);
@@ -79,7 +100,7 @@ export async function readUpload(
     );
   return {
     filename: row.filename as string,
-    contentType: row.content_type as ChatUploadContentType | null,
+    contentType: row.content_type as FileContentType | null,
     bytes: Buffer.from(row.bytes),
   };
 }
