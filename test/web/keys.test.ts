@@ -266,6 +266,60 @@ describe("dispatch", () => {
     expect(e.defaultPrevented).toBe(true);
   });
 
+  const chord = (target: EventTarget, repeat = false) => {
+    const e = new KeyboardEvent("keydown", {
+      key: "P",
+      code: "KeyP",
+      ctrlKey: true,
+      shiftKey: true,
+      repeat,
+      bubbles: true,
+      cancelable: true,
+    });
+    target.dispatchEvent(e);
+    return e;
+  };
+
+  // The palette's binding: one press opens, the next closes, from inside its
+  // own input as much as from the page.
+  it("toggles both ways on fresh presses, and holds still while held", () => {
+    let open = false;
+    teardown.push(
+      pushScope([
+        {
+          key: "ctrl+shift+p",
+          label: "",
+          inFields: true,
+          repeats: false,
+          run: () => (open = !open),
+        },
+      ]),
+    );
+    chord(document.body);
+    expect(open).toBe(true);
+
+    const input = focusedInput();
+    const held = chord(input, true);
+    expect(open).toBe(true);
+    expect(held.defaultPrevented).toBe(true);
+
+    chord(input);
+    expect(open).toBe(false);
+    chord(document.body);
+    expect(open).toBe(true);
+  });
+
+  it("runs a binding again on auto-repeat unless it opts out", () => {
+    const ran = bind("j");
+    const repeat = () =>
+      document.body.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "j", repeat: true, bubbles: true }),
+      );
+    press("j");
+    repeat();
+    expect(ran).toEqual(["j", "j"]);
+  });
+
   // A prefix that goes nowhere must not eat the key typed after it.
   it("reads a key on its own when it does not continue the sequence", () => {
     const ran = bind("g g", "j");

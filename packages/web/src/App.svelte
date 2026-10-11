@@ -232,6 +232,7 @@
         label: "",
         hidden: true,
         inFields: true,
+        repeats: false,
         run: () => (paletteOpen = paletteAllowed && !paletteOpen),
       },
     ]),

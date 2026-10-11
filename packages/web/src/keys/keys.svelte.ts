@@ -5,6 +5,11 @@ export type Binding = {
   run: () => void;
   inFields?: boolean;
   hidden?: boolean;
+  /**
+   * Whether a held key runs it again on each auto-repeat. On by default, so a
+   * held j keeps moving; a toggle turns it off, or holding it flickers.
+   */
+  repeats?: boolean;
 };
 
 /** How long a half-typed sequence waits for its next key before lapsing. */
@@ -114,6 +119,12 @@ export function startKeys() {
     return null;
   };
 
+  const fire = (binding: Binding, e: KeyboardEvent) => {
+    e.preventDefault();
+    if (e.repeat && binding.repeats === false) return;
+    binding.run();
+  };
+
   const onKey = (e: KeyboardEvent) => {
     if (e.metaKey || e.altKey) return;
     const pressed = normalize(e, e.ctrlKey);
@@ -131,8 +142,7 @@ export function startKeys() {
     }
     if (hit) {
       clearPending();
-      e.preventDefault();
-      hit.run();
+      fire(hit, e);
       return;
     }
 
@@ -148,8 +158,7 @@ export function startKeys() {
         return;
       }
       if (solo) {
-        e.preventDefault();
-        solo.run();
+        fire(solo, e);
         return;
       }
     }
