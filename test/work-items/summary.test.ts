@@ -21,6 +21,7 @@ const summary: TicketSummary = {
     { date: "2026-06-18", event: "Patch delivered." },
   ],
   tried: [{ action: "Restarted the spooler", outcome: "No change." }],
+  files: [],
 };
 
 const note = (over: Partial<RawMessage>): RawMessage => ({
@@ -58,6 +59,57 @@ describe("renderSummaryHtml", () => {
     );
     expect(bare).not.toContain("Timeline");
     expect(bare).not.toContain("Tried / ruled out");
+  });
+});
+
+describe("the files of a summary", () => {
+  const withFiles: TicketSummary = {
+    ...summary,
+    files: [
+      {
+        name: "screen<1>.png",
+        from: "Ana",
+        date: "2026-06-16",
+        shows: "The spooler's error dialog, code E-209.",
+      },
+      { name: "app.log", shows: "Timeouts start at 10:02." },
+      { name: "export.csv" },
+    ],
+  };
+
+  it("get a section of their own in the note, each with who sent it and what it shows", () => {
+    const html = renderSummaryHtml({ external_id: "42" }, withFiles);
+    expect(html).toContain("<strong>Files</strong>");
+    expect(html).toContain(
+      `<strong>screen&lt;1&gt;.png</strong> <span style="color:#777">Ana, 2026-06-16</span><br>The spooler's error dialog, code E-209.`,
+    );
+    expect(html).toContain(
+      "<strong>app.log</strong><br>Timeouts start at 10:02.",
+    );
+    expect(html).toContain("<strong>export.csv</strong></li>");
+    expect(html.indexOf("Files")).toBeGreaterThan(
+      html.indexOf("Tried / ruled out"),
+    );
+  });
+
+  it("are lines of the text a later flow step reads", () => {
+    expect(renderSummaryText(withFiles).split("\n").slice(-4)).toEqual([
+      "Files:",
+      "- screen<1>.png (Ana, 2026-06-16): The spooler's error dialog, code E-209.",
+      "- app.log: Timeouts start at 10:02.",
+      "- export.csv",
+    ]);
+  });
+
+  it("leave no section behind when there are none, or the summary names none", () => {
+    const { files: _none, ...older } = withFiles;
+    for (const bare of [older, { ...older, files: [] }]) {
+      expect(renderSummaryHtml({ external_id: "42" }, bare)).not.toContain(
+        "Files",
+      );
+      expect(renderSummaryText(bare)).not.toContain("Files:");
+    }
+    expect(ticketSummarySchema.parse(older).files).toEqual([]);
   });
 });
 
