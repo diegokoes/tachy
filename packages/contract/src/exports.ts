@@ -65,8 +65,7 @@ export function sheetName(name: string | undefined): string {
 }
 
 /** `basename`, without `node:path` - this file is bundled into the browser. */
-const basename = (path: string) =>
-  path.replace(/\/+$/, "").split("/").pop() ?? "";
+const basename = (path: string) => path.split("/").filter(Boolean).pop() ?? "";
 
 /**
  * A name safe to write to disk and to put in a Content-Disposition header, on
