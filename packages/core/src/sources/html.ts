@@ -9,19 +9,20 @@
 export function stripHtml(html: string): string {
   return (
     html
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<script\b[\s\S]*?<\/script[^>]*>/gi, " ")
+      .replace(/<style\b[\s\S]*?<\/style[^>]*>/gi, " ")
       // A reader of the text should know a picture stood here.
       .replace(/<img\b[^>]*>/gi, " [image] ")
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n")
       .replace(/<[^>]+>/g, " ")
       .replace(/&nbsp;/g, " ")
-      .replace(/&amp;/g, "&")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
+      // Last: decoded first, the text "&amp;lt;" would come out as "<".
+      .replace(/&amp;/g, "&")
       .replace(/[ \t]{2,}/g, " ")
       .replace(/\n{3,}/g, "\n\n")
       .trim()
