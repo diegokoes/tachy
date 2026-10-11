@@ -4,6 +4,7 @@
   import { Button, Panel } from "../tui";
   import ApprovalField from "./ApprovalField.svelte";
   import { api } from "../api";
+  import { parseUploadRef, uploadPreviewPath } from "@tachy/contract";
   import type { WorkItemSchema } from "@tachy/contract";
   import { adoptAgentDraft } from "../work-items/composer.svelte";
 
@@ -31,6 +32,14 @@
   });
 
   let raw = $state(false);
+
+  // save_library_image keeps a picture: the review is of the picture, which
+  // its fields only name. One taken out of a zip has no address to load.
+  const previewSrc = $derived.by(() => {
+    if (entry.tool !== "save_library_image" || entry.input.member) return null;
+    const upload = parseUploadRef(String(entry.input.path ?? ""));
+    return upload ? uploadPreviewPath(upload.id) : null;
+  });
 
   // create_ado_work_item takes an open `fields` object, so the project's schema
   // turns a JSON blob into controls. A slow or failed call leaves the JSON
@@ -169,6 +178,13 @@
         aria-label="raw tool input"
         oninput={(e) => editRaw(e.currentTarget.value)}></textarea>
     {:else}
+      {#if previewSrc}
+        <img
+          class="preview"
+          src={previewSrc}
+          alt={String(entry.input.alt ?? "the image to keep")}
+        />
+      {/if}
       <div class="fields">
         {#each keys as key (key)}
           {#if key === "fields" && schema && adoFields}
@@ -282,6 +298,14 @@
   .wrap {
     max-width: 46rem;
     margin: var(--pad-2) 0;
+  }
+
+  .preview {
+    display: block;
+    max-width: 100%;
+    max-height: 18rem;
+    margin-bottom: var(--pad-3);
+    border: 1px solid var(--line, currentColor);
   }
 
   .fields {

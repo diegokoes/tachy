@@ -27,8 +27,10 @@ export interface ArchiveMember {
 
 export interface ExtractedFile {
   text: string;
-  /** Of a PDF. */
+  /** Of a PDF, whose text carries a page mark where each page starts. */
   pages?: number;
+  /** Of a PDF: the pages that are scans, so their text is not in `text`. */
+  scannedPages?: number[];
   /** Of an archive read without naming a member; `text` is the same list. */
   members?: ArchiveMember[];
 }

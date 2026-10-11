@@ -58,6 +58,24 @@ export function shownText(
 }
 
 /**
+ * What a read says of a PDF: its page count, and the pages whose text is not
+ * in the result because they hold none. Empty for any other file.
+ */
+export function pageFacts(extracted: {
+  pages?: number;
+  scannedPages?: number[];
+}): Record<string, unknown> {
+  if (extracted.pages == null) return {};
+  if (!extracted.scannedPages?.length) return { pages: extracted.pages };
+  return {
+    pages: extracted.pages,
+    scanned_pages: extracted.scannedPages,
+    pages_note:
+      "The text carries a [page N] line where each page starts: cite the page. scanned_pages hold no text layer (a scan, or a blank page), so what they say is not in this text; do not infer it.",
+  };
+}
+
+/**
  * `out`, followed by pictures for the model to look at. Each is its own image
  * block, which is the only form in which a model sees one.
  */
