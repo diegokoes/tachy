@@ -19,6 +19,7 @@ import {
 import { badInput } from "@tachy/core/infra";
 import {
   imageForModel,
+  type ExtractedFile,
   type ModelImage,
   type StoredFile,
 } from "@tachy/core/files";
@@ -33,6 +34,7 @@ import {
   out,
   outScrubbed,
   outWithImages,
+  pageFacts,
   searchOut,
   shownText,
 } from "../results";
@@ -136,7 +138,7 @@ tool(
       const shown = shownText(source.text, window, tokens);
       shownSources.push({
         source: source.source,
-        ...(source.pages != null ? { pages: source.pages } : {}),
+        ...pageFacts(source),
         ...(source.members ? { members: source.members } : {}),
         ...shown,
         ...sourceNote(source, shown.continue_at),
@@ -206,17 +208,20 @@ tool(
     else await requireCanEdit(await referenceDocScope(args.supersedes));
 
     let body = args.body;
-    let pages: number | undefined;
+    let extracted: ExtractedFile | undefined;
     if (args.body_path) {
-      const extracted = await extractSource(args.body_path);
+      extracted = await extractSource(args.body_path);
       if (extracted.members)
         throw badInput(
           "body_path names an archive, which is a list of files and not a document; attach the file itself",
         );
+      if (extracted.scannedPages?.length === extracted.pages)
+        throw badInput(
+          `the PDF has no text layer on any of its ${extracted.pages} pages (a scan), so there is no text to save`,
+        );
       body = globalRedactionEnabled()
         ? scrubText(extracted.text, new TokenMap())
         : extracted.text;
-      pages = extracted.pages;
     }
     const saved = await saveReferenceDoc({
       title: args.title,
@@ -242,7 +247,7 @@ tool(
       status: saved.status,
       chunks: saved.chunks,
       body_chars: body!.length,
-      ...(pages != null ? { pages } : {}),
+      ...pageFacts(extracted ?? {}),
     });
   },
 );
@@ -250,7 +255,7 @@ tool(
 tool(
   "search_reference",
   {
-    description: `Semantic search over approved reference docs (project context). Returns the best-matching snippet per doc. Only the latest approved version of a doc is returned. Filter by product_slug / team_slug (slug or alias) and tags. ${GRADE_NOTE}`,
+    description: `Semantic search over approved reference docs (project context). Returns the best-matching snippet per doc, with the page it is on when the doc came from a PDF: cite it. Only the latest approved version of a doc is returned. Filter by product_slug / team_slug (slug or alias) and tags. ${GRADE_NOTE}`,
     inputSchema: {
       query: z.string(),
       product_slug: z.string().optional(),

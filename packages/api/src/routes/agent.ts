@@ -19,9 +19,9 @@ import {
 } from "@tachy/core/config";
 import { getUserByEmail, userSoleTeamId } from "@tachy/core/access";
 import { getArtifact, listVisibleArtifacts } from "@tachy/core/exports";
-import { fileFamily, uploadLimitBytes } from "@tachy/core";
-import { saveUpload, uploadLimits } from "@tachy/core/chat";
-import { inspectFile } from "@tachy/core/files";
+import { fileFamily, uploadLimitBytes, uploadRef } from "@tachy/core";
+import { readUpload, saveUpload, uploadLimits } from "@tachy/core/chat";
+import { imageForModel, inspectFile, isImageFile } from "@tachy/core/files";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { requireCaller } from "../authz";
 import { getIdentity } from "../auth";
@@ -305,6 +305,22 @@ export const agent = new Hono()
       throw forbidden("only the user who started this turn can approve it");
     entry.turn.approve(id, { approve, message, updatedInput });
     return c.json({ ok: true });
+  })
+
+  // The picture an image upload holds, for whoever uploaded it: what the
+  // review box of a tool that keeps one shows. Fitted as it is for a model.
+  .get("/uploads/:id", async (c) => {
+    const owner = await requireCaller(c);
+    const upload = await readUpload(uploadRef(c.req.param("id"), ""), owner);
+    if (!isImageFile(upload))
+      throw badInput("only an image upload has a preview");
+    const image = await imageForModel(upload.bytes);
+    return c.body(new Uint8Array(image.bytes), 200, {
+      "Content-Type": image.mimeType,
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+      "Cache-Control": "private, max-age=3600",
+    });
   })
 
   .post("/uploads", async (c) => {

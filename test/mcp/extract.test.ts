@@ -42,7 +42,7 @@ describe("extractSource", () => {
     });
     const got = await extractSource(pdf.ref);
     expect(got.pages).toBe(1);
-    expect(got.text).toBe("Line controller failover heartbeat");
+    expect(got.text).toBe("[page 1]\nLine controller failover heartbeat");
 
     const txt = await saveUpload({
       userId: null,

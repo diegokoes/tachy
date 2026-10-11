@@ -882,6 +882,9 @@ create table reference_doc_chunks (
     id          uuid primary key default gen_random_uuid(),
     doc_id      uuid not null references reference_docs(id) on delete cascade,
     ordinal     integer not null,
+    -- The page of the source document the chunk came from, read from the page
+    -- marks a doc saved from a PDF keeps in its body. Null: the body has none.
+    page        integer,
     chunk_text  text not null,
     embedding   vector(768),
     embedding_model text,

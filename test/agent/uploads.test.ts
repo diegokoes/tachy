@@ -1,10 +1,11 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createUser } from "@tachy/core/access";
-import { parseUploadRef } from "@tachy/core/chat";
+import { parseUploadRef } from "@tachy/core";
 import { createApp } from "../../packages/api/src/app";
 import { loginCookie } from "../http";
 import { resetData, sql } from "../database";
-import { docx } from "../fixtures/files";
+import sharp from "sharp";
+import { docx, picture } from "../fixtures/files";
 
 afterAll(() => sql.end());
 
@@ -116,6 +117,54 @@ describe("chat uploads", () => {
       delete process.env.TACHY_UPLOAD_IMAGE_MAX_MB;
       delete process.env.TACHY_UPLOAD_MAX_MB;
     }
+  });
+
+  it("shows an image upload to its uploader, fitted, and to nobody else", async () => {
+    const { cookie } = await uploaderCookie();
+    const image = new Uint8Array(await picture(2400, 1200));
+    const { path } = await (
+      await upload(cookie, new File([image], "screen.png"))
+    ).json();
+    const { id } = parseUploadRef(path)!;
+
+    const shown = await app.request(`/api/agent/uploads/${id}`, {
+      headers: { Cookie: cookie },
+    });
+    expect(shown.status).toBe(200);
+    expect(shown.headers.get("content-type")).toBe("image/png");
+    expect(shown.headers.get("content-security-policy")).toBe(
+      "default-src 'none'; sandbox",
+    );
+    const sent = await sharp(Buffer.from(await shown.arrayBuffer())).metadata();
+    expect([sent.width, sent.height]).toEqual([2000, 1000]);
+
+    await createUser({
+      email: "other@example.com",
+      password: "a-long-password",
+      role: "member",
+    });
+    const other = await loginCookie(
+      app,
+      "other@example.com",
+      "a-long-password",
+    );
+    const refused = await app.request(`/api/agent/uploads/${id}`, {
+      headers: { Cookie: other },
+    });
+    expect(refused.status).toBe(400);
+  });
+
+  it("has no picture for an upload that is not an image", async () => {
+    const { cookie } = await uploaderCookie();
+    const { path } = await (
+      await upload(cookie, new File(["hello"], "notes.txt"))
+    ).json();
+    const response = await app.request(
+      `/api/agent/uploads/${parseUploadRef(path)!.id}`,
+      { headers: { Cookie: cookie } },
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json()).detail).toMatch(/only an image upload/);
   });
 
   it("tells the chat which limits apply on this host", async () => {
