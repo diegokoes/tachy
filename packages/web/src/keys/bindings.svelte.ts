@@ -46,6 +46,9 @@ export const ACTIONS = {
   settings: { label: "settings", key: "ctrl+," },
   feedback: { label: "feedback", key: "ctrl+." },
   artifacts: { label: "artifacts panel", key: "a" },
+  // Firefox keeps ctrl+shift+p for a private window and never hands it to the
+  // page; a rebind is the way round it there.
+  palette: { label: "command palette", key: "ctrl+shift+p" },
 } as const;
 
 export type Action = keyof typeof ACTIONS;

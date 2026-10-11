@@ -1,50 +1,16 @@
-<script lang="ts" module>
-  import { scrollport } from "../shell/scrollport.svelte";
-
-  // Dialogs stack. Escape and Enter reach the topmost one only, and only the
-  // topmost one is in view: a dialog it covers folds away, or, where the caller
-  // asks, stays and sinks into the blur with the app.
-  const stack = $state<symbol[]>([]);
-
-  // One lock for the whole stack, taken by the first dialog and handed back by
-  // the last. Both boxes: the view scrolls inside `main`, so locking the body
-  // alone leaves the page running under the dialog.
-  let unlock: (() => void) | null = null;
-
-  function enter(id: symbol) {
-    if (!stack.length) {
-      const port = scrollport();
-      const body = document.body.style.overflow;
-      const ported = port?.style.overflow ?? "";
-      document.body.style.overflow = "hidden";
-      if (port) port.style.overflow = "hidden";
-      document.documentElement.toggleAttribute("data-dialog", true);
-      unlock = () => {
-        document.body.style.overflow = body;
-        if (port) port.style.overflow = ported;
-        document.documentElement.toggleAttribute("data-dialog", false);
-      };
-    }
-    stack.push(id);
-  }
-
-  function leave(id: symbol) {
-    const i = stack.indexOf(id);
-    if (i < 0) return;
-    stack.splice(i, 1);
-    if (!stack.length) {
-      unlock?.();
-      unlock = null;
-    }
-  }
-</script>
-
 <script lang="ts">
   import { onMount, tick, type Snippet } from "svelte";
   import { unfold, type Unfolding } from "../motion/motion";
   import Scrollbar from "./Scrollbar.svelte";
   import Scrim from "./Scrim.svelte";
   import { portal } from "./portal";
+  import {
+    coverMode,
+    enterDialog,
+    isCovered,
+    isTopDialog,
+    leaveDialog,
+  } from "./dialogs.svelte";
   import Button from "./Button.svelte";
   import type { IconName } from "./icons";
 
@@ -108,8 +74,8 @@
   let scrim = $state<HTMLElement>();
 
   const me = Symbol();
-  const top = $derived(stack.at(-1) === me);
-  const covered = $derived(!top && stack.includes(me));
+  const top = $derived(isTopDialog(me));
+  const covered = $derived(isCovered(me));
 
   let motion: Unfolding | undefined;
   let released = false;
@@ -123,7 +89,7 @@
   function release() {
     if (released) return;
     released = true;
-    leave(me);
+    leaveDialog(me);
     void tick().then(() => {
       if (restore?.isConnected) restore.focus?.();
     });
@@ -151,7 +117,7 @@
     'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
   onMount(() => {
-    enter(me);
+    enterDialog(me);
     if (win && plate && bar && content && scrim) {
       motion = unfold({ win, plate, parts: [bar, content], scrim });
       motion.open(() => onOpened?.());
@@ -166,7 +132,7 @@
 
   $effect(() => {
     if (released) return;
-    if (covered) motion?.cover(whenCovered);
+    if (covered) motion?.cover(coverMode(whenCovered));
     else motion?.uncover();
   });
 
