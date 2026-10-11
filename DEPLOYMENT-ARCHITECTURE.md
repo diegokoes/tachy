@@ -1043,8 +1043,9 @@ never runs on an event loop that serves requests.
   which the request-size limit bounds.
 - **The embedder is a dependency of every search.** If its model thread dies
   it restarts (`embed-host.ts`). Searches fail with a retryable 503 until it is
-  back, and `/readyz` goes red. A model that fails to load three times exits
-  the process.
+  back, and `/readyz` goes red. A model that fails to load six times in a
+  row, about half a minute with the wait doubling between attempts, exits the
+  process.
 - **The model is always in memory,** about 1.9 GB even when nobody searches.
 
 §4.6 says what changes on bigger hosts, and §5.15 how to change the model.
@@ -2405,6 +2406,11 @@ connection: a probe every 30 s that waits 10 s for one, six times in a row,
 drains the api and exits 1 (`watchPool` in `api/src/lifecycle.ts`). A probe
 that fails counts as answered, because Postgres being down fails at once
 (measured: 4 to 9 ms with postgres.js), and the api rides that out.
+
+`docker compose up` does not wait for that restart: a dependency that exits
+once fails the whole command, and the services after it are never started. So
+`tachy.service` has `Restart=on-failure` and runs it again every 15 s until the
+stack is up.
 
 ## 10. CI/CD
 
