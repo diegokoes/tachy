@@ -403,6 +403,177 @@ describe("freshdesk files", () => {
     }
   });
 
+  // A pasted picture's address: a token on Freshdesk's host, no file name.
+  const token = (id: number) =>
+    `e30.${Buffer.from(
+      JSON.stringify({ id, domain: "x.freshdesk.com", account_id: 1 }),
+    ).toString("base64url")}.c2ln`;
+  const pasted = (id: number, host = "attachment.freshdesk.com") =>
+    `https://${host}/inline/attachment?token=${token(id)}`;
+  const img = (src: string) =>
+    `<img src="${src}" class="fr-fic fr-fil fr-dib" data-id="1">`;
+  const picture = (id: number) => ({
+    id: `inline-${id}`,
+    name: "image.png",
+    inline: true,
+  });
+  const redirect = (location: string) => () =>
+    new Response(null, { status: 302, headers: { location } });
+
+  it("lists the pictures pasted into a message, each once, and only Freshdesk's own", async () => {
+    mockHelpdesk({
+      "/agents": [],
+      "/tickets/7?include=requester": {
+        ...ticket,
+        description: `<div>look ${img(pasted(5001))}</div>`,
+        attachments: [screen],
+      },
+      "/tickets/7/conversations?page=1": [
+        {
+          ...convo(1),
+          body: [
+            img(pasted(5002)),
+            // The reply quotes the first message, its picture included.
+            `<blockquote>${img(pasted(5001))}</blockquote>`,
+            // The same picture twice in one message.
+            img(`${pasted(5002)}&amp;v=1`),
+            img("https://dev.azure.com/org/_apis/wit/attachments/1"),
+            img("data:image/png;base64,AAAA"),
+            img("http://attachment.freshdesk.com/inline/attachment?token=x"),
+            img(`https://files.example/inline/attachment?token=${token(9)}`),
+            img(`https://attachment.freshdesk.com/other?token=${token(9)}`),
+            img("https://attachment.freshdesk.com/inline/attachment"),
+            img(
+              "https://attachment.freshdesk.com/inline/attachment?token=a.b.c",
+            ),
+            img(
+              `https://attachment.freshdesk.com/inline/attachment?token=e30.${Buffer.from(
+                JSON.stringify({ id: "../etc" }),
+              ).toString("base64url")}.c2ln`,
+            ),
+            // A token that names no file.
+            img(
+              `https://attachment.freshdesk.com/inline/attachment?token=e30.${Buffer.from(
+                JSON.stringify({ domain: "x.freshdesk.com", account_id: 1 }),
+              ).toString("base64url")}.c2ln`,
+            ),
+            "<img src='not a url'>",
+          ].join(" "),
+        },
+      ],
+    });
+    const item = await source().fetchItem("7");
+    expect(item.messages.map((m) => m.attachments)).toEqual([
+      [
+        {
+          id: "900",
+          name: "screen.png",
+          contentType: "image/png",
+          sizeBytes: 4,
+        },
+        picture(5001),
+      ],
+      [picture(5002)],
+    ]);
+    expect(JSON.stringify(item.messages)).not.toContain("token=");
+  });
+
+  it("lists a picture addressed on the helpdesk's own host, whatever its domain", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const body = url.includes("/conversations")
+          ? []
+          : url.includes("/agents")
+            ? []
+            : {
+                ...ticket,
+                description: img(pasted(5003, "support.acme.com")),
+              };
+        return { ok: true, status: 200, json: async () => body } as Response;
+      }),
+    );
+    const item = await createFreshdeskSource({
+      baseUrl: "https://support.acme.com",
+      slug: "fd",
+      config: {},
+    }).fetchItem("7");
+    expect(item.messages[0].attachments).toEqual([picture(5003)]);
+  });
+
+  it("opens a pasted picture through its redirects, with no key on any of them", async () => {
+    const onHelpdesk = pasted(5001, "x.freshdesk.com");
+    const seen = mockHelpdesk(
+      {
+        "/tickets/7": {
+          ...ticket,
+          description: `<div>look ${img(pasted(5001))}</div>`,
+        },
+      },
+      {
+        [pasted(5001)]: redirect(onHelpdesk),
+        [onHelpdesk]: redirect(CLOUDFRONT),
+        [CLOUDFRONT]: () =>
+          Object.defineProperty(
+            new Response(PNG, { headers: { "content-type": "image/png" } }),
+            "url",
+            { value: CLOUDFRONT },
+          ),
+      },
+    );
+    const opened = await source().openAttachment!("7", "inline-5001");
+    // The name is the one the last address carries.
+    expect(opened).toMatchObject({
+      name: "screen.png",
+      contentType: "image/png",
+    });
+    expect(await bytesOf(opened.body)).toEqual(PNG);
+    expect(seen.map((request) => request.url)).toEqual([
+      "https://x.freshdesk.com/api/v2/tickets/7",
+      pasted(5001),
+      onHelpdesk,
+      CLOUDFRONT,
+    ]);
+    expect(seen.slice(1).map((request) => request.authorization)).toEqual([
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  it("names a pasted picture by its type when its address carries no name", async () => {
+    mockHelpdesk(
+      {
+        "/tickets/7": ticket,
+        "/tickets/7/conversations?page=1": [
+          { ...convo(1), body: img(pasted(5002)) },
+        ],
+      },
+      {
+        [pasted(5002)]: () =>
+          new Response(new Uint8Array([0xff, 0xd8, 0xff]), {
+            headers: {
+              "content-type": "image/jpeg; charset=binary",
+              "content-length": "3",
+            },
+          }),
+      },
+    );
+    await expect(
+      source().openAttachment!("7", "inline-5002"),
+    ).resolves.toMatchObject({ name: "image.jpg", sizeBytes: 3 });
+  });
+
+  it("refuses a pasted picture no message of the ticket has", async () => {
+    mockHelpdesk({
+      "/tickets/7": { ...ticket, description: img(pasted(5001)) },
+      "/tickets/7/conversations?page=1": [convo(1)],
+    });
+    await expect(source().openAttachment!("7", "inline-9999")).rejects.toThrow(
+      "ticket 7 lists no file 'inline-9999'",
+    );
+  });
+
   it("does not follow an address onto a private host", async () => {
     const seen = mockHelpdesk({
       "/tickets/7": {

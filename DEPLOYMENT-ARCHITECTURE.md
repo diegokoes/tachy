@@ -1138,8 +1138,11 @@ both live in Postgres with a TTL.
   Its listing gives each an address signed for five minutes and good without
   the API key, so every open reads the ticket again, and its conversations up
   to the page that lists the file, for a fresh one; the key is not sent with
-  it. A picture pasted into a Freshdesk message is not in that listing and
-  does not open yet.
+  it. A picture pasted into a Freshdesk message is not in that listing. The
+  message's HTML addresses it by a token that opens without the key, through
+  two redirects, so it is listed from the HTML and found again the same way,
+  by reading the messages. A picture a message only links from elsewhere is
+  left out.
 - **Under a connection's redaction** a file's name is scrubbed, its text is
   scrubbed when read, and an image is withheld from the model unless that
   connection's own switch (`config.redaction.images`) allows it.
