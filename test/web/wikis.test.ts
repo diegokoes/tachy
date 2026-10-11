@@ -86,7 +86,7 @@ describe("uploading an image", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ error: "not an image" }), {
+        new Response(JSON.stringify({ detail: "not an image" }), {
           status: 400,
         }),
       ),

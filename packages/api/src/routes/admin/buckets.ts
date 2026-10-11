@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../../validation";
 import { z } from "zod";
 import { SLUG_RE } from "@tachy/core";
 import {
@@ -42,21 +42,16 @@ const updateSchema = z.object({
  */
 export const buckets = new Hono()
   .get("/buckets", async (c) => c.json(await listBuckets()))
-  .post(
-    "/buckets",
-    requireAdmin,
-    zValidator("json", createSchema),
-    async (c) => {
-      const body = c.req.valid("json");
-      const created = await createBucket(body, await callerUserId(c));
-      await audit(c, "bucket_create", body.slug, { teams: body.teams });
-      return c.json(created, 201);
-    },
-  )
+  .post("/buckets", requireAdmin, validate("json", createSchema), async (c) => {
+    const body = c.req.valid("json");
+    const created = await createBucket(body, await callerUserId(c));
+    await audit(c, "bucket_create", body.slug, { teams: body.teams });
+    return c.json(created, 201);
+  })
   .patch(
     "/buckets/:slug",
     requireAdmin,
-    zValidator("json", updateSchema),
+    validate("json", updateSchema),
     async (c) =>
       c.json(await updateBucket(c.req.param("slug"), c.req.valid("json"))),
   )

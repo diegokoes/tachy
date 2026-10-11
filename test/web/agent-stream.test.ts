@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { PROBLEM_TYPES } from "@tachy/contract";
 
 const unauthorized = vi.fn();
 vi.mock("../../packages/web/src/access/session.svelte", () => ({
@@ -93,24 +94,32 @@ describe("chatStream", () => {
   it("hands back the running turn when the server answers 409", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: false,
-        status: 409,
-        json: async () => ({ error: "already running", turnId: "t-1" }),
-      })),
+      vi.fn(async () =>
+        Response.json(
+          {
+            type: PROBLEM_TYPES["turn-in-progress"].type,
+            detail: "already running",
+            turnId: "t-1",
+          },
+          { status: 409 },
+        ),
+      ),
     );
     const err = await (async () => {
       for await (const _ of chatStream({ message: "x" } as never));
     })().catch((e) => e);
     expect(err).toBeInstanceOf(ChatRefused);
-    expect(err).toMatchObject({ status: 409, turnId: "t-1" });
+    expect(err).toMatchObject({
+      status: 409,
+      message: "already running",
+      turnId: "t-1",
+    });
   });
 
   it("throws on any other failure", async () => {
-    const { response } = sseResponse([], 500);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => response),
+      vi.fn(async () => new Response("", { status: 500 })),
     );
     await expect(async () => {
       for await (const _ of chatStream({ message: "x" } as never));

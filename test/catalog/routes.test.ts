@@ -74,7 +74,7 @@ describe("component routes", () => {
   it("refuses a product slug that does not exist", async () => {
     const response = await get("/api/products/no-such-product/components");
     expect(response.status).toBe(400);
-    expect((await response.json()).error).toMatch(/no-such-product/);
+    expect((await response.json()).detail).toMatch(/no-such-product/);
   });
 
   // The architecture view draws the whole catalogue, so it needs every
@@ -268,7 +268,7 @@ describe("customer routes", () => {
   it("refuses the profile of a customer that does not exist", async () => {
     const response = await get("/api/customers/nope/profile");
     expect(response.status).toBe(400);
-    expect((await response.json()).error).toMatch(/nope/);
+    expect((await response.json()).detail).toMatch(/nope/);
   });
 });
 
@@ -420,7 +420,7 @@ describe("customer component links", () => {
       "DELETE",
     );
     expect(response.status).toBe(400);
-    expect((await response.json()).error).toMatch(/product_slug and component/);
+    expect((await response.json()).detail).toMatch(/product_slug and component/);
   });
 });
 

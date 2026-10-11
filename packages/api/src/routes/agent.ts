@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import {
   badInput,
@@ -24,6 +24,7 @@ import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { requireCaller } from "../authz";
 import { getIdentity } from "../auth";
 import { lifecycle } from "../lifecycle";
+import { problem } from "../problems";
 import { requestIdOf } from "../logging";
 import { AdmissionCancelled, QueueFull } from "../admission";
 import { BUILTIN_COMMANDS } from "../commands";
@@ -63,6 +64,14 @@ const approveSchema = z.object({
   updatedInput: z.record(z.string(), z.any()).optional(),
 });
 
+/** `turnId` is the turn already running, for the client to resume or stop. */
+const turnInProgress = (c: Context, turnId: string | undefined) =>
+  problem(c, 409, {
+    problem: "turn-in-progress",
+    detail: "you already have a chat turn running; stop it or wait for it",
+    turnId,
+  });
+
 export const agent = new Hono()
 
   .get("/commands", async (c) => {
@@ -96,7 +105,7 @@ export const agent = new Hono()
     });
   })
 
-  .post("/chat", zValidator("json", chatSchema), async (c) => {
+  .post("/chat", validate("json", chatSchema), async (c) => {
     if (lifecycle.draining) {
       c.header("Retry-After", "30");
       throw unavailable("the server is restarting; try again in a moment");
@@ -113,14 +122,7 @@ export const agent = new Hono()
     const userKey = userEmail ?? "anonymous";
 
     const running = activeByUser.get(userKey);
-    if (running)
-      return c.json(
-        {
-          error: "you already have a chat turn running; stop it or wait for it",
-          turnId: running,
-        },
-        409,
-      );
+    if (running) return turnInProgress(c, running);
 
     const user = userEmail ? await getUserByEmail(userEmail) : null;
     const ctx: ScopeContext = user
@@ -163,13 +165,7 @@ export const agent = new Hono()
     };
 
     if (activeByUser.has(userKey))
-      return c.json(
-        {
-          error: "you already have a chat turn running; stop it or wait for it",
-          turnId: activeByUser.get(userKey),
-        },
-        409,
-      );
+      return turnInProgress(c, activeByUser.get(userKey));
     setAdmissionLimits({
       cap: settings.agent_slot_cap.value,
       queueMax: settings.agent_queue_max.value,
@@ -180,7 +176,7 @@ export const agent = new Hono()
     } catch (err) {
       if (!(err instanceof QueueFull)) throw err;
       c.header("Retry-After", "30");
-      return c.json({ error: err.message }, 429);
+      return problem(c, 429, { detail: err.message });
     }
     activeByUser.set(userKey, turnId);
     const leave = () => {
@@ -280,7 +276,7 @@ export const agent = new Hono()
 
   .post(
     "/stop",
-    zValidator("json", z.object({ turnId: z.string() })),
+    validate("json", z.object({ turnId: z.string() })),
     async (c) => {
       const { turnId } = c.req.valid("json");
       const email = getIdentity(c)?.email ?? env.userEmail;
@@ -295,7 +291,7 @@ export const agent = new Hono()
     },
   )
 
-  .post("/approve", zValidator("json", approveSchema), async (c) => {
+  .post("/approve", validate("json", approveSchema), async (c) => {
     const { turnId, id, approve, message, updatedInput } = c.req.valid("json");
     const entry = turns.get(turnId);
     if (!entry) throw notFound("unknown or finished turn");

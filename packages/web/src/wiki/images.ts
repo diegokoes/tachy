@@ -1,4 +1,5 @@
 import { onUnauthorized } from "../access/session.svelte";
+import { readError } from "../problems";
 
 /**
  * Store an image for this wiki's articles. Multipart, so it cannot go through
@@ -16,8 +17,6 @@ export async function uploadImage(
     body: form,
   });
   if (response.status === 401) onUnauthorized();
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok)
-    throw new Error(body?.error ?? `upload failed (${response.status})`);
-  return body;
+  if (!response.ok) throw await readError(response);
+  return response.json();
 }

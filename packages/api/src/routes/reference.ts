@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import {
   listReferenceDocs,
@@ -153,7 +153,7 @@ export const reference = new Hono()
     countView({ docId: id }, await callerUserId(c));
     return c.json(doc);
   })
-  .patch("/:id", zValidator("json", referenceUpdateSchema), async (c) => {
+  .patch("/:id", validate("json", referenceUpdateSchema), async (c) => {
     const id = c.req.param("id");
     const doc = await getReferenceDoc(id);
     await assertScopeEditor(c, {
@@ -172,7 +172,7 @@ export const reference = new Hono()
     });
     return c.json(rows);
   })
-  .post("/", zValidator("json", referenceInputSchema), async (c) => {
+  .post("/", validate("json", referenceInputSchema), async (c) => {
     const body = c.req.valid("json");
     await assertScopeEditor(c, {
       productId: body.productId,

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import { badInput } from "@tachy/core/infra";
 import { getTeamIdBySlug } from "@tachy/core/catalog";
@@ -56,7 +56,7 @@ export const artifacts = new Hono()
     );
   })
 
-  .put("/", zValidator("json", putSchema), async (c) => {
+  .put("/", validate("json", putSchema), async (c) => {
     const actor = await requireCaller(c);
     const { scope, team, slug, title, description, body, spec } =
       c.req.valid("json");
@@ -70,7 +70,7 @@ export const artifacts = new Hono()
     return c.json({ ok: true });
   })
 
-  .delete("/", zValidator("json", deleteSchema), async (c) => {
+  .delete("/", validate("json", deleteSchema), async (c) => {
     const actor = await requireCaller(c);
     const { scope, team, slug } = c.req.valid("json");
     const scopeId = await scopeTarget(actor, scope, team);

@@ -26,7 +26,7 @@ function answers(me: Response) {
 
 const refused = () =>
   Response.json(
-    { error: "not added", code: NOT_INVITED, email: "stranger@example.com" },
+    { detail: "not added", code: NOT_INVITED, email: "stranger@example.com" },
     { status: 403 },
   );
 
@@ -52,7 +52,7 @@ describe("what the app knows once it has booted", () => {
   });
 
   it("reads an ordinary 401 as signed out, not as refused", async () => {
-    answers(Response.json({ error: "unauthenticated" }, { status: 401 }));
+    answers(Response.json({ detail: "unauthenticated" }, { status: 401 }));
     await initSession();
     expect(session.me).toBeNull();
     expect(session.uninvited).toBeNull();

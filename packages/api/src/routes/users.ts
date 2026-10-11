@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import {
   listUsers,
@@ -65,7 +65,7 @@ export const users = new Hono()
     );
   })
 
-  .post("/", requireAdmin, zValidator("json", createSchema), async (c) => {
+  .post("/", requireAdmin, validate("json", createSchema), async (c) => {
     const body = c.req.valid("json");
     const created = await createUser({
       email: body.email,
@@ -83,7 +83,7 @@ export const users = new Hono()
     return c.json(created);
   })
 
-  .patch("/:id", requireAdmin, zValidator("json", patchSchema), async (c) => {
+  .patch("/:id", requireAdmin, validate("json", patchSchema), async (c) => {
     const id = c.req.param("id");
     const body = c.req.valid("json");
     if (body.display_name !== undefined)
@@ -113,7 +113,7 @@ export const users = new Hono()
     "/:id/tokens",
     requireAdmin,
     requireSession,
-    zValidator("json", tokenSchema),
+    validate("json", tokenSchema),
     async (c) => {
       const owner = await userEmailOf(c.req.param("id")!);
       if (!owner) throw notFound("no such user");
@@ -149,17 +149,13 @@ export const users = new Hono()
     c.json(await listTeamMembers(c.req.param("teamSlug"))),
   )
 
-  .put(
-    "/team-members/:teamSlug",
-    zValidator("json", memberSchema),
-    async (c) => {
-      await assertTeamAdmin(c, c.req.param("teamSlug"));
-      const { email, role } = c.req.valid("json");
-      await setTeamMember(c.req.param("teamSlug"), email, role);
-      await audit(c, "team_member_set", email, {
-        team: c.req.param("teamSlug"),
-        role,
-      });
-      return c.json({ ok: true });
-    },
-  );
+  .put("/team-members/:teamSlug", validate("json", memberSchema), async (c) => {
+    await assertTeamAdmin(c, c.req.param("teamSlug"));
+    const { email, role } = c.req.valid("json");
+    await setTeamMember(c.req.param("teamSlug"), email, role);
+    await audit(c, "team_member_set", email, {
+      team: c.req.param("teamSlug"),
+      role,
+    });
+    return c.json({ ok: true });
+  });

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import { badInput } from "@tachy/core/infra";
 import { audit } from "../audit";
@@ -89,7 +89,7 @@ export const flows = new Hono()
     return c.json(run);
   })
 
-  .post("/", zValidator("json", flowSchema), async (c) => {
+  .post("/", validate("json", flowSchema), async (c) => {
     const body = await input(c, c.req.valid("json"));
     const created = await createFlow(body, await callerUserId(c));
     await audit(c, "flow_save", created.name, {
@@ -105,7 +105,7 @@ export const flows = new Hono()
     return c.json(await getFlow(id));
   })
 
-  .put("/:id", zValidator("json", flowSchema), async (c) => {
+  .put("/:id", validate("json", flowSchema), async (c) => {
     const id = c.req.param("id");
     await assertScopeEditor(c, await flowScope(id));
     const body = await input(c, c.req.valid("json"));
@@ -130,7 +130,7 @@ export const flows = new Hono()
   })
 
   // Dry by default: trying a flow on a ticket should not post on it.
-  .post("/:id/run", zValidator("json", runSchema), async (c) => {
+  .post("/:id/run", validate("json", runSchema), async (c) => {
     const id = c.req.param("id");
     await assertScopeEditor(c, await flowScope(id));
     const body = c.req.valid("json");

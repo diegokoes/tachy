@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import { secretsEnabled, errorText } from "@tachy/core/infra";
 import {
@@ -84,7 +84,7 @@ export const me = new Hono()
     });
   })
 
-  .put("/credentials/:name", zValidator("json", valueSchema), async (c) => {
+  .put("/credentials/:name", validate("json", valueSchema), async (c) => {
     const userId = await requireCaller(c);
     const name = c.req.param("name");
     const { value } = c.req.valid("json");
@@ -112,25 +112,20 @@ export const me = new Hono()
     c.json(await listApiTokens(await requireCaller(c))),
   )
 
-  .post(
-    "/tokens",
-    requireSession,
-    zValidator("json", tokenSchema),
-    async (c) => {
-      const userId = await requireCaller(c);
-      const body = c.req.valid("json");
-      const { token, row } = await mintApiToken({
-        userId,
-        name: body.name,
-        expiresAt: tokenExpiry(body.expires_in_days),
-        createdBy: userId,
-      });
-      await audit(c, "api_token_mint", body.name, {
-        expires_at: row.expires_at,
-      });
-      return c.json({ ...row, token }, 201);
-    },
-  )
+  .post("/tokens", requireSession, validate("json", tokenSchema), async (c) => {
+    const userId = await requireCaller(c);
+    const body = c.req.valid("json");
+    const { token, row } = await mintApiToken({
+      userId,
+      name: body.name,
+      expiresAt: tokenExpiry(body.expires_in_days),
+      createdBy: userId,
+    });
+    await audit(c, "api_token_mint", body.name, {
+      expires_at: row.expires_at,
+    });
+    return c.json({ ...row, token }, 201);
+  })
 
   .delete("/tokens/:id", async (c) => {
     const row = await revokeApiToken(c.req.param("id"), await requireCaller(c));
@@ -176,7 +171,7 @@ export const me = new Hono()
     return c.json({ models, restricted: allowed.length > 0, error });
   })
 
-  .put("/preferences/:key", zValidator("json", prefSchema), async (c) => {
+  .put("/preferences/:key", validate("json", prefSchema), async (c) => {
     const userId = await requireCaller(c);
     await setPref(
       userId,
@@ -212,7 +207,7 @@ export const me = new Hono()
 
   .post(
     "/notifications/read",
-    zValidator("json", z.object({ ids: z.array(z.string().uuid()).min(1) })),
+    validate("json", z.object({ ids: z.array(z.string().uuid()).min(1) })),
     async (c) => {
       const userId = await requireCaller(c);
       await markRead(userId, c.req.valid("json").ids);
