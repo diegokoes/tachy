@@ -16,6 +16,7 @@ import {
   referenceDocLineage,
 } from "@tachy/core/reference";
 import { badInput } from "@tachy/core/infra";
+import { windowText, type WindowedText } from "@tachy/core/files";
 import { referenceStatusSchema } from "@tachy/core/knowledge";
 import type { ReferenceDocUpdate } from "@tachy/core/reference";
 import { extractSource } from "../extract";
@@ -27,16 +28,31 @@ import {
   componentIntoFilter,
   resolveScopeIds,
   loadContextSources,
+  type ContextSource,
 } from "../context";
 
 /** What `ingest_context` returns of each source when `max_chars` is not given. */
 const DEFAULT_PREVIEW_CHARS = 20_000;
 
+/** What to do next with one source: open an archive, or read on. */
+function sourceNote(
+  source: ContextSource,
+  shown: WindowedText,
+  shownTo: number,
+): { note?: string } {
+  if (source.members)
+    return { note: "This is the archive's file list. Read one with member." };
+  if (!shown.truncated) return {};
+  return {
+    note: `Shown to char ${shownTo} of ${shown.chars} - continue with offset: ${shownTo}; to save the FULL text as a reference doc, call save_reference_doc with body_path.`,
+  };
+}
+
 tool(
   "ingest_context",
   {
     description:
-      "Load freeform project context from pasted text, local file paths, and/or URLs, and return the cleaned raw text for you to structure. PDF paths are text-extracted automatically. This tool ONLY reads - it never saves. Long sources are truncated at max_chars (default 20000); for large documents (big PDFs), preview here, then call save_reference_doc with body_path so the full text is extracted and saved server-side. After loading, classify the content and route each part: durable incident lessons → save_knowledge_entry; architecture facts → add_component; everything else (docs, runbooks, design notes, config explainers) → save_reference_doc. Say briefly how you routed it, then make the calls - each is gated by its own review box.",
+      "Load freeform project context from pasted text, attached file paths, and/or URLs, and return the cleaned raw text for you to structure. PDF, Word, Excel and mail (.eml) files are read as text; a zip answers with its file list, and member reads one of them. This tool ONLY reads - it never saves. Long sources are truncated at max_chars (default 20000): continue with offset, or narrow a log with match. For large documents (big PDFs), preview here, then call save_reference_doc with body_path so the full text is extracted and saved server-side. After loading, classify the content and route each part: durable incident lessons → save_knowledge_entry; architecture facts → add_component; everything else (docs, runbooks, design notes, config explainers) → save_reference_doc. Say briefly how you routed it, then make the calls - each is gated by its own review box.",
     inputSchema: {
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
@@ -44,14 +60,45 @@ tool(
       paths: z.array(z.string()).optional(),
       urls: z.array(z.string()).optional(),
       max_chars: z.number().int().positive().optional(),
+      offset: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe(
+          "Chars to skip in each source. Continue a truncated read from the chars already shown, or jump to an [offset N] a match reported.",
+        ),
+      match: z
+        .array(z.string().min(1))
+        .max(10)
+        .optional()
+        .describe(
+          "Literal terms, matched without case. Returns only the lines holding one, each with two lines of context under the [offset N] it starts at. For logs: an error code, a timestamp, a request id.",
+        ),
+      member: z
+        .string()
+        .optional()
+        .describe(
+          "With exactly one zip path: the file inside it to read, by the name its list gives.",
+        ),
     },
     // readOnlyHint because nothing here is persisted; openWorldHint because
     // `urls` reaches hosts outside this deployment, which is what a client
     // deciding whether to run this unattended needs to weigh.
     annotations: { readOnlyHint: true, openWorldHint: true },
   },
-  async ({ product_slug, team_slug, text, paths, urls, max_chars }) => {
-    const sources = await loadContextSources({ text, paths, urls });
+  async ({
+    product_slug,
+    team_slug,
+    text,
+    paths,
+    urls,
+    max_chars,
+    offset,
+    match,
+    member,
+  }) => {
+    const sources = await loadContextSources({ text, paths, urls, member });
     if (!sources.length)
       throw badInput("Provide at least one of: text, paths, urls");
 
@@ -62,21 +109,19 @@ tool(
       product_slug: product_slug ?? null,
       team_slug: team_slug ?? null,
       sources: sources.map((source) => {
-        const truncated = source.text.length > maxChars;
-        const textOut = truncated
-          ? source.text.slice(0, maxChars)
-          : source.text;
+        const shown = windowText(source.text, { offset, maxChars, match });
+        const shownTo = (offset ?? 0) + shown.text.length;
         return {
           source: source.source,
-          chars: source.text.length,
+          chars: shown.chars,
           ...(source.pages != null ? { pages: source.pages } : {}),
-          truncated,
-          text: redact ? scrubText(textOut, tokens) : textOut,
-          ...(truncated
-            ? {
-                note: `Truncated at ${maxChars} of ${source.text.length} chars - summarize from this preview; to save the FULL text as a reference doc, call save_reference_doc with body_path.`,
-              }
+          ...(source.members ? { members: source.members } : {}),
+          ...(shown.matchedLines != null
+            ? { matched_lines: shown.matchedLines }
             : {}),
+          truncated: shown.truncated,
+          text: redact ? scrubText(shown.text, tokens) : shown.text,
+          ...sourceNote(source, shown, shownTo),
         };
       }),
       ...(redact
@@ -144,6 +189,10 @@ tool(
     let pages: number | undefined;
     if (args.body_path) {
       const extracted = await extractSource(args.body_path);
+      if (extracted.members)
+        throw badInput(
+          "body_path names an archive, which is a list of files and not a document; attach the file itself",
+        );
       body = globalRedactionEnabled()
         ? scrubText(extracted.text, new TokenMap())
         : extracted.text;

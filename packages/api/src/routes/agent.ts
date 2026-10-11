@@ -19,8 +19,9 @@ import {
 } from "@tachy/core/config";
 import { getUserByEmail, userSoleTeamId } from "@tachy/core/access";
 import { getArtifact, listVisibleArtifacts } from "@tachy/core/exports";
-import { checkUpload } from "@tachy/core";
-import { saveUpload } from "@tachy/core/chat";
+import { fileFamily, uploadLimitBytes } from "@tachy/core";
+import { saveUpload, uploadLimits } from "@tachy/core/chat";
+import { inspectFile } from "@tachy/core/files";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { requireCaller } from "../authz";
 import { getIdentity } from "../auth";
@@ -29,7 +30,7 @@ import { problem } from "../problems";
 import { requestIdOf } from "../logging";
 import { AdmissionCancelled, QueueFull } from "../admission";
 import { BUILTIN_COMMANDS } from "../commands";
-import { MAX_UPLOAD_BYTES, tooLarge } from "../upload-limit";
+import { requestLimitBytes, tooLarge } from "../upload-limit";
 import {
   activeByUser,
   admission,
@@ -85,6 +86,7 @@ export const agent = new Hono()
         }
       : {};
     return c.json({
+      uploadLimits: uploadLimits(),
       builtins: BUILTIN_COMMANDS.filter((b) => !b.hidden).map(
         ({ name, args, description, subcommands }) => ({
           name,
@@ -310,15 +312,18 @@ export const agent = new Hono()
     // Checked before parseBody, which buffers the whole request first: past
     // that point the limit has already been paid for in memory.
     const declared = Number(c.req.header("content-length") ?? 0);
-    if (declared > MAX_UPLOAD_BYTES) throw tooLarge(declared);
+    if (declared > requestLimitBytes()) throw tooLarge(declared);
     const body = await c.req.parseBody();
     const file = body.file;
     if (!(file instanceof File)) throw badInput("expected a 'file' field");
-    if (file.size > MAX_UPLOAD_BYTES) throw tooLarge(file.size);
+    if (file.size > requestLimitBytes()) throw tooLarge(file.size);
     const filename = basename(file.name || "upload");
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const check = checkUpload(filename, bytes);
+    const check = inspectFile(filename, bytes);
     if ("refusal" in check) return problem(c, 415, { detail: check.refusal });
+    const family = fileFamily(check.contentType);
+    const limitBytes = uploadLimitBytes(family, uploadLimits());
+    if (file.size > limitBytes) throw tooLarge(file.size, limitBytes, family);
     const { ref } = await saveUpload({
       userId: owner,
       filename,
