@@ -15,6 +15,7 @@ import {
   listReferenceDocs,
   updateReferenceDoc,
   referenceDocLineage,
+  queueDocExtraction,
 } from "@tachy/core/reference";
 import { badInput } from "@tachy/core/infra";
 import {
@@ -157,6 +158,25 @@ tool(
   },
 );
 
+/**
+ * A doc saved from a PDF holds only its text layer. The rest, its figures and
+ * the words of its scanned pages, is added by a job, and the result says so.
+ */
+async function pdfCompletion(
+  docId: string,
+  path: string | undefined,
+  extracted: ExtractedFile | undefined,
+  userId: string | null,
+): Promise<Record<string, unknown>> {
+  if (!path || extracted?.pages == null) return {};
+  await queueDocExtraction({ docId, path, userId });
+  return {
+    completion: "queued",
+    completion_note:
+      "The doc holds the PDF's text pages now. A job is placing its figures and reading its scanned pages, and adds them as a new revision; tell the user in one line and do not wait for it.",
+  };
+}
+
 tool(
   "save_reference_doc",
   {
@@ -215,20 +235,17 @@ tool(
         throw badInput(
           "body_path names an archive, which is a list of files and not a document; attach the file itself",
         );
-      if (extracted.scannedPages?.length === extracted.pages)
-        throw badInput(
-          `the PDF has no text layer on any of its ${extracted.pages} pages (a scan), so there is no text to save`,
-        );
       body = globalRedactionEnabled()
         ? scrubText(extracted.text, new TokenMap())
         : extracted.text;
     }
+    const userId = await resolveCurrentUserId();
     const saved = await saveReferenceDoc({
       title: args.title,
       body: body!,
       productId,
       teamId,
-      createdById: await resolveCurrentUserId(),
+      createdById: userId,
       actor: await mcpActor(),
       source: args.source,
       sourceProjectId: args.source_project_id,
@@ -248,6 +265,7 @@ tool(
       chunks: saved.chunks,
       body_chars: body!.length,
       ...pageFacts(extracted ?? {}),
+      ...(await pdfCompletion(saved.id, args.body_path, extracted, userId)),
     });
   },
 );
