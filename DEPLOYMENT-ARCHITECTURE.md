@@ -1114,6 +1114,17 @@ both live in Postgres with a TTL.
   each page starts, a doc saved from it keeps those lines in its body, and
   `reference_doc_chunks.page` is read from them, so a search hit names its
   page. A page with no text layer is reported, not saved as blank.
+- **The figures and scanned pages** of a PDF are added after the save, by the
+  job `reference.extract` on the `embed` queue. Figures become library images
+  under the page they are on; a picture on three or more pages, or smaller
+  than 120 px, is left out. A scanned page is read by the model, one call a
+  page on the cheap tier and the credential of whoever saved the doc, and not
+  at all under redaction unless `redaction_images` is on. The job needs the
+  upload, so it has to start within the upload's 24 h. On the development
+  workstation, not in the image: a 24 MB PDF of 17 A4 scans at 300 dpi peaked
+  at 446 MB RSS and took 9 s without the model calls, which is why it is on the
+  heavy worker; the peak barely moves with the page count (373 MB at 4 pages),
+  since each page's pictures are released once read.
 - **An image worth keeping** goes from an upload into `library_assets`
   (`save_library_image`), fitted and at most 5 MB, under the same 7-day rule
   for one no body uses.

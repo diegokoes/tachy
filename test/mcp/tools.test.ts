@@ -635,14 +635,34 @@ describe("reading one attached file", () => {
     expect((found.json as { page: number }[])[0].page).toBe(3);
   });
 
-  it("does not save a PDF that is all scans as an empty doc", async () => {
+  it("queues the job that adds a PDF's figures and scanned pages, once it is saved", async () => {
     const scan = await upload("scan.pdf", "application/pdf", pdfOf(["", ""]));
-    const refused = await call("save_reference_doc", {
+    const saved = await call("save_reference_doc", {
       title: "Scan",
       body_path: scan.ref,
     });
-    expect(refused.isError).toBe(true);
-    expect(refused.text).toMatch(/no text layer on any of its 2 pages/);
+    expect(saved.isError).toBe(false);
+    expect(saved.json).toMatchObject({
+      saved: true,
+      scanned_pages: [1, 2],
+      completion: "queued",
+    });
+    const runs = await sql`
+      select kind, status, params from job_runs where kind = 'reference.extract'`;
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({
+      status: "queued",
+      params: { doc_id: (saved.json as { id: string }).id, path: scan.ref },
+    });
+
+    const pasted = await call("save_reference_doc", {
+      title: "Pasted",
+      body: "Plain text, no file behind it.",
+    });
+    expect((pasted.json as Record<string, unknown>).completion).toBeUndefined();
+    expect(
+      await sql`select 1 from job_runs where kind = 'reference.extract'`,
+    ).toHaveLength(1);
   });
 
   it("keeps an image in the library and hands back the markdown for it", async () => {

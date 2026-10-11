@@ -11,7 +11,10 @@ import {
 import { setEmbedBackend, startEmbedHost } from "@tachy/core/search";
 import { sweepInterruptedIndexes } from "@tachy/core/code";
 import { startJobProcess } from "@tachy/core/jobs";
-import { registerAgentFlowActions } from "@tachy/agent";
+import {
+  registerAgentFlowActions,
+  registerAgentPageTranscriber,
+} from "@tachy/agent";
 import { createApp } from "./app";
 import { isBootstrapped } from "./auth";
 import { setInternalEndpoint } from "./internal-endpoint";
@@ -161,6 +164,7 @@ console.log(
  */
 let jobWorker: Awaited<ReturnType<typeof startJobProcess>> | null = null;
 registerAgentFlowActions();
+registerAgentPageTranscriber();
 if (process.env.TACHY_WORKER !== "external")
   // Not awaited: a database whose schema is behind must not hold up the server.
   void startJobProcess({
