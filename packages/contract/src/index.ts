@@ -141,23 +141,34 @@ export {
 } from "./access";
 export type { ApiTokenRow, SsoAdmission, UserCensus } from "./access";
 export {
-  CHAT_UPLOAD_ACCEPT,
-  CHAT_UPLOAD_CONTENT_TYPES,
-  CHAT_UPLOAD_EXTENSIONS,
-  CHAT_UPLOAD_TYPES,
-  MAX_UPLOAD_BYTES,
-  checkUpload,
+  FILE_CONTENT_TYPES,
+  FILE_EXTENSIONS,
+  FILE_TYPES,
+  checkFile,
+  decodeText,
+  fileExtension,
+  fileFamily,
   isPdf,
   isText,
+  isZip,
+  mismatchReason,
+  unlistedReason,
+} from "./files";
+export type {
+  FileCheck,
+  FileContentType,
+  FileExtension,
+  FileFamily,
+} from "./files";
+export {
+  CHAT_UPLOAD_ACCEPT,
+  DEFAULT_UPLOAD_LIMITS,
+  largestUploadBytes,
   tooLargeReason,
-  uploadExtension,
+  uploadLimitBytes,
   uploadRefusal,
 } from "./uploads";
-export type {
-  ChatUploadContentType,
-  ChatUploadExtension,
-  UploadCheck,
-} from "./uploads";
+export type { UploadLimits } from "./uploads";
 export {
   PROBLEM_TYPES,
   isProblemType,

@@ -7,8 +7,7 @@
     getCommands,
     stopTurn,
     ChatRefused,
-    type BuiltinCommandMeta,
-    type CommandArtifactMeta,
+    type ChatCommands,
   } from "./agent";
   import { addEntry, chat, type Entry } from "./chatState.svelte";
   import { renderMarkdown } from "../markdown/markdown";
@@ -156,10 +155,7 @@
     else addEntry({ kind: "assistant", text });
   }
 
-  let commands = $state<{
-    builtins: BuiltinCommandMeta[];
-    artifacts: CommandArtifactMeta[];
-  } | null>(null);
+  let commands = $state<ChatCommands | null>(null);
   let cmdMenu = $state<CommandMenu>();
   let cmdDismissed = $state(false);
 
@@ -611,7 +607,11 @@
 
   async function addFiles(files: FileList | null | undefined) {
     for (const file of Array.from(files ?? [])) {
-      const refusal = uploadRefusal(file.name, file.size);
+      const refusal = uploadRefusal(
+        file.name,
+        file.size,
+        commands?.uploadLimits,
+      );
       if (refusal) {
         addEntry({ kind: "error", text: refusal });
         continue;

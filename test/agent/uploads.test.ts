@@ -4,6 +4,7 @@ import { parseUploadRef } from "@tachy/core/chat";
 import { createApp } from "../../packages/api/src/app";
 import { loginCookie } from "../http";
 import { resetData, sql } from "../database";
+import { docx } from "../fixtures/files";
 
 afterAll(() => sql.end());
 
@@ -67,15 +68,65 @@ describe("chat uploads", () => {
 
   it("refuses an extension that is not on the list", async () => {
     const { cookie } = await uploaderCookie();
-    const response = await upload(cookie, new File([ZIP], "report.docx"));
+    const response = await upload(cookie, new File([ZIP], "tool.exe"));
     expect(response.status).toBe(415);
     expect(response.headers.get("content-type")).toBe(
       "application/problem+json",
     );
-    expect((await response.json()).detail).toMatch(
-      /report\.docx is not a type/,
-    );
+    expect((await response.json()).detail).toMatch(/tool\.exe is not a type/);
     expect(await sql`select 1 from chat_uploads`).toHaveLength(0);
+  });
+
+  it("stores a Word document, and refuses a zip renamed to one", async () => {
+    const { cookie } = await uploaderCookie();
+    const body = "<w:p><w:r><w:t>step one</w:t></w:r></w:p>";
+    const document = new Uint8Array(docx(body));
+    const stored = await upload(cookie, new File([document], "runbook.docx"));
+    expect(stored.status).toBe(200);
+    const [row] = await sql`select content_type from chat_uploads`;
+    expect(row.content_type).toMatch(/wordprocessingml\.document$/);
+
+    const renamed = await upload(cookie, new File([ZIP], "report.docx"));
+    expect(renamed.status).toBe(415);
+    expect((await renamed.json()).detail).toMatch(/does not contain/);
+    expect(await sql`select 1 from chat_uploads`).toHaveLength(1);
+  });
+
+  it("holds an image to its own limit, and each limit to what the host sets", async () => {
+    const { cookie } = await uploaderCookie();
+    const image = new Uint8Array(1024 * 1024 + 1);
+    image.set(PNG);
+    process.env.TACHY_UPLOAD_IMAGE_MAX_MB = "1";
+    process.env.TACHY_UPLOAD_MAX_MB = "2";
+    try {
+      const tooBig = await upload(cookie, new File([image], "screen.png"));
+      expect(tooBig.status).toBe(400);
+      expect((await tooBig.json()).detail).toMatch(
+        /image is 1\.0 MB, over the 1 MB upload limit/,
+      );
+      const asText = new File(["x".repeat(1024 * 1024 + 1)], "notes.txt");
+      expect((await upload(cookie, asText)).status).toBe(200);
+      const overAll = new File(["x".repeat(2 * 1024 * 1024 + 1)], "big.txt");
+      const refused = await upload(cookie, overAll);
+      expect(refused.status).toBe(400);
+      expect((await refused.json()).detail).toMatch(
+        /over the 2 MB upload limit/,
+      );
+    } finally {
+      delete process.env.TACHY_UPLOAD_IMAGE_MAX_MB;
+      delete process.env.TACHY_UPLOAD_MAX_MB;
+    }
+  });
+
+  it("tells the chat which limits apply on this host", async () => {
+    const { cookie } = await uploaderCookie();
+    const response = await app.request("/api/agent/commands", {
+      headers: { Cookie: cookie },
+    });
+    expect((await response.json()).uploadLimits).toEqual({
+      imageBytes: 10 * 1024 * 1024,
+      fileBytes: 25 * 1024 * 1024,
+    });
   });
 
   it("refuses a file whose bytes are not what its extension says", async () => {

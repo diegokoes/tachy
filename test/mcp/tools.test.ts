@@ -15,8 +15,10 @@ import {
 } from "@tachy/core/sources";
 import { addResolutionPattern } from "@tachy/core/catalog";
 import { sweepWikiGaps } from "@tachy/core/wiki";
+import { saveUpload } from "@tachy/core/chat";
 import { server } from "../../packages/mcp/src/index";
 import { resetData, sql, tpdProductId } from "../database";
+import { zipOf } from "../fixtures/files";
 
 afterAll(() => sql.end());
 
@@ -310,6 +312,106 @@ describe("reference and wiki round trips", () => {
     });
     expect(answer.isError).toBe(true);
     expect(answer.text).toMatch(/reserved/i);
+  });
+});
+
+describe("attached files through ingest_context", () => {
+  type Sources = {
+    sources: {
+      source: string;
+      chars: number;
+      truncated: boolean;
+      text: string;
+      note?: string;
+      matched_lines?: number;
+      members?: { name: string; sizeBytes: number }[];
+    }[];
+  };
+
+  const log = Array.from({ length: 400 }, (_, i) =>
+    i === 250 ? "10:02 ERROR timeout on line 3" : `10:0${i % 10} tick ${i}`,
+  ).join("\n");
+
+  const uploaded = (filename: string, bytes: Uint8Array) =>
+    saveUpload({
+      userId: null,
+      filename,
+      contentType: filename.endsWith(".zip") ? "application/zip" : "text/plain",
+      bytes,
+    });
+
+  it("says where a truncated read stopped, and reads on from there", async () => {
+    const { ref } = await uploaded("app.log", new TextEncoder().encode(log));
+    const first = await call("ingest_context", {
+      paths: [ref],
+      max_chars: 100,
+    });
+    const [source] = (first.json as Sources).sources;
+    expect(source).toMatchObject({ chars: log.length, truncated: true });
+    expect(source.note).toMatch(/continue with offset: 100/);
+
+    const next = await call("ingest_context", {
+      paths: [ref],
+      max_chars: 100,
+      offset: 100,
+    });
+    expect((next.json as Sources).sources[0].text).toBe(log.slice(100, 200));
+  });
+
+  it("narrows a log to the lines holding a term", async () => {
+    const { ref } = await uploaded("app.log", new TextEncoder().encode(log));
+    const found = await call("ingest_context", {
+      paths: [ref],
+      match: ["error"],
+    });
+    const [source] = (found.json as Sources).sources;
+    expect(source.matched_lines).toBe(1);
+    expect(source.truncated).toBe(false);
+    expect(source.text).toMatch(/^\[offset \d+\]/);
+    expect(source.text.split("\n")).toHaveLength(6);
+    expect(source.text).toContain("ERROR timeout on line 3");
+  });
+
+  it("lists a zip, then reads the member it is asked for", async () => {
+    const { ref } = await uploaded(
+      "logs.zip",
+      zipOf({ "app.log": log, "notes.md": "# notes" }),
+    );
+    const listed = await call("ingest_context", { paths: [ref] });
+    const [archive] = (listed.json as Sources).sources;
+    expect(archive.members?.map((m) => m.name)).toEqual([
+      "app.log",
+      "notes.md",
+    ]);
+    expect(archive.note).toMatch(/Read one with member/);
+
+    const member = await call("ingest_context", {
+      paths: [ref],
+      member: "notes.md",
+    });
+    expect((member.json as Sources).sources[0]).toMatchObject({
+      source: `${ref} > notes.md`,
+      text: "# notes",
+    });
+  });
+
+  it("does not save an archive's file list as a reference doc", async () => {
+    const { ref } = await uploaded("logs.zip", zipOf({ "app.log": log }));
+    const refused = await call("save_reference_doc", {
+      title: "Logs",
+      body_path: ref,
+    });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toMatch(/names an archive/);
+  });
+
+  it("refuses member with anything but one path", async () => {
+    const refused = await call("ingest_context", {
+      text: "pasted",
+      member: "notes.md",
+    });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toMatch(/exactly one path/);
   });
 });
 

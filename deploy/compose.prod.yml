@@ -35,6 +35,9 @@ services:
       TACHY_HOST_IP: ${TACHY_HOST_IP:-}
       TACHY_DEFAULT_SNI: ${TACHY_HOST_IP:-${TACHY_HOSTNAME}}
       TACHY_TLS: ${TACHY_TLS:-internal}
+      # Above the largest chat upload (TACHY_UPLOAD_MAX_MB), for the multipart
+      # framing around it.
+      TACHY_REQUEST_BODY_MAX: ${TACHY_REQUEST_BODY_MAX:-26MB}
     volumes:
       - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ${TACHY_TLS_CERT_DIR:-./deploy/caddy/certs}:/certs:ro
