@@ -1,10 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { gsap, reducedMotion } from "./gsap";
+  import { rand, scatter, twinkle, type Star } from "./stars";
 
-  /** One span per glyph, so each can move on its own, scattered on a jittered
-   *  grid so the field looks hand-placed rather than tiled. */
-  const GLYPHS = ["·", "·", "·", "*", "+", "'"];
   /** Density decides whether this reads as a sky or a few specks. At 220 on a
    *  1920px viewport the mean spacing is ~97px, and the ~160px gutter beside
    *  the app window holds one sparse column, which reads as empty. */
@@ -13,12 +11,8 @@
   /** Cursor influence, px. Also the bucket size, so a move tests ~9 buckets. */
   const REPEL = 90;
 
-  type Star = {
-    glyph: string;
-    x: number;
-    y: number;
-    size: number;
-    dim: number;
+  /** One span per glyph, so each can move on its own. */
+  type Speck = Star & {
     el?: HTMLSpanElement;
     xTo?: (value: number) => void;
     yTo?: (value: number) => void;
@@ -28,21 +22,9 @@
    *  as crossing into a new space: the stars twinkle faster and dip harder. */
   let { intense = false }: { intense?: boolean } = $props();
 
-  const rand = (a: number, b: number) => a + Math.random() * (b - a);
+  const stars: Speck[] = scatter(COUNT);
 
-  // Percentages, so the field reflows with the viewport without re-laying out.
-  const stars: Star[] = Array.from({ length: COUNT }, () => ({
-    glyph: GLYPHS[Math.floor(Math.random() * GLYPHS.length)],
-    x: rand(0, 100),
-    y: rand(0, 100),
-    size: rand(0.6, 1.25),
-    // The floor is this high because it multiplies into --star-ink and again
-    // into the twinkle: lower, the faintest stars are in the DOM and invisible
-    // on screen.
-    dim: rand(0.6, 1),
-  }));
-
-  const motes: Star[] = Array.from({ length: MOTES }, () => ({
+  const motes: Speck[] = Array.from({ length: MOTES }, () => ({
     glyph: "·",
     x: rand(0, 100),
     y: rand(20, 100),
@@ -52,7 +34,7 @@
 
   let root = $state<HTMLDivElement>();
   /** star index by "col:row" bucket, so a pointermove never scans all 220. */
-  const buckets = new Map<string, Star[]>();
+  const buckets = new Map<string, Speck[]>();
 
   function rebucket(w: number, h: number) {
     buckets.clear();
@@ -80,22 +62,7 @@
     }
 
     const ctx = gsap.context(() => {
-      // Twinkle. Long, offset durations so the field never pulses in unison -
-      // synchronised blinking reads as a loading state, not as sky.
-      for (const star of stars) {
-        if (!star.el) continue;
-        gsap.to(star.el, {
-          // A twinkle, not a blink: dipping to a quarter made half the field
-          // read as flickering out rather than breathing. Intense dips further
-          // and cycles faster, so the sky is visibly more alive.
-          opacity: star.dim * (intense ? rand(0.3, 0.7) : rand(0.5, 0.75)),
-          duration: intense ? rand(1.1, 3) : rand(3, 7),
-          delay: intense ? rand(0, 2.5) : rand(0, 6),
-          repeat: -1,
-          yoyo: true,
-          ease: "sine.inOut",
-        });
-      }
+      for (const star of stars) if (star.el) twinkle(star.el, star, intense);
 
       // Slow rising motes: the only thing here with a direction.
       for (const mote of motes) {

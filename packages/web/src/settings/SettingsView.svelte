@@ -15,34 +15,24 @@
   import Keybinds from "./Keybinds.svelte";
   import Columns from "./Columns.svelte";
   import Group from "./Group.svelte";
+  import { SETTINGS_TABS } from "./tabs";
 
   type Section = { label: string; hint?: string; view: Component };
 
   /** A tab is a pair of columns of groups, or one view that lays itself out. */
-  type Tab = SubnavItem &
-    ({ left: Section[]; right: Section[] } | { view: Component });
+  type Layout = { left: Section[]; right: Section[] } | { view: Component };
+  type Tab = SubnavItem & Layout;
 
-  const TABS: Tab[] = [
-    {
-      key: "theme",
-      label: "theme",
-      icon: "theme",
+  const LAYOUTS: Record<string, Layout> = {
+    theme: {
       left: [
         { label: "appearance", view: Appearance },
         { label: "dates", view: Dates },
       ],
       right: [{ label: "fonts", view: Fonts }],
     },
-    {
-      key: "keybinds",
-      label: "keybinds",
-      icon: "keybinds",
-      view: Keybinds,
-    },
-    {
-      key: "agent",
-      label: "agent",
-      icon: "agent",
+    keybinds: { view: Keybinds },
+    agent: {
       left: [
         {
           label: "runtime",
@@ -63,7 +53,12 @@
         },
       ],
     },
-  ];
+  };
+
+  const TABS: Tab[] = SETTINGS_TABS.map((tab) => ({
+    ...tab,
+    ...LAYOUTS[tab.key],
+  }));
 
   /**
    * Section URLs from before the tabs survive in bookmarks and history; each

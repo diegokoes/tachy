@@ -89,10 +89,10 @@ export default defineConfig({
           branches: 47,
         },
         "packages/web/src/**": {
-          lines: 51,
-          statements: 50,
-          functions: 48,
-          branches: 43,
+          lines: 53,
+          statements: 52,
+          functions: 50,
+          branches: 45,
         },
         "packages/mcp/src/**": {
           lines: 69,
