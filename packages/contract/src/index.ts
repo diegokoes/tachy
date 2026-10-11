@@ -141,6 +141,24 @@ export {
 } from "./access";
 export type { ApiTokenRow, SsoAdmission, UserCensus } from "./access";
 export {
+  CHAT_UPLOAD_ACCEPT,
+  CHAT_UPLOAD_CONTENT_TYPES,
+  CHAT_UPLOAD_EXTENSIONS,
+  CHAT_UPLOAD_TYPES,
+  MAX_UPLOAD_BYTES,
+  checkUpload,
+  isPdf,
+  isText,
+  tooLargeReason,
+  uploadExtension,
+  uploadRefusal,
+} from "./uploads";
+export type {
+  ChatUploadContentType,
+  ChatUploadExtension,
+  UploadCheck,
+} from "./uploads";
+export {
   PROBLEM_TYPES,
   isProblemType,
   problemMessage,
@@ -183,6 +201,7 @@ export {
   MAX_ASSET_BYTES,
   assetPath,
   ASSET_SRC_RE,
+  sniffImage,
 } from "./assets";
 export type { LibraryAssetType } from "./assets";
 

@@ -19,6 +19,7 @@ import {
 } from "@tachy/core/config";
 import { getUserByEmail, userSoleTeamId } from "@tachy/core/access";
 import { getArtifact, listVisibleArtifacts } from "@tachy/core/exports";
+import { checkUpload } from "@tachy/core";
 import { saveUpload } from "@tachy/core/chat";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { requireCaller } from "../authz";
@@ -315,10 +316,14 @@ export const agent = new Hono()
     if (!(file instanceof File)) throw badInput("expected a 'file' field");
     if (file.size > MAX_UPLOAD_BYTES) throw tooLarge(file.size);
     const filename = basename(file.name || "upload");
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const check = checkUpload(filename, bytes);
+    if ("refusal" in check) return problem(c, 415, { detail: check.refusal });
     const { ref } = await saveUpload({
       userId: owner,
       filename,
-      bytes: new Uint8Array(await file.arrayBuffer()),
+      contentType: check.contentType,
+      bytes,
     });
     return c.json({ path: ref, filename: file.name });
   });

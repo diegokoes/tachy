@@ -1,3 +1,4 @@
+import type { ChatUploadContentType } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { badInput } from "../infra/errors";
 
@@ -24,11 +25,14 @@ export function parseUploadRef(
 export async function saveUpload(input: {
   userId: string | null;
   filename: string;
+  contentType: ChatUploadContentType;
   bytes: Uint8Array;
 }): Promise<{ id: string; ref: string }> {
   const [row] = await sql`
-    insert into chat_uploads (user_id, filename, byte_size, bytes, expires_at)
-    values (${input.userId}, ${input.filename}, ${input.bytes.byteLength}, ${input.bytes},
+    insert into chat_uploads
+      (user_id, filename, content_type, byte_size, bytes, expires_at)
+    values (${input.userId}, ${input.filename}, ${input.contentType},
+            ${input.bytes.byteLength}, ${input.bytes},
             now() + ${uploadTtlMs()} * interval '1 millisecond')
     returning id
   `;
@@ -47,12 +51,16 @@ export const ANONYMOUS_UPLOADS = "_anonymous";
 /**
  * The bytes behind a reference. With an owner, only that user's uploads
  * resolve: a turn's MCP child cannot read another person's attachment even
- * with its reference.
+ * with its reference. A null `contentType` is a row stored unchecked.
  */
 export async function readUpload(
   ref: string,
   owner: string | undefined,
-): Promise<{ filename: string; bytes: Buffer }> {
+): Promise<{
+  filename: string;
+  contentType: ChatUploadContentType | null;
+  bytes: Buffer;
+}> {
   const parsed = parseUploadRef(ref);
   if (!parsed)
     throw badInput(
@@ -60,7 +68,7 @@ export async function readUpload(
     );
   const anonymous = owner === ANONYMOUS_UPLOADS;
   const [row] = await sql`
-    select filename, bytes from chat_uploads
+    select filename, content_type, bytes from chat_uploads
     where id = ${parsed.id} and expires_at > now()
       and (${owner === undefined}
            or user_id is not distinct from ${anonymous ? null : (owner ?? null)}::uuid)
@@ -69,7 +77,11 @@ export async function readUpload(
     throw badInput(
       `'${ref}' is not an uploaded file; only chat attachments can be read`,
     );
-  return { filename: row.filename as string, bytes: Buffer.from(row.bytes) };
+  return {
+    filename: row.filename as string,
+    contentType: row.content_type as ChatUploadContentType | null,
+    bytes: Buffer.from(row.bytes),
+  };
 }
 
 export async function sweepUploads(): Promise<number> {
