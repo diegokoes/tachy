@@ -3,10 +3,7 @@
  * and keeping an image from one in the library.
  */
 import { z } from "zod";
-import {
-  globalImagesAllowed,
-  globalRedactionEnabled,
-} from "@tachy/core/compliance";
+import { TokenMap } from "@tachy/core/compliance";
 import { MAX_ASSET_BYTES } from "@tachy/core";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import {
@@ -63,11 +60,13 @@ tool(
   "read_file",
   {
     description:
-      "Read one file the user attached, by its upload: reference. An image comes back as the image itself, for you to look at: a screenshot of an error, a photo of a label. PDF, Word, Excel, mail (.eml) and text files come back as text, truncated at max_chars (default 20000): continue with offset, narrow a log with match, or take a PDF by pages. A zip answers with its file list, and member reads one of them. Open what bears on the question, not everything attached: an image costs about as much context as several pages of text. This tool only reads. To file a document in the library, use ingest_context.",
+      "Read one file by its reference: one the user attached (upload:...), or one a ticket lists (the path of an entry in a work item's files). An image comes back as the image itself, for you to look at: a screenshot of an error, a photo of a label. PDF, Word, Excel, mail (.eml) and text files come back as text, truncated at max_chars (default 20000): continue with offset, narrow a log with match, or take a PDF by pages. A zip answers with its file list, and member reads one of them. Open what bears on the question, not everything attached: an image costs about as much context as several pages of text. This tool only reads. To file a document in the library, use ingest_context.",
     inputSchema: {
       path: z
         .string()
-        .describe("The upload: reference, exactly as the message gave it."),
+        .describe(
+          "The reference, exactly as given: upload:... from the message, or the path of a ticket's file.",
+        ),
       ...textWindowFields,
       pages: z
         .string()
@@ -78,9 +77,9 @@ tool(
     annotations: { readOnlyHint: true },
   },
   async ({ path, max_chars, offset, match, pages, member }) => {
-    const file = await openSource(path, { member });
+    const { file, redact, imagesAllowed } = await openSource(path, { member });
     if (isImageFile(file)) {
-      if (!globalImagesAllowed())
+      if (!imagesAllowed)
         return out({ file: file.filename, note: IMAGE_WITHHELD });
       const image = await imageForModel(file.bytes);
       return outWithImages(
@@ -96,11 +95,12 @@ tool(
 
     const extracted = await extractFile(file);
     const text = pages ? pagesOf(extracted, pages) : extracted.text;
-    const shown = shownText(text, {
-      offset,
-      maxChars: max_chars ?? DEFAULT_READ_CHARS,
-      match,
-    });
+    const shown = shownText(
+      text,
+      { offset, maxChars: max_chars ?? DEFAULT_READ_CHARS, match },
+      new TokenMap(),
+      redact,
+    );
     return out({
       file: file.filename,
       ...pageFacts(extracted),
@@ -111,7 +111,7 @@ tool(
           }
         : {}),
       ...shown,
-      ...(globalRedactionEnabled() ? { redaction: PLACEHOLDER_NOTE } : {}),
+      ...(redact ? { redaction: PLACEHOLDER_NOTE } : {}),
     });
   },
 );
@@ -128,7 +128,7 @@ tool(
       path: z
         .string()
         .describe(
-          "The upload: reference of the image, as the message gave it.",
+          "The reference of the image: upload:... from the message, or the path of a ticket's file.",
         ),
       member: memberField,
       alt: z
@@ -148,7 +148,7 @@ tool(
   async ({ path, member, alt, product_slug }) => {
     const { productId } = await resolveScopeIds({ product_slug });
     await requireCanEdit({ productId });
-    const file = await openSource(path, { member });
+    const { file } = await openSource(path, { member });
     if (!isImageFile(file)) throw badInput(`${file.filename} is not an image`);
     const image = await imageWithin(file.bytes, MAX_ASSET_BYTES);
     const saved = await saveAsset({

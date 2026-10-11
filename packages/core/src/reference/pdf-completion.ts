@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import { MAX_ASSET_BYTES } from "@tachy/contract";
-import { scrubText, TokenMap } from "../compliance/redaction";
-import { effectiveSettings } from "../config/settings";
+import {
+  scrubText,
+  TokenMap,
+  type RedactionPolicy,
+} from "../compliance/redaction";
 import {
   joinPages,
   openPdf,
@@ -112,6 +115,7 @@ interface Transcription {
 async function transcribeScans(
   pdf: OpenedPdf,
   reader: { userId: string | null; docId: string },
+  policy: RedactionPolicy,
   signal: AbortSignal,
 ): Promise<Transcription> {
   const scans = pdf.scannedPages;
@@ -122,9 +126,7 @@ async function transcribeScans(
     ...(note && scans.length > texts.size ? { note } : {}),
   });
   if (!scans.length) return done();
-  const settings = await effectiveSettings();
-  const redact = settings.redaction_global.value;
-  if (redact && !settings.redaction_images.value)
+  if (!policy.images)
     return done("redaction is on and images are withheld from the model");
   if (!transcriber) return done("this process cannot reach a model");
 
@@ -137,7 +139,8 @@ async function transcribeScans(
     const text = await transcriber(page, { ...reader, pageNumber });
     if (text === null) return done("no model credential to read them with");
     const words = text.trim();
-    if (words) texts.set(pageNumber, redact ? scrubText(words, tokens) : words);
+    if (words)
+      texts.set(pageNumber, policy.enabled ? scrubText(words, tokens) : words);
   }
   return done(
     scans.length > SCANNED_PAGES_MAX
@@ -158,6 +161,8 @@ export async function completeDocFromPdf(input: {
   docId: string;
   pdf: Uint8Array;
   userId: string | null;
+  /** The redaction of where the PDF came from: a connection's, or the global one. */
+  policy: RedactionPolicy;
   signal: AbortSignal;
 }): Promise<PdfCompletion> {
   const doc = await getReferenceDoc(input.docId);
@@ -183,6 +188,7 @@ export async function completeDocFromPdf(input: {
   const scans = await transcribeScans(
     pdf,
     { userId: input.userId, docId: input.docId },
+    input.policy,
     input.signal,
   );
 

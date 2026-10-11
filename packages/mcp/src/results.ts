@@ -34,14 +34,16 @@ export const PLACEHOLDER_NOTE =
   "Placeholders like [EMAIL_1]/[SECRET_1] are intentional redactions - treat them as opaque, never guess the originals.";
 
 /**
- * A text as a read returns it: the part asked for, scrubbed under redaction.
- * `continue_at` is the offset the next read takes when this one was cut.
- * Sources read in one call share `tokens`, so a value keeps its placeholder.
+ * A text as a read returns it: the part asked for, scrubbed under redaction,
+ * which a file off a ticket takes from its connection. `continue_at` is the
+ * offset the next read takes when this one was cut. Sources read in one call
+ * share `tokens`, so a value keeps its placeholder.
  */
 export function shownText(
   text: string,
   window: TextWindow,
   tokens = new TokenMap(),
+  redact = globalRedactionEnabled(),
 ) {
   const shown = windowText(text, window);
   return {
@@ -50,7 +52,7 @@ export function shownText(
       ? { matched_lines: shown.matchedLines }
       : {}),
     truncated: shown.truncated,
-    text: globalRedactionEnabled() ? scrubText(shown.text, tokens) : shown.text,
+    text: redact ? scrubText(shown.text, tokens) : shown.text,
     ...(shown.truncated
       ? { continue_at: (window.offset ?? 0) + shown.text.length }
       : {}),

@@ -13,6 +13,7 @@ import {
   resolveRedactionPolicy,
   globalImagesAllowed,
   globalRedactionEnabled,
+  redactionPolicy,
 } from "@tachy/core/compliance";
 import { estimateCostUsd } from "@tachy/core/analytics";
 import { type RawWorkItem } from "@tachy/core/sources";
@@ -242,6 +243,28 @@ describe("redactNormalized", () => {
     expect(redacted.messages[0].author).toBe("[USER_1]");
   });
 
+  it("scrubs a file's name where it scrubs the text, and keeps its id", () => {
+    const withFile: RawWorkItem = {
+      ...base,
+      messages: [
+        {
+          ...base.messages[0],
+          attachments: [
+            { id: "900", name: "from jane@acme.com (scan).pdf", sizeBytes: 12 },
+          ],
+        },
+      ],
+    };
+    const redacted = redactNormalized(withFile, {
+      customerSlug: "acme-corp",
+      map: new TokenMap(),
+    });
+    expect(redacted.messages[0].attachments).toEqual([
+      { id: "900", name: "from [EMAIL_1] (scan).pdf", sizeBytes: 12 },
+    ]);
+    expect(withFile.messages[0].attachments![0].name).toContain("jane@");
+  });
+
   it("falls back to [CUSTOMER] with no slug and never mutates the input", () => {
     const snapshot = structuredClone(base);
     const redacted = redactNormalized(base, {
@@ -392,6 +415,30 @@ describe("resolveRedactionPolicy", () => {
       delete process.env.TACHY_REDACT;
     }
     expect(resolveRedactionPolicy(undefined).enabled).toBe(false);
+  });
+
+  it("withholds a connection's images under redaction until its own switch allows them", () => {
+    expect(resolveRedactionPolicy(undefined)).toEqual({
+      enabled: false,
+      images: true,
+    });
+    expect(resolveRedactionPolicy({ redaction: { enabled: true } })).toEqual({
+      enabled: true,
+      images: false,
+    });
+    expect(
+      resolveRedactionPolicy({ redaction: { enabled: true, images: true } }),
+    ).toEqual({ enabled: true, images: true });
+    // Global redaction turns it on for every connection; the switch is still
+    // the connection's own.
+    expect(redactionPolicy({ redaction: { images: true } }, true)).toEqual({
+      enabled: true,
+      images: true,
+    });
+    expect(redactionPolicy(null, true)).toEqual({
+      enabled: true,
+      images: false,
+    });
   });
 
   it("allows an image with no connection behind it unless redaction is on and nobody allowed it", () => {

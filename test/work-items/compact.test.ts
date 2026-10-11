@@ -1,3 +1,4 @@
+import type { RawAttachment } from "@tachy/core/sources";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -451,11 +452,40 @@ describe("attachments", () => {
     },
     { id: 2, name: "notes.txt", content_type: "text/plain", size: 900 },
   ];
+  /** As a message stored before adapters listed files in one shape. */
+  const stored = files as unknown as RawAttachment[];
 
   it("normalizes freshdesk, jira and junk shapes alike", () => {
     expect(normalizeAttachments(files)).toEqual([
-      { name: "xml-bad-soap.xml", size: 67658, type: "application/xml" },
-      { name: "notes.txt", size: 900, type: "text/plain" },
+      {
+        id: "1",
+        name: "xml-bad-soap.xml",
+        size: 67658,
+        type: "application/xml",
+      },
+      { id: "2", name: "notes.txt", size: 900, type: "text/plain" },
+    ]);
+    // What an adapter lists now, and Freshdesk's other name for the size.
+    expect(
+      normalizeAttachments([
+        {
+          id: "9",
+          name: "pasted.png",
+          contentType: "image/png",
+          sizeBytes: 12,
+          inline: true,
+        },
+        { name: "b.log", file_size: 5 },
+      ]),
+    ).toEqual([
+      {
+        id: "9",
+        name: "pasted.png",
+        size: 12,
+        type: "image/png",
+        inline: true,
+      },
+      { name: "b.log", size: 5 },
     ]);
     expect(
       normalizeAttachments([
@@ -471,7 +501,7 @@ describe("attachments", () => {
       [
         message({
           externalId: "1",
-          attachments: files,
+          attachments: stored,
           bodyText: [
             "Adjunto el XML con el error",
             "",
@@ -501,7 +531,7 @@ describe("attachments", () => {
         message({
           externalId: "2",
           bodyText: "aqui va el fichero",
-          attachments: files,
+          attachments: stored,
         }),
       ],
       meta,
@@ -513,12 +543,36 @@ describe("attachments", () => {
     ).toContain("xml-bad-soap.xml");
   });
 
+  it("gives a message that is only a file a turn, so the file is listed", () => {
+    const compacted = compactMessages(
+      [
+        message({ externalId: "1", bodyText: "no arranca la impresora" }),
+        message({
+          externalId: "2",
+          bodyText: "",
+          attachments: [{ id: "9", name: "pasted.png", inline: true }],
+        }),
+        message({ externalId: "3", bodyText: "" }),
+      ],
+      meta,
+    );
+    expect(compacted.turns).toHaveLength(2);
+    expect(compacted.turns[1]).toMatchObject({
+      text: "",
+      source_message: "2",
+      attachments: [{ id: "9", name: "pasted.png", inline: true }],
+    });
+    expect(renderCompactScript(compacted)).toContain(
+      "↳ files: pasted.png (in the message)",
+    );
+  });
+
   it("renders files in both the script and the note", () => {
     const compacted = compactMessages(
       [
         message({
           externalId: "1",
-          attachments: files,
+          attachments: stored,
           bodyText: "adjunto va",
         }),
       ],

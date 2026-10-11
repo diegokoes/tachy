@@ -10,6 +10,7 @@ import { asNoteHtml } from "@tachy/core/work-items";
 import type { FlowOption } from "@tachy/core";
 import type {
   WorkItemSource,
+  RawAttachment,
   RawWorkItem,
   RawMessage,
   ListOptions,
@@ -74,6 +75,36 @@ function redactFreshdeskRaw(
   return copy;
 }
 
+/** A file as Freshdesk lists it. Its docs show the size under either name. */
+interface FreshdeskAttachment {
+  id?: number;
+  name?: string;
+  content_type?: string;
+  size?: number;
+  file_size?: number;
+}
+
+/**
+ * The files of a ticket or a conversation. The `attachment_url` beside each
+ * is left behind: it is signed, so one stored or shown is soon a dead link.
+ */
+export function listedFiles(
+  attachments: FreshdeskAttachment[] | undefined,
+): RawAttachment[] {
+  const files: RawAttachment[] = [];
+  for (const file of attachments ?? []) {
+    if (file?.id == null || !file.name) continue;
+    const sizeBytes = file.size ?? file.file_size;
+    files.push({
+      id: String(file.id),
+      name: file.name,
+      ...(file.content_type ? { contentType: file.content_type } : {}),
+      ...(typeof sizeBytes === "number" ? { sizeBytes } : {}),
+    });
+  }
+  return files;
+}
+
 /** The parts of Freshdesk's payloads this adapter reads. */
 interface FreshdeskTicket {
   id: number;
@@ -83,7 +114,7 @@ interface FreshdeskTicket {
   requester_id?: number | null;
   requester?: { email?: string; name?: string };
   description_text?: string;
-  attachments?: unknown[];
+  attachments?: FreshdeskAttachment[];
   created_at?: string;
   updated_at?: string;
 }
@@ -97,7 +128,7 @@ interface FreshdeskConversation {
   private?: boolean;
   from_email?: string;
   body_text?: string;
-  attachments?: unknown[];
+  attachments?: FreshdeskAttachment[];
   created_at?: string;
 }
 
@@ -241,7 +272,7 @@ export const createFreshdeskSource: SourceFactory = (
       visibility: conversation.private ? "private" : "public",
       direction: conversation.incoming ? "incoming" : "outgoing",
       bodyText: conversation.body_text ?? "",
-      attachments: conversation.attachments ?? [],
+      attachments: listedFiles(conversation.attachments),
       createdAt: conversation.created_at,
     };
   }
@@ -325,7 +356,7 @@ export const createFreshdeskSource: SourceFactory = (
         visibility: "public",
         direction: "incoming",
         bodyText: ticket.description_text ?? "",
-        attachments: ticket.attachments ?? [],
+        attachments: listedFiles(ticket.attachments),
         createdAt: ticket.created_at,
       };
       const messages = [

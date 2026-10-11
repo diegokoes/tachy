@@ -1,6 +1,22 @@
 // A work item as its source hands it over, before ingest. `sources/` produces
 // this shape and `compliance/` scrubs it, so it lives with neither.
 
+/**
+ * A file on a message, as its source lists it. It carries no address: a
+ * source's download URLs are signed and expire, so one is asked for when the
+ * file is opened (`WorkItemSource.openAttachment`).
+ */
+export interface RawAttachment {
+  /** The source's own id for it. */
+  id: string;
+  name: string;
+  /** What the source says it is. Never trusted for what the bytes are. */
+  contentType?: string;
+  sizeBytes?: number;
+  /** Placed in the message's body, as a pasted screenshot is. */
+  inline?: boolean;
+}
+
 export interface RawMessage {
   externalId?: string;
   author?: string;
@@ -11,7 +27,7 @@ export interface RawMessage {
   visibility: "public" | "private" | "internal";
   direction: "incoming" | "outgoing";
   bodyText: string;
-  attachments?: unknown[];
+  attachments?: RawAttachment[];
   createdAt?: string;
 }
 
