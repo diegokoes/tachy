@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../../validation";
 import { z } from "zod";
 import {
   listSourceConnections,
@@ -94,7 +94,7 @@ export const sources = new Hono()
   .post(
     "/source-connections",
     requireAdmin,
-    zValidator("json", sourceConnSchema),
+    validate("json", sourceConnSchema),
     async (c) => {
       const { token, ...conn } = c.req.valid("json");
       if (token && !secretsEnabled())

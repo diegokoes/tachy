@@ -18,6 +18,7 @@ import {
   it,
   vi,
 } from "vitest";
+import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { rememberSecret, sql } from "@tachy/core/infra";
 import { createUser } from "@tachy/core/access";
@@ -40,7 +41,7 @@ import {
   withoutUrlCredentials,
 } from "../../packages/core/src/code/git";
 
-import { createApp, withSecretsMasked } from "../../packages/api/src/app";
+import { createApp } from "../../packages/api/src/app";
 import { loginCookie } from "../http";
 import { resetData } from "../database";
 
@@ -238,11 +239,12 @@ describe("git credentials", () => {
 
   it("masks the body of an HTTPException response", async () => {
     rememberSecret(TOKEN);
-    const thrown = new HTTPException(502, {
-      message: `upstream refused ${TOKEN}`,
+    const raising = createApp() as unknown as Hono;
+    raising.get("/raise", () => {
+      throw new HTTPException(400, { message: `upstream refused ${TOKEN}` });
     });
-    const response = await withSecretsMasked(thrown.getResponse());
-    expect(response.status).toBe(502);
-    expect(await response.text()).toBe("upstream refused [SECRET]");
+    const response = await raising.request("/raise");
+    expect(response.status).toBe(400);
+    expect((await response.json()).detail).toBe("upstream refused [SECRET]");
   });
 });

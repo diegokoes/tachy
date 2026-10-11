@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import {
   sql,
@@ -62,7 +62,7 @@ export const setup = new Hono()
     return c.json({ bootstrapped });
   })
 
-  .post("/", zValidator("json", setupSchema), async (c) => {
+  .post("/", validate("json", setupSchema), async (c) => {
     const body = c.req.valid("json");
     // Both ahead of the hash: this route is outside the `/api/*` guard, and
     // the hash is the one costly thing a stranger could ask it for.

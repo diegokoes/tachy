@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import { forbidden, badInput } from "@tachy/core/infra";
 import { assertGlobalAdmin, canManageTeam } from "@tachy/core/access";
@@ -39,7 +39,7 @@ const deleteSchema = putSchema.omit({ value: true });
  */
 export const preferences = new Hono()
 
-  .put("/", zValidator("json", putSchema), async (c) => {
+  .put("/", validate("json", putSchema), async (c) => {
     const actor = await requireCaller(c);
     const { scope, team, key, value } = c.req.valid("json");
     const teamId = await resolveScopeTarget(actor, scope, team);
@@ -47,7 +47,7 @@ export const preferences = new Hono()
     return c.json({ ok: true });
   })
 
-  .delete("/", zValidator("json", deleteSchema), async (c) => {
+  .delete("/", validate("json", deleteSchema), async (c) => {
     const actor = await requireCaller(c);
     const { scope, team, key } = c.req.valid("json");
     const teamId = await resolveScopeTarget(actor, scope, team);

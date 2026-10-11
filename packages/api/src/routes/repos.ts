@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import { assertGlobalAdmin, type EntryScope } from "@tachy/core/access";
 import { badInput, notFound, sql, errorText } from "@tachy/core/infra";
@@ -186,7 +186,7 @@ export const repos = new Hono()
     );
   })
 
-  .put("/", zValidator("json", linkSchema), async (c) => {
+  .put("/", validate("json", linkSchema), async (c) => {
     const body = c.req.valid("json");
     await assertCanWriteRepo(
       c,
@@ -241,7 +241,7 @@ export const repos = new Hono()
     );
   })
 
-  .put("/bulk", zValidator("json", bulkLinkSchema), async (c) => {
+  .put("/bulk", validate("json", bulkLinkSchema), async (c) => {
     const body = c.req.valid("json");
     await assertScopeEditor(
       c,
@@ -305,7 +305,7 @@ export const repos = new Hono()
 
   // What the default line would index under a proposed config; nothing is
   // embedded.
-  .post("/:slug/preview", zValidator("json", previewSchema), async (c) => {
+  .post("/:slug/preview", validate("json", previewSchema), async (c) => {
     const slug = c.req.param("slug");
     await assertCanWriteRepo(c, {}, slug);
     const body = c.req.valid("json");
@@ -321,7 +321,7 @@ export const repos = new Hono()
 
   // The lines a walkthrough step points at, redacted as the agent's own read
   // of them is, so the panel shows what the answer was written from.
-  .get("/:slug/file", zValidator("query", fileSchema), async (c) => {
+  .get("/:slug/file", validate("query", fileSchema), async (c) => {
     const slug = c.req.param("slug");
     const query = c.req.valid("query");
     const file = await readCodeFile(slug, query.path, {

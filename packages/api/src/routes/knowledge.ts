@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import {
   saveKnowledgeEntry,
@@ -188,7 +188,7 @@ export const knowledge = new Hono()
   .get("/:id/feedback", async (c) =>
     c.json(await listFeedback(c.req.param("id"))),
   )
-  .post("/:id/feedback", zValidator("json", feedbackSchema), async (c) => {
+  .post("/:id/feedback", validate("json", feedbackSchema), async (c) => {
     const body = c.req.valid("json");
     return c.json(
       await addFeedback({
@@ -244,7 +244,7 @@ export const knowledge = new Hono()
     countView({ entryId: id }, await callerUserId(c));
     return c.json(entry);
   })
-  .patch("/:id", zValidator("json", knowledgeUpdateSchema), async (c) => {
+  .patch("/:id", validate("json", knowledgeUpdateSchema), async (c) => {
     const id = c.req.param("id");
     await assertScopeEditor(c, await entryScope(id));
     return c.json(
@@ -258,7 +258,7 @@ export const knowledge = new Hono()
     });
     return c.json(rows);
   })
-  .post("/", zValidator("json", knowledgeInputSchema), async (c) => {
+  .post("/", validate("json", knowledgeInputSchema), async (c) => {
     const body = c.req.valid("json");
     await assertScopeEditor(c, await newEntryScope(body));
     return c.json(
@@ -286,7 +286,7 @@ const runSchema = z.object({
  */
 export const analysisRuns = new Hono().post(
   "/",
-  zValidator("json", runSchema),
+  validate("json", runSchema),
   async (c) => {
     const userId = await requireCaller(c);
     return c.json(
