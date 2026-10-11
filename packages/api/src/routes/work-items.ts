@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import { resolveSource } from "@tachy/core/sources";
 import {
@@ -65,14 +65,14 @@ export const workItems = new Hono()
   .post(
     "/stored/preview",
     requireAdmin,
-    zValidator("json", storedFilterSchema),
+    validate("json", storedFilterSchema),
     async (c) =>
       c.json(await previewStoredItems(storedFilter(c.req.valid("json")))),
   )
   .post(
     "/stored/delete",
     requireAdmin,
-    zValidator("json", storedDeleteSchema),
+    validate("json", storedDeleteSchema),
     async (c) => {
       const { expected, ...body } = c.req.valid("json");
       const filter = storedFilter(body);
@@ -110,7 +110,7 @@ export const workItems = new Hono()
   // A note goes onto the customer's own ticket, under the org's shared
   // credential: the most externally visible thing this API does, so it is held
   // to the same scope check as editing the item it hangs off.
-  .post("/:source/:id/notes", zValidator("json", noteSchema), async (c) => {
+  .post("/:source/:id/notes", validate("json", noteSchema), async (c) => {
     const { source, id } = c.req.param();
     const { body } = c.req.valid("json");
     const { conn, source: src } = await resolveSource(
@@ -122,7 +122,7 @@ export const workItems = new Hono()
     await src.postNote(id, body, { private: true });
     return c.json({ posted: true });
   })
-  .patch("/:id/customer", zValidator("json", customerSchema), async (c) => {
+  .patch("/:id/customer", validate("json", customerSchema), async (c) => {
     const id = c.req.param("id");
     await assertScopeEditor(c, await workItemScope(id));
     const { customer_slug, unit } = c.req.valid("json");
@@ -134,7 +134,7 @@ export const workItems = new Hono()
   })
   .patch(
     "/:id/observed-version",
-    zValidator("json", versionSchema),
+    validate("json", versionSchema),
     async (c) => {
       const id = c.req.param("id");
       await assertScopeEditor(c, await workItemScope(id));

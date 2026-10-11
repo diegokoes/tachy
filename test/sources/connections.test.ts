@@ -420,7 +420,7 @@ describe("the work-item field schema route", () => {
       { headers: { Cookie: cookie } },
     );
     expect(response.status).toBe(400);
-    expect((await response.json()).error).toMatch(/project and type/);
+    expect((await response.json()).detail).toMatch(/project and type/);
   });
 
   it("404s an unknown connection", async () => {

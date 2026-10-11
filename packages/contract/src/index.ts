@@ -140,6 +140,13 @@ export {
   TOKEN_LIFETIME_DAYS,
 } from "./access";
 export type { ApiTokenRow, SsoAdmission, UserCensus } from "./access";
+export {
+  PROBLEM_TYPES,
+  isProblemType,
+  problemMessage,
+  readProblem,
+} from "./problems";
+export type { ProblemDetails, ProblemSlug } from "./problems";
 export type {
   SourceCensus,
   SourceConnectionRow,

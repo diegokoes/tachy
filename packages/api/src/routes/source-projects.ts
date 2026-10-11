@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { requireAdmin } from "../auth";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import { badInput, notFound, sql, errorText } from "@tachy/core/infra";
 import {
@@ -132,7 +132,7 @@ export const sourceProjects = new Hono()
     );
   })
 
-  .post("/source-projects", zValidator("json", projectSchema), async (c) => {
+  .post("/source-projects", validate("json", projectSchema), async (c) => {
     const body = c.req.valid("json");
     await assertCanWriteProject(c, body.product_slug, body.team_slug);
     return c.json(
@@ -158,7 +158,7 @@ export const sourceProjects = new Hono()
 
   .patch(
     "/source-projects/:id",
-    zValidator("json", projectPatchSchema),
+    validate("json", projectPatchSchema),
     async (c) => {
       const id = c.req.param("id");
       await assertScopeEditor(c, await sourceProjectScope(id));
@@ -198,7 +198,7 @@ export const sourceProjects = new Hono()
 
   .put(
     "/source-projects/:id/areas",
-    zValidator("json", areaSchema),
+    validate("json", areaSchema),
     async (c) => {
       const id = c.req.param("id");
       await assertScopeEditor(c, await sourceProjectScope(id));

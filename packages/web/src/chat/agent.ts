@@ -1,4 +1,6 @@
 import { onUnauthorized } from "../access/session.svelte";
+import { isProblemType } from "@tachy/contract";
+import { readError } from "../problems";
 
 export interface ChatBody {
   message: string;
@@ -75,16 +77,14 @@ export async function* chatStream(
     return;
   }
   if (!response.ok) {
-    const body = (await Promise.resolve()
-      .then(() => response.json())
-      .catch(() => ({}))) as {
-      error?: string;
-      turnId?: string;
-    };
+    const refusal = await readError(response);
+    const running = isProblemType(refusal.problem, "turn-in-progress")
+      ? refusal.problem?.turnId
+      : undefined;
     throw new ChatRefused(
       response.status,
-      body.error ?? `agent chat failed: ${response.status}`,
-      body.turnId,
+      refusal.message,
+      typeof running === "string" ? running : undefined,
     );
   }
   if (!response.body) throw new Error(`agent chat failed: ${response.status}`);
@@ -178,10 +178,10 @@ export async function uploadDoc(
     body: form,
   });
   if (response.status === 401) onUnauthorized();
-  const body = await response.json().catch(() => ({}));
   if (!response.ok)
     throw new Error(
-      `could not attach ${file.name}: ${body?.error ?? `upload failed (${response.status} ${response.statusText})`}`,
+      `could not attach ${file.name}: ${(await readError(response)).message}`,
     );
+  const body = await response.json();
   return { ...body, image: file.type.startsWith("image/") };
 }
