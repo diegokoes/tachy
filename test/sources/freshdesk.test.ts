@@ -1,6 +1,11 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 
+// A signed address is fetched as an untrusted URL, which looks its host up.
+vi.mock("node:dns/promises", () => ({
+  lookup: async () => [{ address: "52.216.10.10", family: 4 }],
+}));
+
 beforeAll(() => {
   process.env.FRESHDESK_TOKEN = "test-key";
 });
@@ -114,8 +119,6 @@ describe("freshdesk adapter", () => {
       [{ id: "901", name: "app.log", sizeBytes: 77 }],
     ]);
     expect(JSON.stringify(item.messages)).not.toContain("signed");
-    // Opening one waits on what Freshdesk does not document.
-    expect(source().openAttachment).toBeUndefined();
   });
 
   it("pages through tickets with more than 30 conversations", async () => {
@@ -238,6 +241,181 @@ describe("freshdesk adapter", () => {
     await source().postNote!("7", "<p>x</p>");
     const request = requests.find((r) => r.path === "/tickets/7/notes")!;
     expect(JSON.parse(String(request.init?.body)).private).toBe(true);
+  });
+});
+
+describe("freshdesk files", () => {
+  // The two shapes Freshdesk signs a file's address in.
+  const CLOUDFRONT =
+    "https://x.attachments1.freshdesk.com/data/helpdesk/attachments/production/900/original/screen.png?Expires=1760000000&Signature=c2ln&Key-Pair-Id=K1";
+  const S3 =
+    "https://s3.amazonaws.com/cdn.freshdesk.com/data/helpdesk/attachments/production/901/original/list.xlsx?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=300&X-Amz-Signature=c2ln";
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+
+  interface Seen {
+    url: string;
+    authorization: string | null;
+  }
+
+  function mockHelpdesk(
+    routes: Record<string, unknown>,
+    files: Record<string, () => Response> = {},
+  ): Seen[] {
+    const seen: Seen[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        seen.push({
+          url,
+          authorization: new Headers(init?.headers).get("authorization"),
+        });
+        if (files[url]) return files[url]();
+        const path = url.replace("https://x.freshdesk.com/api/v2", "");
+        const key = Object.keys(routes)
+          .sort((a, b) => b.length - a.length)
+          .find((k) => path.startsWith(k));
+        if (!key) throw new Error(`unexpected fetch ${url}`);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => routes[key],
+          text: async () => "",
+        } as Response;
+      }),
+    );
+    return seen;
+  }
+
+  const bytesOf = async (body: ReadableStream<Uint8Array>) =>
+    new Uint8Array(await new Response(body).arrayBuffer());
+
+  const screen = {
+    id: 900,
+    name: "screen.png",
+    content_type: "image/png",
+    size: 4,
+    attachment_url: CLOUDFRONT,
+  };
+
+  it("opens a file the ticket lists from its signed address, without the API key", async () => {
+    const seen = mockHelpdesk(
+      { "/tickets/7": { ...ticket, attachments: [screen] } },
+      { [CLOUDFRONT]: () => new Response(PNG) },
+    );
+    const opened = await source().openAttachment!("7", "900");
+    expect(opened).toMatchObject({
+      name: "screen.png",
+      contentType: "image/png",
+      sizeBytes: 4,
+    });
+    expect(await bytesOf(opened.body)).toEqual(PNG);
+    // The ticket listed it, so no conversation was read.
+    expect(seen.map((request) => request.url)).toEqual([
+      "https://x.freshdesk.com/api/v2/tickets/7",
+      CLOUDFRONT,
+    ]);
+    expect(seen[0].authorization).toMatch(/^Basic /);
+    expect(seen[1].authorization).toBeNull();
+  });
+
+  it("finds a file on a later page of conversations", async () => {
+    const seen = mockHelpdesk(
+      {
+        "/tickets/7": ticket,
+        "/tickets/7/conversations?page=1": Array.from({ length: 30 }, (_, i) =>
+          convo(i + 1),
+        ),
+        "/tickets/7/conversations?page=2": [
+          {
+            ...convo(31),
+            attachments: [{ id: 901, name: "list.xlsx", attachment_url: S3 }],
+          },
+        ],
+      },
+      {
+        [S3]: () =>
+          new Response(new Uint8Array(12), {
+            headers: { "content-length": "12" },
+          }),
+      },
+    );
+    const opened = await source().openAttachment!("7", "901");
+    // Unlisted, the size is the one the file's host declares.
+    expect(opened).toMatchObject({ name: "list.xlsx", sizeBytes: 12 });
+    expect(opened.contentType).toBeUndefined();
+    expect(seen.at(-1)).toEqual({ url: S3, authorization: null });
+  });
+
+  it("stops reading conversations at the page that lists the file", async () => {
+    const full = Array.from({ length: 30 }, (_, i) => convo(i + 1));
+    mockHelpdesk(
+      {
+        "/tickets/7": ticket,
+        // No second page is routed: asking for it fails the test.
+        "/tickets/7/conversations?page=1": [
+          { ...full[0], attachments: [screen] },
+          ...full.slice(1),
+        ],
+      },
+      { [CLOUDFRONT]: () => new Response(PNG) },
+    );
+    await expect(source().openAttachment!("7", "900")).resolves.toMatchObject({
+      name: "screen.png",
+    });
+  });
+
+  it("refuses an id the ticket does not list", async () => {
+    const seen = mockHelpdesk({
+      "/tickets/7": { ...ticket, attachments: [screen] },
+      "/tickets/7/conversations?page=1": [convo(1)],
+    });
+    await expect(source().openAttachment!("7", "999")).rejects.toThrow(
+      "ticket 7 lists no file '999'",
+    );
+    expect(
+      seen.every((r) => r.url.startsWith("https://x.freshdesk.com/")),
+    ).toBe(true);
+  });
+
+  it("reports a refused address by its status, never by the address", async () => {
+    mockHelpdesk(
+      { "/tickets/7": { ...ticket, attachments: [screen] } },
+      { [CLOUDFRONT]: () => new Response("<Error/>", { status: 403 }) },
+    );
+    const failure = await source().openAttachment!("7", "900").catch(
+      (e: Error) => e,
+    );
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toBe("Freshdesk file -> 403");
+  });
+
+  it("refuses a listing that carries no usable address", async () => {
+    for (const attachment_url of [undefined, "not a url"]) {
+      mockHelpdesk({
+        "/tickets/7": {
+          ...ticket,
+          attachments: [{ ...screen, attachment_url }],
+        },
+      });
+      await expect(source().openAttachment!("7", "900")).rejects.toThrow(
+        "Freshdesk gave no address for the file",
+      );
+    }
+  });
+
+  it("does not follow an address onto a private host", async () => {
+    const seen = mockHelpdesk({
+      "/tickets/7": {
+        ...ticket,
+        attachments: [
+          { ...screen, attachment_url: "http://169.254.169.254/latest/" },
+        ],
+      },
+    });
+    await expect(source().openAttachment!("7", "900")).rejects.toThrow(
+      "private or loopback",
+    );
+    expect(seen).toHaveLength(1);
   });
 });
 

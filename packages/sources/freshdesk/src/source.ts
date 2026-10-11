@@ -1,11 +1,20 @@
-import { changeTagList, sourceFetch } from "@tachy/core/sources";
+import {
+  changeTagList,
+  fetchUntrustedUrl,
+  sourceFetch,
+} from "@tachy/core/sources";
 import {
   customerStandIn,
   scrubbableCopy,
   scrubStrings,
   TokenMap,
 } from "@tachy/core/compliance";
-import { freshdeskToken, errorText, rememberSecret } from "@tachy/core/infra";
+import {
+  badInput,
+  errorText,
+  freshdeskToken,
+  rememberSecret,
+} from "@tachy/core/infra";
 import { asNoteHtml } from "@tachy/core/work-items";
 import type { FlowOption } from "@tachy/core";
 import type {
@@ -82,11 +91,13 @@ interface FreshdeskAttachment {
   content_type?: string;
   size?: number;
   file_size?: number;
+  /** Signed, and good for five minutes from the read that returned it. */
+  attachment_url?: string;
 }
 
 /**
  * The files of a ticket or a conversation. The `attachment_url` beside each
- * is left behind: it is signed, so one stored or shown is soon a dead link.
+ * is left behind: one stored or shown is a dead link five minutes later.
  */
 export function listedFiles(
   attachments: FreshdeskAttachment[] | undefined,
@@ -210,6 +221,55 @@ export const createFreshdeskSource: SourceFactory = (
         `Freshdesk GET ${path} -> ${response.status} ${await response.text()}`,
       );
     return (await response.json()) as T;
+  }
+
+  /** A ticket's conversations, a page at a time, oldest first. */
+  async function* conversationPages(
+    ticketId: string,
+  ): AsyncGenerator<FreshdeskConversation[]> {
+    for (let page = 1; page <= MAX_CONVERSATION_PAGES; page++) {
+      const batch = await get<FreshdeskConversation[]>(
+        `/tickets/${ticketId}/conversations?page=${page}`,
+      );
+      if (!Array.isArray(batch) || batch.length === 0) return;
+      yield batch;
+      if (batch.length < CONVERSATIONS_PER_PAGE) return;
+    }
+  }
+
+  /**
+   * A file the ticket lists, read anew for an address that still opens. The
+   * read stops at the page that lists it.
+   */
+  async function listedFile(
+    ticketId: string,
+    attachmentId: string,
+  ): Promise<FreshdeskAttachment | undefined> {
+    const among = (files: FreshdeskAttachment[] | undefined) =>
+      files?.find((file) => String(file.id) === attachmentId);
+    const ticket = await get<FreshdeskTicket>(`/tickets/${ticketId}`);
+    const onTicket = among(ticket.attachments);
+    if (onTicket) return onTicket;
+    for await (const conversations of conversationPages(ticketId))
+      for (const conversation of conversations) {
+        const file = among(conversation.attachments);
+        if (file) return file;
+      }
+    return undefined;
+  }
+
+  /**
+   * The signature in the address is the whole grant, so the API key is not
+   * sent with it, and no failure repeats the address: whoever reads one can
+   * open the file.
+   */
+  async function openSigned(address: string | undefined): Promise<Response> {
+    if (!address || !URL.canParse(address))
+      throw new Error("Freshdesk gave no address for the file");
+    const response = await fetchUntrustedUrl("Freshdesk file", address);
+    if (!response.ok || !response.body)
+      throw new Error(`Freshdesk file -> ${response.status}`);
+    return response;
   }
 
   let agentNames: Map<string, string> | null = null;
@@ -337,14 +397,8 @@ export const createFreshdeskSource: SourceFactory = (
         `/tickets/${ticketId}?include=requester`,
       );
       const convos: FreshdeskConversation[] = [];
-      for (let page = 1; page <= MAX_CONVERSATION_PAGES; page++) {
-        const batch = await get<FreshdeskConversation[]>(
-          `/tickets/${ticketId}/conversations?page=${page}`,
-        );
-        if (!Array.isArray(batch) || batch.length === 0) break;
+      for await (const batch of conversationPages(ticketId))
         convos.push(...batch);
-        if (batch.length < CONVERSATIONS_PER_PAGE) break;
-      }
       // Loaded even when no agent replied: redaction needs the colleagues a
       // thread only mentions. The map is cached for the life of the adapter.
       const names = await loadAgentNames();
@@ -366,6 +420,24 @@ export const createFreshdeskSource: SourceFactory = (
       return {
         ...metadataToItem(ticket, messages),
         knownPeople: [...names.values()],
+      };
+    },
+
+    async openAttachment(externalId, attachmentId) {
+      const file = await listedFile(
+        encodeURIComponent(externalId),
+        attachmentId,
+      );
+      if (!file)
+        throw badInput(`ticket ${externalId} lists no file '${attachmentId}'`);
+      const response = await openSigned(file.attachment_url);
+      const length = Number(response.headers.get("content-length"));
+      return {
+        name: file.name ?? attachmentId,
+        ...(file.content_type ? { contentType: file.content_type } : {}),
+        sizeBytes:
+          file.size ?? file.file_size ?? (length > 0 ? length : undefined),
+        body: response.body!,
       };
     },
 
