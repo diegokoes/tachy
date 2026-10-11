@@ -70,6 +70,8 @@ cli            profile "tools", ad hoc: sync, backup, restore, reembed, seed
   `api/src/turn-config.ts`):
   - an allowlist of inherited variables;
   - a pool of 2 with a 30 s idle timeout, and a 256 MB heap cap;
+  - whether redaction is on, and whether images pass it (`TACHY_REDACT`,
+    `TACHY_REDACT_IMAGES`);
   - the embedder's URL and the internal secret, so it never loads the model;
   - the caller's own source tokens and nobody else's.
 - **Embedding** happens in the embedder. A knowledge or reference save still
@@ -1100,6 +1102,14 @@ both live in Postgres with a TTL.
 - **An upload** weighs at most 25 MB, an image at most 10 MB
   (`TACHY_UPLOAD_MAX_MB`, `TACHY_UPLOAD_IMAGE_MAX_MB`). The types taken are
   the ones `contract/src/files.ts` lists; `core/src/files` reads each as text.
+- **An image** goes to the model as a picture, from the tool that read it
+  (`read_file`, `ingest_context`). The MCP child first fits it inside
+  2000 px and writes it afresh without its metadata (`core/src/files/image.ts`,
+  sharp, loaded on the first image). On the development workstation, not in the
+  image: a 9.5 MB PNG added 19 MB to the child's peak RSS, a 48-megapixel JPEG
+  and a 49-megapixel PNG 55 MB each, all under 150 ms. Under redaction an
+  image is withheld unless `redaction_images` is on, since a picture cannot be
+  scrubbed.
 - **Neither table's data is in the dumps** (`deploy/backup/tachy-backup`).
 
 **Revisit.** If uploads regularly approach the 25 MB limit, or several hundred
@@ -2214,7 +2224,9 @@ and the SFTP pull keeps working as it is.
 
   A transcript is a Claude Code session file under `users/<id>/` in the
   `tachy-agent-home` volume: every prompt, tool call and tool result of a chat,
-  customer ticket content included, and what lets the chat be resumed. Whether
+  customer ticket content included, and what lets the chat be resumed. An image
+  a tool showed the model is in it, and Claude Code keeps a second copy in the
+  session's `tool-results` folder; the sweep removes both at the same age. Whether
   Claude Code's own `cleanupPeriodDays` also deletes them, and sooner, is **to
   verify**: tachý passes `settingSources: []` (`agent/src/claude.ts`), so the
   default applies.

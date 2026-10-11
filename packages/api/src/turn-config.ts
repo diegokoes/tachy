@@ -133,6 +133,7 @@ export async function mcpConfig(
   }
   if (turn.actorRole) mcpEnv.TACHY_ACTOR_ROLE = turn.actorRole;
   if (settings.redaction_global.value) mcpEnv.TACHY_REDACT = "true";
+  if (settings.redaction_images.value) mcpEnv.TACHY_REDACT_IMAGES = "true";
 
   mcpEnv.NODE_OPTIONS = "--max-old-space-size=256";
 
@@ -231,7 +232,7 @@ export function buildPrompt(input: {
   }
   if (input.uploadPaths?.length)
     parts.push(
-      `The user attached these files for you to analyze with the ingest_context tool: ${input.uploadPaths.join(", ")}.`,
+      `The user attached these files: ${input.uploadPaths.join(", ")}. Open the ones the message is about with read_file, or with ingest_context when they are documentation to file in the library.`,
     );
   const note = dateNote(input.dateFormat);
   if (note) parts.push(note);
