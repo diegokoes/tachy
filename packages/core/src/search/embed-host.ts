@@ -32,6 +32,20 @@ function spawn(): Worker {
   });
 }
 
+/** A model thread that was serving and died is started again after this. */
+const THREAD_RESTART_MS = 1_000;
+const FIRST_LOAD_RETRY_MS = 1_000;
+const MAX_LOAD_FAILURES = 6;
+
+/**
+ * The wait before load attempt `failures + 1`, doubling from one second. A
+ * host that boots starts the container before its network resolves names, so
+ * the attempts together must outlast that.
+ */
+export function loadRetryDelayMs(failures: number): number {
+  return FIRST_LOAD_RETRY_MS * 2 ** (failures - 1);
+}
+
 /**
  * Loads the embedding model once, in a worker thread, so encoding never blocks
  * the event loop that serves requests. A thread that dies is restarted; one
@@ -43,7 +57,7 @@ export function startEmbedHost(opts: {
   onFatal?: (err: Error) => void;
   maxLoadFailures?: number;
 }): EmbedHost {
-  const maxLoadFailures = opts.maxLoadFailures ?? 3;
+  const maxLoadFailures = opts.maxLoadFailures ?? MAX_LOAD_FAILURES;
   let worker: Worker | undefined;
   let ready = false;
   let stopped = false;
@@ -87,14 +101,18 @@ export function startEmbedHost(opts: {
         request.reject(new EmbedderUnavailable("embedding thread restarted"));
       pending.clear();
       if (stopped) return;
-      if (!wasReady && ++loadFailures >= maxLoadFailures) {
+      if (!wasReady) loadFailures++;
+      if (loadFailures >= maxLoadFailures) {
         opts.onFatal?.(
           new Error(`embedding model failed to load ${loadFailures} times`),
         );
         return;
       }
-      log("warn", "embedding_thread_exit", { code, restarting: true });
-      setTimeout(start, 1_000).unref();
+      const retryMs = wasReady
+        ? THREAD_RESTART_MS
+        : loadRetryDelayMs(loadFailures);
+      log("warn", "embedding_thread_exit", { code, retryMs });
+      setTimeout(start, retryMs).unref();
     });
   };
 
