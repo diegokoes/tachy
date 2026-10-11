@@ -1105,25 +1105,33 @@ both live in Postgres with a TTL.
 - **An image** goes to the model as a picture, from the tool that read it
   (`read_file`, `ingest_context`). The MCP child first fits it inside
   2000 px and writes it afresh without its metadata (`core/src/files/image.ts`,
-  sharp, loaded on the first image). On the development workstation, not in the
-  image: a 9.5 MB PNG added 19 MB to the child's peak RSS, a 48-megapixel JPEG
-  and a 49-megapixel PNG 55 MB each, all under 150 ms. Under redaction an
+  sharp, loaded on the first image). In a throwaway container from the
+  production image (`--network none`, measured 2026-10-12), a 9.5 MB PNG added
+  37 MB to the peak RSS of the process that prepared it, a 48-megapixel JPEG
+  51 MB and a 49-megapixel PNG 54 MB, all under 175 ms. Under redaction an
   image is withheld unless `redaction_images` is on, since a picture cannot be
   scrubbed.
 - **A PDF** is read page by page. Its text carries a `[page N]` line where
   each page starts, a doc saved from it keeps those lines in its body, and
   `reference_doc_chunks.page` is read from them, so a search hit names its
-  page. A page with no text layer is reported, not saved as blank.
+  page. A page with no text layer is reported, not saved as blank. Reading
+  the text costs memory by page count, not by file size. In the same
+  container a 300-page text PDF (1.2 M characters) added 115 MB to the peak
+  RSS in 0.4 s and a 2000-page one (7.7 M characters) 218 MB in 2.4 s; a
+  24 MB PDF of scans added 32 MB. That comes on top of the child's 125 MB
+  (§3.1) while the read lasts, and stays inside its 256 MB heap cap: the
+  2000-page read passes with the cap at 96 MB.
 - **The figures and scanned pages** of a PDF are added after the save, by the
   job `reference.extract` on the `embed` queue. Figures become library images
   under the page they are on; a picture on three or more pages, or smaller
   than 120 px, is left out. A scanned page is read by the model, one call a
   page on the cheap tier and the credential of whoever saved the doc, and not
   at all under redaction unless `redaction_images` is on. The job needs the
-  upload, so it has to start within the upload's 24 h. On the development
-  workstation, not in the image: a 24 MB PDF of 17 A4 scans at 300 dpi peaked
-  at 446 MB RSS and took 9 s without the model calls, which is why it is on the
-  heavy worker; the peak barely moves with the page count (373 MB at 4 pages),
+  upload, so it has to start within the upload's 24 h. In the same container
+  a 24 MB PDF of 17 A4 scans at 300 dpi peaked at 460 MB RSS and took 9 s
+  without the model calls, which is why it is on the heavy worker
+  (`TACHY_WORKER_HEAVY_MEM_LIMIT`, 1536 MB by default). 4 such pages peaked at
+  326 MB: the peak moves little with the page count,
   since each page's pictures are released once read.
 - **An image worth keeping** goes from an upload into `library_assets`
   (`save_library_image`), fitted and at most 5 MB, under the same 7-day rule
