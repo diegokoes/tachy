@@ -39,6 +39,9 @@ describe("slash command registry", () => {
     const expanded = findCommand("summary")!.expand("fd 59577");
     expect(expanded).toContain("fetch_work_item");
     expect(expanded).toContain("post_work_item_summary");
+    // The files that bear on the problem are opened, and not all of them.
+    expect(expanded).toContain("read_file");
+    expect(expanded).toMatch(/at most five/);
     expect(expanded).toMatch(/at most two lines/);
     expect(expanded).toContain("User arguments: fd 59577");
   });

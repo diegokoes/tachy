@@ -13,6 +13,8 @@ const SYSTEM = `You summarise one support ticket for the colleague who picks it 
 next. You get the thread as a de-duplicated script, oldest first. Report only
 what the thread says; where it does not say, leave it out. Write in the
 language the agents on the ticket write in. Plain sentences, no markdown.
+The script names the files on each message; you cannot open them, so say what
+one shows only where the thread itself says it.
 Answer with one JSON object matching the schema and nothing else.`;
 
 /** The thread and the answer's shape, as the one prompt of the call. */

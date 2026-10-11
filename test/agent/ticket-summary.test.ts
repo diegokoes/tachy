@@ -29,6 +29,10 @@ describe("summaryPrompt", () => {
     expect(prompt).toContain("What was already attempted or ruled out");
     expect(prompt).toContain("Ana (2026-06-16):");
     expect(prompt).toContain("the queue never drains");
+    // The files field is in the schema the model answers to.
+    expect(prompt).toContain(
+      "The files on the ticket that bear on the problem",
+    );
   });
 });
 
@@ -45,7 +49,17 @@ describe("parseSummary", () => {
       parseSummary(
         `Here it is:\n\`\`\`json\n${JSON.stringify(answer)}\n\`\`\``,
       ),
-    ).toEqual(answer);
+    ).toEqual({ ...answer, files: [] });
+  });
+
+  it("keeps the files a summary names, with what the thread says of them", () => {
+    const files = [
+      { name: "screen.png", from: "Ana", shows: "The error dialog." },
+      { name: "app.log" },
+    ];
+    expect(parseSummary(JSON.stringify({ ...answer, files }))?.files).toEqual(
+      files,
+    );
   });
 
   it("is null for an answer of another shape, or none", () => {
