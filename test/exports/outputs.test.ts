@@ -132,7 +132,7 @@ describe("outputs API", () => {
 
     const anon = await app.request(`/api/outputs/${meta.id}/download`);
     expect(anon.status).toBe(403);
-    expect((await anon.json()).error).toMatch(/no user account/);
+    expect((await anon.json()).detail).toMatch(/no user account/);
   });
 
   it("deletes through the route", async () => {

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../../validation";
 import { z } from "zod";
 import { log, env, secretsEnabled } from "@tachy/core/infra";
 import {
@@ -56,7 +56,7 @@ export const system = new Hono()
   .post(
     "/system/maintenance",
     requireAdmin,
-    zValidator("json", z.object({ refuse_chats: z.boolean() })),
+    validate("json", z.object({ refuse_chats: z.boolean() })),
     async (c) => {
       lifecycle.refusingChats = c.req.valid("json").refuse_chats;
       log("warn", "maintenance", { refuse_chats: lifecycle.refusingChats });
@@ -70,7 +70,7 @@ export const system = new Hono()
   .put(
     "/settings/:key",
     requireAdmin,
-    zValidator("json", z.object({ value: z.unknown() })),
+    validate("json", z.object({ value: z.unknown() })),
     async (c) => {
       await setSetting(c.req.param("key")!, c.req.valid("json").value);
       await audit(c, "setting_set", c.req.param("key")!, {

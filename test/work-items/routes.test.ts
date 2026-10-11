@@ -115,7 +115,7 @@ describe("POST /api/work-items/:source/:id/notes", () => {
       json({ body: "hello" }),
     );
     expect(response.status).toBe(400);
-    expect((await response.json()).error).toMatch(/notes unsupported/i);
+    expect((await response.json()).detail).toMatch(/notes unsupported/i);
   });
 });
 

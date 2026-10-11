@@ -1,14 +1,7 @@
 import { onUnauthorized } from "./access/session.svelte";
+import { ApiError, readError } from "./problems";
 
-export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-    public body?: unknown,
-  ) {
-    super(message);
-  }
-}
+export { ApiError, readError };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {
@@ -19,15 +12,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     onUnauthorized();
     throw new ApiError(401, "unauthorized");
   }
+  if (!response.ok) throw await readError(response);
   const text = await response.text();
-  const body = text ? JSON.parse(text) : undefined;
-  if (!response.ok)
-    throw new ApiError(
-      response.status,
-      body?.error ?? response.statusText,
-      body,
-    );
-  return body as T;
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 export const api = {

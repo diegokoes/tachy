@@ -54,7 +54,7 @@ describe("first-run setup wizard", () => {
     ]) {
       const response = await app.request("/api/setup", json(body));
       expect(response.status).toBe(403);
-      expect((await response.json()).error).toMatch(/setup code/);
+      expect((await response.json()).detail).toMatch(/setup code/);
       expect(response.headers.get("set-cookie")).toBeNull();
     }
     expect(await sql`select 1 from users`).toHaveLength(0);
@@ -114,7 +114,7 @@ describe("first-run setup wizard", () => {
       }),
     );
     expect(response.status).toBe(409);
-    expect((await response.json()).error).toMatch(/already exists/);
+    expect((await response.json()).detail).toMatch(/already exists/);
 
     const [row] =
       await sql`select role, password_hash from users where email = 'colleague@example.com'`;
