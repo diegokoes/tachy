@@ -2,6 +2,7 @@ import { defineBucketJobs } from "../buckets/jobs";
 import { defineCodeJobs } from "../code/jobs";
 import { defineFlowJobs } from "../flows/jobs";
 import { defineRetentionJobs } from "../compliance/retention";
+import { defineReferenceJobs } from "../reference/jobs";
 import { sql } from "../infra/db";
 import { log } from "../infra/log";
 import { defineSearchJobs } from "../search/jobs";
@@ -23,6 +24,7 @@ export function registerCoreJobs(): void {
   defineLoadTestJobs();
   defineFlowJobs();
   defineBucketJobs();
+  defineReferenceJobs();
 }
 
 /**
