@@ -75,7 +75,11 @@ describe("extractFile", () => {
       contentType: null,
       bytes: minimalPdf("Failover heartbeat"),
     });
-    expect(pdf).toEqual({ text: "Failover heartbeat", pages: 1 });
+    expect(pdf).toEqual({
+      text: "[page 1]\nFailover heartbeat",
+      pages: 1,
+      scannedPages: [],
+    });
   });
 
   it("reads a Word document, a workbook and a mail file as text", async () => {

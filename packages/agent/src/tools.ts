@@ -51,6 +51,7 @@ export const WRITE_TOOLS = [
   "save_reference_doc",
   "update_reference_doc",
   "save_wiki_article",
+  "save_library_image",
   "add_wiki_category",
   "seed_wiki_sections",
   "add_knowledge_feedback",

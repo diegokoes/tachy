@@ -1110,6 +1110,13 @@ both live in Postgres with a TTL.
   and a 49-megapixel PNG 55 MB each, all under 150 ms. Under redaction an
   image is withheld unless `redaction_images` is on, since a picture cannot be
   scrubbed.
+- **A PDF** is read page by page. Its text carries a `[page N]` line where
+  each page starts, a doc saved from it keeps those lines in its body, and
+  `reference_doc_chunks.page` is read from them, so a search hit names its
+  page. A page with no text layer is reported, not saved as blank.
+- **An image worth keeping** goes from an upload into `library_assets`
+  (`save_library_image`), fitted and at most 5 MB, under the same 7-day rule
+  for one no body uses.
 - **Neither table's data is in the dumps** (`deploy/backup/tachy-backup`).
 
 **Revisit.** If uploads regularly approach the 25 MB limit, or several hundred

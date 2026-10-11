@@ -19,7 +19,7 @@ import { saveUpload } from "@tachy/core/chat";
 import { server } from "../../packages/mcp/src/index";
 import { resetData, sql, tpdProductId } from "../database";
 import sharp from "sharp";
-import { picture, zipOf } from "../fixtures/files";
+import { pdfOf, picture, zipOf } from "../fixtures/files";
 
 afterAll(() => sql.end());
 
@@ -566,6 +566,124 @@ describe("reading one attached file", () => {
       { source: notes.ref, text: "# notes" },
       { source: second.ref, image: 2, width_px: 60 },
     ]);
+  });
+
+  const manual = () =>
+    upload(
+      "manual.pdf",
+      "application/pdf",
+      pdfOf(["Install the controller", "", "Reset the heartbeat"]),
+    );
+
+  it("reads a PDF under its page marks, and names the pages with no text", async () => {
+    const { ref } = await manual();
+    const whole = await read("read_file", { path: ref });
+    expect(whole.json).toMatchObject({
+      pages: 3,
+      scanned_pages: [2],
+      text: "[page 1]\nInstall the controller\n\n[page 2]\n\n[page 3]\nReset the heartbeat",
+    });
+    expect(whole.json.pages_note).toMatch(/hold no text layer/);
+
+    const last = await read("read_file", { path: ref, pages: "3" });
+    expect(last.json.text).toBe("[page 3]\nReset the heartbeat");
+    const range = await read("read_file", { path: ref, pages: "1-2" });
+    expect(range.json.text).toBe(
+      "[page 1]\nInstall the controller\n\n[page 2]",
+    );
+  });
+
+  it("refuses a page range that is not one, or not of a PDF", async () => {
+    const { ref } = await manual();
+    for (const [pages, message] of [
+      ["two", /not a page or a range/],
+      ["9", /has 3 pages/],
+    ] as const) {
+      const refused = await call("read_file", { path: ref, pages });
+      expect(refused.isError).toBe(true);
+      expect(refused.text).toMatch(message);
+    }
+    const text = await upload(
+      "notes.md",
+      "text/markdown",
+      new TextEncoder().encode("# notes"),
+    );
+    const refused = await call("read_file", { path: text.ref, pages: "1" });
+    expect(refused.text).toMatch(/applies to a PDF/);
+  });
+
+  it("saves a PDF as a doc that knows its pages, and says which hold no text", async () => {
+    const { ref } = await manual();
+    const saved = await call("save_reference_doc", {
+      title: "Controller manual",
+      body_path: ref,
+    });
+    expect(saved.isError).toBe(false);
+    expect(saved.json).toMatchObject({
+      saved: true,
+      pages: 3,
+      scanned_pages: [2],
+    });
+    const pages = await sql`
+      select page from reference_doc_chunks
+      where doc_id = ${(saved.json as { id: string }).id} order by ordinal`;
+    expect(pages.map((row) => row.page)).toEqual([1, 3]);
+
+    const found = await call("search_reference", {
+      query: "reset the heartbeat",
+    });
+    expect((found.json as { page: number }[])[0].page).toBe(3);
+  });
+
+  it("does not save a PDF that is all scans as an empty doc", async () => {
+    const scan = await upload("scan.pdf", "application/pdf", pdfOf(["", ""]));
+    const refused = await call("save_reference_doc", {
+      title: "Scan",
+      body_path: scan.ref,
+    });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toMatch(/no text layer on any of its 2 pages/);
+  });
+
+  it("keeps an image in the library and hands back the markdown for it", async () => {
+    const { ref } = await upload(
+      "wiring.png",
+      "image/png",
+      await picture(3000, 1500),
+    );
+    const kept = await call("save_library_image", {
+      path: ref,
+      alt: "Wiring of the [line]\ncontroller",
+      product_slug: "tpd",
+    });
+    expect(kept.isError).toBe(false);
+    const { id, markdown } = kept.json as { id: string; markdown: string };
+    expect(markdown).toBe(
+      `![Wiring of the line controller](/api/library/assets/${id})`,
+    );
+    const [asset] = await sql`
+      select content_type, filename, product_id, bytes from library_assets where id = ${id}`;
+    expect(asset).toMatchObject({
+      content_type: "image/png",
+      filename: "wiring.png",
+      product_id: await tpdProductId(),
+    });
+    const stored = await sharp(asset.bytes).metadata();
+    expect([stored.width, stored.height]).toEqual([2000, 1000]);
+  });
+
+  it("keeps only an image", async () => {
+    const { ref } = await upload(
+      "notes.md",
+      "text/markdown",
+      new TextEncoder().encode("# notes"),
+    );
+    const refused = await call("save_library_image", {
+      path: ref,
+      alt: "Some notes",
+    });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toMatch(/notes\.md is not an image/);
   });
 
   it("answers a reference that is not an upload as a tool error", async () => {
