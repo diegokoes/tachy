@@ -29,8 +29,13 @@ import {
 import { resolveRedactionPolicy, redactForLlm } from "@tachy/core/compliance";
 import type { IngestedItem } from "@tachy/core/work-items";
 import type { RawWorkItem } from "@tachy/core/sources";
-import type { ArchiveMember } from "@tachy/core/files";
-import { extractSource } from "./extract";
+import {
+  extractFile,
+  isImageFile,
+  type ArchiveMember,
+  type StoredFile,
+} from "@tachy/core/files";
+import { openSource } from "./extract";
 
 /**
  * Tool results have a size ceiling that a whole transcript exceeds, so turns
@@ -326,6 +331,8 @@ export interface ContextSource {
   text: string;
   pages?: number;
   members?: ArchiveMember[];
+  /** Set for an image, which is shown and has no text. */
+  image?: StoredFile;
 }
 
 export async function loadContextSources(input: {
@@ -340,11 +347,15 @@ export async function loadContextSources(input: {
   const sources: ContextSource[] = [];
   if (input.text?.trim()) sources.push({ source: "inline", text: input.text });
   for (const path of input.paths ?? []) {
-    const { text, pages, members } = await extractSource(path, {
-      member: input.member,
-    });
+    const file = await openSource(path, { member: input.member });
+    const source = input.member ? `${path} > ${input.member}` : path;
+    if (isImageFile(file)) {
+      sources.push({ source, text: "", image: file });
+      continue;
+    }
+    const { text, pages, members } = await extractFile(file);
     sources.push({
-      source: input.member ? `${path} > ${input.member}` : path,
+      source,
       text,
       ...(pages != null ? { pages } : {}),
       ...(members ? { members } : {}),

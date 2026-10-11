@@ -18,7 +18,8 @@ import { sweepWikiGaps } from "@tachy/core/wiki";
 import { saveUpload } from "@tachy/core/chat";
 import { server } from "../../packages/mcp/src/index";
 import { resetData, sql, tpdProductId } from "../database";
-import { zipOf } from "../fixtures/files";
+import sharp from "sharp";
+import { picture, zipOf } from "../fixtures/files";
 
 afterAll(() => sql.end());
 
@@ -412,6 +413,165 @@ describe("attached files through ingest_context", () => {
     });
     expect(refused.isError).toBe(true);
     expect(refused.text).toMatch(/exactly one path/);
+  });
+});
+
+describe("reading one attached file", () => {
+  type Block = {
+    type: string;
+    text?: string;
+    data?: string;
+    mimeType?: string;
+  };
+
+  /** The whole answer: an image arrives as a block of its own, after the text. */
+  async function read(name: string, args: Record<string, unknown>) {
+    const answer = (await client.callTool({ name, arguments: args })) as {
+      content: Block[];
+      isError?: boolean;
+    };
+    return {
+      isError: answer.isError === true,
+      json: JSON.parse(answer.content[0].text ?? "{}") as Record<string, any>,
+      images: answer.content.filter((block) => block.type === "image"),
+    };
+  }
+
+  const upload = (filename: string, contentType: string, bytes: Uint8Array) =>
+    saveUpload({
+      userId: null,
+      filename,
+      contentType: contentType as never,
+      bytes,
+    });
+
+  it("shows an image as an image, fitted to what a model is given", async () => {
+    const { ref } = await upload(
+      "screen.png",
+      "image/png",
+      await picture(3000, 1500),
+    );
+    const shown = await read("read_file", { path: ref });
+    expect(shown.json).toMatchObject({
+      file: "screen.png",
+      width_px: 2000,
+      height_px: 1000,
+    });
+    expect(shown.images).toHaveLength(1);
+    expect(shown.images[0].mimeType).toBe("image/png");
+    const sent = await sharp(
+      Buffer.from(shown.images[0].data!, "base64"),
+    ).metadata();
+    expect([sent.width, sent.height]).toEqual([2000, 1000]);
+  });
+
+  it("returns a text file as text, and says where to read on", async () => {
+    const { ref } = await upload(
+      "app.log",
+      "text/plain",
+      new TextEncoder().encode("0123456789".repeat(30)),
+    );
+    const shown = await read("read_file", { path: ref, max_chars: 100 });
+    expect(shown.images).toHaveLength(0);
+    expect(shown.json).toMatchObject({
+      file: "app.log",
+      chars: 300,
+      truncated: true,
+      continue_at: 100,
+    });
+    const rest = await read("read_file", { path: ref, offset: 290 });
+    expect(rest.json).toMatchObject({ text: "0123456789", truncated: false });
+  });
+
+  it("lists a zip, and shows an image or a text taken out of it", async () => {
+    const { ref } = await upload(
+      "bundle.zip",
+      "application/zip",
+      zipOf({ "shot.png": await picture(40, 30), "notes.md": "# notes" }),
+    );
+    const listed = await read("read_file", { path: ref });
+    expect(listed.json.members.map((m: { name: string }) => m.name)).toEqual([
+      "shot.png",
+      "notes.md",
+    ]);
+    const image = await read("read_file", { path: ref, member: "shot.png" });
+    expect(image.json).toMatchObject({ file: "shot.png", width_px: 40 });
+    expect(image.images).toHaveLength(1);
+    const text = await read("read_file", { path: ref, member: "notes.md" });
+    expect(text.json.text).toBe("# notes");
+  });
+
+  it("withholds an image under redaction until the organisation allows it", async () => {
+    const { ref } = await upload(
+      "screen.png",
+      "image/png",
+      await picture(40, 30),
+    );
+    process.env.TACHY_REDACT = "true";
+    try {
+      const withheld = await read("read_file", { path: ref });
+      expect(withheld.isError).toBe(false);
+      expect(withheld.images).toHaveLength(0);
+      expect(withheld.json.note).toMatch(/withheld: PII redaction is on/);
+
+      const viaIngest = await read("ingest_context", { paths: [ref] });
+      expect(viaIngest.images).toHaveLength(0);
+      expect(viaIngest.json.sources[0].note).toMatch(/withheld/);
+
+      process.env.TACHY_REDACT_IMAGES = "true";
+      expect((await read("read_file", { path: ref })).images).toHaveLength(1);
+    } finally {
+      delete process.env.TACHY_REDACT;
+      delete process.env.TACHY_REDACT_IMAGES;
+    }
+  });
+
+  it("scrubs a text file under redaction and says placeholders are deliberate", async () => {
+    const { ref } = await upload(
+      "mail.txt",
+      "text/plain",
+      new TextEncoder().encode("write to ana.ops@example.com about it"),
+    );
+    process.env.TACHY_REDACT = "true";
+    try {
+      const shown = await read("read_file", { path: ref });
+      expect(shown.json.text).not.toContain("ana.ops@example.com");
+      expect(shown.json.redaction).toMatch(/intentional redactions/);
+    } finally {
+      delete process.env.TACHY_REDACT;
+    }
+  });
+
+  it("puts each image of a context dump after the text, numbered", async () => {
+    const first = await upload("a.png", "image/png", await picture(40, 30));
+    const second = await upload(
+      "b.jpg",
+      "image/jpeg",
+      await picture(60, 20, "jpeg"),
+    );
+    const notes = await upload(
+      "notes.md",
+      "text/markdown",
+      new TextEncoder().encode("# notes"),
+    );
+    const loaded = await read("ingest_context", {
+      paths: [first.ref, notes.ref, second.ref],
+    });
+    expect(loaded.images.map((image) => image.mimeType)).toEqual([
+      "image/png",
+      "image/jpeg",
+    ]);
+    expect(loaded.json.sources).toMatchObject([
+      { source: first.ref, image: 1, width_px: 40 },
+      { source: notes.ref, text: "# notes" },
+      { source: second.ref, image: 2, width_px: 60 },
+    ]);
+  });
+
+  it("answers a reference that is not an upload as a tool error", async () => {
+    const refused = await call("read_file", { path: "/etc/passwd" });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toMatch(/is not an uploaded file/);
   });
 });
 

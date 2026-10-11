@@ -57,6 +57,8 @@ export type RuntimeInfo = {
 export type SystemInfo = {
   settings: {
     redaction_global: Setting<boolean>;
+    /** Absent from an older API. */
+    redaction_images?: Setting<boolean>;
     agent_model: Setting<string>;
     agent_effort: Setting<string>;
     allowed_models: Setting<string[]>;

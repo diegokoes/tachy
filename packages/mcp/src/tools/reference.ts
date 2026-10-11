@@ -4,6 +4,7 @@ import { resolveCurrentUserId } from "@tachy/core/access";
 import { getCustomerIdBySlug } from "@tachy/core/catalog";
 import {
   TokenMap,
+  globalImagesAllowed,
   globalRedactionEnabled,
   scrubText,
 } from "@tachy/core/compliance";
@@ -16,14 +17,27 @@ import {
   referenceDocLineage,
 } from "@tachy/core/reference";
 import { badInput } from "@tachy/core/infra";
-import { windowText, type WindowedText } from "@tachy/core/files";
+import {
+  imageForModel,
+  type ModelImage,
+  type StoredFile,
+} from "@tachy/core/files";
 import { referenceStatusSchema } from "@tachy/core/knowledge";
 import type { ReferenceDocUpdate } from "@tachy/core/reference";
 import { extractSource } from "../extract";
 import { tool } from "../server";
-import { GRADE_NOTE, out, searchOut, outScrubbed } from "../results";
+import {
+  GRADE_NOTE,
+  IMAGE_WITHHELD,
+  PLACEHOLDER_NOTE,
+  out,
+  outScrubbed,
+  outWithImages,
+  searchOut,
+  shownText,
+} from "../results";
 import { mcpActor, requireCanEdit, referenceDocScope } from "../permissions";
-import { structuredField } from "../fields";
+import { memberField, structuredField, textWindowFields } from "../fields";
 import {
   componentIntoFilter,
   resolveScopeIds,
@@ -37,50 +51,54 @@ const DEFAULT_PREVIEW_CHARS = 20_000;
 /** What to do next with one source: open an archive, or read on. */
 function sourceNote(
   source: ContextSource,
-  shown: WindowedText,
-  shownTo: number,
+  continueAt: number | undefined,
 ): { note?: string } {
   if (source.members)
     return { note: "This is the archive's file list. Read one with member." };
-  if (!shown.truncated) return {};
+  if (continueAt == null) return {};
   return {
-    note: `Shown to char ${shownTo} of ${shown.chars} - continue with offset: ${shownTo}; to save the FULL text as a reference doc, call save_reference_doc with body_path.`,
+    note: `Truncated - continue with offset: ${continueAt}; to save the FULL text as a reference doc, call save_reference_doc with body_path.`,
   };
 }
+
+/**
+ * An image source as its entry in the result. The picture itself is appended
+ * to `images`, and the entry says which one it is.
+ */
+async function shownImage(
+  source: ContextSource & { image: StoredFile },
+  images: ModelImage[],
+) {
+  if (!globalImagesAllowed())
+    return { source: source.source, note: IMAGE_WITHHELD };
+  const image = await imageForModel(source.image.bytes);
+  images.push(image);
+  return {
+    source: source.source,
+    image: images.length,
+    width_px: image.widthPx,
+    height_px: image.heightPx,
+    note: `Image ${images.length} of those that follow this result.`,
+  };
+}
+
+const hasImage = (
+  source: ContextSource,
+): source is ContextSource & { image: StoredFile } => source.image != null;
 
 tool(
   "ingest_context",
   {
     description:
-      "Load freeform project context from pasted text, attached file paths, and/or URLs, and return the cleaned raw text for you to structure. PDF, Word, Excel and mail (.eml) files are read as text; a zip answers with its file list, and member reads one of them. This tool ONLY reads - it never saves. Long sources are truncated at max_chars (default 20000): continue with offset, or narrow a log with match. For large documents (big PDFs), preview here, then call save_reference_doc with body_path so the full text is extracted and saved server-side. After loading, classify the content and route each part: durable incident lessons → save_knowledge_entry; architecture facts → add_component; everything else (docs, runbooks, design notes, config explainers) → save_reference_doc. Say briefly how you routed it, then make the calls - each is gated by its own review box.",
+      "Load freeform project context from pasted text, attached file paths, and/or URLs, and return the cleaned raw text for you to structure. PDF, Word, Excel and mail (.eml) files are read as text; an image comes back as the image itself; a zip answers with its file list, and member reads one of them. This tool ONLY reads - it never saves. Long sources are truncated at max_chars (default 20000): continue with offset, or narrow a log with match. For large documents (big PDFs), preview here, then call save_reference_doc with body_path so the full text is extracted and saved server-side. After loading, classify the content and route each part: durable incident lessons → save_knowledge_entry; architecture facts → add_component; everything else (docs, runbooks, design notes, config explainers) → save_reference_doc. Say briefly how you routed it, then make the calls - each is gated by its own review box.",
     inputSchema: {
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
       text: z.string().optional(),
       paths: z.array(z.string()).optional(),
       urls: z.array(z.string()).optional(),
-      max_chars: z.number().int().positive().optional(),
-      offset: z
-        .number()
-        .int()
-        .min(0)
-        .optional()
-        .describe(
-          "Chars to skip in each source. Continue a truncated read from the chars already shown, or jump to an [offset N] a match reported.",
-        ),
-      match: z
-        .array(z.string().min(1))
-        .max(10)
-        .optional()
-        .describe(
-          "Literal terms, matched without case. Returns only the lines holding one, each with two lines of context under the [offset N] it starts at. For logs: an error code, a timestamp, a request id.",
-        ),
-      member: z
-        .string()
-        .optional()
-        .describe(
-          "With exactly one zip path: the file inside it to read, by the name its list gives.",
-        ),
+      ...textWindowFields,
+      member: memberField,
     },
     // readOnlyHint because nothing here is persisted; openWorldHint because
     // `urls` reaches hosts outside this deployment, which is what a client
@@ -102,36 +120,38 @@ tool(
     if (!sources.length)
       throw badInput("Provide at least one of: text, paths, urls");
 
-    const maxChars = max_chars ?? DEFAULT_PREVIEW_CHARS;
-    const redact = globalRedactionEnabled();
+    const window = {
+      offset,
+      maxChars: max_chars ?? DEFAULT_PREVIEW_CHARS,
+      match,
+    };
     const tokens = new TokenMap();
-    return out({
-      product_slug: product_slug ?? null,
-      team_slug: team_slug ?? null,
-      sources: sources.map((source) => {
-        const shown = windowText(source.text, { offset, maxChars, match });
-        const shownTo = (offset ?? 0) + shown.text.length;
-        return {
-          source: source.source,
-          chars: shown.chars,
-          ...(source.pages != null ? { pages: source.pages } : {}),
-          ...(source.members ? { members: source.members } : {}),
-          ...(shown.matchedLines != null
-            ? { matched_lines: shown.matchedLines }
-            : {}),
-          truncated: shown.truncated,
-          text: redact ? scrubText(shown.text, tokens) : shown.text,
-          ...sourceNote(source, shown, shownTo),
-        };
-      }),
-      ...(redact
-        ? {
-            redaction:
-              "Placeholders like [EMAIL_1]/[SECRET_1] are intentional redactions - treat them as opaque, never guess the originals.",
-          }
-        : {}),
-      next: "Summarize how this routes, then call save_knowledge_entry / save_reference_doc / add_component. Each call is gated by its own review box.",
-    });
+    const images: ModelImage[] = [];
+    const shownSources: Record<string, unknown>[] = [];
+    for (const source of sources) {
+      if (hasImage(source)) {
+        shownSources.push(await shownImage(source, images));
+        continue;
+      }
+      const shown = shownText(source.text, window, tokens);
+      shownSources.push({
+        source: source.source,
+        ...(source.pages != null ? { pages: source.pages } : {}),
+        ...(source.members ? { members: source.members } : {}),
+        ...shown,
+        ...sourceNote(source, shown.continue_at),
+      });
+    }
+    return outWithImages(
+      {
+        product_slug: product_slug ?? null,
+        team_slug: team_slug ?? null,
+        sources: shownSources,
+        ...(globalRedactionEnabled() ? { redaction: PLACEHOLDER_NOTE } : {}),
+        next: "Summarize how this routes, then call save_knowledge_entry / save_reference_doc / add_component. Each call is gated by its own review box.",
+      },
+      images,
+    );
   },
 );
 

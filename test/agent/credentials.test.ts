@@ -93,6 +93,20 @@ describe("per-turn agent config isolation (cross-user token safety)", () => {
     }
   });
 
+  it("tells the subprocess whether redaction is on, and whether images pass it", async () => {
+    const settings = await effectiveSettings();
+    const off = await mcpConfig("alice@example.com", settings);
+    expect(off.mcpEnv.TACHY_REDACT).toBeUndefined();
+    expect(off.mcpEnv.TACHY_REDACT_IMAGES).toBeUndefined();
+    const on = await mcpConfig("alice@example.com", {
+      ...settings,
+      redaction_global: { value: true, source: "db" },
+      redaction_images: { value: true, source: "db" },
+    });
+    expect(on.mcpEnv.TACHY_REDACT).toBe("true");
+    expect(on.mcpEnv.TACHY_REDACT_IMAGES).toBe("true");
+  });
+
   it("materializes each caller's own source token into a fresh mcpEnv", async () => {
     const settings = await effectiveSettings();
     const aliceCfg = await mcpConfig("alice@example.com", settings);

@@ -1,4 +1,5 @@
 import { strToU8, zipSync } from "fflate";
+import sharp from "sharp";
 
 /** A one-page PDF whose text layer holds `text`. */
 export function minimalPdf(text: string): Buffer {
@@ -51,3 +52,20 @@ export const zipOf = (files: Record<string, string | Uint8Array>) =>
       ]),
     ),
   );
+
+/** A plain image of the given size, as a real encoded file. */
+export async function picture(
+  widthPx: number,
+  heightPx: number,
+  format: "png" | "jpeg" | "webp" | "gif" = "png",
+): Promise<Uint8Array> {
+  const image = sharp({
+    create: {
+      width: widthPx,
+      height: heightPx,
+      channels: 3,
+      background: { r: 200, g: 60, b: 20 },
+    },
+  });
+  return new Uint8Array(await image.toFormat(format).toBuffer());
+}

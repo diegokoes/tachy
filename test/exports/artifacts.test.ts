@@ -256,6 +256,17 @@ describe("buildPrompt", () => {
     expect(messageAt).toBeGreaterThan(uploadsAt);
   });
 
+  it("names the attached files and the tool that opens one", () => {
+    const prompt = buildPrompt({
+      message: "what does this show?",
+      uploadPaths: ["upload:00000000-0000-0000-0000-000000000000/s.png"],
+    });
+    expect(prompt).toContain(
+      "upload:00000000-0000-0000-0000-000000000000/s.png",
+    );
+    expect(prompt).toContain("read_file");
+  });
+
   it("is just the message when nothing is attached", () => {
     expect(buildPrompt({ message: "hi" })).toBe("hi");
   });

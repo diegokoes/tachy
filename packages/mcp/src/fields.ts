@@ -60,3 +60,30 @@ export const knowledgeFilterFields = {
   fixed_version: z.string().optional(),
   limit: limitField,
 };
+
+/** How much of a file's text a read returns, and from where. */
+export const textWindowFields = {
+  max_chars: z.number().int().positive().optional(),
+  offset: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe(
+      "Chars to skip. Continue a truncated read from the chars already shown, or jump to an [offset N] a match reported.",
+    ),
+  match: z
+    .array(z.string().min(1))
+    .max(10)
+    .optional()
+    .describe(
+      "Literal terms, matched without case. Returns only the lines holding one, each with two lines of context under the [offset N] it starts at. For logs: an error code, a timestamp, a request id.",
+    ),
+};
+
+export const memberField = z
+  .string()
+  .optional()
+  .describe(
+    "With one zip path: the file inside it to read, by the name its list gives.",
+  );
