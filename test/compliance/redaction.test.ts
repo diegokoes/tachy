@@ -11,6 +11,7 @@ import {
   redactNormalized,
   redactForLlm,
   resolveRedactionPolicy,
+  globalImagesAllowed,
   globalRedactionEnabled,
 } from "@tachy/core/compliance";
 import { estimateCostUsd } from "@tachy/core/analytics";
@@ -391,6 +392,19 @@ describe("resolveRedactionPolicy", () => {
       delete process.env.TACHY_REDACT;
     }
     expect(resolveRedactionPolicy(undefined).enabled).toBe(false);
+  });
+
+  it("allows an image with no connection behind it unless redaction is on and nobody allowed it", () => {
+    expect(globalImagesAllowed()).toBe(true);
+    process.env.TACHY_REDACT = "true";
+    try {
+      expect(globalImagesAllowed()).toBe(false);
+      process.env.TACHY_REDACT_IMAGES = "true";
+      expect(globalImagesAllowed()).toBe(true);
+    } finally {
+      delete process.env.TACHY_REDACT;
+      delete process.env.TACHY_REDACT_IMAGES;
+    }
   });
 });
 

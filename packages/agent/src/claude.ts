@@ -177,6 +177,17 @@ export async function claudePermission(
     : { behavior: "deny", message: decision.message ?? "Denied by user." };
 }
 
+/**
+ * A tool result as the browser is sent it. A picture a tool showed the model
+ * stays on the server: the stream carries that there was one, not its bytes.
+ */
+export function withoutImageData(content: unknown): unknown {
+  if (!Array.isArray(content)) return content;
+  return content.map((block: ContentBlock | null) =>
+    block?.type === "image" ? { type: "image" } : block,
+  );
+}
+
 export class ClaudeTurn extends TurnBase {
   private controller = new AbortController();
 
@@ -258,7 +269,9 @@ export class ClaudeTurn extends TurnBase {
                 type: "tool_result",
                 tool,
                 id,
-                result: (block as { content?: unknown }).content,
+                result: withoutImageData(
+                  (block as { content?: unknown }).content,
+                ),
               });
             }
         } else if (sdkMessage.type === "result") {

@@ -52,13 +52,14 @@ function listArchive(bytes: Uint8Array): ExtractedFile {
 }
 
 /**
- * One file of an archive, read as the kind its own name and bytes make it. An
+ * One file of an archive, as the kind its own name and bytes make it. An
  * archive inside an archive is refused: each level unpacks again.
  */
-async function extractMember(
-  archive: StoredFile,
-  member: string,
-): Promise<ExtractedFile> {
+export function archiveMember(archive: StoredFile, member: string): StoredFile {
+  if (!isArchive(archive))
+    throw badInput(
+      `${archive.filename} is not an archive; read it without member`,
+    );
   const entry = zipEntries(archive.bytes).find((e) => e.name === member);
   if (!entry)
     throw badInput(
@@ -70,12 +71,20 @@ async function extractMember(
   if ("refusal" in check) throw badInput(check.refusal);
   if (fileFamily(check.contentType) === "archive")
     throw badInput(`${filename} is an archive inside an archive; not read`);
-  return extractFile({ filename, contentType: check.contentType, bytes });
+  return { filename, contentType: check.contentType, bytes };
 }
 
 /** A row stored before uploads were checked: a PDF by its magic, else text. */
 const uncheckedType = (bytes: Uint8Array): FileContentType =>
   isPdf(bytes) ? "application/pdf" : "text/plain";
+
+const familyOf = (file: StoredFile) =>
+  fileFamily(file.contentType ?? uncheckedType(file.bytes));
+
+const isArchive = (file: StoredFile) => familyOf(file) === "archive";
+
+/** An image is looked at, not extracted: see `imageForModel`. */
+export const isImageFile = (file: StoredFile) => familyOf(file) === "image";
 
 /**
  * A file as the text a model reads. `member` names one file of an archive;
@@ -85,20 +94,13 @@ export async function extractFile(
   file: StoredFile,
   opts: { member?: string } = {},
 ): Promise<ExtractedFile> {
-  const contentType = file.contentType ?? uncheckedType(file.bytes);
-  const family = fileFamily(contentType);
-  if (opts.member && family !== "archive")
-    throw badInput(
-      `${file.filename} is not an archive; read it without member`,
-    );
+  if (opts.member) return extractFile(archiveMember(file, opts.member));
 
-  if (family === "archive")
-    return opts.member
-      ? extractMember(file, opts.member)
-      : listArchive(file.bytes);
+  const family = familyOf(file);
+  if (family === "archive") return listArchive(file.bytes);
   if (family === "image")
     throw badInput(
-      `${file.filename} is an image, which has no text to extract; ask the user what it shows`,
+      `${file.filename} is an image, which has no text to extract`,
     );
   if (family === "pdf") return pdfText(file.bytes);
   if (family === "mail") return { text: await mailText(file.bytes) };
@@ -106,5 +108,5 @@ export async function extractFile(
   if (family === "sheet") return { text: workbookText(file.bytes) };
 
   const text = decodeText(file.bytes) ?? new TextDecoder().decode(file.bytes);
-  return { text: contentType === "text/html" ? stripHtml(text) : text };
+  return { text: file.contentType === "text/html" ? stripHtml(text) : text };
 }

@@ -307,6 +307,17 @@ export function globalRedactionEnabled(): boolean {
 }
 
 /**
+ * Whether an image no connection stands behind, such as a chat upload, may be
+ * sent to a model. A picture cannot be scrubbed, so under redaction it is
+ * withheld unless the organisation has allowed it (TACHY_REDACT_IMAGES).
+ */
+export function globalImagesAllowed(): boolean {
+  return (
+    !globalRedactionEnabled() || process.env.TACHY_REDACT_IMAGES === "true"
+  );
+}
+
+/**
  * Read the redaction switch off a source connection's `config` jsonb (the
  * global flag overrides).
  */
