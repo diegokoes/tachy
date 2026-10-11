@@ -16,7 +16,7 @@ import {
 
 /**
  * A file on the message, referenced not linked: source download URLs are signed
- * and short-lived (Freshdesk's expire in minutes), and the file is already on
+ * and short-lived (Freshdesk's last five minutes), and the file is already on
  * the same ticket a transcript is posted to.
  */
 export interface CompactAttachment {
