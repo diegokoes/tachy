@@ -71,6 +71,8 @@ export type AdoFields = {
 export interface AdoRelation {
   rel?: string;
   url?: string;
+  /** For an attached file: its name, and on some servers its size in bytes. */
+  attributes?: { name?: unknown; resourceSize?: unknown };
 }
 
 export interface AdoWorkItem {
@@ -362,6 +364,8 @@ export interface AdoClient {
     fileName: string,
     bytes: Uint8Array,
   ): Promise<AdoAttachmentRef>;
+  /** The bytes of an attachment, by the id its URL ends in. */
+  openAttachment(id: string): Promise<Response>;
   listWikis(project?: string): Promise<AdoWiki[]>;
   listWikiPages(project: string, wiki: string): Promise<string[]>;
   getWikiPage(
@@ -663,6 +667,22 @@ export function createAdoClient(connection: AdoCfg): AdoClient {
           body: bytes,
         },
       );
+    },
+
+    async openAttachment(id) {
+      const path = `/_apis/wit/attachments/${encodeURIComponent(id)}`;
+      const response = await sourceFetch(
+        `Azure DevOps GET ${path}`,
+        orgUrl + withVersion(path),
+        {
+          headers: { Authorization: auth, Accept: "application/octet-stream" },
+        },
+        { connection: connection.slug },
+      );
+      // A rejected PAT is answered with a sign-in page under 203, not a 401.
+      if (!response.ok || response.status === 203 || !response.body)
+        throw new Error(`Azure DevOps GET ${path} -> ${response.status}`);
+      return response;
     },
 
     async listWikis(project) {

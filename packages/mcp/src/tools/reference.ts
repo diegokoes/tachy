@@ -72,7 +72,7 @@ async function shownImage(
   source: ContextSource & { image: StoredFile },
   images: ModelImage[],
 ) {
-  if (!globalImagesAllowed())
+  if (!(source.imagesAllowed ?? globalImagesAllowed()))
     return { source: source.source, note: IMAGE_WITHHELD };
   const image = await imageForModel(source.image.bytes);
   images.push(image);
@@ -136,7 +136,7 @@ tool(
         shownSources.push(await shownImage(source, images));
         continue;
       }
-      const shown = shownText(source.text, window, tokens);
+      const shown = shownText(source.text, window, tokens, source.redact);
       shownSources.push({
         source: source.source,
         ...pageFacts(source),
@@ -150,7 +150,9 @@ tool(
         product_slug: product_slug ?? null,
         team_slug: team_slug ?? null,
         sources: shownSources,
-        ...(globalRedactionEnabled() ? { redaction: PLACEHOLDER_NOTE } : {}),
+        ...(globalRedactionEnabled() || sources.some((s) => s.redact)
+          ? { redaction: PLACEHOLDER_NOTE }
+          : {}),
         next: "Summarize how this routes, then call save_knowledge_entry / save_reference_doc / add_component. Each call is gated by its own review box.",
       },
       images,
@@ -228,14 +230,14 @@ tool(
     else await requireCanEdit(await referenceDocScope(args.supersedes));
 
     let body = args.body;
-    let extracted: ExtractedFile | undefined;
+    let extracted: (ExtractedFile & { redact: boolean }) | undefined;
     if (args.body_path) {
       extracted = await extractSource(args.body_path);
       if (extracted.members)
         throw badInput(
           "body_path names an archive, which is a list of files and not a document; attach the file itself",
         );
-      body = globalRedactionEnabled()
+      body = extracted.redact
         ? scrubText(extracted.text, new TokenMap())
         : extracted.text;
     }

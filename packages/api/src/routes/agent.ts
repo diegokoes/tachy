@@ -30,6 +30,7 @@ import { problem } from "../problems";
 import { requestIdOf } from "../logging";
 import { AdmissionCancelled, QueueFull } from "../admission";
 import { BUILTIN_COMMANDS } from "../commands";
+import { INERT_HEADERS } from "../downloads";
 import { requestLimitBytes, tooLarge } from "../upload-limit";
 import {
   activeByUser,
@@ -316,9 +317,8 @@ export const agent = new Hono()
       throw badInput("only an image upload has a preview");
     const image = await imageForModel(upload.bytes);
     return c.body(new Uint8Array(image.bytes), 200, {
+      ...INERT_HEADERS,
       "Content-Type": image.mimeType,
-      "X-Content-Type-Options": "nosniff",
-      "Content-Security-Policy": "default-src 'none'; sandbox",
       "Cache-Control": "private, max-age=3600",
     });
   })

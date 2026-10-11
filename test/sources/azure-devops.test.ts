@@ -175,6 +175,147 @@ describe("azure-devops adapter", () => {
     ]);
   });
 
+  describe("files", () => {
+    const FILE = "098a279a-60b9-40a8-868b-b7fd00c0a439";
+    const PASTED = "a5cedde4-2dd5-4fcf-befe-fd0977dd3433";
+    const IN_COMMENT = "6b2266bf-a155-4582-a475-ca4da68193ef";
+    const org = "https://dev.azure.com/myorg";
+    const withFiles = {
+      ...workItem,
+      fields: {
+        ...workItem.fields,
+        "System.Description": `<div>Printer stops<img src="${org}/projguid/_apis/wit/attachments/${PASTED}?fileName=image.png&amp;x=1"> mid-run</div>`,
+      },
+      relations: [
+        ...workItem.relations,
+        {
+          rel: "AttachedFile",
+          url: `${org}/_apis/wit/attachments/${FILE}`,
+          attributes: { name: "Spec.txt", resourceSize: 31 },
+        },
+        // Someone else's organisation: never one of this item's files.
+        {
+          rel: "AttachedFile",
+          url: `https://dev.azure.com/other/_apis/wit/attachments/${FILE}`,
+          attributes: { name: "Other.txt" },
+        },
+      ],
+    };
+    const fileRoutes = {
+      ...routes,
+      "/_apis/wit/workitems/42": withFiles,
+      "/ProjA/_apis/wit/workItems/42/comments": {
+        comments: [
+          {
+            id: 1,
+            text: `<div>see <img src='${org}/_apis/wit/attachments/${IN_COMMENT}'> and <img src="https://evil.example/x.png"></div>`,
+            createdBy: { displayName: "Bob Dev" },
+            createdDate: "2026-01-02T00:00:00Z",
+          },
+        ],
+      },
+    };
+
+    it("lists attached files on the first message and pasted images where they stand", async () => {
+      mockFetch(fileRoutes);
+      const item = await source().fetchItem("42");
+      const [description, repro, comment] = item.messages;
+      expect(description.bodyText).toBe("Printer stops [image] mid-run");
+      expect(description.attachments).toEqual([
+        { id: PASTED, name: "image.png", inline: true },
+        { id: FILE, name: "Spec.txt", sizeBytes: 31 },
+      ]);
+      expect(repro.attachments).toBeUndefined();
+      expect(comment.attachments).toEqual([
+        { id: IN_COMMENT, name: "image.png", inline: true },
+      ]);
+    });
+
+    it("gives the files a message of their own when the item has no description", async () => {
+      const {
+        "System.Description": _d,
+        "Microsoft.VSTS.TCM.ReproSteps": _r,
+        ...bare
+      } = withFiles.fields;
+      mockFetch({
+        ...fileRoutes,
+        "/_apis/wit/workitems/42": { ...withFiles, fields: bare },
+      });
+      const item = await source().fetchItem("42");
+      expect(item.messages[0]).toMatchObject({
+        externalId: "files-42",
+        bodyText: "",
+        attachments: [{ id: FILE, name: "Spec.txt", sizeBytes: 31 }],
+      });
+    });
+
+    it("opens a file the item lists, by its id, with the token", async () => {
+      const calls: { url: string; auth: string | null }[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, init?: RequestInit) => {
+          const headers = new Headers(init?.headers);
+          calls.push({ url, auth: headers.get("authorization") });
+          const path = url.replace(org, "");
+          if (path.startsWith(`/_apis/wit/attachments/${FILE}`))
+            return new Response("the spec", {
+              headers: { "content-length": "8" },
+            });
+          const key = Object.keys(fileRoutes)
+            .sort((a, b) => b.length - a.length)
+            .find((k) => path.startsWith(k));
+          return {
+            ok: true,
+            status: 200,
+            text: async () =>
+              JSON.stringify(fileRoutes[key as keyof typeof fileRoutes]),
+          } as Response;
+        }),
+      );
+      const opened = await source().openAttachment!("42", FILE.toUpperCase());
+      expect(opened.name).toBe("Spec.txt");
+      expect(opened.sizeBytes).toBe(31);
+      expect(await new Response(opened.body).text()).toBe("the spec");
+      const download = calls.at(-1)!;
+      expect(download.url).toBe(
+        `${org}/_apis/wit/attachments/${FILE}?api-version=7.1`,
+      );
+      expect(download.auth).toMatch(/^Basic /);
+      expect(calls.every((call) => call.url.startsWith(org))).toBe(true);
+    });
+
+    it("refuses an id the item does not list, without asking for it", async () => {
+      const { calls } = mockFetch(fileRoutes);
+      await expect(
+        source().openAttachment!("42", "11111111-2222-3333-4444-555555555555"),
+      ).rejects.toThrow(/work item 42 lists no file/);
+      expect(calls.some((call) => call.includes("/attachments/"))).toBe(false);
+    });
+
+    it("reports a rejected token, which arrives as a sign-in page", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) => {
+          const path = url.replace(org, "");
+          if (path.startsWith("/_apis/wit/attachments/"))
+            return new Response("<html>sign in</html>", { status: 203 });
+          const key = Object.keys(fileRoutes)
+            .sort((a, b) => b.length - a.length)
+            .find((k) => path.startsWith(k));
+          return {
+            ok: true,
+            status: 200,
+            text: async () =>
+              JSON.stringify(fileRoutes[key as keyof typeof fileRoutes]),
+          } as Response;
+        }),
+      );
+      await expect(source().openAttachment!("42", FILE)).rejects.toThrow(
+        /attachments\/.* -> 203/,
+      );
+    });
+  });
+
   it("lists items per project with a JSON cursor", async () => {
     const { calls } = mockFetch({
       ...routes,

@@ -1125,6 +1125,20 @@ both live in Postgres with a TTL.
   at 446 MB RSS and took 9 s without the model calls, which is why it is on the
   heavy worker; the peak barely moves with the page count (373 MB at 4 pages),
   since each page's pictures are released once read.
+- **A ticket's file** is never stored. A read of the ticket lists it (id,
+  name, declared type and size, no address, since a source's download links
+  are signed), and it is fetched from the source each time it is opened: by
+  the agent (`read_file` with the file's reference) on the turn's own source
+  token, and by a person from the chat's list of files
+  (`GET /api/work-items/:source/:id/attachments/:attachmentId`) on theirs. It
+  is held to what an upload is, the same kinds and the same limits. To a
+  browser an image is served fitted and without its metadata, and anything
+  else only as a download. Azure DevOps files open: attached files, and the
+  pictures pasted into a field or a comment. Freshdesk files are listed and
+  do not open yet.
+- **Under a connection's redaction** a file's name is scrubbed, its text is
+  scrubbed when read, and an image is withheld from the model unless that
+  connection's own switch (`config.redaction.images`) allows it.
 - **An image worth keeping** goes from an upload into `library_assets`
   (`save_library_image`), fitted and at most 5 MB, under the same 7-day rule
   for one no body uses.

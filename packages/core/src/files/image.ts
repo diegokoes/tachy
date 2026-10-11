@@ -54,12 +54,15 @@ function encoded(image: Sharp, sourceFormat: string | undefined): Sharp {
 }
 
 /**
- * An image as it is sent to a model: upright, at most
- * MODEL_IMAGE_MAX_EDGE_PX on its longest edge, and written afresh, which
- * leaves its metadata (a camera's location, an author) behind. Only the first
- * frame of an animation is kept, which is all a model reads.
+ * An image as it is sent to a model, or shown to a person: upright, at most
+ * `maxEdgePx` on its longest edge, and written afresh, which leaves its
+ * metadata (a camera's location, an author) behind. Only the first frame of
+ * an animation is kept, which is all a model reads.
  */
-export async function imageForModel(bytes: Uint8Array): Promise<ModelImage> {
+export async function imageForModel(
+  bytes: Uint8Array,
+  maxEdgePx = MODEL_IMAGE_MAX_EDGE_PX,
+): Promise<ModelImage> {
   const sharp = await loadSharp();
   try {
     const source = sharp(bytes, {
@@ -68,8 +71,8 @@ export async function imageForModel(bytes: Uint8Array): Promise<ModelImage> {
     });
     const { format } = await source.metadata();
     const fitted = source.autoOrient().resize({
-      width: MODEL_IMAGE_MAX_EDGE_PX,
-      height: MODEL_IMAGE_MAX_EDGE_PX,
+      width: maxEdgePx,
+      height: maxEdgePx,
       fit: "inside",
       withoutEnlargement: true,
     });

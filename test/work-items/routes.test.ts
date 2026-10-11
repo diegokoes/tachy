@@ -12,7 +12,9 @@ import {
   type SourceFactory,
 } from "@tachy/core/sources";
 import { createApp } from "../../packages/api/src/app";
+import sharp from "sharp";
 import { json } from "../http";
+import { picture } from "../fixtures/files";
 import { resetData, seededFreshdeskConnId, sql } from "../database";
 
 afterAll(() => sql.end());
@@ -41,6 +43,25 @@ const factory: SourceFactory = () => ({
     : {}),
 });
 registerSource("fake-items", factory);
+
+/** What the fake source holds for each attachment id of ticket 42. */
+const held = new Map<string, { name: string; bytes: Uint8Array }>();
+
+registerSource("fake-files-api", () => ({
+  type: "fake-files-api",
+  capabilities: { postNote: false, incrementalSync: false },
+  async fetchItem() {
+    throw new Error("not used");
+  },
+  async listItems() {
+    return { items: [] };
+  },
+  async openAttachment(_externalId, attachmentId) {
+    const file = held.get(attachmentId);
+    if (!file) throw new Error(`42 lists no file '${attachmentId}'`);
+    return { name: file.name, body: new Response(file.bytes).body! };
+  },
+}));
 
 const app = createApp();
 
@@ -116,6 +137,79 @@ describe("POST /api/work-items/:source/:id/notes", () => {
     );
     expect(response.status).toBe(400);
     expect((await response.json()).detail).toMatch(/notes unsupported/i);
+  });
+});
+
+describe("GET /api/work-items/:source/:id/attachments/:attachmentId", () => {
+  const open = (id: string, query = "") =>
+    app.request(`/api/work-items/files-api-conn/42/attachments/${id}${query}`);
+
+  beforeEach(async () => {
+    await sql`delete from source_connections where slug = 'files-api-conn'`;
+    await sql`
+      insert into source_connections (source_type, slug, base_url)
+      values ('fake-files-api', 'files-api-conn', 'https://example.invalid')
+    `;
+    held.clear();
+    held.set("900", { name: "screen.png", bytes: await picture(2400, 1200) });
+    held.set("901", {
+      name: "Störung.log",
+      bytes: new TextEncoder().encode("ERROR timeout"),
+    });
+    // A page of markup named as a picture: served as neither.
+    held.set("902", {
+      name: "trap.png",
+      bytes: new TextEncoder().encode("<script>alert(1)</script>"),
+    });
+  });
+  afterAll(async () => {
+    await sql`delete from source_connections where slug = 'files-api-conn'`;
+  });
+
+  it("serves an image as a picture, fitted, and smaller when asked for a thumbnail", async () => {
+    const shown = await open("900");
+    expect(shown.status).toBe(200);
+    expect(shown.headers.get("content-type")).toBe("image/png");
+    expect(shown.headers.get("content-security-policy")).toBe(
+      "default-src 'none'; sandbox",
+    );
+    expect(shown.headers.get("x-content-type-options")).toBe("nosniff");
+    const full = await sharp(Buffer.from(await shown.arrayBuffer())).metadata();
+    expect([full.width, full.height]).toEqual([2000, 1000]);
+
+    const thumb = await open("900", "?thumb=1");
+    const small = await sharp(
+      Buffer.from(await thumb.arrayBuffer()),
+    ).metadata();
+    expect([small.width, small.height]).toEqual([320, 160]);
+  });
+
+  it("serves anything else only as a download, under its own name", async () => {
+    for (const id of ["901", "902"]) {
+      const response = await open(id);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe(
+        "application/octet-stream",
+      );
+      expect(response.headers.get("content-disposition")).toMatch(
+        /^attachment; filename="/,
+      );
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+    }
+    const log = await open("901");
+    expect(log.headers.get("content-disposition")).toContain(
+      "filename*=UTF-8''St%C3%B6rung.log",
+    );
+    expect(await log.text()).toBe("ERROR timeout");
+  });
+
+  it("answers a file the ticket does not list, and a source that opens none, as errors", async () => {
+    expect((await open("999")).status).toBeGreaterThanOrEqual(400);
+    const closed = await app.request(
+      "/api/work-items/fake-items-conn/42/attachments/900",
+    );
+    expect(closed.status).toBe(400);
+    expect((await closed.json()).detail).toMatch(/cannot be opened from here/);
   });
 });
 
