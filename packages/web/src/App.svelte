@@ -486,6 +486,19 @@
     border-color: transparent;
   }
 
+  /* A conversation under way runs to the window's outer bottom edge, the line
+     the settings mark stands on, so the composer's foot meets the mark's. The
+     three rules give back the Panel's padding, its rule and `main`'s air. */
+  .window:has(main > :global(.chat.bare:not(.empty))) > :global(section) {
+    padding-bottom: 0;
+  }
+  .window:has(main > :global(.chat.bare:not(.empty))) .shell {
+    height: calc(100% + var(--panel-line-w));
+  }
+  main:has(> :global(.chat.bare:not(.empty))) {
+    padding-bottom: 0;
+  }
+
   /* Three tracks, and the outer two are equal: the pill stays on the frame's
      true centre no matter how wide the wordmark draws. */
   .topbar {
