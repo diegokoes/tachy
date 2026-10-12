@@ -54,6 +54,8 @@
   import ChecksPanel from "../diagnostics/ChecksPanel.svelte";
   import LoadsPanel from "../diagnostics/LoadsPanel.svelte";
   import FlowsPanel from "../flows/FlowsPanel.svelte";
+  import StoredPanel from "../work-items/StoredPanel.svelte";
+  import StoredTimeline from "../work-items/StoredTimeline.svelte";
 
   type Section = ConsoleSection & {
     view: Component;
@@ -70,6 +72,7 @@
     integrations: {
       sources: { view: SourcesPanel },
       projects: { view: ProjectsPanel },
+      tickets: { view: StoredPanel, detail: StoredTimeline },
       repos: { view: ReposPanel, detail: RepoDetail },
       buckets: { view: BucketsPanel },
       "bulk-link": { view: BulkLink },
