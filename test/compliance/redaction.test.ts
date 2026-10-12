@@ -243,6 +243,27 @@ describe("redactNormalized", () => {
     expect(redacted.messages[0].author).toBe("[USER_1]");
   });
 
+  it("tokenizes who the item is assigned to, as it does where they are mentioned or write", () => {
+    const assigned: RawWorkItem = {
+      ...base,
+      assignee: "Bob Dev",
+      messages: [
+        { ...base.messages[0], bodyText: "Bob Dev is looking at it" },
+        { ...base.messages[0], author: "Bob Dev", bodyText: "fixed" },
+      ],
+    };
+    const redacted = redactNormalized(assigned, {
+      customerSlug: "acme-corp",
+      map: new TokenMap(),
+    });
+    expect(redacted.assignee).toMatch(/^\[USER_\d+\]$/);
+    expect(redacted.messages[0].bodyText).toBe(
+      `${redacted.assignee} is looking at it`,
+    );
+    expect(redacted.messages[1].author).toBe(redacted.assignee);
+    expect(JSON.stringify(redacted)).not.toContain("Bob");
+  });
+
   it("scrubs a file's name where it scrubs the text, and keeps its id", () => {
     const withFile: RawWorkItem = {
       ...base,

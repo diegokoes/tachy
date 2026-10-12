@@ -37,6 +37,7 @@ describe("github adapter", () => {
         state: "open",
         html_url: "https://github.com/o/r/issues/5",
         user: { login: "alice" },
+        assignee: { login: "carol" },
         body: "it breaks",
         created_at: "2026-01-01T00:00:00Z",
         updated_at: "2026-01-02T00:00:00Z",
@@ -55,6 +56,8 @@ describe("github adapter", () => {
     expect(item.kind).toBe("issue");
     expect(item.groupKey).toBe("o/r");
     expect(item.status).toBe("open");
+    expect(item.assignee).toBe("carol");
+    expect(item.listed).toBeUndefined();
     expect(item.messages.map((m) => m.bodyText)).toEqual([
       "it breaks",
       "confirmed",
@@ -116,6 +119,7 @@ describe("github adapter", () => {
     });
     const { items } = await source().listItems({ groupKey: "o/r" });
     expect(items.map((i) => i.title)).toEqual(["real issue"]);
+    expect(items[0].listed).toBe(true);
   });
 
   it("rejects notes (GitHub has no private notes)", () => {

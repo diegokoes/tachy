@@ -62,6 +62,8 @@ export type AdoFields = {
   "System.AreaPath"?: string;
   "System.WorkItemType"?: string;
   "System.CreatedBy"?: AdoIdentity;
+  "System.AssignedTo"?: AdoIdentity;
+  "Microsoft.VSTS.Common.Priority"?: number;
   "System.CreatedDate"?: string;
   "System.ChangedDate"?: string;
   "System.Description"?: string;

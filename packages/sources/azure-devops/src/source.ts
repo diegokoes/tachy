@@ -208,6 +208,9 @@ export const createAzureDevopsSource: SourceFactory = (
       status: fields["System.State"],
       groupKey: fields["System.TeamProject"],
       areaPath: fields["System.AreaPath"],
+      assignee: fields["System.AssignedTo"]?.displayName,
+      priority: fields["Microsoft.VSTS.Common.Priority"]?.toString(),
+      itemType: fields["System.WorkItemType"],
       requester: createdBy?.displayName ?? uniqueName ?? undefined,
       requesterEmail: uniqueName.includes("@") ? uniqueName : undefined,
       raw: {
@@ -531,7 +534,10 @@ export const createAzureDevopsSource: SourceFactory = (
         SYNC_PAGE,
       );
       const fetched = ids.length ? await client.getWorkItemsBatch(ids) : [];
-      const items = fetched.map((workItem) => toItem(workItem, []));
+      const items = fetched.map((workItem): RawWorkItem => ({
+        ...toItem(workItem, []),
+        listed: true,
+      }));
 
       // ChangedDate watermark cursor: the >= query re-fetches boundary items,
       // which the ingest upsert dedupes; a full page that fails to advance the
