@@ -11,7 +11,7 @@
   } from "./agent";
   import { addEntry, chat, type Entry } from "./chatState.svelte";
   import { renderMarkdown } from "../markdown/markdown";
-  import { reflow, drainOut } from "../motion/motion";
+  import { reflow } from "../motion/motion";
   import Scrollbar from "../tui/Scrollbar.svelte";
   import ArtifactPanel from "./ArtifactPanel.svelte";
   import CommandMenu, {
@@ -26,7 +26,7 @@
   import Launcher from "./Launcher.svelte";
   import { ArtifactMark, Button, Caret, caretSide, G, Icon, tip } from "../tui";
   import { pushScope } from "../keys/keys.svelte";
-  import { tuckTopbar } from "../shell/topbar.svelte";
+  import { tuckTopbar, unveilTopbar, veilTopbar } from "../shell/topbar.svelte";
   import { CHAT_UPLOAD_ACCEPT, uploadRefusal } from "@tachy/contract";
   import type {
     WorkItemTypeOption,
@@ -113,10 +113,13 @@
   const empty = $derived(chat.entries.length === 0);
 
   // A pre effect, so the dock is read where it still sits: centred before the
-  // first message, at the foot after it.
+  // first message, at the foot after it. Its landing shows a nav that a clear
+  // brought back veiled.
   $effect.pre(() => {
     void empty;
-    const play = untrack(() => reflow([dockEl], { absolute: false }));
+    const play = untrack(() =>
+      reflow([dockEl], { absolute: false, onComplete: unveilTopbar }),
+    );
     void tick().then(play);
   });
 
@@ -666,16 +669,12 @@
   }
 
   let turnAbort: AbortController | undefined;
-  onDestroy(() => turnAbort?.abort());
+  onDestroy(() => {
+    turnAbort?.abort();
+    unveilTopbar();
+  });
   let clearArmed = $state(false);
   let disarmTimer: ReturnType<typeof setTimeout> | undefined;
-
-  /** The transcript's running text, which leaves word by word. */
-  const WORDED =
-    ":scope > .turn > .who, :scope > .turn > .body:not(.md), :scope > .turn > .body.md > :not(pre, table, hr)";
-  /** What a word clip would leave standing: cards, tool rows, code, buttons. */
-  const BOXED =
-    ":scope > :not(.turn), :scope > .turn :is(pre, table, code, img, hr, .btn)";
 
   function armClear() {
     clearArmed = true;
@@ -683,19 +682,18 @@
     disarmTimer = setTimeout(() => (clearArmed = false), 4000);
   }
 
-  function wipe() {
-    chat.entries = [];
-    chat.sessionId = undefined;
-    chat.turnId = undefined;
-  }
-
+  /**
+   * The transcript goes at once. The nav takes its row back veiled, so the
+   * window settles while the dock travels to the centre, and the dock's
+   * landing shows it.
+   */
   function confirmClear() {
     clearTimeout(disarmTimer);
     clearArmed = false;
-    if (!transcriptEl) return wipe();
-    const pick = (selector: string) =>
-      Array.from(transcriptEl!.querySelectorAll<HTMLElement>(selector));
-    drainOut(pick(WORDED), pick(BOXED), wipe);
+    veilTopbar();
+    chat.entries = [];
+    chat.sessionId = undefined;
+    chat.turnId = undefined;
   }
 
   function onClear() {

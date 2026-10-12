@@ -31,46 +31,6 @@ export function shatter(node: HTMLElement) {
 }
 
 /**
- * Empties a view: each word of `text` drains away top to bottom, and `boxes`,
- * the surfaces a word clip would leave standing, fade. `onComplete` fires once,
- * with the words whole again and the boxes still transparent, so the caller
- * removes the nodes in it.
- */
-export function drainOut(
-  text: HTMLElement[],
-  boxes: HTMLElement[],
-  onComplete: () => void,
-) {
-  if (reducedMotion() || (!text.length && !boxes.length)) {
-    onComplete();
-    return null;
-  }
-  const split = new SplitText(text, {
-    type: "words",
-    reduceWhiteSpace: false,
-  });
-  const tl = gsap.timeline({
-    onComplete: () => {
-      split.revert();
-      onComplete();
-    },
-  });
-  tl.to(boxes, { opacity: 0, duration: 0.18, ease: "power1.out" }, 0);
-  tl.fromTo(
-    split.words,
-    { clipPath: "inset(0% 0 0 0)" },
-    {
-      clipPath: "inset(100% 0 0 0)",
-      duration: 0.28,
-      ease: "power2.in",
-      stagger: { amount: 0.22 },
-    },
-    0,
-  );
-  return tl;
-}
-
-/**
  * Resolves a mask of password dots into plain text: the placeholder of an
  * input, the text of anything else. A setting the user has not set still
  * resolves to something, and the decode says that typing or picking here
@@ -725,16 +685,21 @@ export function unfold(opts: {
 /**
  * Smooth resizing for a layout change. Call it in the old layout, make the
  * change, then call what it returns: each node travels from its old box to its
- * new one. Width and height are tweened, so text reflows, and the nodes are
- * absolute for the tween, since a zero-basis flex item ignores an inline
- * height. `absolute: false` keeps a node that only moves in flow.
+ * new one, width and height tweened so text reflows. A zero-basis flex item
+ * ignores an inline height, so nodes are absolute for the tween unless
+ * `absolute: false`. `onComplete` fires at once when nothing travels.
  */
 export function reflow(
   targets: (Element | null | undefined)[],
-  opts: { duration?: number; ease?: string; absolute?: boolean } = {},
+  opts: {
+    duration?: number;
+    ease?: string;
+    absolute?: boolean;
+    onComplete?: () => void;
+  } = {},
 ): () => void {
   const nodes = targets.filter((t): t is Element => Boolean(t));
-  if (reducedMotion() || !nodes.length) return () => {};
+  if (reducedMotion() || !nodes.length) return () => opts.onComplete?.();
   const state = Flip.getState(nodes);
   const duration = opts.duration ?? 0.35;
   return () => {
@@ -742,6 +707,7 @@ export function reflow(
       duration,
       ease: opts.ease ?? "power2.inOut",
       absolute: opts.absolute ?? true,
+      onComplete: opts.onComplete,
       onEnter: (els) =>
         gsap.fromTo(els, { opacity: 0 }, { opacity: 1, duration }),
       onLeave: (els) => gsap.to(els, { opacity: 0, duration: duration / 2 }),
