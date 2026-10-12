@@ -1156,7 +1156,7 @@
     flex-direction: column;
     gap: 0.1rem;
     width: fit-content;
-    max-width: 60ch;
+    max-width: 70ch;
   }
   .turn .who {
     font-size: var(--fs-xs);
