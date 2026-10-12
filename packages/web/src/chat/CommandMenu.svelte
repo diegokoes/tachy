@@ -38,6 +38,13 @@
     description: "Attach an artifact to the next message",
   };
 
+  /** Client-side too: it changes what the conversation's turns run on. */
+  export const MODEL_COMMAND: BuiltinCommandMeta = {
+    name: "model",
+    args: "<model> [effort]",
+    description: "Run this conversation on another model",
+  };
+
   export function matchArtifacts(
     artifacts: CommandArtifactMeta[],
     query: string,
@@ -99,7 +106,7 @@
         desc: a.description ?? "",
         pick: { kind: "artifact", artifact: a } as CommandPick,
       }));
-    return [...builtins, ARTIFACT_COMMAND]
+    return [...builtins, ARTIFACT_COMMAND, MODEL_COMMAND]
       .filter((b) => b.name.startsWith(query.toLowerCase()))
       .map((b) => ({
         key: `b:${b.name}`,

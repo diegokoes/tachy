@@ -1,5 +1,9 @@
 import { onUnauthorized } from "../access/session.svelte";
-import { isProblemType, type UploadLimits } from "@tachy/contract";
+import {
+  isProblemType,
+  type AgentEffort,
+  type UploadLimits,
+} from "@tachy/contract";
 import { readError } from "../problems";
 
 export interface ChatBody {
@@ -8,6 +12,9 @@ export interface ChatBody {
   uploadPaths?: string[];
   artifactId?: string;
   command?: { name: string; args: string };
+  /** The conversation's `/model` pick; unset, the settings decide. */
+  model?: string;
+  effort?: AgentEffort;
 }
 
 export interface SubcommandMeta {

@@ -21,6 +21,7 @@ import {
   encodeDateFormat,
   formatDateTime,
   DEFAULT_DATE_FORMAT,
+  type AgentEffort,
   type DateFormat,
 } from "@tachy/core";
 import { getUserByEmail, userSoleTeamId } from "@tachy/core/access";
@@ -195,6 +196,28 @@ export async function mcpConfig(
     effort: prefs.agent_effort.value as AgentConfig["effort"],
     ...(agentAuth ? { agentAuth } : {}),
     ...(allowedModels.length ? { allowedModels } : {}),
+  };
+}
+
+/**
+ * What the caller picked for this conversation, laid over their preference. A
+ * model off the org's list is refused: `effectiveModel` would run the first
+ * allowed one in its place, and the caller asked for this one by name.
+ */
+export function turnChoice<
+  Config extends Pick<AgentConfig, "model" | "effort" | "allowedModels">,
+>(base: Config, picked: { model?: string; effort?: AgentEffort }): Config {
+  const { allowedModels } = base;
+  if (
+    picked.model &&
+    allowedModels?.length &&
+    !allowedModels.includes(picked.model)
+  )
+    throw badInput(`model '${picked.model}' is not on your org's list`);
+  return {
+    ...base,
+    ...(picked.model ? { model: picked.model } : {}),
+    ...(picked.effort ? { effort: picked.effort } : {}),
   };
 }
 
