@@ -128,6 +128,36 @@
             ></td
           >
         </tr>
+        {#if system.settings.redaction_global.value && system.settings.redaction_images}
+          {@const images = system.settings.redaction_images}
+          <tr>
+            <td class="tip">Images under redaction</td>
+            <td>
+              <label class="check">
+                <Checkbox
+                  checked={images.value}
+                  ariaLabel="Send images to the model under redaction"
+                  onchange={(checked) =>
+                    saveSetting("redaction_images", checked)}
+                />
+                <span class="state" class:on={!images.value}>
+                  <Icon
+                    name={images.value ? "lockOff" : "lockOn"}
+                    size="1em"
+                    weight={7}
+                  />
+                  {images.value
+                    ? "sent: a picture cannot be scrubbed"
+                    : "withheld from the model"}
+                </span>
+              </label>
+            </td>
+            <td
+              ><span class="badge src-{images.source}">{images.source}</span
+              ></td
+            >
+          </tr>
+        {/if}
         <tr>
           <td>Agent model</td>
           <td class="edit-cell">

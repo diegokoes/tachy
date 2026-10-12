@@ -140,6 +140,51 @@ export {
   TOKEN_LIFETIME_DAYS,
 } from "./access";
 export type { ApiTokenRow, SsoAdmission, UserCensus } from "./access";
+export {
+  FILE_CONTENT_TYPES,
+  FILE_EXTENSIONS,
+  FILE_TYPES,
+  checkFile,
+  decodeText,
+  fileExtension,
+  fileFamily,
+  isPdf,
+  isText,
+  isZip,
+  mismatchReason,
+  unlistedReason,
+} from "./files";
+export type {
+  FileCheck,
+  FileContentType,
+  FileExtension,
+  FileFamily,
+} from "./files";
+export {
+  attachmentPath,
+  attachmentRef,
+  parseAttachmentRef,
+} from "./attachments";
+export type { AttachmentRef, WorkItemFile } from "./attachments";
+export {
+  CHAT_UPLOAD_ACCEPT,
+  DEFAULT_UPLOAD_LIMITS,
+  largestUploadBytes,
+  parseUploadRef,
+  tooLargeReason,
+  uploadLimitBytes,
+  uploadPreviewPath,
+  uploadRef,
+  uploadRefusal,
+} from "./uploads";
+export type { UploadLimits } from "./uploads";
+export {
+  PROBLEM_TYPES,
+  isProblemType,
+  problemMessage,
+  readProblem,
+} from "./problems";
+export type { ProblemDetails, ProblemSlug } from "./problems";
 export type {
   SourceCensus,
   SourceConnectionRow,
@@ -176,6 +221,7 @@ export {
   MAX_ASSET_BYTES,
   assetPath,
   ASSET_SRC_RE,
+  sniffImage,
 } from "./assets";
 export type { LibraryAssetType } from "./assets";
 

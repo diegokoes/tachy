@@ -1,6 +1,11 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 
+// A signed address is fetched as an untrusted URL, which looks its host up.
+vi.mock("node:dns/promises", () => ({
+  lookup: async () => [{ address: "52.216.10.10", family: 4 }],
+}));
+
 beforeAll(() => {
   process.env.FRESHDESK_TOKEN = "test-key";
 });
@@ -74,6 +79,46 @@ describe("freshdesk adapter", () => {
       "it stopped",
       "reply 1",
     ]);
+  });
+
+  it("lists each message's files by id and name, and leaves their signed addresses behind", async () => {
+    mockFetch({
+      "/tickets/7?include=requester": {
+        ...ticket,
+        attachments: [
+          {
+            id: 900,
+            name: "screen.png",
+            content_type: "image/png",
+            size: 2048,
+            attachment_url: "https://s3.example/signed?X-Amz-Expires=300",
+          },
+        ],
+      },
+      "/tickets/7/conversations?page=1": [
+        {
+          ...convo(1),
+          attachments: [
+            // The name the docs give the size on a note's own response.
+            { id: 901, name: "app.log", file_size: 77 },
+            { name: "no id, so nothing to open it by" },
+          ],
+        },
+      ],
+    });
+    const item = await source().fetchItem("7");
+    expect(item.messages.map((m) => m.attachments)).toEqual([
+      [
+        {
+          id: "900",
+          name: "screen.png",
+          contentType: "image/png",
+          sizeBytes: 2048,
+        },
+      ],
+      [{ id: "901", name: "app.log", sizeBytes: 77 }],
+    ]);
+    expect(JSON.stringify(item.messages)).not.toContain("signed");
   });
 
   it("pages through tickets with more than 30 conversations", async () => {
@@ -196,6 +241,352 @@ describe("freshdesk adapter", () => {
     await source().postNote!("7", "<p>x</p>");
     const request = requests.find((r) => r.path === "/tickets/7/notes")!;
     expect(JSON.parse(String(request.init?.body)).private).toBe(true);
+  });
+});
+
+describe("freshdesk files", () => {
+  // The two shapes Freshdesk signs a file's address in.
+  const CLOUDFRONT =
+    "https://x.attachments1.freshdesk.com/data/helpdesk/attachments/production/900/original/screen.png?Expires=1760000000&Signature=c2ln&Key-Pair-Id=K1";
+  const S3 =
+    "https://s3.amazonaws.com/cdn.freshdesk.com/data/helpdesk/attachments/production/901/original/list.xlsx?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=300&X-Amz-Signature=c2ln";
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+
+  interface Seen {
+    url: string;
+    authorization: string | null;
+  }
+
+  function mockHelpdesk(
+    routes: Record<string, unknown>,
+    files: Record<string, () => Response> = {},
+  ): Seen[] {
+    const seen: Seen[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        seen.push({
+          url,
+          authorization: new Headers(init?.headers).get("authorization"),
+        });
+        if (files[url]) return files[url]();
+        const path = url.replace("https://x.freshdesk.com/api/v2", "");
+        const key = Object.keys(routes)
+          .sort((a, b) => b.length - a.length)
+          .find((k) => path.startsWith(k));
+        if (!key) throw new Error(`unexpected fetch ${url}`);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => routes[key],
+          text: async () => "",
+        } as Response;
+      }),
+    );
+    return seen;
+  }
+
+  const bytesOf = async (body: ReadableStream<Uint8Array>) =>
+    new Uint8Array(await new Response(body).arrayBuffer());
+
+  const screen = {
+    id: 900,
+    name: "screen.png",
+    content_type: "image/png",
+    size: 4,
+    attachment_url: CLOUDFRONT,
+  };
+
+  it("opens a file the ticket lists from its signed address, without the API key", async () => {
+    const seen = mockHelpdesk(
+      { "/tickets/7": { ...ticket, attachments: [screen] } },
+      { [CLOUDFRONT]: () => new Response(PNG) },
+    );
+    const opened = await source().openAttachment!("7", "900");
+    expect(opened).toMatchObject({
+      name: "screen.png",
+      contentType: "image/png",
+      sizeBytes: 4,
+    });
+    expect(await bytesOf(opened.body)).toEqual(PNG);
+    // The ticket listed it, so no conversation was read.
+    expect(seen.map((request) => request.url)).toEqual([
+      "https://x.freshdesk.com/api/v2/tickets/7",
+      CLOUDFRONT,
+    ]);
+    expect(seen[0].authorization).toMatch(/^Basic /);
+    expect(seen[1].authorization).toBeNull();
+  });
+
+  it("finds a file on a later page of conversations", async () => {
+    const seen = mockHelpdesk(
+      {
+        "/tickets/7": ticket,
+        "/tickets/7/conversations?page=1": Array.from({ length: 30 }, (_, i) =>
+          convo(i + 1),
+        ),
+        "/tickets/7/conversations?page=2": [
+          {
+            ...convo(31),
+            attachments: [{ id: 901, name: "list.xlsx", attachment_url: S3 }],
+          },
+        ],
+      },
+      {
+        [S3]: () =>
+          new Response(new Uint8Array(12), {
+            headers: { "content-length": "12" },
+          }),
+      },
+    );
+    const opened = await source().openAttachment!("7", "901");
+    // Unlisted, the size is the one the file's host declares.
+    expect(opened).toMatchObject({ name: "list.xlsx", sizeBytes: 12 });
+    expect(opened.contentType).toBeUndefined();
+    expect(seen.at(-1)).toEqual({ url: S3, authorization: null });
+  });
+
+  it("stops reading conversations at the page that lists the file", async () => {
+    const full = Array.from({ length: 30 }, (_, i) => convo(i + 1));
+    mockHelpdesk(
+      {
+        "/tickets/7": ticket,
+        // No second page is routed: asking for it fails the test.
+        "/tickets/7/conversations?page=1": [
+          { ...full[0], attachments: [screen] },
+          ...full.slice(1),
+        ],
+      },
+      { [CLOUDFRONT]: () => new Response(PNG) },
+    );
+    await expect(source().openAttachment!("7", "900")).resolves.toMatchObject({
+      name: "screen.png",
+    });
+  });
+
+  it("refuses an id the ticket does not list", async () => {
+    const seen = mockHelpdesk({
+      "/tickets/7": { ...ticket, attachments: [screen] },
+      "/tickets/7/conversations?page=1": [convo(1)],
+    });
+    await expect(source().openAttachment!("7", "999")).rejects.toThrow(
+      "ticket 7 lists no file '999'",
+    );
+    expect(
+      seen.every((r) => r.url.startsWith("https://x.freshdesk.com/")),
+    ).toBe(true);
+  });
+
+  it("reports a refused address by its status, never by the address", async () => {
+    mockHelpdesk(
+      { "/tickets/7": { ...ticket, attachments: [screen] } },
+      { [CLOUDFRONT]: () => new Response("<Error/>", { status: 403 }) },
+    );
+    const failure = await source().openAttachment!("7", "900").catch(
+      (e: Error) => e,
+    );
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toBe("Freshdesk file -> 403");
+  });
+
+  it("refuses a listing that carries no usable address", async () => {
+    for (const attachment_url of [undefined, "not a url"]) {
+      mockHelpdesk({
+        "/tickets/7": {
+          ...ticket,
+          attachments: [{ ...screen, attachment_url }],
+        },
+      });
+      await expect(source().openAttachment!("7", "900")).rejects.toThrow(
+        "Freshdesk gave no address for the file",
+      );
+    }
+  });
+
+  // A pasted picture's address: a token on Freshdesk's host, no file name.
+  const token = (id: number) =>
+    `e30.${Buffer.from(
+      JSON.stringify({ id, domain: "x.freshdesk.com", account_id: 1 }),
+    ).toString("base64url")}.c2ln`;
+  const pasted = (id: number, host = "attachment.freshdesk.com") =>
+    `https://${host}/inline/attachment?token=${token(id)}`;
+  const img = (src: string) =>
+    `<img src="${src}" class="fr-fic fr-fil fr-dib" data-id="1">`;
+  const picture = (id: number) => ({
+    id: `inline-${id}`,
+    name: "image.png",
+    inline: true,
+  });
+  const redirect = (location: string) => () =>
+    new Response(null, { status: 302, headers: { location } });
+
+  it("lists the pictures pasted into a message, each once, and only Freshdesk's own", async () => {
+    mockHelpdesk({
+      "/agents": [],
+      "/tickets/7?include=requester": {
+        ...ticket,
+        description: `<div>look ${img(pasted(5001))}</div>`,
+        attachments: [screen],
+      },
+      "/tickets/7/conversations?page=1": [
+        {
+          ...convo(1),
+          body: [
+            img(pasted(5002)),
+            // The reply quotes the first message, its picture included.
+            `<blockquote>${img(pasted(5001))}</blockquote>`,
+            // The same picture twice in one message.
+            img(`${pasted(5002)}&amp;v=1`),
+            img("https://dev.azure.com/org/_apis/wit/attachments/1"),
+            img("data:image/png;base64,AAAA"),
+            img("http://attachment.freshdesk.com/inline/attachment?token=x"),
+            img(`https://files.example/inline/attachment?token=${token(9)}`),
+            img(`https://attachment.freshdesk.com/other?token=${token(9)}`),
+            img("https://attachment.freshdesk.com/inline/attachment"),
+            img(
+              "https://attachment.freshdesk.com/inline/attachment?token=a.b.c",
+            ),
+            img(
+              `https://attachment.freshdesk.com/inline/attachment?token=e30.${Buffer.from(
+                JSON.stringify({ id: "../etc" }),
+              ).toString("base64url")}.c2ln`,
+            ),
+            // A token that names no file.
+            img(
+              `https://attachment.freshdesk.com/inline/attachment?token=e30.${Buffer.from(
+                JSON.stringify({ domain: "x.freshdesk.com", account_id: 1 }),
+              ).toString("base64url")}.c2ln`,
+            ),
+            "<img src='not a url'>",
+          ].join(" "),
+        },
+      ],
+    });
+    const item = await source().fetchItem("7");
+    expect(item.messages.map((m) => m.attachments)).toEqual([
+      [
+        {
+          id: "900",
+          name: "screen.png",
+          contentType: "image/png",
+          sizeBytes: 4,
+        },
+        picture(5001),
+      ],
+      [picture(5002)],
+    ]);
+    expect(JSON.stringify(item.messages)).not.toContain("token=");
+  });
+
+  it("lists a picture addressed on the helpdesk's own host, whatever its domain", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const body = url.includes("/conversations")
+          ? []
+          : url.includes("/agents")
+            ? []
+            : {
+                ...ticket,
+                description: img(pasted(5003, "support.acme.com")),
+              };
+        return { ok: true, status: 200, json: async () => body } as Response;
+      }),
+    );
+    const item = await createFreshdeskSource({
+      baseUrl: "https://support.acme.com",
+      slug: "fd",
+      config: {},
+    }).fetchItem("7");
+    expect(item.messages[0].attachments).toEqual([picture(5003)]);
+  });
+
+  it("opens a pasted picture through its redirects, with no key on any of them", async () => {
+    const onHelpdesk = pasted(5001, "x.freshdesk.com");
+    const seen = mockHelpdesk(
+      {
+        "/tickets/7": {
+          ...ticket,
+          description: `<div>look ${img(pasted(5001))}</div>`,
+        },
+      },
+      {
+        [pasted(5001)]: redirect(onHelpdesk),
+        [onHelpdesk]: redirect(CLOUDFRONT),
+        [CLOUDFRONT]: () =>
+          Object.defineProperty(
+            new Response(PNG, { headers: { "content-type": "image/png" } }),
+            "url",
+            { value: CLOUDFRONT },
+          ),
+      },
+    );
+    const opened = await source().openAttachment!("7", "inline-5001");
+    // The name is the one the last address carries.
+    expect(opened).toMatchObject({
+      name: "screen.png",
+      contentType: "image/png",
+    });
+    expect(await bytesOf(opened.body)).toEqual(PNG);
+    expect(seen.map((request) => request.url)).toEqual([
+      "https://x.freshdesk.com/api/v2/tickets/7",
+      pasted(5001),
+      onHelpdesk,
+      CLOUDFRONT,
+    ]);
+    expect(seen.slice(1).map((request) => request.authorization)).toEqual([
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  it("names a pasted picture by its type when its address carries no name", async () => {
+    mockHelpdesk(
+      {
+        "/tickets/7": ticket,
+        "/tickets/7/conversations?page=1": [
+          { ...convo(1), body: img(pasted(5002)) },
+        ],
+      },
+      {
+        [pasted(5002)]: () =>
+          new Response(new Uint8Array([0xff, 0xd8, 0xff]), {
+            headers: {
+              "content-type": "image/jpeg; charset=binary",
+              "content-length": "3",
+            },
+          }),
+      },
+    );
+    await expect(
+      source().openAttachment!("7", "inline-5002"),
+    ).resolves.toMatchObject({ name: "image.jpg", sizeBytes: 3 });
+  });
+
+  it("refuses a pasted picture no message of the ticket has", async () => {
+    mockHelpdesk({
+      "/tickets/7": { ...ticket, description: img(pasted(5001)) },
+      "/tickets/7/conversations?page=1": [convo(1)],
+    });
+    await expect(source().openAttachment!("7", "inline-9999")).rejects.toThrow(
+      "ticket 7 lists no file 'inline-9999'",
+    );
+  });
+
+  it("does not follow an address onto a private host", async () => {
+    const seen = mockHelpdesk({
+      "/tickets/7": {
+        ...ticket,
+        attachments: [
+          { ...screen, attachment_url: "http://169.254.169.254/latest/" },
+        ],
+      },
+    });
+    await expect(source().openAttachment!("7", "900")).rejects.toThrow(
+      "private or loopback",
+    );
+    expect(seen).toHaveLength(1);
   });
 });
 

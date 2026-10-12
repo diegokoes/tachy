@@ -36,6 +36,11 @@ supported, which is what [SECURITY.md](SECURITY.md) says too.
   already judged.
 - When a change raises a package's coverage, raise that package's floor in the
   same pull request. A floor is never lowered to make a build pass.
+- The API answers every error as an RFC 9457 problem
+  (`application/problem+json`). Throw an `AppError`, or return `problem()` from
+  `packages/api/src/problems.ts` where a header has to go with it; validate
+  input with `validate()`, not `zValidator`. Mint a type in the contract's
+  `PROBLEM_TYPES` only when a client branches on it.
 - tachý is AGPL-3.0-or-later; your contribution will be licensed the same way
   once merged.
 

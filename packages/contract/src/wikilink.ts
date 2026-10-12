@@ -8,8 +8,10 @@
  *   [[spooler-stalls|the spooler]]      with display text
  *   [[entry:<uuid>|SSO loop]]           a knowledge entry
  *   [[doc:<uuid>|The old runbook]]      an imported reference doc
+ *
+ * No bracket inside either part: an unclosed `[[` is given up at the next one.
  */
-export const WIKILINK_RE = /\[\[([^\]|]+?)(?:\|([^\]]*?))?\]\]/g;
+export const WIKILINK_RE = /\[\[([^\[\]|]+?)(?:\|([^\[\]]*?))?\]\]/g;
 
 export type WikilinkTargetKind = "article" | "entry" | "doc";
 

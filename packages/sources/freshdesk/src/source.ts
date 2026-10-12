@@ -1,15 +1,26 @@
-import { changeTagList, sourceFetch } from "@tachy/core/sources";
+import {
+  changeTagList,
+  fetchUntrustedUrl,
+  sourceFetch,
+} from "@tachy/core/sources";
 import {
   customerStandIn,
   scrubbableCopy,
   scrubStrings,
   TokenMap,
 } from "@tachy/core/compliance";
-import { freshdeskToken, errorText, rememberSecret } from "@tachy/core/infra";
+import {
+  badInput,
+  errorText,
+  freshdeskToken,
+  rememberSecret,
+} from "@tachy/core/infra";
 import { asNoteHtml } from "@tachy/core/work-items";
 import type { FlowOption } from "@tachy/core";
 import type {
   WorkItemSource,
+  OpenedAttachment,
+  RawAttachment,
   RawWorkItem,
   RawMessage,
   ListOptions,
@@ -74,6 +85,144 @@ function redactFreshdeskRaw(
   return copy;
 }
 
+/** A file as Freshdesk lists it. Its docs show the size under either name. */
+interface FreshdeskAttachment {
+  id?: number;
+  name?: string;
+  content_type?: string;
+  size?: number;
+  file_size?: number;
+  /** Signed, and good for five minutes from the read that returned it. */
+  attachment_url?: string;
+}
+
+/**
+ * The files of a ticket or a conversation. The `attachment_url` beside each
+ * is left behind: one stored or shown is a dead link five minutes later.
+ */
+export function listedFiles(
+  attachments: FreshdeskAttachment[] | undefined,
+): RawAttachment[] {
+  const files: RawAttachment[] = [];
+  for (const file of attachments ?? []) {
+    if (file?.id == null || !file.name) continue;
+    const sizeBytes = file.size ?? file.file_size;
+    files.push({
+      id: String(file.id),
+      name: file.name,
+      ...(file.content_type ? { contentType: file.content_type } : {}),
+      ...(typeof sizeBytes === "number" ? { sizeBytes } : {}),
+    });
+  }
+  return files;
+}
+
+/** The size a file's host declares for it, when it declares one. */
+function declaredLength(response: Response): number | undefined {
+  const length = Number(response.headers.get("content-length"));
+  return length > 0 ? length : undefined;
+}
+
+const IMG_SRC = /<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/gi;
+
+/** How a pasted picture's id reads, apart from a listed file's number. */
+const PASTED = "inline-";
+
+/**
+ * The file a pasted picture's address names. The address is
+ * `/inline/attachment?token=<JWT>` on a Freshdesk host or the helpdesk's own,
+ * and the token's `id` claim is all in it that tells one file from another.
+ */
+function pastedId(src: string, helpdeskHost: string): string | null {
+  if (!URL.canParse(src)) return null;
+  const url = new URL(src);
+  const onFreshdesk =
+    url.host === helpdeskHost || url.host.endsWith(".freshdesk.com");
+  if (url.protocol !== "https:" || !onFreshdesk) return null;
+  if (url.pathname !== "/inline/attachment") return null;
+  const claims = url.searchParams.get("token")?.split(".")[1];
+  if (!claims) return null;
+  try {
+    const { id } = JSON.parse(Buffer.from(claims, "base64url").toString());
+    const named = typeof id === "number" || typeof id === "string";
+    return named && /^[\w-]{1,64}$/.test(String(id)) ? PASTED + id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The pictures pasted into a message's HTML: each one's id and its address. */
+function pastedSources(
+  html: string | undefined,
+  helpdeskHost: string,
+): Map<string, string> {
+  const sources = new Map<string, string>();
+  for (const [, quoted] of (html ?? "").matchAll(IMG_SRC)) {
+    const src = quoted.replace(/&amp;/g, "&");
+    const id = pastedId(src, helpdeskHost);
+    if (id && !sources.has(id)) sources.set(id, src);
+  }
+  return sources;
+}
+
+/**
+ * The pictures pasted into a message. Freshdesk leaves them out of
+ * `attachments`, and the name is only known once one is opened.
+ */
+function pastedImages(
+  html: string | undefined,
+  helpdeskHost: string,
+): RawAttachment[] {
+  return [...pastedSources(html, helpdeskHost).keys()].map((id) => ({
+    id,
+    name: "image.png",
+    inline: true,
+  }));
+}
+
+/**
+ * A reply quotes the messages before it, pictures included: each picture
+ * stays on the first message that has it.
+ */
+function withoutQuotedImages(messages: RawMessage[]): RawMessage[] {
+  const seen = new Set<string>();
+  return messages.map((message) => ({
+    ...message,
+    attachments: (message.attachments ?? []).filter((file) => {
+      if (!file.inline) return true;
+      if (seen.has(file.id)) return false;
+      seen.add(file.id);
+      return true;
+    }),
+  }));
+}
+
+const IMAGE_EXTENSIONS: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+};
+
+/**
+ * What to call a pasted picture: the file name its address redirects to, or
+ * failing that one made from the type its host declares.
+ */
+function pastedName(response: Response): string {
+  const last = URL.canParse(response.url)
+    ? new URL(response.url).pathname.split("/").pop()
+    : undefined;
+  if (last && /\.[A-Za-z0-9]{2,5}$/.test(last)) {
+    try {
+      return decodeURIComponent(last);
+    } catch {
+      return last;
+    }
+  }
+  const type = (response.headers.get("content-type") ?? "").split(";")[0];
+  return `image.${IMAGE_EXTENSIONS[type.trim().toLowerCase()] ?? "png"}`;
+}
+
 /** The parts of Freshdesk's payloads this adapter reads. */
 interface FreshdeskTicket {
   id: number;
@@ -82,8 +231,9 @@ interface FreshdeskTicket {
   group_id?: number | null;
   requester_id?: number | null;
   requester?: { email?: string; name?: string };
+  description?: string;
   description_text?: string;
-  attachments?: unknown[];
+  attachments?: FreshdeskAttachment[];
   created_at?: string;
   updated_at?: string;
 }
@@ -96,8 +246,9 @@ interface FreshdeskConversation {
   incoming?: boolean;
   private?: boolean;
   from_email?: string;
+  body?: string;
   body_text?: string;
-  attachments?: unknown[];
+  attachments?: FreshdeskAttachment[];
   created_at?: string;
 }
 
@@ -166,6 +317,7 @@ export const createFreshdeskSource: SourceFactory = (
     "Basic " + rememberSecret(Buffer.from(`${token}:X`).toString("base64"));
   const base = connection.baseUrl.replace(/\/$/, "");
   const api = base + "/api/v2";
+  const helpdeskHost = URL.canParse(base) ? new URL(base).host : "";
 
   async function get<T>(path: string): Promise<T> {
     const response = await sourceFetch(
@@ -179,6 +331,75 @@ export const createFreshdeskSource: SourceFactory = (
         `Freshdesk GET ${path} -> ${response.status} ${await response.text()}`,
       );
     return (await response.json()) as T;
+  }
+
+  /** A ticket's conversations, a page at a time, oldest first. */
+  async function* conversationPages(
+    ticketId: string,
+  ): AsyncGenerator<FreshdeskConversation[]> {
+    for (let page = 1; page <= MAX_CONVERSATION_PAGES; page++) {
+      const batch = await get<FreshdeskConversation[]>(
+        `/tickets/${ticketId}/conversations?page=${page}`,
+      );
+      if (!Array.isArray(batch) || batch.length === 0) return;
+      yield batch;
+      if (batch.length < CONVERSATIONS_PER_PAGE) return;
+    }
+  }
+
+  /**
+   * Each message of a ticket as it reads now, oldest first: the files it
+   * lists and its HTML. A listed file's address only opens for five minutes,
+   * so one is always taken from a read just made; a caller that stops early
+   * reads no further page.
+   */
+  async function* messagesNow(ticketId: string): AsyncGenerator<{
+    files: FreshdeskAttachment[] | undefined;
+    html: string | undefined;
+  }> {
+    const ticket = await get<FreshdeskTicket>(`/tickets/${ticketId}`);
+    yield { files: ticket.attachments, html: ticket.description };
+    for await (const conversations of conversationPages(ticketId))
+      for (const conversation of conversations)
+        yield { files: conversation.attachments, html: conversation.body };
+  }
+
+  /**
+   * The signature or token in the address is the whole grant, so the API key
+   * is not sent with it, and no failure repeats the address: whoever reads one
+   * can open the file.
+   */
+  async function openAddress(address: string | undefined): Promise<Response> {
+    if (!address || !URL.canParse(address))
+      throw new Error("Freshdesk gave no address for the file");
+    const response = await fetchUntrustedUrl("Freshdesk file", address);
+    if (!response.ok || !response.body)
+      throw new Error(`Freshdesk file -> ${response.status}`);
+    return response;
+  }
+
+  async function openListed(
+    file: FreshdeskAttachment,
+    attachmentId: string,
+  ): Promise<OpenedAttachment> {
+    const response = await openAddress(file.attachment_url);
+    return {
+      name: file.name ?? attachmentId,
+      ...(file.content_type ? { contentType: file.content_type } : {}),
+      sizeBytes: file.size ?? file.file_size ?? declaredLength(response),
+      body: response.body!,
+    };
+  }
+
+  async function openPasted(src: string): Promise<OpenedAttachment> {
+    const response = await openAddress(src);
+    const type = response.headers.get("content-type");
+    return {
+      name: pastedName(response),
+      ...(type ? { contentType: type } : {}),
+      sizeBytes: declaredLength(response),
+      body: response.body!,
+    };
   }
 
   let agentNames: Map<string, string> | null = null;
@@ -241,7 +462,10 @@ export const createFreshdeskSource: SourceFactory = (
       visibility: conversation.private ? "private" : "public",
       direction: conversation.incoming ? "incoming" : "outgoing",
       bodyText: conversation.body_text ?? "",
-      attachments: conversation.attachments ?? [],
+      attachments: [
+        ...listedFiles(conversation.attachments),
+        ...pastedImages(conversation.body, helpdeskHost),
+      ],
       createdAt: conversation.created_at,
     };
   }
@@ -306,14 +530,8 @@ export const createFreshdeskSource: SourceFactory = (
         `/tickets/${ticketId}?include=requester`,
       );
       const convos: FreshdeskConversation[] = [];
-      for (let page = 1; page <= MAX_CONVERSATION_PAGES; page++) {
-        const batch = await get<FreshdeskConversation[]>(
-          `/tickets/${ticketId}/conversations?page=${page}`,
-        );
-        if (!Array.isArray(batch) || batch.length === 0) break;
+      for await (const batch of conversationPages(ticketId))
         convos.push(...batch);
-        if (batch.length < CONVERSATIONS_PER_PAGE) break;
-      }
       // Loaded even when no agent replied: redaction needs the colleagues a
       // thread only mentions. The map is cached for the life of the adapter.
       const names = await loadAgentNames();
@@ -325,17 +543,36 @@ export const createFreshdeskSource: SourceFactory = (
         visibility: "public",
         direction: "incoming",
         bodyText: ticket.description_text ?? "",
-        attachments: ticket.attachments ?? [],
+        attachments: [
+          ...listedFiles(ticket.attachments),
+          ...pastedImages(ticket.description, helpdeskHost),
+        ],
         createdAt: ticket.created_at,
       };
-      const messages = [
-        description,
-        ...convos.map((c) => mapConversation(c, names)),
-      ].sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
+      const messages = withoutQuotedImages(
+        [description, ...convos.map((c) => mapConversation(c, names))].sort(
+          (a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""),
+        ),
+      );
       return {
         ...metadataToItem(ticket, messages),
         knownPeople: [...names.values()],
       };
+    },
+
+    async openAttachment(externalId, attachmentId) {
+      const pasted = attachmentId.startsWith(PASTED);
+      for await (const message of messagesNow(encodeURIComponent(externalId))) {
+        const src = pasted
+          ? pastedSources(message.html, helpdeskHost).get(attachmentId)
+          : undefined;
+        if (src) return openPasted(src);
+        const file = pasted
+          ? undefined
+          : message.files?.find((listed) => String(listed.id) === attachmentId);
+        if (file) return openListed(file, attachmentId);
+      }
+      throw badInput(`ticket ${externalId} lists no file '${attachmentId}'`);
     },
 
     async listItems(opts: ListOptions) {

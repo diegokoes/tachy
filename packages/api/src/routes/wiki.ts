@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import {
   addWikiCategory,
@@ -186,7 +186,7 @@ export const wiki = new Hono()
   // Re-parenting from the coverage view, where the shape is visible.
   .patch(
     "/wiki/:scope/components/:slug",
-    zValidator("json", componentPatchSchema),
+    validate("json", componentPatchSchema),
     async (c) => {
       const productId = await scopeProductId(c.req.param("scope"));
       if (!productId) throw badInput("components belong to a product");
@@ -248,7 +248,7 @@ export const wiki = new Hono()
 
   .post(
     "/wiki/:scope/categories",
-    zValidator("json", categorySchema),
+    validate("json", categorySchema),
     async (c) => {
       const productId = await scopeProductId(c.req.param("scope"));
       await assertScopeEditor(c, wikiScope(productId));
@@ -260,7 +260,7 @@ export const wiki = new Hono()
 
   .patch(
     "/wiki/:scope/categories/:slug",
-    zValidator("json", categoryPatchSchema),
+    validate("json", categoryPatchSchema),
     async (c) => {
       const productId = await scopeProductId(c.req.param("scope"));
       await assertScopeEditor(c, wikiScope(productId));
@@ -282,26 +282,21 @@ export const wiki = new Hono()
     return c.json(gone);
   })
 
-  .post(
-    "/wiki/:scope/articles",
-    zValidator("json", articleSchema),
-    async (c) => {
-      const productId = await scopeProductId(c.req.param("scope"));
-      await assertScopeEditor(c, wikiScope(productId));
-      const { categories, ...body } = c.req.valid("json");
-      const saved = await saveReferenceDoc({
-        ...body,
-        productId,
-        kind: "wiki",
-        createdById: await callerUserId(c),
-        actor: await callerActor(c),
-      });
-      if (categories)
-        await setArticleCategories(productId, saved.id, categories);
-      await rescan(productId);
-      return c.json(saved);
-    },
-  )
+  .post("/wiki/:scope/articles", validate("json", articleSchema), async (c) => {
+    const productId = await scopeProductId(c.req.param("scope"));
+    await assertScopeEditor(c, wikiScope(productId));
+    const { categories, ...body } = c.req.valid("json");
+    const saved = await saveReferenceDoc({
+      ...body,
+      productId,
+      kind: "wiki",
+      createdById: await callerUserId(c),
+      actor: await callerActor(c),
+    });
+    if (categories) await setArticleCategories(productId, saved.id, categories);
+    await rescan(productId);
+    return c.json(saved);
+  })
 
   .get("/wiki/:scope/articles/:slug", async (c) => {
     const productId = await scopeProductId(c.req.param("scope"));
@@ -317,7 +312,7 @@ export const wiki = new Hono()
 
   .patch(
     "/wiki/:scope/articles/:slug",
-    zValidator("json", articlePatchSchema),
+    validate("json", articlePatchSchema),
     async (c) => {
       const productId = await scopeProductId(c.req.param("scope"));
       await assertScopeEditor(c, wikiScope(productId));

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../../validation";
 import { z } from "zod";
 import {
   catalogCensus,
@@ -100,7 +100,7 @@ export const overview = new Hono()
   // What the deployment has been doing. Its own route so the rail's counts stay
   // one cheap query: these scan day buckets and the run log. The two lists that
   // name people travel only to an app admin, as `/system` holds back `env`.
-  .get("/overview/activity", zValidator("query", periodQuery), async (c) => {
+  .get("/overview/activity", validate("query", periodQuery), async (c) => {
     const { days } = c.req.valid("query");
     const [usage, tools, traffic, library] = await Promise.all([
       agentUsageCensus(days ?? 30),
@@ -156,7 +156,7 @@ export const overview = new Hono()
   // SPA, which owns the deployment's terms for teams, products and customers.
   .get(
     "/overview/issues",
-    zValidator(
+    validate(
       "query",
       z.object({
         page: z.enum([

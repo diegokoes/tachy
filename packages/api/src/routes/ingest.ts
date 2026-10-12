@@ -7,6 +7,7 @@ import {
   ingestBatch,
 } from "@tachy/core/buckets";
 import { log } from "@tachy/core/infra";
+import { problem } from "../problems";
 import { callerAddress, failureThrottle } from "../throttle";
 
 const badTokens = failureThrottle(10);
@@ -24,16 +25,18 @@ export const ingest = new Hono().post(
       "",
     );
     const caller = `${c.req.param("slug")} ${callerAddress(c)}`;
-    if (badTokens.blocked(caller))
-      return c.json({ error: "too many failed tokens; wait a minute" }, 429, {
-        "Retry-After": "60",
+    if (badTokens.blocked(caller)) {
+      c.header("Retry-After", "60");
+      return problem(c, 429, {
+        detail: "too many failed tokens; wait a minute",
       });
+    }
     const bucket = token
       ? await bucketByToken(c.req.param("slug"), token)
       : null;
     if (!bucket) {
       badTokens.fail(caller);
-      return c.json({ error: "invalid or missing ingest token" }, 401);
+      return problem(c, 401, { detail: "invalid or missing ingest token" });
     }
     c.set("bucket" as never, bucket as never);
     await next();
@@ -41,12 +44,9 @@ export const ingest = new Hono().post(
   bodyLimit({
     maxSize: BUCKET_BATCH_MAX_BYTES,
     onError: (c) =>
-      c.json(
-        {
-          error: `batch larger than ${BUCKET_BATCH_MAX_BYTES} bytes; send fewer documents per batch`,
-        },
-        413,
-      ),
+      problem(c, 413, {
+        detail: `batch larger than ${BUCKET_BATCH_MAX_BYTES} bytes; send fewer documents per batch`,
+      }),
   }),
   async (c) => {
     const bucket = c.get("bucket" as never) as { id: string; slug: string };

@@ -7,7 +7,7 @@ import type {
 import type { TokenMap } from "../compliance/redaction";
 import type { RawWorkItem } from "../work-items/raw";
 
-export type { RawMessage, RawWorkItem } from "../work-items/raw";
+export type { RawAttachment, RawMessage, RawWorkItem } from "../work-items/raw";
 
 export interface SourceCapabilities {
   postNote: boolean;
@@ -39,10 +39,28 @@ export interface SourceProbe {
   groupsNote?: string;
 }
 
+/** A file of an item, as its bytes arrive from the source. */
+export interface OpenedAttachment {
+  name: string;
+  /** As the source declares it. The reader checks the bytes instead. */
+  contentType?: string;
+  sizeBytes?: number;
+  body: ReadableStream<Uint8Array>;
+}
+
 export interface WorkItemSource {
   readonly type: string;
   readonly capabilities: SourceCapabilities;
   fetchItem(externalId: string): Promise<RawWorkItem>;
+  /**
+   * The bytes of a file the item lists, by the id `fetchItem` gave it. An id
+   * the item does not list is refused: the caller's token reads this item, not
+   * every file the source holds.
+   */
+  openAttachment?(
+    externalId: string,
+    attachmentId: string,
+  ): Promise<OpenedAttachment>;
   /** Cheapest authenticated call the API offers; throws when the token is bad. */
   verify?(): Promise<SourceProbe>;
   listItems(

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import {
   LOAD_SCRIPTS,
@@ -38,7 +38,7 @@ export const diagnostics = new Hono()
   .post(
     "/runs",
     requireAdmin,
-    zValidator(
+    validate(
       "json",
       z.object({
         script: z.string(),

@@ -70,7 +70,7 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
     expand: (args) =>
       [
         "Summarise one ticket and post the summary onto it. Save nothing else.",
-        "fetch_work_item, then read every message chronologically, linked_items included. Call post_work_item_summary with what the thread establishes; it replaces the summary an earlier run posted.",
+        "fetch_work_item, then read every message chronologically, linked_items included. Of its files, open with read_file the ones that bear on the problem, a screenshot of the error or a log, and at most five; say in the summary's files what each shows. Call post_work_item_summary with what the thread and those files establish; it replaces the summary an earlier run posted.",
         "Then STOP and answer in at most two lines: the ticket title, and that the summary was posted.",
         argsLine(args),
       ].join("\n"),

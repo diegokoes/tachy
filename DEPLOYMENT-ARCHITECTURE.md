@@ -70,6 +70,8 @@ cli            profile "tools", ad hoc: sync, backup, restore, reembed, seed
   `api/src/turn-config.ts`):
   - an allowlist of inherited variables;
   - a pool of 2 with a 30 s idle timeout, and a 256 MB heap cap;
+  - whether redaction is on, and whether images pass it (`TACHY_REDACT`,
+    `TACHY_REDACT_IMAGES`);
   - the embedder's URL and the internal secret, so it never loads the model;
   - the caller's own source tokens and nobody else's.
 - **Embedding** happens in the embedder. A knowledge or reference save still
@@ -1043,8 +1045,9 @@ never runs on an event loop that serves requests.
   which the request-size limit bounds.
 - **The embedder is a dependency of every search.** If its model thread dies
   it restarts (`embed-host.ts`). Searches fail with a retryable 503 until it is
-  back, and `/readyz` goes red. A model that fails to load three times exits
-  the process.
+  back, and `/readyz` goes red. A model that fails to load six times in a
+  row, about half a minute with the wait doubling between attempts, exits the
+  process.
 - **The model is always in memory,** about 1.9 GB even when nobody searches.
 
 §4.6 says what changes on bigger hosts, and §5.15 how to change the model.
@@ -1096,11 +1099,68 @@ both live in Postgres with a TTL.
 - **Uploads** are rows in `chat_uploads`. They expire after 24 h
   (`TACHY_UPLOAD_TTL_HOURS`), only their owner's turn can read them
   (`core/src/chat/uploads.ts`), and `retention.sweep` deletes them.
+- **An upload** weighs at most 25 MB, an image at most 10 MB
+  (`TACHY_UPLOAD_MAX_MB`, `TACHY_UPLOAD_IMAGE_MAX_MB`). The types taken are
+  the ones `contract/src/files.ts` lists; `core/src/files` reads each as text.
+- **An image** goes to the model as a picture, from the tool that read it
+  (`read_file`, `ingest_context`). The MCP child first fits it inside
+  2000 px and writes it afresh without its metadata (`core/src/files/image.ts`,
+  sharp, loaded on the first image). In a throwaway container from the
+  production image (`--network none`, measured 2026-10-12), a 9.5 MB PNG added
+  37 MB to the peak RSS of the process that prepared it, a 48-megapixel JPEG
+  51 MB and a 49-megapixel PNG 54 MB, all under 175 ms. Under redaction an
+  image is withheld unless `redaction_images` is on, since a picture cannot be
+  scrubbed.
+- **A PDF** is read page by page. Its text carries a `[page N]` line where
+  each page starts, a doc saved from it keeps those lines in its body, and
+  `reference_doc_chunks.page` is read from them, so a search hit names its
+  page. A page with no text layer is reported, not saved as blank. Reading
+  the text costs memory by page count, not by file size. In the same
+  container a 300-page text PDF (1.2 M characters) added 115 MB to the peak
+  RSS in 0.4 s and a 2000-page one (7.7 M characters) 218 MB in 2.4 s; a
+  24 MB PDF of scans added 32 MB. That comes on top of the child's 125 MB
+  (§3.1) while the read lasts, and stays inside its 256 MB heap cap: the
+  2000-page read passes with the cap at 96 MB.
+- **The figures and scanned pages** of a PDF are added after the save, by the
+  job `reference.extract` on the `embed` queue. Figures become library images
+  under the page they are on; a picture on three or more pages, or smaller
+  than 120 px, is left out. A scanned page is read by the model, one call a
+  page on the cheap tier and the credential of whoever saved the doc, and not
+  at all under redaction unless `redaction_images` is on. The job needs the
+  upload, so it has to start within the upload's 24 h. In the same container
+  a 24 MB PDF of 17 A4 scans at 300 dpi peaked at 460 MB RSS and took 9 s
+  without the model calls, which is why it is on the heavy worker
+  (`TACHY_WORKER_HEAVY_MEM_LIMIT`, 1536 MB by default). 4 such pages peaked at
+  326 MB: the peak moves little with the page count,
+  since each page's pictures are released once read.
+- **A ticket's file** is never stored. A read of the ticket lists it (id,
+  name, declared type and size, no address, since a source's download links
+  are signed), and it is fetched from the source each time it is opened: by
+  the agent (`read_file` with the file's reference) on the turn's own source
+  token, and by a person from the chat's list of files
+  (`GET /api/work-items/:source/:id/attachments/:attachmentId`) on theirs. It
+  is held to what an upload is, the same kinds and the same limits. To a
+  browser an image is served fitted and without its metadata, and anything
+  else only as a download. Azure DevOps files open: attached files, and the
+  pictures pasted into a field or a comment. Freshdesk's attached files open.
+  Its listing gives each an address signed for five minutes and good without
+  the API key, so every open reads the ticket again, and its conversations up
+  to the page that lists the file, for a fresh one; the key is not sent with
+  it. A picture pasted into a Freshdesk message is not in that listing. The
+  message's HTML addresses it by a token that opens without the key, through
+  two redirects, so it is listed from the HTML and found again the same way,
+  by reading the messages. A picture a message only links from elsewhere is
+  left out.
+- **Under a connection's redaction** a file's name is scrubbed, its text is
+  scrubbed when read, and an image is withheld from the model unless that
+  connection's own switch (`config.redaction.images`) allows it.
+- **An image worth keeping** goes from an upload into `library_assets`
+  (`save_library_image`), fitted and at most 5 MB, under the same 7-day rule
+  for one no body uses.
 - **Neither table's data is in the dumps** (`deploy/backup/tachy-backup`).
 
-**Revisit.** If uploads regularly approach the 25 MB limit
-(`api/src/upload-limit.ts`), or several hundred MB a day, then the database is
-the wrong home for them.
+**Revisit.** If uploads regularly approach the 25 MB limit, or several hundred
+MB a day, then the database is the wrong home for them.
 
 ### 5.7 Caddy at the edge
 
@@ -1121,9 +1181,10 @@ image carries no DNS module. It would need a custom Caddy build (§15.1).
 - HSTS for a year, `nosniff`, `X-Frame-Options DENY`, a referrer policy, and no
   `Server` header. There is no Content-Security-Policy.
 - `/internal` answers 404.
-- One body limit of 26 MB for every path: the 25 MB upload cap plus multipart
-  overhead. The api enforces the smaller caps itself: 5 MB for library images
-  and 16 MB for a bucket batch.
+- One body limit for every path, 26 MB (`TACHY_REQUEST_BODY_MAX`): the 25 MB
+  upload cap plus multipart overhead. A host that raises the upload cap raises
+  this with it. The api enforces the smaller caps itself: 10 MB for a chat
+  image, 5 MB for library images and 16 MB for a bucket batch.
 - Its upstream health check is `/readyz`.
 
 **Why TLS is not optional.** Entra requires it: "Redirect URIs must begin with
@@ -2210,7 +2271,9 @@ and the SFTP pull keeps working as it is.
 
   A transcript is a Claude Code session file under `users/<id>/` in the
   `tachy-agent-home` volume: every prompt, tool call and tool result of a chat,
-  customer ticket content included, and what lets the chat be resumed. Whether
+  customer ticket content included, and what lets the chat be resumed. An image
+  a tool showed the model is in it, and Claude Code keeps a second copy in the
+  session's `tool-results` folder; the sweep removes both at the same age. Whether
   Claude Code's own `cleanupPeriodDays` also deletes them, and sooner, is **to
   verify**: tachý passes `settingSources: []` (`agent/src/claude.ts`), so the
   default applies.
@@ -2405,6 +2468,11 @@ connection: a probe every 30 s that waits 10 s for one, six times in a row,
 drains the api and exits 1 (`watchPool` in `api/src/lifecycle.ts`). A probe
 that fails counts as answered, because Postgres being down fails at once
 (measured: 4 to 9 ms with postgres.js), and the api rides that out.
+
+`docker compose up` does not wait for that restart: a dependency that exits
+once fails the whole command, and the services after it are never started. So
+`tachy.service` has `Restart=on-failure` and runs it again every 15 s until the
+stack is up.
 
 ## 10. CI/CD
 

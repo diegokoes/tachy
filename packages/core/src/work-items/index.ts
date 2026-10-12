@@ -1,4 +1,5 @@
-export type { RawMessage, RawWorkItem } from "./raw";
+export type { RawAttachment, RawMessage, RawWorkItem } from "./raw";
+export * from "./attachments";
 export * from "./ingest";
 export * from "./cleanup";
 export * from "./linked-refs";

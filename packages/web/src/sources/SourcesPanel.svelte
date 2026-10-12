@@ -172,6 +172,9 @@
   const redactionOn = (c: Connection) =>
     (configOf(c).redaction as { enabled?: boolean } | undefined)?.enabled ===
     true;
+  const imagesAllowed = (c: Connection) =>
+    (configOf(c).redaction as { images?: boolean } | undefined)?.images ===
+    true;
   const groupsOf = (connection: Connection): string[] => {
     const key = SPEC[connection.source_type as SourceType]?.configKey;
     const listed = key ? configOf(connection)[key] : undefined;
@@ -298,6 +301,16 @@
       span: "full",
       aside: formTest,
     },
+    {
+      key: "redaction_images",
+      label: "images under redaction",
+      formOnly: true,
+      edit: "checkbox",
+      visible: (d) => Boolean(d.redaction),
+      info: "Send this source's images to the model although redaction is on. A picture cannot be scrubbed.",
+      value: (r) => imagesAllowed(r),
+      span: "full",
+    },
     // Testing is per connection but reading the results is a sweep down the
     // list, so the action belongs on the row as well as in the dialog.
     { key: "probe", label: "", width: "7rem", align: "end", cell: testCell },
@@ -310,7 +323,11 @@
     const config: Record<string, unknown> = row ? { ...configOf(row) } : {};
     const key = SPEC[type].configKey;
     if (key) config[key] = csv(String(draft.groups ?? ""));
-    if (draft.redaction) config.redaction = { enabled: true };
+    if (draft.redaction)
+      config.redaction = {
+        enabled: true,
+        ...(draft.redaction_images ? { images: true } : {}),
+      };
     else delete config.redaction;
 
     const slug = String(draft.slug).trim();

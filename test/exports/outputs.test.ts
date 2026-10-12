@@ -80,6 +80,8 @@ describe("output storage", () => {
   it("never lets a path or control character into the filename", () => {
     expect(safeFilename("../../etc/passwd")).toBe("passwd");
     expect(safeFilename("a/b:c*d?.xlsx")).toBe("b-c-d-.xlsx");
+    expect(safeFilename("out//report.xlsx///")).toBe("report.xlsx");
+    expect(safeFilename("///")).toBe("download");
     expect(safeFilename("")).toBe("download");
   });
 });
@@ -132,7 +134,7 @@ describe("outputs API", () => {
 
     const anon = await app.request(`/api/outputs/${meta.id}/download`);
     expect(anon.status).toBe(403);
-    expect((await anon.json()).error).toMatch(/no user account/);
+    expect((await anon.json()).detail).toMatch(/no user account/);
   });
 
   it("deletes through the route", async () => {

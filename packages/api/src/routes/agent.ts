@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import {
   badInput,
@@ -19,15 +19,19 @@ import {
 } from "@tachy/core/config";
 import { getUserByEmail, userSoleTeamId } from "@tachy/core/access";
 import { getArtifact, listVisibleArtifacts } from "@tachy/core/exports";
-import { saveUpload } from "@tachy/core/chat";
+import { fileFamily, uploadLimitBytes, uploadRef } from "@tachy/core";
+import { readUpload, saveUpload, uploadLimits } from "@tachy/core/chat";
+import { imageForModel, inspectFile, isImageFile } from "@tachy/core/files";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { requireCaller } from "../authz";
 import { getIdentity } from "../auth";
 import { lifecycle } from "../lifecycle";
+import { problem } from "../problems";
 import { requestIdOf } from "../logging";
 import { AdmissionCancelled, QueueFull } from "../admission";
 import { BUILTIN_COMMANDS } from "../commands";
-import { MAX_UPLOAD_BYTES, tooLarge } from "../upload-limit";
+import { INERT_HEADERS } from "../downloads";
+import { requestLimitBytes, tooLarge } from "../upload-limit";
 import {
   activeByUser,
   admission,
@@ -63,6 +67,14 @@ const approveSchema = z.object({
   updatedInput: z.record(z.string(), z.any()).optional(),
 });
 
+/** `turnId` is the turn already running, for the client to resume or stop. */
+const turnInProgress = (c: Context, turnId: string | undefined) =>
+  problem(c, 409, {
+    problem: "turn-in-progress",
+    detail: "you already have a chat turn running; stop it or wait for it",
+    turnId,
+  });
+
 export const agent = new Hono()
 
   .get("/commands", async (c) => {
@@ -75,6 +87,7 @@ export const agent = new Hono()
         }
       : {};
     return c.json({
+      uploadLimits: uploadLimits(),
       builtins: BUILTIN_COMMANDS.filter((b) => !b.hidden).map(
         ({ name, args, description, subcommands }) => ({
           name,
@@ -96,7 +109,7 @@ export const agent = new Hono()
     });
   })
 
-  .post("/chat", zValidator("json", chatSchema), async (c) => {
+  .post("/chat", validate("json", chatSchema), async (c) => {
     if (lifecycle.draining) {
       c.header("Retry-After", "30");
       throw unavailable("the server is restarting; try again in a moment");
@@ -113,14 +126,7 @@ export const agent = new Hono()
     const userKey = userEmail ?? "anonymous";
 
     const running = activeByUser.get(userKey);
-    if (running)
-      return c.json(
-        {
-          error: "you already have a chat turn running; stop it or wait for it",
-          turnId: running,
-        },
-        409,
-      );
+    if (running) return turnInProgress(c, running);
 
     const user = userEmail ? await getUserByEmail(userEmail) : null;
     const ctx: ScopeContext = user
@@ -163,13 +169,7 @@ export const agent = new Hono()
     };
 
     if (activeByUser.has(userKey))
-      return c.json(
-        {
-          error: "you already have a chat turn running; stop it or wait for it",
-          turnId: activeByUser.get(userKey),
-        },
-        409,
-      );
+      return turnInProgress(c, activeByUser.get(userKey));
     setAdmissionLimits({
       cap: settings.agent_slot_cap.value,
       queueMax: settings.agent_queue_max.value,
@@ -180,7 +180,7 @@ export const agent = new Hono()
     } catch (err) {
       if (!(err instanceof QueueFull)) throw err;
       c.header("Retry-After", "30");
-      return c.json({ error: err.message }, 429);
+      return problem(c, 429, { detail: err.message });
     }
     activeByUser.set(userKey, turnId);
     const leave = () => {
@@ -280,7 +280,7 @@ export const agent = new Hono()
 
   .post(
     "/stop",
-    zValidator("json", z.object({ turnId: z.string() })),
+    validate("json", z.object({ turnId: z.string() })),
     async (c) => {
       const { turnId } = c.req.valid("json");
       const email = getIdentity(c)?.email ?? env.userEmail;
@@ -295,7 +295,7 @@ export const agent = new Hono()
     },
   )
 
-  .post("/approve", zValidator("json", approveSchema), async (c) => {
+  .post("/approve", validate("json", approveSchema), async (c) => {
     const { turnId, id, approve, message, updatedInput } = c.req.valid("json");
     const entry = turns.get(turnId);
     if (!entry) throw notFound("unknown or finished turn");
@@ -308,21 +308,43 @@ export const agent = new Hono()
     return c.json({ ok: true });
   })
 
+  // The picture an image upload holds, for whoever uploaded it: what the
+  // review box of a tool that keeps one shows. Fitted as it is for a model.
+  .get("/uploads/:id", async (c) => {
+    const owner = await requireCaller(c);
+    const upload = await readUpload(uploadRef(c.req.param("id"), ""), owner);
+    if (!isImageFile(upload))
+      throw badInput("only an image upload has a preview");
+    const image = await imageForModel(upload.bytes);
+    return c.body(new Uint8Array(image.bytes), 200, {
+      ...INERT_HEADERS,
+      "Content-Type": image.mimeType,
+      "Cache-Control": "private, max-age=3600",
+    });
+  })
+
   .post("/uploads", async (c) => {
     const owner = await requireCaller(c);
     // Checked before parseBody, which buffers the whole request first: past
     // that point the limit has already been paid for in memory.
     const declared = Number(c.req.header("content-length") ?? 0);
-    if (declared > MAX_UPLOAD_BYTES) throw tooLarge(declared);
+    if (declared > requestLimitBytes()) throw tooLarge(declared);
     const body = await c.req.parseBody();
     const file = body.file;
     if (!(file instanceof File)) throw badInput("expected a 'file' field");
-    if (file.size > MAX_UPLOAD_BYTES) throw tooLarge(file.size);
+    if (file.size > requestLimitBytes()) throw tooLarge(file.size);
     const filename = basename(file.name || "upload");
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const check = inspectFile(filename, bytes);
+    if ("refusal" in check) return problem(c, 415, { detail: check.refusal });
+    const family = fileFamily(check.contentType);
+    const limitBytes = uploadLimitBytes(family, uploadLimits());
+    if (file.size > limitBytes) throw tooLarge(file.size, limitBytes, family);
     const { ref } = await saveUpload({
       userId: owner,
       filename,
-      bytes: new Uint8Array(await file.arrayBuffer()),
+      contentType: check.contentType,
+      bytes,
     });
     return c.json({ path: ref, filename: file.name });
   });

@@ -10,6 +10,7 @@ import type {
   TicketValidation,
 } from "@tachy/contract";
 import { api, ApiError } from "../api";
+import { readError } from "../problems";
 import { ensureProjects, ensureTypes } from "./az.svelte";
 import { onUnauthorized } from "../access/session.svelte";
 import { isBody, isEmpty, TAGS, TITLE } from "./layout";
@@ -288,10 +289,8 @@ export async function create(): Promise<CreatedTicket | null> {
       onUnauthorized();
       throw new ApiError(401, "unauthorized");
     }
-    const json = await response.json().catch(() => ({}));
-    if (!response.ok)
-      throw new ApiError(response.status, json?.error ?? response.statusText);
-    const created = json as CreatedTicket;
+    if (!response.ok) throw await readError(response);
+    const created = (await response.json()) as CreatedTicket;
     discardDraft();
     composer.open = false;
     return created;

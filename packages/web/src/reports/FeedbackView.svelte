@@ -8,6 +8,7 @@
   import { gsap, reducedMotion } from "../motion/gsap";
   import { pushScope } from "../keys/keys.svelte";
   import BugIdeaToggle from "./BugIdeaToggle.svelte";
+  import { FEEDBACK_FROM } from "./feedback";
   import type { ReportReview, ReportType } from "@tachy/contract";
 
   let type = $state<ReportType | null>(null);
@@ -67,7 +68,7 @@
   );
 
   function leave() {
-    const from = sessionStorage.getItem("tachy-feedback-from");
+    const from = sessionStorage.getItem(FEEDBACK_FROM);
     const key =
       from && from !== "/feedback"
         ? from.slice(1).split("/")[0] || "chat"
@@ -106,7 +107,7 @@
         title: title.trim(),
         body: body.trim(),
         context: {
-          from: sessionStorage.getItem("tachy-feedback-from") ?? null,
+          from: sessionStorage.getItem(FEEDBACK_FROM) ?? null,
           href: window.location.href,
           user_agent: navigator.userAgent,
           viewport: `${window.innerWidth}x${window.innerHeight}`,

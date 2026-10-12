@@ -1,10 +1,13 @@
+import { largestUploadBytes, tooLargeReason } from "@tachy/core";
+import type { FileFamily } from "@tachy/core";
+import { uploadLimits } from "@tachy/core/chat";
 import { badInput } from "@tachy/core/infra";
 
-export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+/** The largest body a route that takes files reads, whatever the file is. */
+export const requestLimitBytes = () => largestUploadBytes(uploadLimits());
 
-const megabytes = (bytes: number) => (bytes / 1024 / 1024).toFixed(1);
-
-export const tooLarge = (bytes: number) =>
-  badInput(
-    `file is ${megabytes(bytes)} MB, over the ${MAX_UPLOAD_BYTES / 1024 / 1024} MB upload limit`,
-  );
+export const tooLarge = (
+  bytes: number,
+  limitBytes = requestLimitBytes(),
+  family?: FileFamily,
+) => badInput(tooLargeReason(bytes, limitBytes, family));

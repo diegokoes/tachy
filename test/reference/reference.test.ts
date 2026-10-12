@@ -109,6 +109,41 @@ describe("reference docs", () => {
     expect(after[0].chunk_text).not.toMatch(/printers/);
   });
 
+  it("keeps the page of each chunk of a body that marks its pages, through an edit", async () => {
+    const body = [
+      "[page 1]",
+      "The label printer is installed on the packing line and fed from the batch queue.",
+      "[page 2]",
+      "When the active line controller node loses its heartbeat, the standby promotes itself and replays the journal.",
+    ].join("\n");
+    const saved = await saveReferenceDoc({ title: "Line manual", body });
+    const pagesOf = async () =>
+      (
+        await sql`select page from reference_doc_chunks where doc_id = ${saved.id} order by ordinal`
+      ).map((row) => row.page);
+    expect(await pagesOf()).toEqual([1, 2]);
+
+    const [hit] = await searchReferenceDocs(
+      "standby controller takes over after a missed heartbeat",
+    );
+    expect(hit).toMatchObject({ id: saved.id, page: 2 });
+    expect(hit.snippet).not.toContain("[page");
+
+    await updateReferenceDoc(saved.id, {
+      body: `Preface added by hand.\n\n${body}`,
+    });
+    expect(await pagesOf()).toEqual([null, 1, 2]);
+  });
+
+  it("gives a doc with no page marks no page", async () => {
+    const saved = await saveReferenceDoc({
+      title: "Queue runbook",
+      body: "Drain the batch queue before restarting the label renderer.",
+    });
+    const [hit] = await searchReferenceDocs("restart the label renderer");
+    expect(hit).toMatchObject({ id: saved.id, page: null });
+  });
+
   it("lists newest-first and omits archived from search", async () => {
     const saved = await saveReferenceDoc({
       title: "A",

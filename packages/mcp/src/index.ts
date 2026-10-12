@@ -23,6 +23,7 @@ import "./tools/analytics";
 import "./tools/catalog";
 import "./tools/wiki";
 import "./tools/reference";
+import "./tools/files";
 import "./tools/sources";
 import "./tools/azure-devops";
 import "./tools/code";

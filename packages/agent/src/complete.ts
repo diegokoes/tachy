@@ -1,4 +1,5 @@
-import { query } from "@anthropic-ai/claude-agent-sdk";
+import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
+import type { ModelImage } from "@tachy/core/files";
 import { claudeEnv } from "./claude";
 import { effectiveModel, type AgentAuth, type AgentEffort } from "./backend";
 
@@ -28,10 +29,39 @@ export interface CompletionResult {
  * turn path: `claudeEnv` passes on no credential of the server's and sets the
  * caller's own, so a one-shot never bills the server's account.
  */
+/**
+ * A prompt with pictures, as the one user message of a call. The SDK takes
+ * images only on a stream of messages, never beside a plain string; they go
+ * before the text, where a model reads them best.
+ */
+export async function* withImages(
+  prompt: string,
+  images: ModelImage[],
+): AsyncGenerator<SDKUserMessage> {
+  yield {
+    type: "user",
+    parent_tool_use_id: null,
+    message: {
+      role: "user",
+      content: [
+        ...images.map((image) => ({
+          type: "image" as const,
+          source: {
+            type: "base64" as const,
+            media_type: image.mimeType,
+            data: Buffer.from(image.bytes).toString("base64"),
+          },
+        })),
+        { type: "text" as const, text: prompt },
+      ],
+    },
+  };
+}
+
 export async function completeOnce(
   prompt: string,
   config: CompletionConfig,
-  opts: { timeoutMs?: number } = {},
+  opts: { timeoutMs?: number; images?: ModelImage[] } = {},
 ): Promise<CompletionResult> {
   const controller = new AbortController();
   const timer = opts.timeoutMs
@@ -45,7 +75,7 @@ export async function completeOnce(
       outputTokens: null,
     };
     for await (const sdkMessage of query({
-      prompt,
+      prompt: opts.images?.length ? withImages(prompt, opts.images) : prompt,
       options: {
         abortController: controller,
         model: effectiveModel(config),

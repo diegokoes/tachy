@@ -1,4 +1,4 @@
-import { errorText } from "@tachy/core/infra";
+import { badInput, errorText } from "@tachy/core/infra";
 import {
   changeTagList,
   listSourceProjects,
@@ -13,6 +13,7 @@ import {
 import type {
   WorkItemComposer,
   WorkItemSource,
+  RawAttachment,
   RawWorkItem,
   RawMessage,
   ListOptions,
@@ -59,6 +60,58 @@ function parseGitArtifact(url: string): {
     repo: parts[1],
     ref: parts[2],
   };
+}
+
+/** An attachment's address ends in its id, and may name the file. */
+const ATTACHMENT_URL =
+  /\/_apis\/wit\/attachments\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})(?:\?(.*))?$/i;
+
+const IMG_SRC = /<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/gi;
+
+/**
+ * The attachment an address names, when it is one of this organisation's. An
+ * address elsewhere is never an attachment: the token must not follow it.
+ */
+function attachmentAt(
+  url: string,
+  orgUrl: string,
+): { id: string; fileName?: string } | null {
+  if (!url.toLowerCase().startsWith(`${orgUrl.toLowerCase()}/`)) return null;
+  const match = ATTACHMENT_URL.exec(url);
+  if (!match) return null;
+  const fileName = new URLSearchParams(match[2] ?? "").get("fileName");
+  return { id: match[1].toLowerCase(), ...(fileName ? { fileName } : {}) };
+}
+
+/** The files linked to a work item as attachments. */
+export function attachedFiles(
+  relations: AdoRelation[],
+  orgUrl: string,
+): RawAttachment[] {
+  const files: RawAttachment[] = [];
+  for (const relation of relations) {
+    if (relation.rel !== "AttachedFile") continue;
+    const at = attachmentAt(relation.url ?? "", orgUrl);
+    if (!at) continue;
+    const { name, resourceSize } = relation.attributes ?? {};
+    files.push({
+      id: at.id,
+      name: typeof name === "string" && name ? name : (at.fileName ?? at.id),
+      ...(typeof resourceSize === "number" ? { sizeBytes: resourceSize } : {}),
+    });
+  }
+  return files;
+}
+
+/** The pictures pasted into an HTML field: each is an attachment its `img` names. */
+export function inlineImages(html: string, orgUrl: string): RawAttachment[] {
+  const images: RawAttachment[] = [];
+  for (const [, src] of html.matchAll(IMG_SRC)) {
+    const at = attachmentAt(src.replace(/&amp;/g, "&"), orgUrl);
+    if (!at || images.some((image) => image.id === at.id)) continue;
+    images.push({ id: at.id, name: at.fileName ?? "image.png", inline: true });
+  }
+  return images;
 }
 
 function scrubIdentity(identity: unknown, map: TokenMap, name: string): void {
@@ -282,6 +335,75 @@ export const createAzureDevopsSource: SourceFactory = (
     return relationSummary;
   }
 
+  /**
+   * The item as messages: its description, its repro steps and its comments,
+   * each with the pictures pasted into it. Attached files belong to the item
+   * and not to a message, so they ride on the first one.
+   */
+  async function itemMessages(workItem: AdoWorkItem): Promise<RawMessage[]> {
+    const fields = workItem.fields ?? {};
+    const opener = fields["System.CreatedBy"]?.displayName;
+    const opened = fields["System.CreatedDate"];
+    const messages: RawMessage[] = [];
+    const fromHtml = (
+      externalId: string,
+      html: string,
+      message: Partial<RawMessage> & { lead?: string },
+    ) => {
+      const { lead = "", ...rest } = message;
+      const images = inlineImages(html, client.orgUrl);
+      messages.push({
+        externalId,
+        visibility: "internal",
+        direction: "incoming",
+        bodyText: lead + stripHtml(html),
+        ...(images.length ? { attachments: images } : {}),
+        ...rest,
+      });
+    };
+
+    const description = fields["System.Description"];
+    if (typeof description === "string" && description.trim())
+      fromHtml(`desc-${workItem.id}`, description, {
+        author: opener,
+        createdAt: opened,
+      });
+    const repro = fields["Microsoft.VSTS.TCM.ReproSteps"];
+    if (typeof repro === "string" && repro.trim())
+      fromHtml(`repro-${workItem.id}`, repro, {
+        author: opener,
+        createdAt: opened,
+        lead: "Repro steps:\n",
+      });
+
+    const files = attachedFiles(workItem.relations ?? [], client.orgUrl);
+    if (files.length && !messages.length)
+      messages.push({
+        externalId: `files-${workItem.id}`,
+        author: opener,
+        visibility: "internal",
+        direction: "incoming",
+        bodyText: "",
+        createdAt: opened,
+      });
+    if (files.length)
+      messages[0].attachments = [...(messages[0].attachments ?? []), ...files];
+
+    const project = fields["System.TeamProject"];
+    if (project)
+      for (const comment of await client.getComments(
+        project,
+        String(workItem.id),
+      ))
+        fromHtml(`comment-${comment.id}`, comment.text ?? "", {
+          author: comment.createdBy?.displayName,
+          createdAt: comment.createdDate,
+        });
+    return messages.sort((a, b) =>
+      (a.createdAt ?? "").localeCompare(b.createdAt ?? ""),
+    );
+  }
+
   const defaultsFor = (
     project: string,
     type: string,
@@ -345,51 +467,28 @@ export const createAzureDevopsSource: SourceFactory = (
 
     async fetchItem(externalId: string): Promise<RawWorkItem> {
       const workItem = await client.getWorkItem(externalId);
-      const fields = workItem.fields ?? {};
-      const project = fields["System.TeamProject"];
-      const messages: RawMessage[] = [];
-
-      const description = fields["System.Description"];
-      if (typeof description === "string" && description.trim()) {
-        messages.push({
-          externalId: `desc-${workItem.id}`,
-          author: fields["System.CreatedBy"]?.displayName,
-          visibility: "internal",
-          direction: "incoming",
-          bodyText: stripHtml(description),
-          createdAt: fields["System.CreatedDate"],
-        });
-      }
-      const repro = fields["Microsoft.VSTS.TCM.ReproSteps"];
-      if (typeof repro === "string" && repro.trim()) {
-        messages.push({
-          externalId: `repro-${workItem.id}`,
-          author: fields["System.CreatedBy"]?.displayName,
-          visibility: "internal",
-          direction: "incoming",
-          bodyText: `Repro steps:\n${stripHtml(repro)}`,
-          createdAt: fields["System.CreatedDate"],
-        });
-      }
-      if (project) {
-        const comments = await client.getComments(project, externalId);
-        for (const comment of comments) {
-          messages.push({
-            externalId: `comment-${comment.id}`,
-            author: comment.createdBy?.displayName,
-            visibility: "internal",
-            direction: "incoming",
-            bodyText: stripHtml(comment.text ?? ""),
-            createdAt: comment.createdDate,
-          });
-        }
-      }
-      messages.sort((a, b) =>
-        (a.createdAt ?? "").localeCompare(b.createdAt ?? ""),
-      );
-
+      const messages = await itemMessages(workItem);
+      const project = workItem.fields?.["System.TeamProject"];
       const relations = await resolveRelations(workItem, project ?? "");
       return toItem(workItem, messages, relations);
+    },
+
+    async openAttachment(externalId, attachmentId) {
+      const workItem = await client.getWorkItem(externalId);
+      const file = (await itemMessages(workItem))
+        .flatMap((message) => message.attachments ?? [])
+        .find((listed) => listed.id === attachmentId.toLowerCase());
+      if (!file)
+        throw badInput(
+          `work item ${externalId} lists no file '${attachmentId}'`,
+        );
+      const response = await client.openAttachment(file.id);
+      const length = Number(response.headers.get("content-length"));
+      return {
+        name: file.name,
+        sizeBytes: file.sizeBytes ?? (length > 0 ? length : undefined),
+        body: response.body!,
+      };
     },
 
     async setTags(externalId, change) {

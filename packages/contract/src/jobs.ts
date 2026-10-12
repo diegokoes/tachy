@@ -37,7 +37,8 @@ export const JOB_QUEUES = [
     name: "embed",
     class: "heavy",
     cap: 1,
-    description: "Embedding backfills over stored knowledge and code.",
+    description:
+      "Embedding backfills over stored knowledge and code, and reading the figures and scans of a saved PDF.",
   },
   {
     name: "testing",

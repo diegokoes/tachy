@@ -6,6 +6,7 @@ import {
 } from "@tachy/core/config";
 import { recordRun } from "@tachy/core/analytics";
 import { scrubText, TokenMap } from "@tachy/core/compliance";
+import type { ModelImage } from "@tachy/core/files";
 import { completeOnce } from "./complete";
 
 /**
@@ -18,6 +19,11 @@ export interface Advisory {
   system: string;
   /** Built with the org's redaction applied to whatever it passes through. */
   prompt: (scrub: (text: string) => string) => string;
+  /**
+   * Pictures the prompt is about. They cannot be scrubbed: whoever passes
+   * them has already checked that redaction allows it.
+   */
+  images?: ModelImage[];
   /** "cheap" for a quick verdict, "caller" when the judgement is the product. */
   tier: "cheap" | "caller";
   timeoutMs: number;
@@ -59,7 +65,7 @@ export async function runAdvisory(
         agentAuth,
         systemPrompt: advisory.system,
       },
-      { timeoutMs: advisory.timeoutMs },
+      { timeoutMs: advisory.timeoutMs, images: advisory.images },
     );
     await recordRun({
       userId,

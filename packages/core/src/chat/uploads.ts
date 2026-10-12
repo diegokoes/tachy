@@ -1,34 +1,44 @@
+import {
+  DEFAULT_UPLOAD_LIMITS,
+  parseUploadRef,
+  uploadRef,
+  type FileContentType,
+  type UploadLimits,
+} from "@tachy/contract";
 import { sql } from "../infra/db";
 import { badInput } from "../infra/errors";
 
 export const uploadTtlMs = () =>
   (Number(process.env.TACHY_UPLOAD_TTL_HOURS) || 24) * 60 * 60_000;
 
-/**
- * How an upload is named to the agent and its tools: a reference, not a file
- * path, so it resolves the same on every replica and can never name a file on
- * the host.
- */
-export const uploadRef = (id: string, filename: string) =>
-  `upload:${id}/${filename}`;
+const megabytesFrom = (variable: string, fallbackBytes: number) => {
+  const megabytes = Number(process.env[variable]);
+  return megabytes > 0 ? megabytes * 1024 * 1024 : fallbackBytes;
+};
 
-const REF_RE = /^upload:([0-9a-f-]{36})(?:\/(.*))?$/;
-
-export function parseUploadRef(
-  ref: string,
-): { id: string; filename: string } | null {
-  const match = REF_RE.exec(ref.trim());
-  return match ? { id: match[1], filename: match[2] ?? "" } : null;
-}
+/** This host's upload limits: the contract's defaults unless it sets its own. */
+export const uploadLimits = (): UploadLimits => ({
+  imageBytes: megabytesFrom(
+    "TACHY_UPLOAD_IMAGE_MAX_MB",
+    DEFAULT_UPLOAD_LIMITS.imageBytes,
+  ),
+  fileBytes: megabytesFrom(
+    "TACHY_UPLOAD_MAX_MB",
+    DEFAULT_UPLOAD_LIMITS.fileBytes,
+  ),
+});
 
 export async function saveUpload(input: {
   userId: string | null;
   filename: string;
+  contentType: FileContentType;
   bytes: Uint8Array;
 }): Promise<{ id: string; ref: string }> {
   const [row] = await sql`
-    insert into chat_uploads (user_id, filename, byte_size, bytes, expires_at)
-    values (${input.userId}, ${input.filename}, ${input.bytes.byteLength}, ${input.bytes},
+    insert into chat_uploads
+      (user_id, filename, content_type, byte_size, bytes, expires_at)
+    values (${input.userId}, ${input.filename}, ${input.contentType},
+            ${input.bytes.byteLength}, ${input.bytes},
             now() + ${uploadTtlMs()} * interval '1 millisecond')
     returning id
   `;
@@ -47,12 +57,16 @@ export const ANONYMOUS_UPLOADS = "_anonymous";
 /**
  * The bytes behind a reference. With an owner, only that user's uploads
  * resolve: a turn's MCP child cannot read another person's attachment even
- * with its reference.
+ * with its reference. A null `contentType` is a row stored unchecked.
  */
 export async function readUpload(
   ref: string,
   owner: string | undefined,
-): Promise<{ filename: string; bytes: Buffer }> {
+): Promise<{
+  filename: string;
+  contentType: FileContentType | null;
+  bytes: Buffer;
+}> {
   const parsed = parseUploadRef(ref);
   if (!parsed)
     throw badInput(
@@ -60,7 +74,7 @@ export async function readUpload(
     );
   const anonymous = owner === ANONYMOUS_UPLOADS;
   const [row] = await sql`
-    select filename, bytes from chat_uploads
+    select filename, content_type, bytes from chat_uploads
     where id = ${parsed.id} and expires_at > now()
       and (${owner === undefined}
            or user_id is not distinct from ${anonymous ? null : (owner ?? null)}::uuid)
@@ -69,7 +83,11 @@ export async function readUpload(
     throw badInput(
       `'${ref}' is not an uploaded file; only chat attachments can be read`,
     );
-  return { filename: row.filename as string, bytes: Buffer.from(row.bytes) };
+  return {
+    filename: row.filename as string,
+    contentType: row.content_type as FileContentType | null,
+    bytes: Buffer.from(row.bytes),
+  };
 }
 
 export async function sweepUploads(): Promise<number> {

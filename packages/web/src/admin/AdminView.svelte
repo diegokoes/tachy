@@ -3,18 +3,13 @@
   import { navigate, segment } from "../shell/router.svelte";
   import { keep, recall } from "../shell/kept";
   import { scrollport } from "../shell/scrollport.svelte";
-  import { isGlobalAdmin } from "../access/session.svelte";
-  import { t, showCustomer } from "../terms";
   import { Button } from "../tui";
-  import {
-    setSubnav,
-    setTopActions,
-    type SubnavItem,
-  } from "../shell/subnav.svelte";
+  import { setSubnav, setTopActions } from "../shell/subnav.svelte";
   import SectionedPage, {
     type PageSection,
   } from "../sections/SectionedPage.svelte";
   import { sectionActions } from "./sectionAction.svelte";
+  import { CONSOLE_PAGES, consoleSections, type ConsoleSection } from "./pages";
   import { pageActions } from "./pageActions.svelte";
   import FillSection from "./FillSection.svelte";
   import { census } from "./census.svelte";
@@ -60,220 +55,65 @@
   import LoadsPanel from "../diagnostics/LoadsPanel.svelte";
   import FlowsPanel from "../flows/FlowsPanel.svelte";
 
-  type Section = Omit<PageSection, "count" | "tone"> & {
-    /** Which census key counts this section. Omitted for a section with nothing to count. */
-    n?: string;
-    show?: boolean;
-    /**
-     * Where the section opens. A handful of rows belongs over the overview,
-     * where the counters stay readable behind it; a list that runs to fifty
-     * wants the window. Defaults to the window.
-     */
-    present?: "modal" | "page";
-    /** A page section that takes the whole window, edge to edge, and never scrolls. */
-    fill?: boolean;
+  type Section = ConsoleSection & {
+    view: Component;
     /** What opens in the window for one record of the section, at /console/<page>/<section>/<id>. */
     detail?: Component;
   };
 
-  const PAGES: SubnavItem[] = $derived([
-    { key: "integrations", label: "integrations", icon: "integrations" },
-    { key: "structure", label: "structure", icon: "structure" },
-    { key: "access", label: "users", icon: "users" },
-    { key: "flows", label: "flows", icon: "flows" },
-    { key: "workers", label: "jobs", icon: "workers" },
-    { key: "system", label: "system", icon: "system" },
-  ]);
+  /** What each section renders, by page then section key; pages.ts holds the rest. */
+  const VIEWS: Record<
+    string,
+    Record<string, { view: Component; detail?: Component }>
+  > = {
+    flows: { forms: { view: FlowsPanel } },
+    integrations: {
+      sources: { view: SourcesPanel },
+      projects: { view: ProjectsPanel },
+      repos: { view: ReposPanel, detail: RepoDetail },
+      buckets: { view: BucketsPanel },
+      "bulk-link": { view: BulkLink },
+    },
+    structure: {
+      teams: { view: TeamsPanel },
+      products: { view: ProductsPanel },
+      components: { view: ComponentsPanel },
+      map: { view: CoverageMap },
+      labels: { view: LabelsPanel },
+      patterns: { view: PatternsPanel },
+      customers: { view: CustomersPanel },
+    },
+    access: {
+      users: { view: AccessPanel },
+      teams: { view: TeamRosterPanel },
+      admins: { view: AppAdminsPanel },
+    },
+    workers: {
+      jobs: { view: JobsPanel },
+      runs: { view: RunsPanel },
+      queues: { view: QueuesPanel },
+      processes: { view: WorkersPanel },
+      failures: { view: JobFailuresPanel },
+    },
+    system: {
+      reports: { view: ReportsPanel },
+      audit: { view: AuditPanel },
+      runtime: { view: RuntimePanel },
+      host: { view: HostPanel },
+      checks: { view: ChecksPanel },
+      loads: { view: LoadsPanel },
+      settings: { view: SystemPanel },
+    },
+  };
 
-  const admin = $derived(isGlobalAdmin());
-
-  const SECTIONS: Record<string, Section[]> = $derived({
-    flows: [
-      {
-        key: "forms",
-        label: "ticket forms",
-        view: FlowsPanel,
-        fill: true,
-      },
-    ],
-    integrations: [
-      {
-        key: "sources",
-        label: "sources",
-        view: SourcesPanel,
-        n: "sources",
-      },
-      {
-        key: "projects",
-        label: "projects",
-        icon: "project",
-        view: ProjectsPanel,
-        n: "projects",
-      },
-      {
-        key: "repos",
-        label: "repos",
-        icon: "repo",
-        view: ReposPanel,
-        n: "repos",
-        detail: RepoDetail,
-      },
-      {
-        key: "buckets",
-        label: "buckets",
-        view: BucketsPanel,
-        n: "buckets",
-        present: "modal",
-      },
-      { key: "bulk-link", label: "bulk link", view: BulkLink, fill: true },
-    ],
-    structure: [
-      {
-        key: "teams",
-        label: t("teams"),
-        view: TeamsPanel,
-        n: "teams",
-      },
-      {
-        key: "products",
-        label: t("products"),
-        view: ProductsPanel,
-        n: "products",
-      },
-      {
-        key: "components",
-        label: "components",
-        view: ComponentsPanel,
-        n: "components",
-        fill: true,
-      },
-      {
-        key: "map",
-        label: "entries per component",
-        view: CoverageMap,
-        fill: true,
-      },
-      {
-        key: "labels",
-        label: "labels",
-        view: LabelsPanel,
-        n: "labels",
-      },
-      {
-        key: "patterns",
-        label: "resolution patterns",
-        view: PatternsPanel,
-        n: "patterns",
-      },
-      {
-        key: "customers",
-        label: t("customers"),
-        view: CustomersPanel,
-        n: "customers",
-        show: showCustomer(),
-      },
-    ],
-    access: [
-      {
-        key: "users",
-        label: "users",
-        icon: "users",
-        view: AccessPanel,
-        n: "users",
-      },
-      {
-        key: "teams",
-        label: t("teams"),
-        view: TeamRosterPanel,
-        n: "teams",
-      },
-      {
-        key: "admins",
-        label: "app admins",
-        view: AppAdminsPanel,
-      },
-    ],
-    workers: [
-      {
-        key: "jobs",
-        label: "schedule",
-        icon: "jobs",
-        view: JobsPanel,
-      },
-      {
-        key: "runs",
-        label: "runs",
-        icon: "runs",
-        view: RunsPanel,
-      },
-      {
-        key: "queues",
-        label: "queues",
-        icon: "queues",
-        view: QueuesPanel,
-      },
-      {
-        key: "processes",
-        label: "workers",
-        icon: "workerPool",
-        view: WorkersPanel,
-      },
-      {
-        key: "failures",
-        label: "failed jobs",
-        view: JobFailuresPanel,
-        present: "modal",
-      },
-    ],
-    // All dialogs: the overview carries the summary of each, which is the page,
-    // and a counter or tile opens the full detail behind it.
-    system: [
-      {
-        key: "reports",
-        label: "reports",
-        view: ReportsPanel,
-        n: "reports",
-        show: admin,
-      },
-      {
-        key: "audit",
-        label: "audit trail",
-        view: AuditPanel,
-        show: admin,
-        present: "modal",
-      },
-      {
-        key: "runtime",
-        label: "runtime",
-        view: RuntimePanel,
-        present: "modal",
-      },
-      {
-        key: "host",
-        label: "backups & host",
-        view: HostPanel,
-        present: "modal",
-      },
-      {
-        key: "checks",
-        label: "checks",
-        view: ChecksPanel,
-        present: "modal",
-      },
-      {
-        key: "loads",
-        label: "load tests",
-        view: LoadsPanel,
-        present: "modal",
-      },
-      {
-        key: "settings",
-        label: "runtime settings",
-        view: SystemPanel,
-        present: "modal",
-      },
-    ],
-  });
+  const SECTIONS: Record<string, Section[]> = $derived(
+    Object.fromEntries(
+      Object.entries(consoleSections()).map(([page, list]) => [
+        page,
+        list.map((s) => ({ ...s, ...VIEWS[page][s.key] })),
+      ]),
+    ),
+  );
 
   const OVERVIEWS: Record<string, Component | undefined> = $derived({
     flows: undefined,
@@ -314,6 +154,7 @@
           present: _present,
           fill: _fill,
           detail: _detail,
+          add: _add,
           ...rest
         }): PageSection => ({
           ...rest,
@@ -326,7 +167,7 @@
 
   $effect(() =>
     setSubnav({
-      items: PAGES,
+      items: CONSOLE_PAGES,
       active: page,
       onpick: (k) => navigate(`/console/${k}`),
     }),

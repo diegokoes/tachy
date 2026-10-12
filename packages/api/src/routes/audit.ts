@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import { AUDIT_ACTIONS, MAX_PAGE } from "@tachy/core";
 import { listAudit } from "@tachy/core/audit";
@@ -14,6 +14,6 @@ const pageQuery = z.object({
 /** The audit trail, for app admins: it names who signs in from where. */
 export const auditTrail = new Hono()
   .use("*", requireAdmin)
-  .get("/", zValidator("query", pageQuery), async (c) =>
+  .get("/", validate("query", pageQuery), async (c) =>
     c.json(await listAudit(c.req.valid("query"))),
   );

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import {
   createReport,
@@ -43,14 +43,14 @@ const submitSchema = z.object({
 export const reports = new Hono()
 
   // The advisory the form runs on every draft before submitting it.
-  .post("/review", zValidator("json", reviewSchema), async (c) => {
+  .post("/review", validate("json", reviewSchema), async (c) => {
     const userId = await requireCaller(c);
     const ctx = await callerScope(c);
     const { type, title, body } = c.req.valid("json");
     return c.json(await reviewReport({ title, body }, type, ctx, userId));
   })
 
-  .post("/", zValidator("json", submitSchema), async (c) => {
+  .post("/", validate("json", submitSchema), async (c) => {
     const userId = await requireCaller(c);
     const { type, title, body, context, review } = c.req.valid("json");
     const row = await createReport({
@@ -74,10 +74,7 @@ export const reports = new Hono()
   .get(
     "/all",
     requireAdmin,
-    zValidator(
-      "query",
-      z.object({ status: z.enum(REPORT_STATUSES).optional() }),
-    ),
+    validate("query", z.object({ status: z.enum(REPORT_STATUSES).optional() })),
     async (c) =>
       c.json(await listReports({ status: c.req.valid("query").status })),
   )
@@ -89,7 +86,7 @@ export const reports = new Hono()
   .post(
     "/:id/reply",
     requireAdmin,
-    zValidator("json", z.object({ body: z.string().min(1).max(20_000) })),
+    validate("json", z.object({ body: z.string().min(1).max(20_000) })),
     async (c) => {
       const adminId = await requireCaller(c);
       const id = c.req.param("id")!;
@@ -120,7 +117,7 @@ export const reports = new Hono()
   .put(
     "/:id/status",
     requireAdmin,
-    zValidator("json", z.object({ status: z.enum(REPORT_STATUSES) })),
+    validate("json", z.object({ status: z.enum(REPORT_STATUSES) })),
     async (c) =>
       c.json(
         await setReportStatus(c.req.param("id")!, c.req.valid("json").status),

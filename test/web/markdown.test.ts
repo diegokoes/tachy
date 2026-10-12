@@ -17,6 +17,10 @@ const marked = new Marked({ gfm: true, breaks: true }).use({
 });
 const render = (src: string) => marked.parse(src, { async: false }) as string;
 
+/** Enough unclosed links that one scan of the body per link overruns the budget. */
+const UNCLOSED_LINKS = 3_000;
+const RENDER_BUDGET_MS = 2_000;
+
 describe("wikilink rendering", () => {
   it("renders a link as an inert anchor carrying its target", () => {
     const html = render("See [[spooler-stalls]] now.");
@@ -40,6 +44,19 @@ describe("wikilink rendering", () => {
 
   it("leaves a single bracket alone", () => {
     expect(render("[not a link]")).not.toContain("wikilink");
+  });
+
+  it("renders a link that follows an unclosed one", () => {
+    const html = render("[[unclosed and [[spooler-stalls]]");
+    expect(html).toContain('data-wikilink="spooler-stalls"');
+    expect(html).not.toContain('data-wikilink="unclosed');
+  });
+
+  it("renders a body of unclosed links without rereading it per link", () => {
+    const body = "[[a ".repeat(UNCLOSED_LINKS);
+    const startedMs = performance.now();
+    expect(render(body)).not.toContain("wikilink");
+    expect(performance.now() - startedMs).toBeLessThan(RENDER_BUDGET_MS);
   });
 
   // A target cannot break out of the attribute it is written into.
