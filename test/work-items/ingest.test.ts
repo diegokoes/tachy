@@ -267,7 +267,180 @@ describe("one stored copy of each message", () => {
       connId,
       rawItem({ messages: [message()] }),
     );
-    await ingestWorkItem(connId, rawItem({ title: "renamed", messages: [] }));
+    await ingestWorkItem(
+      connId,
+      rawItem({ title: "renamed", listed: true, messages: [] }),
+    );
     expect(await stored(item.id)).toHaveLength(1);
+  });
+
+  it("clears the stored messages when a fetch finds the item has none left", async () => {
+    const connId = await seededFreshdeskConnId();
+    const item = await ingestWorkItem(
+      connId,
+      rawItem({ messages: [message()] }),
+    );
+    await ingestWorkItem(connId, rawItem({ messages: [] }));
+    expect(await stored(item.id)).toEqual([]);
+  });
+
+  it("keeps who sent a message and whether a machine wrote it", async () => {
+    const connId = await seededFreshdeskConnId();
+    const item = await ingestWorkItem(
+      connId,
+      rawItem({
+        messages: [
+          message({ author: "42", authorLabel: "jane@acme.com" }),
+          message({
+            externalId: "m2",
+            authorLabel: "support (automated)",
+            automated: true,
+          }),
+        ],
+      }),
+    );
+    expect(
+      await sql`
+        select external_id, author, author_label, automated
+        from work_item_messages where work_item_id = ${item.id} order by external_id
+      `,
+    ).toEqual([
+      {
+        external_id: "m1",
+        author: "42",
+        author_label: "jane@acme.com",
+        automated: false,
+      },
+      {
+        external_id: "m2",
+        author: "alice",
+        author_label: "support (automated)",
+        automated: true,
+      },
+    ]);
+  });
+
+  it("follows a note that was made public at the source", async () => {
+    const connId = await seededFreshdeskConnId();
+    const note = message({ visibility: "private", direction: "outgoing" });
+    const item = await ingestWorkItem(connId, rawItem({ messages: [note] }));
+    await ingestWorkItem(
+      connId,
+      rawItem({ messages: [{ ...note, visibility: "public" }] }),
+    );
+    expect(
+      await sql`
+        select visibility, direction from work_item_messages
+        where work_item_id = ${item.id}
+      `,
+    ).toEqual([{ visibility: "public", direction: "outgoing" }]);
+  });
+});
+
+describe("a listing over a stored copy", () => {
+  beforeEach(resetData);
+
+  const row = async (itemId: string) => {
+    const [stored] = await sql`
+      select title, status, external_group_key, requester, assignee, priority,
+             item_type, raw, fetched_at, source_created_at
+      from work_items where id = ${itemId}
+    `;
+    return stored;
+  };
+
+  it("lays its fields over the payload a fetch stored, and keeps what only a fetch returns", async () => {
+    const connId = await seededFreshdeskConnId();
+    const item = await ingestWorkItem(
+      connId,
+      rawItem({
+        raw: {
+          id: 58925,
+          status: 2,
+          description_text: "the scanner is offline",
+          requester: { email: "jane@acme.com" },
+        },
+        messages: [
+          {
+            externalId: "desc-58925",
+            visibility: "public",
+            direction: "incoming",
+            bodyText: "the scanner is offline",
+          },
+        ],
+      }),
+    );
+    const fetched = await row(item.id);
+
+    await ingestWorkItem(
+      connId,
+      rawItem({
+        status: "4",
+        listed: true,
+        raw: { id: 58925, status: 4, stats: { resolved_at: "2026-04-02" } },
+      }),
+    );
+    const listed = await row(item.id);
+    expect(listed.status).toBe("4");
+    expect(listed.raw).toEqual({
+      id: 58925,
+      status: 4,
+      stats: { resolved_at: "2026-04-02" },
+      description_text: "the scanner is offline",
+      requester: { email: "jane@acme.com" },
+    });
+    expect(listed.fetched_at).toEqual(fetched.fetched_at);
+  });
+
+  it("replaces the payload on a fetch, so a field the source dropped goes", async () => {
+    const connId = await seededFreshdeskConnId();
+    const item = await ingestWorkItem(
+      connId,
+      rawItem({ raw: { id: 58925, due_by: "2026-04-03" } }),
+    );
+    await ingestWorkItem(connId, rawItem({ raw: { id: 58925 } }));
+    expect((await row(item.id)).raw).toEqual({ id: 58925 });
+  });
+
+  it("leaves an item only a listing carried marked as never fetched", async () => {
+    const connId = await seededFreshdeskConnId();
+    const item = await ingestWorkItem(connId, rawItem({ listed: true }));
+    expect((await row(item.id)).fetched_at).toBeNull();
+
+    await ingestWorkItem(connId, rawItem());
+    expect((await row(item.id)).fetched_at).toBeInstanceOf(Date);
+  });
+
+  it("follows the source when a ticket moves group, owner, priority or type", async () => {
+    const connId = await seededFreshdeskConnId();
+    const item = await ingestWorkItem(
+      connId,
+      rawItem({
+        requester: "42",
+        assignee: "7",
+        priority: "1",
+        itemType: "Question",
+        sourceCreatedAt: "2026-04-01T10:00:00Z",
+      }),
+    );
+    await ingestWorkItem(
+      connId,
+      rawItem({
+        groupKey: "999",
+        requester: "43",
+        assignee: "8",
+        priority: "4",
+        itemType: "Incident",
+        listed: true,
+      }),
+    );
+    expect(await row(item.id)).toMatchObject({
+      external_group_key: "999",
+      requester: "43",
+      assignee: "8",
+      priority: "4",
+      item_type: "Incident",
+      source_created_at: new Date("2026-04-01T10:00:00Z"),
+    });
   });
 });

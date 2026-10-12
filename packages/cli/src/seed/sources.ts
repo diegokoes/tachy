@@ -188,9 +188,11 @@ async function seedWorkItems(
       "customer_id",
       "observed_version",
       "requester",
+      "priority",
       "raw",
       "source_created_at",
       "source_updated_at",
+      "fetched_at",
     ],
     volumes.workItems,
     (i) => {
@@ -210,6 +212,11 @@ async function seedWorkItems(
       const symptom = pick(rng, SYMPTOMS);
       const errorCode = `E${intBetween(rng, 100, 999)}`;
       const created = pastDate(rng, 540);
+      const observedVersion = `${intBetween(rng, 3, 9)}.${intBetween(rng, 0, 12)}`;
+      const priority = intBetween(rng, 1, 4);
+      const updated = new Date(
+        created.getTime() + intBetween(rng, 0, 72) * 3_600_000,
+      );
 
       return {
         id,
@@ -226,19 +233,16 @@ async function seedWorkItems(
         customer_id: chance(rng, 0.75)
           ? customers[i % customers.length].id
           : null,
-        observed_version: `${intBetween(rng, 3, 9)}.${intBetween(rng, 0, 12)}`,
+        observed_version: observedVersion,
         requester: `contact${i % 200}@example.invalid`,
+        priority: `${priority}`,
         // Capped: a realistic blob dominates the database's size at
         // --scale=large.
-        raw: tx.json({
-          seeded: true,
-          symptom,
-          priority: intBetween(rng, 1, 4),
-        }),
+        raw: tx.json({ seeded: true, symptom, priority }),
         source_created_at: created,
-        source_updated_at: new Date(
-          created.getTime() + intBetween(rng, 0, 72) * 3_600_000,
-        ),
+        source_updated_at: updated,
+        // Every seeded item has messages, as one read whole does.
+        fetched_at: updated,
       };
     },
   );
