@@ -336,6 +336,28 @@ export function nextListPosition(
 export const toSecond = (isoDate: string) =>
   new Date(isoDate).toISOString().replace(/\.\d{3}Z$/, "Z");
 
+/** The API answers in JSON. A page comes from what stands in front of it. */
+export const isApiAnswer = (contentType: string | null) =>
+  /\bjson\b/i.test(contentType ?? "");
+
+/**
+ * What a helpdesk sent in place of an answer, in a line: the API's error code
+ * and message, or the title of a page. Null when it sent neither.
+ */
+export function refusalText(body: string): string | null {
+  try {
+    const error = JSON.parse(body) as { code?: unknown; message?: unknown };
+    const said = [error?.code, error?.message].filter(
+      (part) => typeof part === "string",
+    );
+    if (said.length) return said.join(": ");
+  } catch {
+    // Not JSON: a page.
+  }
+  const title = body.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1].trim();
+  return title ? `a page titled "${title}"` : null;
+}
+
 /** The names of an answer's fields: of an object, or of a list's first entry. */
 export function keysOf(body: unknown): string[] {
   const sample = Array.isArray(body) ? body[0] : body;

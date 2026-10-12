@@ -14,8 +14,10 @@ import { writeFileSync } from "node:fs";
 import {
   conversationShapes,
   createTicketTally,
+  isApiAnswer,
   keysOf,
   nextListPosition,
+  refusalText,
   toSecond,
   type ListedConversation,
   type ListedTicket,
@@ -46,8 +48,12 @@ const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
 interface Answer {
   status: number;
   body: unknown;
+  /** What was sent, as it was sent. */
+  text: string;
   headers: Headers;
 }
+
+const IDENTITY_PATH = "/api/v2/agents/me";
 
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
@@ -133,6 +139,20 @@ async function main() {
   const today = new Date().toISOString().slice(0, 10);
   const out = option("out") ?? `helpdesk-profile-${base.host}-${today}.json`;
 
+  // Asked with no key, before the key is: a helpdesk that restricts where it
+  // is read from answers with a page, whatever the credentials.
+  const reached = await fetch(new URL(IDENTITY_PATH, base), {
+    redirect: "manual",
+  });
+  if (!isApiAnswer(reached.headers.get("content-type"))) {
+    const sent = refusalText(await reached.text()) ?? "no API answer";
+    console.error(
+      `${base.host} answered ${reached.status} with ${sent}, before any key was asked for or sent.\n` +
+        "Its API is not reachable from this network. A helpdesk can restrict the addresses it is read from: run this from one it allows.",
+    );
+    process.exit(1);
+  }
+
   const key = await readSecret(`API key for ${base.host}: `);
   if (!key) usage();
   const authorization = "Basic " + Buffer.from(`${key}:X`).toString("base64");
@@ -176,7 +196,7 @@ async function main() {
       } catch {
         body = null;
       }
-      return { status: response.status, body, headers: response.headers };
+      return { status: response.status, body, text, headers: response.headers };
     }
   }
 
@@ -194,10 +214,11 @@ async function main() {
     };
   }
 
-  const identity = await call("/api/v2/agents/me");
+  const identity = await call(IDENTITY_PATH);
   if (identity.status !== 200) {
+    const sent = refusalText(identity.text) ?? "no reason given";
     console.error(
-      `the helpdesk answered ${identity.status} to the key: nothing was read`,
+      `the helpdesk answered ${identity.status} to the key (${sent}): nothing was read`,
     );
     process.exit(1);
   }

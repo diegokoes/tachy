@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   conversationShapes,
   createTicketTally,
+  isApiAnswer,
   keysOf,
   nextListPosition,
   quantiles,
+  refusalText,
   toSecond,
   type ListedTicket,
 } from "../../scripts/helpdesk-shapes";
@@ -223,5 +225,38 @@ describe("toSecond and keysOf", () => {
     ]);
     expect(keysOf([])).toEqual([]);
     expect(keysOf(null)).toEqual([]);
+  });
+});
+
+describe("a refusal", () => {
+  it("tells an answer of the API from a page", () => {
+    expect(isApiAnswer("application/json; charset=utf-8")).toBe(true);
+    expect(isApiAnswer("text/html")).toBe(false);
+    expect(isApiAnswer(null)).toBe(false);
+  });
+
+  it("reads the API's code and message", () => {
+    expect(
+      refusalText(
+        '{"code":"invalid_credentials","message":"You have to be logged in to perform this action."}',
+      ),
+    ).toBe(
+      "invalid_credentials: You have to be logged in to perform this action.",
+    );
+    expect(refusalText('{"message":"admin only"}')).toBe("admin only");
+  });
+
+  it("reads a page's title", () => {
+    expect(
+      refusalText(
+        "<html><head>\n<title>Unauthorized location</title></head></html>",
+      ),
+    ).toBe('a page titled "Unauthorized location"');
+  });
+
+  it("gives none for what is neither", () => {
+    expect(refusalText("")).toBeNull();
+    expect(refusalText("{}")).toBeNull();
+    expect(refusalText("<html><body>no</body></html>")).toBeNull();
   });
 });
