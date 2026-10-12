@@ -833,7 +833,9 @@
         {/if}
       </div>
       {#if !empty}
-        <Scrollbar target={transcriptEl} controls="chat-transcript" />
+        <div class="bar-col">
+          <Scrollbar target={transcriptEl} controls="chat-transcript" />
+        </div>
       {/if}
       <ArtifactPanel />
     </div>
@@ -956,6 +958,12 @@
     --side-w: 3.25rem;
     --upload-w: var(--side-w);
     --composer-gap: 0.5rem;
+    /* The artifact tab's width, and the room it keeps from its neighbours. */
+    --tab-w: 2.9rem;
+    --edge-gap: 0.35rem;
+    /* Where ArtifactPanel stands its tab: left of the scrollbar's column,
+       which reaches into the padding `main` keeps on that side. */
+    --edge-right: calc(var(--scrollbar-w) + var(--edge-gap) - var(--pad-2));
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -1112,12 +1120,14 @@
   .md.streaming > :global(:last-child)::after {
     content: "";
   }
+  /* The scrollbar is the last thing on the right, on the edge of `main`'s
+     padding box; the artifact tab stands between it and the text. */
   .transcript-wrap {
     flex: 1;
     min-height: 0;
     display: flex;
-    gap: 0.35rem;
-    padding-right: 2.8rem;
+    gap: var(--edge-gap);
+    margin-right: calc(-1 * var(--pad-2));
   }
   /* Native bar hidden - the ASCII scrollbar next to it takes over. */
   .transcript {
@@ -1128,10 +1138,16 @@
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
-    padding-right: 0.5rem;
+    padding-right: calc(var(--tab-w) + var(--gap));
   }
   .transcript::-webkit-scrollbar {
     display: none;
+  }
+  /* Kept whether or not the bar is drawn, so its arrival moves nothing. */
+  .bar-col {
+    flex: none;
+    display: flex;
+    width: var(--scrollbar-w);
   }
 
   /* Nothing said yet: the lede and the dock sit together in the middle. */
@@ -1140,7 +1156,7 @@
   }
   .chat.empty .transcript-wrap {
     flex: none;
-    padding-right: 0;
+    margin-right: 0;
   }
   .chat.empty .transcript {
     align-items: center;
