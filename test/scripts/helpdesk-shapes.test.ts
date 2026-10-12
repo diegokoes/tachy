@@ -56,34 +56,56 @@ describe("createTicketTally", () => {
         type: null,
         responder_id: null,
         company_id: null,
+        product_id: 7,
+        form_id: 3,
         tags: ["vip"],
         fr_escalated: true,
+        nr_escalated: true,
         is_escalated: true,
         association_type: 3,
+        sentiment_score: 40,
       }),
     );
     const shapes = tally.report();
     expect(shapes.tickets).toBe(2);
-    expect(shapes.by_status).toEqual({ "2": 1, "5": 1 });
-    expect(shapes.by_type).toEqual({ Incident: 1, none: 1 });
-    expect(shapes.by_association_type).toEqual({ none: 1, "3": 1 });
-    expect(shapes).toMatchObject({
+    const created = shapes.in_window;
+    expect(created.by.status).toEqual({
+      "2": { tickets: 1, answered: 0 },
+      "5": { tickets: 1, answered: 0 },
+    });
+    expect(created.by.type).toEqual({
+      Incident: { tickets: 1, answered: 0 },
+      none: { tickets: 1, answered: 0 },
+    });
+    expect(created.by.product).toEqual({
+      none: { tickets: 1, answered: 0 },
+      "7": { tickets: 1, answered: 0 },
+    });
+    expect(created.by.form).toEqual({
+      none: { tickets: 1, answered: 0 },
+      "3": { tickets: 1, answered: 0 },
+    });
+    expect(created).toMatchObject({
+      tickets: 2,
       unassigned: 1,
       without_company: 1,
       with_tags: 1,
       first_response_overdue: 1,
+      next_response_overdue: 1,
       resolution_overdue: 1,
+      with_sentiment: 1,
     });
     expect(shapes.top_level_keys).toContain("association_type");
   });
 
-  it("puts a ticket in the month it was created and the month it was resolved", () => {
+  it("keeps the tickets created before the window apart", () => {
     const tally = createTicketTally(WINDOW_START);
     tally.add(
       ticket({
         stats: {
           first_responded_at: "2026-02-10T10:00:00Z",
           resolved_at: "2026-03-02T08:00:00Z",
+          reopened_at: "2026-03-05T08:00:00Z",
           closed_at: null,
         },
       }),
@@ -91,7 +113,10 @@ describe("createTicketTally", () => {
     tally.add(
       ticket({
         id: 2,
+        group_id: null,
+        responder_id: null,
         created_at: "2025-11-20T08:00:00Z",
+        updated_at: "2026-03-18T16:53:00Z",
         stats: { resolved_at: "2026-02-01T08:00:00Z" },
       }),
     );
@@ -100,26 +125,51 @@ describe("createTicketTally", () => {
       "2026-02": { created: 1, resolved: 1 },
       "2026-03": { created: 0, resolved: 1 },
     });
-    expect(shapes.created_before_window).toBe(1);
+    expect(shapes.in_window).toMatchObject({
+      tickets: 1,
+      answered: 1,
+      resolved: 1,
+      reopened: 1,
+      unassigned: 0,
+    });
+    expect(shapes.in_window.by.group).toEqual({
+      "11": { tickets: 1, answered: 1 },
+    });
+    expect(shapes.before_window).toMatchObject({
+      tickets: 1,
+      answered: 0,
+      resolved: 1,
+      unassigned: 1,
+    });
+    expect(shapes.before_window.by.group).toEqual({
+      none: { tickets: 1, answered: 0 },
+    });
     expect(shapes.oldest_created).toBe("2025-11-20T08:00:00.000Z");
     expect(shapes.newest_created).toBe("2026-02-10T08:00:00.000Z");
     expect(shapes.stats_keys).toEqual({
       first_responded_at: 1,
       resolved_at: 2,
+      reopened_at: 1,
     });
     // The ticket from before the window has no place in the window's durations.
     expect(shapes.first_response_hours).toMatchObject({ n: 1, p50: 2 });
     expect(shapes.resolution_hours).toMatchObject({ n: 1, p50: 480 });
+    expect(shapes.busiest_change_days).toEqual({
+      "2026-02-11": 1,
+      "2026-03-18": 1,
+    });
   });
 
-  it("counts the tickets that fill each custom field, and those naming a dev item", () => {
+  it("counts the window's tickets that fill each custom field, overall and per form", () => {
     const tally = createTicketTally(WINDOW_START);
     tally.add(
       ticket({
+        form_id: 3,
         custom_fields: {
           cf_devops_work_item: "50912",
           cf_site: "",
           cf_lines: [],
+          cf_crisis: false,
         },
       }),
     );
@@ -127,18 +177,90 @@ describe("createTicketTally", () => {
       ticket({
         id: 2,
         subject: "follow-up to AB#77",
-        custom_fields: { cf_devops_work_item: null, cf_site: "north" },
+        custom_fields: {
+          cf_devops_work_item: null,
+          cf_site: "north",
+          cf_crisis: true,
+        },
       }),
     );
     tally.add(ticket({ id: 3 }));
+    tally.add(
+      ticket({
+        id: 4,
+        created_at: "2025-06-01T08:00:00Z",
+        custom_fields: { cf_site: "south" },
+      }),
+    );
     const shapes = tally.report();
     expect(shapes.custom_fields).toEqual({
       cf_devops_work_item: 1,
       cf_site: 1,
       cf_lines: 0,
+      cf_crisis: 1,
+    });
+    expect(shapes.custom_fields_by_form).toEqual({
+      "3": { cf_devops_work_item: 1 },
+      none: { cf_site: 1, cf_crisis: 1 },
     });
     expect(shapes.dev_item_fields).toEqual({ cf_devops_work_item: 1 });
-    expect(shapes.naming_dev_item).toBe(2);
+    expect(shapes.in_window.naming_dev_item).toBe(2);
+  });
+
+  it("reports the values of the fields asked for, crossed with an agent's answer", () => {
+    const tally = createTicketTally(WINDOW_START, [
+      "cf_csat",
+      "cf_effort_hours",
+      "sentiment_score",
+      "cf_notes",
+    ]);
+    const answered = { first_responded_at: "2026-02-10T09:00:00Z" };
+    tally.add(
+      ticket({
+        stats: answered,
+        sentiment_score: 80,
+        custom_fields: { cf_csat: "Good", cf_effort_hours: 2, cf_notes: "a" },
+      }),
+    );
+    tally.add(
+      ticket({
+        id: 2,
+        custom_fields: {
+          cf_csat: "Good",
+          cf_effort_hours: "6.5",
+          cf_notes: "x".repeat(41),
+        },
+      }),
+    );
+    tally.add(ticket({ id: 3, custom_fields: { cf_csat: null } }));
+    const { values } = tally.report();
+    expect(values.cf_csat).toEqual({
+      filled: { tickets: 2, answered: 1 },
+      distinct: 1,
+      by_value: { Good: { tickets: 2, answered: 1 } },
+    });
+    expect(values.cf_effort_hours).toMatchObject({
+      distinct: 2,
+      quantiles: { n: 2, p50: 4.3 },
+    });
+    expect(values.sentiment_score.by_value).toEqual({
+      "80": { tickets: 1, answered: 1 },
+    });
+    // A value too long to be a choice marks the field as free text.
+    expect(values.cf_notes).toEqual({
+      filled: { tickets: 2, answered: 1 },
+      distinct: 2,
+    });
+  });
+
+  it("keeps the values of a field with too many of them out", () => {
+    const tally = createTicketTally(WINDOW_START, ["cf_customer"]);
+    for (let id = 1; id <= 40; id++)
+      tally.add(ticket({ id, custom_fields: { cf_customer: `name ${id}` } }));
+    const { values } = tally.report();
+    expect(values.cf_customer.by_value).toBeUndefined();
+    expect(values.cf_customer.distinct).toBe(31);
+    expect(values.cf_customer.filled.tickets).toBe(40);
   });
 
   it("reports no dates for no tickets", () => {
@@ -147,6 +269,7 @@ describe("createTicketTally", () => {
       tickets: 0,
       oldest_created: null,
       newest_created: null,
+      busiest_change_days: {},
     });
   });
 });

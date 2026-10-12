@@ -3,12 +3,15 @@
  * which kinds, which fields are filled, and which endpoints the key may read.
  *
  *   npx tsx scripts/profile-helpdesk.ts https://<domain>.freshdesk.com \
- *     [--months=12] [--sample=20] [--out=<file>.json]
+ *     [--months=12] [--sample=20] [--out=<file>.json] \
+ *     [--values=<field>,<field>] [--labels=<field>,<field>]
  *
  * Read-only: every call is a GET. The API key is asked for without echo, is
  * sent to the helpdesk's own host and nowhere else, and is not written. The
  * report holds counts, field names and status codes: no subject, message,
- * name or address. The walk keeps to half of the per-minute call budget.
+ * name or address. `--values` adds the values of the ticket fields it names,
+ * `--labels` the choices of the default fields it names: both are the
+ * caller's to judge. The walk keeps to half of the per-minute call budget.
  */
 import { writeFileSync } from "node:fs";
 import {
@@ -42,6 +45,15 @@ const PROGRESS_EVERY_PAGES = 10;
 /** Earlier than any ticket: asks the listing for everything it still returns. */
 const EVERYTHING_SINCE = "2000-01-01T00:00:00Z";
 const RESOLVED_STATUSES = new Set([4, 5]);
+/** Default fields whose choices are people or customers, whatever is asked. */
+const PEOPLE_FIELDS = new Set([
+  "agent",
+  "internal_agent",
+  "requester",
+  "company",
+]);
+/** A status's labels and a type's names say what the codes in the counts mean. */
+const LABELLED_FIELDS = ["status", "ticket_type"];
 /** Plain http is taken for a stand-in on this machine only. */
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
 
@@ -59,7 +71,7 @@ const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
 function usage(): never {
   console.error(
-    "usage: npx tsx scripts/profile-helpdesk.ts https://<domain>.freshdesk.com [--months=12] [--sample=20] [--out=<file>.json]",
+    "usage: npx tsx scripts/profile-helpdesk.ts https://<domain>.freshdesk.com [--months=12] [--sample=20] [--out=<file>.json] [--values=<field>,<field>] [--labels=<field>,<field>]",
   );
   process.exit(2);
 }
@@ -70,6 +82,12 @@ function option(name: string): string | undefined {
     .find((arg) => arg.startsWith(prefix))
     ?.slice(prefix.length);
 }
+
+const listOption = (name: string) =>
+  (option(name) ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 
 function countOption(name: string, fallback: number): number {
   const given = option(name);
@@ -136,6 +154,12 @@ async function main() {
   if (!encrypted && !LOCAL_HOSTS.has(base.hostname)) usage();
   const months = countOption("months", DEFAULT_MONTHS);
   const sampleSize = countOption("sample", DEFAULT_SAMPLE);
+  const valueFields = listOption("values");
+  const labelled = new Set(
+    [...LABELLED_FIELDS, ...listOption("labels")].filter(
+      (name) => !PEOPLE_FIELDS.has(name),
+    ),
+  );
   const today = new Date().toISOString().slice(0, 10);
   const out = option("out") ?? `helpdesk-profile-${base.host}-${today}.json`;
 
@@ -203,14 +227,22 @@ async function main() {
   const listed = (answer: Answer) =>
     Array.isArray(answer.body) ? (answer.body as unknown[]) : [];
 
-  /** Status and field names of an endpoint, and how many entries its first page has. */
-  async function probe(path: string) {
-    const answer = await call(path);
+  /**
+   * Status and field names of an endpoint, and how many entries its first
+   * page has. An answer that wraps its entries in `data` is read there too.
+   */
+  const probe = async (path: string) => described(path, await call(path));
+
+  function described(path: string, answer: Answer) {
+    const wrapped = (answer.body as { data?: unknown } | null)?.data;
     return {
       path: path.split("?")[0],
       status: answer.status,
       count: Array.isArray(answer.body) ? answer.body.length : null,
       keys: keysOf(answer.body),
+      ...(Array.isArray(wrapped)
+        ? { data_count: wrapped.length, data_keys: keysOf(wrapped) }
+        : {}),
     };
   }
 
@@ -224,7 +256,7 @@ async function main() {
   }
 
   const windowStart = monthsAgo(months);
-  const tally = createTicketTally(windowStart);
+  const tally = createTicketTally(windowStart, valueFields);
   const recentResolved: number[] = [];
   let newestTicketId: number | null = null;
   let position: ListPosition = { since: windowStart.toISOString(), page: 1 };
@@ -267,17 +299,30 @@ async function main() {
     ?.created_at;
 
   const agentIds = new Set<string>();
+  const agentsByType: Record<string, number> = {};
+  const agentsPerGroup: Record<string, number> = {};
   let agentsStatus = 0;
   let occasionalAgents = 0;
+  let agentKeys: string[] = [];
   for (let page = 1; page <= MAX_AGENT_PAGES; page++) {
     const answer = await call(
       `/api/v2/agents?per_page=${PER_PAGE}&page=${page}`,
     );
     agentsStatus = answer.status;
-    const agents = listed(answer) as { id?: number; occasional?: boolean }[];
+    const agents = listed(answer) as {
+      id?: number;
+      occasional?: boolean;
+      type?: string;
+      group_ids?: number[];
+    }[];
+    if (page === 1) agentKeys = keysOf(agents);
     for (const agent of agents) {
       if (agent.id != null) agentIds.add(String(agent.id));
       if (agent.occasional) occasionalAgents++;
+      const type = agent.type ?? "none";
+      agentsByType[type] = (agentsByType[type] ?? 0) + 1;
+      for (const group of agent.group_ids ?? [])
+        agentsPerGroup[group] = (agentsPerGroup[group] ?? 0) + 1;
     }
     if (agents.length < PER_PAGE) break;
   }
@@ -295,9 +340,8 @@ async function main() {
     type: field.type ?? null,
     default: field.default === true,
     choices_count: choiceCount(field.choices),
-    // A status's labels and a type's names are configuration. Other choices
-    // can name people or customers, so only their number is kept.
-    ...(field.name === "status" || field.name === "ticket_type"
+    // Other choices can name people or customers: only their number is kept.
+    ...(labelled.has(field.name ?? "")
       ? { choices: field.choices ?? null }
       : {}),
   }));
@@ -322,6 +366,12 @@ async function main() {
     );
   }
 
+  const currentSurveysPath = "/api/v2/customer-satisfaction/surveys";
+  const currentSurveys = await call(currentSurveysPath);
+  const firstSurvey = (
+    currentSurveys.body as { data?: { id?: unknown }[] } | null
+  )?.data?.[0]?.id;
+
   const report = {
     generated_at: new Date().toISOString(),
     host: base.host,
@@ -334,6 +384,9 @@ async function main() {
       status: agentsStatus,
       count: agentIds.size,
       occasional: occasionalAgents,
+      by_type: agentsByType,
+      per_group: agentsPerGroup,
+      keys: agentKeys,
     },
     groups: await probe(`/api/v2/groups?per_page=${PER_PAGE}`),
     ticket_fields: { status: fields.status, fields: ticketFields },
@@ -348,14 +401,20 @@ async function main() {
       keys: keysOf(account.body),
       tier_type: typeof tier === "string" ? tier : null,
     },
-    // The reference documents the first, and the third only with a survey's
-    // id and `/responses` after it: its bare form is a guess at the listing.
+    // The reference documents the first, and the last with a survey's id.
+    // The bare listing of current surveys is not in it.
     surveys: {
       legacy_ratings: await probe(
         `/api/v2/surveys/satisfaction_ratings?created_since=${toSecond(windowStart.toISOString())}`,
       ),
       legacy_surveys: await probe("/api/v2/surveys"),
-      current_surveys: await probe("/api/v2/customer-satisfaction/surveys"),
+      current_surveys: described(currentSurveysPath, currentSurveys),
+      current_responses:
+        typeof firstSurvey === "string" || typeof firstSurvey === "number"
+          ? await probe(
+              `${currentSurveysPath}/${firstSurvey}/responses?created_since=${toSecond(windowStart.toISOString())}`,
+            )
+          : null,
     },
     // The agent interface's own endpoint, absent from the public reference.
     activities:
@@ -373,12 +432,14 @@ async function main() {
 
   writeFileSync(out, JSON.stringify(report, null, 2) + "\n");
   const { listing } = report;
+  const created = listing.in_window;
   console.log(
     [
-      `${listing.tickets} tickets changed since ${windowStart.toISOString().slice(0, 10)}, ${listing.created_before_window} of them created before it`,
+      `${listing.tickets} tickets changed since ${windowStart.toISOString().slice(0, 10)}: ${created.tickets} created since, ${listing.before_window.tickets} before`,
+      `of those created since: ${created.answered} answered by an agent, ${created.resolved} resolved, ${created.unassigned} unassigned`,
       `oldest ticket the listing still returns: ${report.oldest_reachable_created ?? "none"}`,
       `first response, calendar hours: p50 ${listing.first_response_hours.p50}, p90 ${listing.first_response_hours.p90} (n ${listing.first_response_hours.n})`,
-      `naming a dev item: ${listing.naming_dev_item}`,
+      `naming a dev item: ${created.naming_dev_item}`,
       `agents: ${report.agents.count} (status ${report.agents.status})`,
       `surveys: legacy ${report.surveys.legacy_ratings.status}, current ${report.surveys.current_surveys.status}`,
       `activities endpoint: ${report.activities?.status ?? "not asked"}`,

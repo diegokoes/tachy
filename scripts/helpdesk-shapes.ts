@@ -18,8 +18,12 @@ export interface ListedTicket {
   responder_id?: number | null;
   company_id?: number | null;
   association_type?: number | null;
+  product_id?: number | null;
+  form_id?: number | null;
   fr_escalated?: boolean;
+  nr_escalated?: boolean;
   is_escalated?: boolean;
+  sentiment_score?: number | null;
   tags?: string[];
   custom_fields?: Record<string, unknown> | null;
   stats?: Record<string, unknown> | null;
@@ -55,8 +59,12 @@ const increment = (counts: Record<string, number>, key: string) => {
   counts[key] = (counts[key] ?? 0) + 1;
 };
 
+/** A checkbox left unticked holds nothing, as an empty text or list does. */
 const isFilled = (value: unknown) =>
-  value != null && value !== "" && !(Array.isArray(value) && !value.length);
+  value != null &&
+  value !== "" &&
+  value !== false &&
+  !(Array.isArray(value) && !value.length);
 
 /** A time the source gave, in ms, or NaN for one it left out. */
 const timeMs = (value: unknown) =>
@@ -85,31 +93,78 @@ export function quantiles(values: number[]): Quantiles {
   };
 }
 
-/** The counts a walk of the ticket listing adds up to. */
-export interface TicketShapes {
+/** Tickets, and how many of them an agent answered. */
+export interface Slice {
   tickets: number;
-  /** Listed because they changed in the window, created before it. */
-  created_before_window: number;
-  oldest_created: string | null;
-  newest_created: string | null;
-  /** Per month of the window: tickets created in it, and tickets resolved in it. */
-  per_month: Record<string, { created: number; resolved: number }>;
-  by_status: Record<string, number>;
-  by_priority: Record<string, number>;
-  by_type: Record<string, number>;
-  by_source: Record<string, number>;
-  by_group: Record<string, number>;
-  by_association_type: Record<string, number>;
+  answered: number;
+}
+
+const DIMENSIONS = [
+  "status",
+  "priority",
+  "type",
+  "source",
+  "group",
+  "product",
+  "form",
+  "association_type",
+] as const;
+type Dimension = (typeof DIMENSIONS)[number];
+
+/** How a set of tickets spreads over its fields. */
+export interface Spread {
+  tickets: number;
+  /** With a first response from an agent, as `stats` dates one. */
+  answered: number;
+  resolved: number;
+  reopened: number;
   unassigned: number;
   without_company: number;
   with_tags: number;
   first_response_overdue: number;
+  next_response_overdue: number;
   resolution_overdue: number;
-  /** Per custom field: tickets that hold a value in it. */
-  custom_fields: Record<string, number>;
-  dev_item_fields: Record<string, number>;
-  /** Tickets whose subject or custom fields name a dev item as tachy reads one. */
+  /** Whose subject or custom fields name a dev item as tachy reads one. */
   naming_dev_item: number;
+  with_sentiment: number;
+  by: Record<Dimension, Record<string, Slice>>;
+}
+
+/** The values a named field takes. */
+export interface FieldValues {
+  /** The tickets that hold any value in it. */
+  filled: Slice;
+  /** Counted up to one past the most values a field is shown with. */
+  distinct: number;
+  /** Per value, for a field of few short values: a field of free text has none. */
+  by_value?: Record<string, Slice>;
+  /** Of a field whose every value is a number. */
+  quantiles?: Quantiles;
+}
+
+/** The counts a walk of the ticket listing adds up to. */
+export interface TicketShapes {
+  tickets: number;
+  oldest_created: string | null;
+  newest_created: string | null;
+  /** Per month of the window: tickets created in it, and tickets resolved in it. */
+  per_month: Record<string, { created: number; resolved: number }>;
+  /** Tickets created in the window. */
+  in_window: Spread;
+  /** Listed because they changed in the window, created before it. */
+  before_window: Spread;
+  /** The days most tickets last changed on. A bulk change shows as one. */
+  busiest_change_days: Record<string, number>;
+  /**
+   * Per custom field, of the window's tickets: those that hold a value in it.
+   * A checkbox counts when it is ticked.
+   */
+  custom_fields: Record<string, number>;
+  /** The same per ticket form, for the fields a form's tickets fill. */
+  custom_fields_by_form: Record<string, Record<string, number>>;
+  dev_item_fields: Record<string, number>;
+  /** Of the window's tickets, the values of the fields asked for by name. */
+  values: Record<string, FieldValues>;
   /** Per key of `stats`: tickets that hold a time in it. */
   stats_keys: Record<string, number>;
   /** Calendar hours, of the window's tickets that have the time. */
@@ -118,123 +173,224 @@ export interface TicketShapes {
   top_level_keys: string[];
 }
 
+/** Past these a field is free text, and its values stay out of the report. */
+const MAX_VALUES_SHOWN = 30;
+const MAX_VALUE_CHARS = 40;
+const BUSIEST_DAYS_SHOWN = 10;
+
+const emptySpread = (): Spread => ({
+  tickets: 0,
+  answered: 0,
+  resolved: 0,
+  reopened: 0,
+  unassigned: 0,
+  without_company: 0,
+  with_tags: 0,
+  first_response_overdue: 0,
+  next_response_overdue: 0,
+  resolution_overdue: 0,
+  naming_dev_item: 0,
+  with_sentiment: 0,
+  by: Object.fromEntries(
+    DIMENSIONS.map((dimension) => [dimension, {}]),
+  ) as Spread["by"],
+});
+
+function addToSlice(
+  slices: Record<string, Slice>,
+  key: string,
+  answered: boolean,
+) {
+  const slice = (slices[key] ??= { tickets: 0, answered: 0 });
+  slice.tickets++;
+  if (answered) slice.answered++;
+}
+
+const dimensionValues = (ticket: ListedTicket): Record<Dimension, unknown> => ({
+  status: ticket.status,
+  priority: ticket.priority,
+  type: ticket.type || null,
+  source: ticket.source,
+  group: ticket.group_id,
+  product: ticket.product_id,
+  form: ticket.form_id,
+  association_type: ticket.association_type,
+});
+
+const namesDevItem = (ticket: ListedTicket) =>
+  extractAdoRefs({
+    externalId: String(ticket.id),
+    kind: "ticket",
+    title: ticket.subject,
+    raw: ticket,
+    messages: [],
+  }).length > 0;
+
+function addToSpread(spread: Spread, ticket: ListedTicket, answered: boolean) {
+  spread.tickets++;
+  if (answered) spread.answered++;
+  if (Number.isFinite(timeMs(ticket.stats?.resolved_at))) spread.resolved++;
+  if (Number.isFinite(timeMs(ticket.stats?.reopened_at))) spread.reopened++;
+  if (ticket.responder_id == null) spread.unassigned++;
+  if (ticket.company_id == null) spread.without_company++;
+  if (ticket.tags?.length) spread.with_tags++;
+  if (ticket.fr_escalated) spread.first_response_overdue++;
+  if (ticket.nr_escalated) spread.next_response_overdue++;
+  if (ticket.is_escalated) spread.resolution_overdue++;
+  if (ticket.sentiment_score != null) spread.with_sentiment++;
+  if (namesDevItem(ticket)) spread.naming_dev_item++;
+  for (const [dimension, value] of Object.entries(dimensionValues(ticket)))
+    addToSlice(
+      spread.by[dimension as Dimension],
+      String(value ?? NONE),
+      answered,
+    );
+}
+
+/** The values one named field took, as they are met. */
+function createValueTally() {
+  const slices: Record<string, Slice> = {};
+  const filled: Slice = { tickets: 0, answered: 0 };
+  const numbers: number[] = [];
+  let isNumeric = true;
+  let isShort = true;
+  return {
+    add(value: unknown, answered: boolean) {
+      if (!isFilled(value)) return;
+      filled.tickets++;
+      if (answered) filled.answered++;
+      const key = String(value);
+      const known = key in slices;
+      // Past the cap a field is free text: its further values are not kept.
+      if (!known && Object.keys(slices).length > MAX_VALUES_SHOWN) return;
+      addToSlice(slices, key, answered);
+      if (key.length > MAX_VALUE_CHARS) isShort = false;
+      const number = typeof value === "boolean" ? Number.NaN : Number(value);
+      if (Number.isFinite(number)) numbers.push(number);
+      else isNumeric = false;
+    },
+    report(): FieldValues {
+      const distinct = Object.keys(slices).length;
+      const isFew = distinct <= MAX_VALUES_SHOWN;
+      return {
+        filled,
+        distinct,
+        ...(isFew && isShort ? { by_value: slices } : {}),
+        ...(isNumeric && numbers.length
+          ? { quantiles: quantiles(numbers) }
+          : {}),
+      };
+    },
+  };
+}
+
 /**
  * Adds tickets up as a walk reads them, one at a time: a year of a busy
  * helpdesk is not held in memory. A ticket read twice counts once, as it was
- * first read.
+ * first read. `valueFields` names the fields whose values are reported: a
+ * custom field, or a field of the ticket itself.
  */
-export function createTicketTally(windowStart: Date) {
+export function createTicketTally(
+  windowStart: Date,
+  valueFields: string[] = [],
+) {
   const seen = new Set<number>();
   const keys = new Set<string>();
   const firstResponseHours: number[] = [];
   const resolutionHours: number[] = [];
+  const changedPerDay = new Map<string, number>();
+  const valueTallies = new Map(
+    valueFields.map((name) => [name, createValueTally()]),
+  );
   let oldestMs = Number.POSITIVE_INFINITY;
   let newestMs = Number.NEGATIVE_INFINITY;
-  const shapes: Omit<
-    TicketShapes,
-    | "oldest_created"
-    | "newest_created"
-    | "first_response_hours"
-    | "resolution_hours"
-    | "top_level_keys"
-  > = {
-    tickets: 0,
-    created_before_window: 0,
-    per_month: {},
-    by_status: {},
-    by_priority: {},
-    by_type: {},
-    by_source: {},
-    by_group: {},
-    by_association_type: {},
-    unassigned: 0,
-    without_company: 0,
-    with_tags: 0,
-    first_response_overdue: 0,
-    resolution_overdue: 0,
-    custom_fields: {},
-    dev_item_fields: {},
-    naming_dev_item: 0,
-    stats_keys: {},
-  };
+  const inWindow = emptySpread();
+  const beforeWindow = emptySpread();
+  const perMonth: TicketShapes["per_month"] = {};
+  const customFields: Record<string, number> = {};
+  const customFieldsByForm: Record<string, Record<string, number>> = {};
+  const devItemFields: Record<string, number> = {};
+  const statsKeys: Record<string, number> = {};
 
   const month = (key: string) =>
-    (shapes.per_month[key] ??= { created: 0, resolved: 0 });
+    (perMonth[key] ??= { created: 0, resolved: 0 });
 
-  function addTimes(ticket: ListedTicket) {
-    const createdMs = timeMs(ticket.created_at);
-    const inWindow = createdMs >= windowStart.getTime();
-    if (Number.isFinite(createdMs)) {
-      oldestMs = Math.min(oldestMs, createdMs);
-      newestMs = Math.max(newestMs, createdMs);
-    }
-    if (inWindow) month(monthOf(createdMs)).created++;
-    else shapes.created_before_window++;
-
-    for (const [key, value] of Object.entries(ticket.stats ?? {}))
-      if (Number.isFinite(timeMs(value))) increment(shapes.stats_keys, key);
-
-    const resolvedMs = timeMs(ticket.stats?.resolved_at);
-    if (resolvedMs >= windowStart.getTime())
-      month(monthOf(resolvedMs)).resolved++;
-    if (!inWindow) return;
-    const answeredMs = timeMs(ticket.stats?.first_responded_at);
-    if (Number.isFinite(answeredMs))
-      firstResponseHours.push((answeredMs - createdMs) / HOUR_MS);
-    if (Number.isFinite(resolvedMs))
-      resolutionHours.push((resolvedMs - createdMs) / HOUR_MS);
-  }
-
-  function addFields(ticket: ListedTicket) {
+  function addFields(ticket: ListedTicket, answered: boolean) {
+    const form = String(ticket.form_id ?? NONE);
     for (const [name, value] of Object.entries(ticket.custom_fields ?? {})) {
-      shapes.custom_fields[name] ??= 0;
-      if (DEV_ITEM_FIELD.test(name)) shapes.dev_item_fields[name] ??= 0;
+      customFields[name] ??= 0;
+      if (DEV_ITEM_FIELD.test(name)) devItemFields[name] ??= 0;
       if (!isFilled(value)) continue;
-      shapes.custom_fields[name]++;
-      if (DEV_ITEM_FIELD.test(name)) shapes.dev_item_fields[name]++;
+      customFields[name]++;
+      increment((customFieldsByForm[form] ??= {}), name);
+      if (DEV_ITEM_FIELD.test(name)) devItemFields[name]++;
     }
-    const refs = extractAdoRefs({
-      externalId: String(ticket.id),
-      kind: "ticket",
-      title: ticket.subject,
-      raw: ticket,
-      messages: [],
-    });
-    if (refs.length) shapes.naming_dev_item++;
+    for (const [name, values] of valueTallies)
+      values.add(
+        ticket.custom_fields?.[name] ??
+          (ticket as unknown as Record<string, unknown>)[name],
+        answered,
+      );
   }
 
   return {
     add(ticket: ListedTicket) {
       if (seen.has(ticket.id)) return;
       seen.add(ticket.id);
-      shapes.tickets++;
       for (const key of Object.keys(ticket)) keys.add(key);
-      increment(shapes.by_status, String(ticket.status ?? NONE));
-      increment(shapes.by_priority, String(ticket.priority ?? NONE));
-      increment(shapes.by_type, ticket.type || NONE);
-      increment(shapes.by_source, String(ticket.source ?? NONE));
-      increment(shapes.by_group, String(ticket.group_id ?? NONE));
-      increment(
-        shapes.by_association_type,
-        String(ticket.association_type ?? NONE),
-      );
-      if (ticket.responder_id == null) shapes.unassigned++;
-      if (ticket.company_id == null) shapes.without_company++;
-      if (ticket.tags?.length) shapes.with_tags++;
-      if (ticket.fr_escalated) shapes.first_response_overdue++;
-      if (ticket.is_escalated) shapes.resolution_overdue++;
-      addTimes(ticket);
-      addFields(ticket);
+      for (const [key, value] of Object.entries(ticket.stats ?? {}))
+        if (Number.isFinite(timeMs(value))) increment(statsKeys, key);
+
+      const changedMs = timeMs(ticket.updated_at);
+      if (Number.isFinite(changedMs)) {
+        const day = new Date(changedMs).toISOString().slice(0, 10);
+        changedPerDay.set(day, (changedPerDay.get(day) ?? 0) + 1);
+      }
+      const createdMs = timeMs(ticket.created_at);
+      if (Number.isFinite(createdMs)) {
+        oldestMs = Math.min(oldestMs, createdMs);
+        newestMs = Math.max(newestMs, createdMs);
+      }
+      const answeredMs = timeMs(ticket.stats?.first_responded_at);
+      const resolvedMs = timeMs(ticket.stats?.resolved_at);
+      const answered = Number.isFinite(answeredMs);
+      if (resolvedMs >= windowStart.getTime())
+        month(monthOf(resolvedMs)).resolved++;
+
+      if (!(createdMs >= windowStart.getTime())) {
+        addToSpread(beforeWindow, ticket, answered);
+        return;
+      }
+      addToSpread(inWindow, ticket, answered);
+      month(monthOf(createdMs)).created++;
+      if (answered) firstResponseHours.push((answeredMs - createdMs) / HOUR_MS);
+      if (Number.isFinite(resolvedMs))
+        resolutionHours.push((resolvedMs - createdMs) / HOUR_MS);
+      addFields(ticket, answered);
     },
     report(): TicketShapes {
+      const busiest = [...changedPerDay]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, BUSIEST_DAYS_SHOWN);
       return {
-        ...shapes,
+        tickets: seen.size,
         oldest_created: Number.isFinite(oldestMs)
           ? new Date(oldestMs).toISOString()
           : null,
         newest_created: Number.isFinite(newestMs)
           ? new Date(newestMs).toISOString()
           : null,
+        per_month: perMonth,
+        in_window: inWindow,
+        before_window: beforeWindow,
+        busiest_change_days: Object.fromEntries(busiest),
+        custom_fields: customFields,
+        custom_fields_by_form: customFieldsByForm,
+        dev_item_fields: devItemFields,
+        values: Object.fromEntries(
+          [...valueTallies].map(([name, values]) => [name, values.report()]),
+        ),
+        stats_keys: statsKeys,
         first_response_hours: quantiles(firstResponseHours),
         resolution_hours: quantiles(resolutionHours),
         top_level_keys: [...keys].sort(),
