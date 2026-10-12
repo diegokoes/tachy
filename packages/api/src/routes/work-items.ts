@@ -1,15 +1,17 @@
 import { Hono } from "hono";
 import { validate } from "../validation";
 import { z } from "zod";
-import { checkFile, fileFamily } from "@tachy/core";
+import { MAX_PAGE, checkFile, fileFamily } from "@tachy/core";
 import { imageForModel } from "@tachy/core/files";
 import { resolveSource } from "@tachy/core/sources";
 import {
   deleteStoredItems,
   filterForAudit,
   ingestWorkItem,
+  listStoredItems,
   previewStoredItems,
   readAttachmentBytes,
+  readStoredItem,
   workItemScope,
   externalWorkItemScope,
   type StoredItemFilter,
@@ -53,6 +55,21 @@ const storedDeleteSchema = storedFilterSchema.extend({
   expected: z.number().int().min(0),
 });
 
+const storedListSchema = z.object({
+  connection: z.string().min(1).optional(),
+  /** Several statuses, separated by commas. */
+  status: z.string().min(1).optional(),
+  product: z.string().min(1).optional(),
+  team: z.string().min(1).optional(),
+  customer: z.string().min(1).optional(),
+  requester: z.string().min(1).optional(),
+  changed_before: z.string().min(1).optional(),
+  q: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+});
+const storedItemParam = z.object({ id: z.string().uuid() });
+
 const storedFilter = (
   body: z.infer<typeof storedFilterSchema>,
 ): StoredItemFilter => ({
@@ -67,6 +84,25 @@ const storedFilter = (
 });
 
 export const workItems = new Hono()
+  // The stored copies and one with its timeline, for anyone signed in, as the
+  // rest of the console reads. Deleting them stays with app admins.
+  .get("/stored", validate("query", storedListSchema), async (c) => {
+    const { status, q, limit, offset, ...filter } = c.req.valid("query");
+    const statuses = status
+      ?.split(",")
+      .map((one) => one.trim())
+      .filter(Boolean);
+    return c.json(
+      await listStoredItems(storedFilter({ ...filter, statuses }), {
+        query: q,
+        limit,
+        offset,
+      }),
+    );
+  })
+  .get("/stored/:id", validate("param", storedItemParam), async (c) =>
+    c.json(await readStoredItem(c.req.valid("param").id)),
+  )
   // The stored copies of tickets, by filter. A preview first: the delete takes
   // the count the preview gave and refuses when it no longer holds.
   .post(

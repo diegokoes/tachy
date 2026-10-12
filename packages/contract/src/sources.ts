@@ -14,6 +14,8 @@ export interface SourceCensus {
   projects_no_wiki: number;
   projects_for_customer: number;
   never_synced: number;
+  /** Stored copies of tickets and work items, across every connection. */
+  work_items: number;
   by_type: Record<string, number>;
 }
 
