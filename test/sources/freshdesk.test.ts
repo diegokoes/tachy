@@ -103,6 +103,78 @@ describe("freshdesk adapter", () => {
     expect(item.listed).toBeUndefined();
   });
 
+  it("turns a ticket's opening and its stats into events", async () => {
+    mockFetch({
+      "/tickets/7?include=requester": {
+        ...ticket,
+        stats: {
+          first_responded_at: "2026-01-01T02:00:00Z",
+          resolved_at: "2026-01-03T00:00:00Z",
+          closed_at: null,
+          pending_since: "2026-01-02T00:00:00Z",
+          reopened_count: "3",
+        },
+      },
+      "/tickets/7/conversations?page=1": [],
+    });
+    const item = await source().fetchItem("7");
+    expect(item.events).toEqual([
+      {
+        externalId: "created",
+        occurredAt: "2026-01-01T00:00:00Z",
+        field: "created",
+      },
+      {
+        externalId: "stats:first_responded_at:2026-01-01T02:00:00Z",
+        occurredAt: "2026-01-01T02:00:00Z",
+        field: "first_responded",
+      },
+      {
+        externalId: "stats:resolved_at:2026-01-03T00:00:00Z",
+        occurredAt: "2026-01-03T00:00:00Z",
+        field: "resolved",
+      },
+      {
+        externalId: "stats:pending_since:2026-01-02T00:00:00Z",
+        occurredAt: "2026-01-02T00:00:00Z",
+        field: "pending_since",
+      },
+    ]);
+    expect(item.historyComplete).toBeUndefined();
+  });
+
+  it("reads the ticket's company with it, its custom fields beside the standard ones", async () => {
+    const calls = mockFetch({
+      "/tickets/7?include=requester": { ...ticket, company_id: 9 },
+      "/tickets/7/conversations?page=1": [],
+      "/companies/9": {
+        id: 9,
+        name: "Acme",
+        custom_fields: { tier: "gold" },
+      },
+    });
+    const item = await source().fetchItem("7");
+    expect(item.customerKey).toBe("9");
+    expect(item.customerRecord).toEqual({
+      name: "Acme",
+      record: { id: 9, name: "Acme", tier: "gold" },
+    });
+    expect(calls.filter((c) => c.startsWith("/companies"))).toEqual([
+      "/companies/9",
+    ]);
+  });
+
+  it("still reads the ticket when its company cannot be read", async () => {
+    mockFetch({
+      "/tickets/7?include=requester": { ...ticket, company_id: 9 },
+      "/tickets/7/conversations?page=1": [],
+    });
+    const item = await source().fetchItem("7");
+    expect(item.customerKey).toBe("9");
+    expect(item.customerRecord).toBeUndefined();
+    expect(item.messages).toHaveLength(1);
+  });
+
   it("lists tickets as listings, with their stats and no messages", async () => {
     const calls = mockFetch({
       "/tickets?": [
@@ -123,7 +195,9 @@ describe("freshdesk adapter", () => {
       assignee: "5",
       listed: true,
       messages: [],
+      events: [{ field: "created" }],
     });
+    expect(items[0].customerRecord).toBeUndefined();
     expect(nextCursor).toBeUndefined();
   });
 
