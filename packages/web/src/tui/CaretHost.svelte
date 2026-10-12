@@ -42,6 +42,7 @@
   let frame = 0;
   let mirror: HTMLDivElement | undefined;
   let seen = { pos: -1, width: -1, value: "" };
+  /** Where the caret starts, from the field's border box. */
   let at = { left: 0, top: 0, line: 0 };
 
   function drawable(el: Element | null): el is Field {
@@ -79,7 +80,17 @@
     const area = el instanceof HTMLTextAreaElement;
     const pad =
       parseFloat(computed.paddingLeft) + parseFloat(computed.paddingRight);
-    mirror.style.width = `${el.clientWidth - pad}px`;
+    const border = {
+      left: parseFloat(computed.borderLeftWidth),
+      right: parseFloat(computed.borderRightWidth),
+      top: parseFloat(computed.borderTopWidth),
+    };
+    // The border comes from the computed style: Firefox counts an input's
+    // padding into clientLeft and out of clientWidth, and a textarea's not.
+    const inner = area
+      ? el.clientWidth
+      : el.offsetWidth - border.left - border.right;
+    mirror.style.width = `${inner - pad}px`;
     mirror.style.whiteSpace = area ? "pre-wrap" : "pre";
     mirror.style.overflowWrap = area ? "break-word" : "normal";
 
@@ -94,18 +105,18 @@
     const box = mirror.getBoundingClientRect();
     const start = tail.getClientRects()[0] ?? box;
     at = {
-      left: start.left - box.left,
-      top: tail.offsetTop,
+      left: border.left + start.left - box.left,
+      top: border.top + tail.offsetTop,
       line: parseFloat(computed.lineHeight) || size * 1.2,
     };
   }
 
   function place(el: Field) {
     const rect = el.getBoundingClientRect();
-    const left = rect.left + el.clientLeft + at.left - el.scrollLeft;
+    const left = rect.left + at.left - el.scrollLeft;
     const top =
       el instanceof HTMLTextAreaElement
-        ? rect.top + el.clientTop + at.top - el.scrollTop
+        ? rect.top + at.top - el.scrollTop
         : rect.top + (rect.height - at.line) / 2;
     x = left;
     y = top + (at.line - size * 1.15) / 2;
