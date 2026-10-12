@@ -230,6 +230,9 @@ interface FreshdeskTicket {
   status?: number | null;
   group_id?: number | null;
   requester_id?: number | null;
+  responder_id?: number | null;
+  priority?: number | null;
+  type?: string | null;
   requester?: { email?: string; name?: string };
   description?: string;
   description_text?: string;
@@ -481,6 +484,10 @@ export const createFreshdeskSource: SourceFactory = (
       title: ticket.subject,
       status: ticket.status != null ? String(ticket.status) : undefined,
       groupKey: ticket.group_id != null ? String(ticket.group_id) : undefined,
+      assignee:
+        ticket.responder_id != null ? String(ticket.responder_id) : undefined,
+      priority: ticket.priority != null ? String(ticket.priority) : undefined,
+      itemType: ticket.type ?? undefined,
       requester:
         ticket.requester_id != null ? String(ticket.requester_id) : undefined,
       requesterEmail: ticket.requester?.email,
@@ -527,7 +534,7 @@ export const createFreshdeskSource: SourceFactory = (
       // pasted: unescaped it could carry its own query string into the path.
       const ticketId = encodeURIComponent(externalId);
       const ticket = await get<FreshdeskTicket>(
-        `/tickets/${ticketId}?include=requester`,
+        `/tickets/${ticketId}?include=requester,stats`,
       );
       const convos: FreshdeskConversation[] = [];
       for await (const batch of conversationPages(ticketId))
@@ -581,6 +588,8 @@ export const createFreshdeskSource: SourceFactory = (
       params.set("order_by", "updated_at");
       params.set("order_type", "asc");
       if (opts.updatedSince) params.set("updated_since", opts.updatedSince);
+      // The times a ticket was first answered, resolved and closed.
+      params.set("include", "stats");
       const page = opts.cursor ? Number(opts.cursor) : 1;
       params.set("page", String(page));
 
@@ -588,7 +597,10 @@ export const createFreshdeskSource: SourceFactory = (
         `/tickets?${params.toString()}`,
       );
       const raw = Array.isArray(list) ? list : [];
-      let items = raw.map((t) => metadataToItem(t, []));
+      let items = raw.map((t): RawWorkItem => ({
+        ...metadataToItem(t, []),
+        listed: true,
+      }));
       if (opts.groupKey)
         items = items.filter((i) => i.groupKey === opts.groupKey);
 

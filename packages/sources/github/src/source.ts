@@ -64,6 +64,7 @@ interface GithubIssue {
   state?: string;
   body?: string | null;
   user?: { login?: string } | null;
+  assignee?: { login?: string } | null;
   pull_request?: unknown;
   created_at?: string;
   updated_at?: string;
@@ -125,6 +126,7 @@ export const createGithubSource: SourceFactory = (
       title: issue.title,
       status: issue.state,
       groupKey: repo,
+      assignee: issue.assignee?.login,
       requester: issue.user?.login,
       raw: issue,
       sourceCreatedAt: issue.created_at,
@@ -167,7 +169,7 @@ export const createGithubSource: SourceFactory = (
     const items: RawWorkItem[] = [];
     for (const issue of issues) {
       if (issue.pull_request) continue;
-      items.push(issueToItem(repo, issue, []));
+      items.push({ ...issueToItem(repo, issue, []), listed: true });
     }
     return { items, more: issues.length === PER_PAGE };
   }

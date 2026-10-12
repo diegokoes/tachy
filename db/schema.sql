@@ -309,10 +309,18 @@ create table work_items (
     customer_unit_id uuid references customer_units(id) on delete set null,
     observed_version      text,
     requester             text,
+    -- Who it is assigned to, its priority and its type, as the source spells
+    -- them: a Freshdesk agent id and priority number, an ADO display name.
+    assignee              text,
+    priority              text,
+    item_type             text,
     raw                   jsonb,
     source_created_at     timestamptz,
     source_updated_at     timestamptz,
     ingested_at           timestamptz not null default now(),
+    -- When it was last read whole, with its messages. Null while only a
+    -- listing has carried it: such a row has no messages and a thinner raw.
+    fetched_at            timestamptz,
     unique (source_connection_id, external_id)
 );
 
@@ -328,6 +336,11 @@ create table work_item_messages (
     work_item_id    uuid not null references work_items(id) on delete cascade,
     external_id     text,
     author          text,
+    -- The sender as a person reads it: an address or a name. `author` is the
+    -- source's account id where it has one.
+    author_label    text,
+    -- Machine-written mail: an autoresponder, an SLA reminder.
+    automated       boolean not null default false,
     visibility      text,
     direction       text,
     body_text       text,

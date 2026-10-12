@@ -40,6 +40,14 @@ export interface RawWorkItem {
   groupKey?: string;
   /** Source-native area/category path, e.g. Azure DevOps `System.AreaPath`. */
   areaPath?: string;
+  /**
+   * Who it is assigned to, as the source names them. The same spelling from a
+   * listing and from a fetch: a value that differs reads as a reassignment.
+   */
+  assignee?: string;
+  priority?: string;
+  /** The source's own type for it: a Freshdesk ticket type, an ADO work item type. */
+  itemType?: string;
   requester?: string;
   requesterEmail?: string;
   /**
@@ -58,5 +66,10 @@ export interface RawWorkItem {
   raw: unknown;
   sourceCreatedAt?: string;
   sourceUpdatedAt?: string;
+  /**
+   * It came from a listing: `messages` is empty because none were read, and
+   * `raw` holds only what a listing returns. Unset, the item was read whole.
+   */
+  listed?: true;
   messages: RawMessage[];
 }
