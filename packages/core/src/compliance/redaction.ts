@@ -252,6 +252,12 @@ export function redactNormalized(
   ];
   const scrub = (text: string | undefined) =>
     scrubKnownNames(scrubText(text, map), knownNames, map);
+  // A file is named by whoever sent it, often after a person. Its extension
+  // is kept apart: it says what the file is, and reads as part of an address.
+  const scrubFileName = (name: string) => {
+    const dot = name.lastIndexOf(".");
+    return dot > 0 ? scrub(name.slice(0, dot)) + name.slice(dot) : scrub(name);
+  };
   return {
     ...item,
     title: item.title ? scrub(item.title) : item.title,
@@ -269,6 +275,10 @@ export function redactNormalized(
           )
         : m.authorLabel,
       bodyText: scrub(m.bodyText),
+      attachments: m.attachments?.map((file) => ({
+        ...file,
+        name: scrubFileName(file.name),
+      })),
     })),
   };
 }
@@ -294,6 +304,12 @@ export function redactForLlm(
 
 export interface RedactionPolicy {
   enabled: boolean;
+  /**
+   * Whether an image on one of the connection's items may be sent to a model.
+   * A picture cannot be scrubbed, so under redaction this is off until the
+   * connection's own switch allows it.
+   */
+  images: boolean;
 }
 
 /**
@@ -307,19 +323,37 @@ export function globalRedactionEnabled(): boolean {
 }
 
 /**
+ * Whether an image no connection stands behind, such as a chat upload, may be
+ * sent to a model. A picture cannot be scrubbed, so under redaction it is
+ * withheld unless the organisation has allowed it (TACHY_REDACT_IMAGES).
+ */
+export function globalImagesAllowed(): boolean {
+  return (
+    !globalRedactionEnabled() || process.env.TACHY_REDACT_IMAGES === "true"
+  );
+}
+
+/**
  * Read the redaction switch off a source connection's `config` jsonb (the
  * global flag overrides).
  */
 export function resolveRedactionPolicy(
   config: Record<string, unknown> | null | undefined,
 ): RedactionPolicy {
-  if (globalRedactionEnabled()) return { enabled: true };
+  return redactionPolicy(config, globalRedactionEnabled());
+}
+
+/**
+ * `resolveRedactionPolicy` for a process that reads the global switch from
+ * the settings and not from its environment, as a job worker does.
+ */
+export function redactionPolicy(
+  config: Record<string, unknown> | null | undefined,
+  globalOn: boolean,
+): RedactionPolicy {
   const redaction = (config ?? {})["redaction"] as
-    { enabled?: unknown } | undefined;
-  return {
-    enabled:
-      redaction != null &&
-      typeof redaction === "object" &&
-      redaction.enabled === true,
-  };
+    { enabled?: unknown; images?: unknown } | null | undefined;
+  const own = redaction != null && typeof redaction === "object";
+  const enabled = globalOn || (own && redaction.enabled === true);
+  return { enabled, images: !enabled || (own && redaction.images === true) };
 }

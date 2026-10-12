@@ -7,8 +7,7 @@
     getCommands,
     stopTurn,
     ChatRefused,
-    type BuiltinCommandMeta,
-    type CommandArtifactMeta,
+    type ChatCommands,
   } from "./agent";
   import { addEntry, chat, type Entry } from "./chatState.svelte";
   import { renderMarkdown } from "../markdown/markdown";
@@ -27,7 +26,13 @@
   import Launcher from "./Launcher.svelte";
   import { ArtifactMark, Button, Caret, caretSide, G, Icon, tip } from "../tui";
   import { pushScope } from "../keys/keys.svelte";
-  import type { WorkItemTypeOption, CreatedTicket } from "@tachy/contract";
+  import { CHAT_UPLOAD_ACCEPT, uploadRefusal } from "@tachy/contract";
+  import type {
+    WorkItemTypeOption,
+    CreatedTicket,
+    WorkItemFile,
+  } from "@tachy/contract";
+  import FileTray from "../work-items/FileTray.svelte";
   import TicketComposer from "../work-items/TicketComposer.svelte";
   import TicketCard from "../work-items/TicketCard.svelte";
   import {
@@ -149,16 +154,27 @@
     else addEntry({ kind: "tools", calls: [tool] });
   }
 
+  /** The tools whose result lists the files of the ticket they read. */
+  const TICKET_READS = new Set([
+    "fetch_work_item",
+    "get_context",
+    "compact_work_item",
+  ]);
+
+  function showFiles(data: Record<string, unknown>) {
+    if (!TICKET_READS.has(short(data.tool as string))) return;
+    const files = toolPayload(data.result)?.files;
+    if (Array.isArray(files) && files.length)
+      addEntry({ kind: "files", files: files as WorkItemFile[] });
+  }
+
   function appendAssistant(text: string) {
     const last = chat.entries[chat.entries.length - 1];
     if (last && last.kind === "assistant") last.text += text;
     else addEntry({ kind: "assistant", text });
   }
 
-  let commands = $state<{
-    builtins: BuiltinCommandMeta[];
-    artifacts: CommandArtifactMeta[];
-  } | null>(null);
+  let commands = $state<ChatCommands | null>(null);
   let cmdMenu = $state<CommandMenu>();
   let cmdDismissed = $state(false);
 
@@ -455,6 +471,7 @@
       )) {
         chat.queuePosition =
           event === "queued" ? (data.position as number) : null;
+        if (event === "tool_result") showFiles(data);
         if (event === "start") chat.turnId = data.turnId as string;
         else if (event === "text") appendAssistant(data.text as string);
         else if (event === "tool_use") {
@@ -610,6 +627,15 @@
 
   async function addFiles(files: FileList | null | undefined) {
     for (const file of Array.from(files ?? [])) {
+      const refusal = uploadRefusal(
+        file.name,
+        file.size,
+        commands?.uploadLimits,
+      );
+      if (refusal) {
+        addEntry({ kind: "error", text: refusal });
+        continue;
+      }
       try {
         chat.uploads.push(await uploadDoc(file));
       } catch (err) {
@@ -756,6 +782,8 @@
             <CompactPanel title={entry.title} stats={entry.stats} />
           {:else if entry.kind === "output"}
             <OutputCard file={entry.file} />
+          {:else if entry.kind === "files"}
+            <FileTray files={entry.files} />
           {:else if entry.kind === "walkthrough"}
             <Walkthrough
               title={entry.title}
@@ -866,7 +894,7 @@
         {/if}
         <label class="upload" use:tip={"Attach a document"}>
           <Icon name="attach" label="Attach a document" />
-          <input type="file" onchange={onFile} />
+          <input type="file" accept={CHAT_UPLOAD_ACCEPT} onchange={onFile} />
         </label>
         <span class="field">
           <textarea

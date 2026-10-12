@@ -73,3 +73,29 @@ export function sectionHoist(section: string) {
   return (hoists[section] ??= (a: SectionAction | null) =>
     claimSectionAction(section, a));
 }
+
+/** How long a panel has to offer its action after the route reaches it. */
+const OFFER_WAIT_MS = 4000;
+
+/**
+ * Runs a section's action once its panel offers it, for a caller that has just
+ * navigated there and cannot press the button itself. A panel that never
+ * offers one, for want of a permission, leaves the reader on the section.
+ */
+export function runWhenOffered(section: string, slot: SectionSlot = "add") {
+  let done = false;
+  const stop = $effect.root(() => {
+    $effect(() => {
+      const action = sectionAction(section, slot);
+      if (!action || done) return;
+      done = true;
+      untrack(action.run);
+      queueMicrotask(finish);
+    });
+  });
+  const timer = setTimeout(finish, OFFER_WAIT_MS);
+  function finish() {
+    clearTimeout(timer);
+    stop();
+  }
+}

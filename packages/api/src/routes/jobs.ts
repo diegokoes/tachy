@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
 import {
   JOB_CLASS_CHAT_SLOTS,
@@ -61,13 +61,13 @@ export const jobs = new Hono()
     });
   })
 
-  .get("/census", zValidator("query", periodQuery), async (c) =>
+  .get("/census", validate("query", periodQuery), async (c) =>
     c.json(await jobCensus(c.req.valid("query").days ?? 14)),
   )
 
   .get("/live", async (c) => c.json(await jobLive()))
 
-  .post("/schedule-preview", zValidator("json", previewSchema), async (c) => {
+  .post("/schedule-preview", validate("json", previewSchema), async (c) => {
     const { schedule, timezone } = c.req.valid("json");
     try {
       return c.json({
@@ -108,7 +108,7 @@ export const jobs = new Hono()
   .post(
     "/definitions",
     requireAdmin,
-    zValidator("json", jobDefinitionInput),
+    validate("json", jobDefinitionInput),
     async (c) =>
       c.json(
         await createJobDefinition(c.req.valid("json"), await callerUserId(c)),
@@ -119,7 +119,7 @@ export const jobs = new Hono()
   .patch(
     "/definitions/:id",
     requireAdmin,
-    zValidator("json", jobDefinitionInput.partial()),
+    validate("json", jobDefinitionInput.partial()),
     async (c) =>
       c.json(
         await updateJobDefinition(
@@ -153,7 +153,7 @@ export const jobs = new Hono()
 
   .get(
     "/runs",
-    zValidator(
+    validate(
       "query",
       z.object({
         definition_id: z.string().uuid().optional(),
@@ -191,7 +191,7 @@ export const jobs = new Hono()
   .post(
     "/runs",
     requireAdmin,
-    zValidator(
+    validate(
       "json",
       z.object({
         kind: z.string().min(1),

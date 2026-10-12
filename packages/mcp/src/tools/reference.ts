@@ -4,6 +4,7 @@ import { resolveCurrentUserId } from "@tachy/core/access";
 import { getCustomerIdBySlug } from "@tachy/core/catalog";
 import {
   TokenMap,
+  globalImagesAllowed,
   globalRedactionEnabled,
   scrubText,
 } from "@tachy/core/compliance";
@@ -14,81 +15,169 @@ import {
   listReferenceDocs,
   updateReferenceDoc,
   referenceDocLineage,
+  queueDocExtraction,
 } from "@tachy/core/reference";
 import { badInput } from "@tachy/core/infra";
+import {
+  imageForModel,
+  type ExtractedFile,
+  type ModelImage,
+  type StoredFile,
+} from "@tachy/core/files";
 import { referenceStatusSchema } from "@tachy/core/knowledge";
 import type { ReferenceDocUpdate } from "@tachy/core/reference";
 import { extractSource } from "../extract";
 import { tool } from "../server";
-import { GRADE_NOTE, out, searchOut, outScrubbed } from "../results";
+import {
+  GRADE_NOTE,
+  IMAGE_WITHHELD,
+  PLACEHOLDER_NOTE,
+  out,
+  outScrubbed,
+  outWithImages,
+  pageFacts,
+  searchOut,
+  shownText,
+} from "../results";
 import { mcpActor, requireCanEdit, referenceDocScope } from "../permissions";
-import { structuredField } from "../fields";
+import { memberField, structuredField, textWindowFields } from "../fields";
 import {
   componentIntoFilter,
   resolveScopeIds,
   loadContextSources,
+  type ContextSource,
 } from "../context";
 
 /** What `ingest_context` returns of each source when `max_chars` is not given. */
 const DEFAULT_PREVIEW_CHARS = 20_000;
 
+/** What to do next with one source: open an archive, or read on. */
+function sourceNote(
+  source: ContextSource,
+  continueAt: number | undefined,
+): { note?: string } {
+  if (source.members)
+    return { note: "This is the archive's file list. Read one with member." };
+  if (continueAt == null) return {};
+  return {
+    note: `Truncated - continue with offset: ${continueAt}; to save the FULL text as a reference doc, call save_reference_doc with body_path.`,
+  };
+}
+
+/**
+ * An image source as its entry in the result. The picture itself is appended
+ * to `images`, and the entry says which one it is.
+ */
+async function shownImage(
+  source: ContextSource & { image: StoredFile },
+  images: ModelImage[],
+) {
+  if (!(source.imagesAllowed ?? globalImagesAllowed()))
+    return { source: source.source, note: IMAGE_WITHHELD };
+  const image = await imageForModel(source.image.bytes);
+  images.push(image);
+  return {
+    source: source.source,
+    image: images.length,
+    width_px: image.widthPx,
+    height_px: image.heightPx,
+    note: `Image ${images.length} of those that follow this result.`,
+  };
+}
+
+const hasImage = (
+  source: ContextSource,
+): source is ContextSource & { image: StoredFile } => source.image != null;
+
 tool(
   "ingest_context",
   {
     description:
-      "Load freeform project context from pasted text, local file paths, and/or URLs, and return the cleaned raw text for you to structure. PDF paths are text-extracted automatically. This tool ONLY reads - it never saves. Long sources are truncated at max_chars (default 20000); for large documents (big PDFs), preview here, then call save_reference_doc with body_path so the full text is extracted and saved server-side. After loading, classify the content and route each part: durable incident lessons → save_knowledge_entry; architecture facts → add_component; everything else (docs, runbooks, design notes, config explainers) → save_reference_doc. Say briefly how you routed it, then make the calls - each is gated by its own review box.",
+      "Load freeform project context from pasted text, attached file paths, and/or URLs, and return the cleaned raw text for you to structure. PDF, Word, Excel and mail (.eml) files are read as text; an image comes back as the image itself; a zip answers with its file list, and member reads one of them. This tool ONLY reads - it never saves. Long sources are truncated at max_chars (default 20000): continue with offset, or narrow a log with match. For large documents (big PDFs), preview here, then call save_reference_doc with body_path so the full text is extracted and saved server-side. After loading, classify the content and route each part: durable incident lessons → save_knowledge_entry; architecture facts → add_component; everything else (docs, runbooks, design notes, config explainers) → save_reference_doc. Say briefly how you routed it, then make the calls - each is gated by its own review box.",
     inputSchema: {
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
       text: z.string().optional(),
       paths: z.array(z.string()).optional(),
       urls: z.array(z.string()).optional(),
-      max_chars: z.number().int().positive().optional(),
+      ...textWindowFields,
+      member: memberField,
     },
     // readOnlyHint because nothing here is persisted; openWorldHint because
     // `urls` reaches hosts outside this deployment, which is what a client
     // deciding whether to run this unattended needs to weigh.
     annotations: { readOnlyHint: true, openWorldHint: true },
   },
-  async ({ product_slug, team_slug, text, paths, urls, max_chars }) => {
-    const sources = await loadContextSources({ text, paths, urls });
+  async ({
+    product_slug,
+    team_slug,
+    text,
+    paths,
+    urls,
+    max_chars,
+    offset,
+    match,
+    member,
+  }) => {
+    const sources = await loadContextSources({ text, paths, urls, member });
     if (!sources.length)
       throw badInput("Provide at least one of: text, paths, urls");
 
-    const maxChars = max_chars ?? DEFAULT_PREVIEW_CHARS;
-    const redact = globalRedactionEnabled();
+    const window = {
+      offset,
+      maxChars: max_chars ?? DEFAULT_PREVIEW_CHARS,
+      match,
+    };
     const tokens = new TokenMap();
-    return out({
-      product_slug: product_slug ?? null,
-      team_slug: team_slug ?? null,
-      sources: sources.map((source) => {
-        const truncated = source.text.length > maxChars;
-        const textOut = truncated
-          ? source.text.slice(0, maxChars)
-          : source.text;
-        return {
-          source: source.source,
-          chars: source.text.length,
-          ...(source.pages != null ? { pages: source.pages } : {}),
-          truncated,
-          text: redact ? scrubText(textOut, tokens) : textOut,
-          ...(truncated
-            ? {
-                note: `Truncated at ${maxChars} of ${source.text.length} chars - summarize from this preview; to save the FULL text as a reference doc, call save_reference_doc with body_path.`,
-              }
-            : {}),
-        };
-      }),
-      ...(redact
-        ? {
-            redaction:
-              "Placeholders like [EMAIL_1]/[SECRET_1] are intentional redactions - treat them as opaque, never guess the originals.",
-          }
-        : {}),
-      next: "Summarize how this routes, then call save_knowledge_entry / save_reference_doc / add_component. Each call is gated by its own review box.",
-    });
+    const images: ModelImage[] = [];
+    const shownSources: Record<string, unknown>[] = [];
+    for (const source of sources) {
+      if (hasImage(source)) {
+        shownSources.push(await shownImage(source, images));
+        continue;
+      }
+      const shown = shownText(source.text, window, tokens, source.redact);
+      shownSources.push({
+        source: source.source,
+        ...pageFacts(source),
+        ...(source.members ? { members: source.members } : {}),
+        ...shown,
+        ...sourceNote(source, shown.continue_at),
+      });
+    }
+    return outWithImages(
+      {
+        product_slug: product_slug ?? null,
+        team_slug: team_slug ?? null,
+        sources: shownSources,
+        ...(globalRedactionEnabled() || sources.some((s) => s.redact)
+          ? { redaction: PLACEHOLDER_NOTE }
+          : {}),
+        next: "Summarize how this routes, then call save_knowledge_entry / save_reference_doc / add_component. Each call is gated by its own review box.",
+      },
+      images,
+    );
   },
 );
+
+/**
+ * A doc saved from a PDF holds only its text layer. The rest, its figures and
+ * the words of its scanned pages, is added by a job, and the result says so.
+ */
+async function pdfCompletion(
+  docId: string,
+  path: string | undefined,
+  extracted: ExtractedFile | undefined,
+  userId: string | null,
+): Promise<Record<string, unknown>> {
+  if (!path || extracted?.pages == null) return {};
+  await queueDocExtraction({ docId, path, userId });
+  return {
+    completion: "queued",
+    completion_note:
+      "The doc holds the PDF's text pages now. A job is placing its figures and reading its scanned pages, and adds them as a new revision; tell the user in one line and do not wait for it.",
+  };
+}
 
 tool(
   "save_reference_doc",
@@ -141,20 +230,24 @@ tool(
     else await requireCanEdit(await referenceDocScope(args.supersedes));
 
     let body = args.body;
-    let pages: number | undefined;
+    let extracted: (ExtractedFile & { redact: boolean }) | undefined;
     if (args.body_path) {
-      const extracted = await extractSource(args.body_path);
-      body = globalRedactionEnabled()
+      extracted = await extractSource(args.body_path);
+      if (extracted.members)
+        throw badInput(
+          "body_path names an archive, which is a list of files and not a document; attach the file itself",
+        );
+      body = extracted.redact
         ? scrubText(extracted.text, new TokenMap())
         : extracted.text;
-      pages = extracted.pages;
     }
+    const userId = await resolveCurrentUserId();
     const saved = await saveReferenceDoc({
       title: args.title,
       body: body!,
       productId,
       teamId,
-      createdById: await resolveCurrentUserId(),
+      createdById: userId,
       actor: await mcpActor(),
       source: args.source,
       sourceProjectId: args.source_project_id,
@@ -173,7 +266,8 @@ tool(
       status: saved.status,
       chunks: saved.chunks,
       body_chars: body!.length,
-      ...(pages != null ? { pages } : {}),
+      ...pageFacts(extracted ?? {}),
+      ...(await pdfCompletion(saved.id, args.body_path, extracted, userId)),
     });
   },
 );
@@ -181,7 +275,7 @@ tool(
 tool(
   "search_reference",
   {
-    description: `Semantic search over approved reference docs (project context). Returns the best-matching snippet per doc. Only the latest approved version of a doc is returned. Filter by product_slug / team_slug (slug or alias) and tags. ${GRADE_NOTE}`,
+    description: `Semantic search over approved reference docs (project context). Returns the best-matching snippet per doc, with the page it is on when the doc came from a PDF: cite it. Only the latest approved version of a doc is returned. Filter by product_slug / team_slug (slug or alias) and tags. ${GRADE_NOTE}`,
     inputSchema: {
       query: z.string(),
       product_slug: z.string().optional(),

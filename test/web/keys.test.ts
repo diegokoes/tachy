@@ -3,7 +3,9 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  ACTIONS,
   RESERVED,
+  actionKey,
   conflicts,
   defaultNavKey,
   defaultSubnavKey,
@@ -14,7 +16,11 @@ import {
   setSubnavKey,
   subnavKey,
 } from "../../packages/web/src/keys/bindings.svelte";
-import { pushScope, startKeys } from "../../packages/web/src/keys/keys.svelte";
+import {
+  normalize,
+  pushScope,
+  startKeys,
+} from "../../packages/web/src/keys/keys.svelte";
 
 const NAV = [
   { key: "chat", label: "Chat" },
@@ -77,6 +83,42 @@ describe("overrides", () => {
     expect(keymap.nav).toEqual({});
     expect(keymap.subnav).toEqual({});
     expect(navKey("library", 1)).toBe("2");
+  });
+});
+
+describe("normalize", () => {
+  const key = (init: KeyboardEventInit) => {
+    const e = new KeyboardEvent("keydown", init);
+    return normalize(e, e.ctrlKey);
+  };
+
+  it("keeps ctrl on a shifted letter", () => {
+    expect(key({ key: "P", code: "KeyP", ctrlKey: true, shiftKey: true })).toBe(
+      "ctrl+shift+p",
+    );
+  });
+
+  it("reads a shifted letter or digit by its key, not what it types", () => {
+    expect(key({ key: "P", code: "KeyP", shiftKey: true })).toBe("shift+p");
+    expect(key({ key: "!", code: "Digit1", shiftKey: true })).toBe("shift+1");
+  });
+
+  it("spells named keys by their cap", () => {
+    expect(key({ key: "Enter" })).toBe("⏎");
+    expect(key({ key: ",", ctrlKey: true })).toBe("ctrl+,");
+  });
+});
+
+describe("the command palette's binding", () => {
+  it("defaults to ctrl+shift+p and follows a rebind", () => {
+    expect(actionKey("palette")).toBe(ACTIONS.palette.key);
+    expect(actionKey("palette")).toBe("ctrl+shift+p");
+    setNavKey("palette", "ctrl+shift+k");
+    expect(actionKey("palette")).toBe("ctrl+shift+k");
+  });
+
+  it("is named when another binding would take its key", () => {
+    expect(conflicts("ctrl+shift+p", NAV, 0)).toEqual(["command palette"]);
   });
 });
 
@@ -197,6 +239,85 @@ describe("dispatch", () => {
     const input = focusedInput();
     press("a", input);
     expect(document.activeElement).toBe(input);
+  });
+
+  it("runs a ctrl+shift chord from inside a field when the binding allows", () => {
+    const ran: string[] = [];
+    teardown.push(
+      pushScope([
+        {
+          key: "ctrl+shift+p",
+          label: "",
+          inFields: true,
+          run: () => ran.push("palette"),
+        },
+      ]),
+    );
+    const e = new KeyboardEvent("keydown", {
+      key: "P",
+      code: "KeyP",
+      ctrlKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    focusedInput().dispatchEvent(e);
+    expect(ran).toEqual(["palette"]);
+    expect(e.defaultPrevented).toBe(true);
+  });
+
+  const chord = (target: EventTarget, repeat = false) => {
+    const e = new KeyboardEvent("keydown", {
+      key: "P",
+      code: "KeyP",
+      ctrlKey: true,
+      shiftKey: true,
+      repeat,
+      bubbles: true,
+      cancelable: true,
+    });
+    target.dispatchEvent(e);
+    return e;
+  };
+
+  // The palette's binding: one press opens, the next closes, from inside its
+  // own input as much as from the page.
+  it("toggles both ways on fresh presses, and holds still while held", () => {
+    let open = false;
+    teardown.push(
+      pushScope([
+        {
+          key: "ctrl+shift+p",
+          label: "",
+          inFields: true,
+          repeats: false,
+          run: () => (open = !open),
+        },
+      ]),
+    );
+    chord(document.body);
+    expect(open).toBe(true);
+
+    const input = focusedInput();
+    const held = chord(input, true);
+    expect(open).toBe(true);
+    expect(held.defaultPrevented).toBe(true);
+
+    chord(input);
+    expect(open).toBe(false);
+    chord(document.body);
+    expect(open).toBe(true);
+  });
+
+  it("runs a binding again on auto-repeat unless it opts out", () => {
+    const ran = bind("j");
+    const repeat = () =>
+      document.body.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "j", repeat: true, bubbles: true }),
+      );
+    press("j");
+    repeat();
+    expect(ran).toEqual(["j", "j"]);
   });
 
   // A prefix that goes nowhere must not eat the key typed after it.

@@ -2,7 +2,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { Context, Hono, Next } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { setSignedCookie, getSignedCookie, deleteCookie } from "hono/cookie";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "./validation";
 import { z } from "zod";
 import {
   initOidcAuthMiddleware,
@@ -24,8 +24,9 @@ import {
 } from "@tachy/core/access";
 import { recordAudit } from "@tachy/core/audit";
 import { effectiveSettings } from "@tachy/core/config";
-import { env, log } from "@tachy/core/infra";
+import { env, forbidden, log } from "@tachy/core/infra";
 import { API_TOKEN_PREFIX, NOT_INVITED, type UserRole } from "@tachy/core";
+import { problem } from "./problems";
 import { callerAddress, failureThrottle } from "./throttle";
 
 export interface OidcConfig {
@@ -138,19 +139,11 @@ export async function sessionEmail(c: Context): Promise<string | undefined> {
  * with its own code and not a 401: the SPA answers a 401 by sending the browser
  * to sign in, which this person has just done.
  */
-function notInvited(email: string): HTTPException {
-  return new HTTPException(403, {
-    message: `${email} signed in with SSO and has no account here`,
-    res: Response.json(
-      {
-        error: "this account has not been added; ask an app admin",
-        code: NOT_INVITED,
-        email,
-      },
-      { status: 403 },
-    ),
+const notInvited = (email: string) =>
+  forbidden("this account has not been added; ask an app admin", {
+    code: NOT_INVITED,
+    email,
   });
-}
 
 let bootstrappedCache = false;
 export async function isBootstrapped(): Promise<boolean> {
@@ -328,7 +321,7 @@ export function installAuth(
   if (passwordAuth) {
     base.post(
       "/auth/password/login",
-      zValidator("json", loginSchema),
+      validate("json", loginSchema),
       async (c) => {
         const { email, password } = c.req.valid("json");
         const address = callerAddress(c);
@@ -336,10 +329,12 @@ export function installAuth(
         if (
           loginsByAddress.blocked(address) ||
           loginsByAccount.blocked(account)
-        )
-          return c.json({ error: "too many attempts; wait a minute" }, 429, {
-            "Retry-After": "60",
+        ) {
+          c.header("Retry-After", "60");
+          return problem(c, 429, {
+            detail: "too many attempts; wait a minute",
           });
+        }
         const user = await getUserByEmail(email);
         const matches = await verifyPassword(
           password,
@@ -354,12 +349,11 @@ export function installAuth(
             target: email,
             address,
           });
-          return c.json({ error: "invalid email or password" }, 401);
+          return problem(c, 401, { detail: "invalid email or password" });
         }
         if (oidc && !user.password_login_allowed)
-          return c.json(
-            { error: "this account signs in with SSO; password login is off" },
-            403,
+          throw forbidden(
+            "this account signs in with SSO; password login is off",
           );
         if (user.password_hash && isWeakerHash(user.password_hash))
           await strengthenPasswordHash(user.id, password);
@@ -402,7 +396,7 @@ export function installAuth(
   base.get("/auth/me", async (c) => {
     const identity = await resolveIdentity(c, opts);
     if (!identity || identity.via === "token")
-      return c.json({ error: "unauthenticated" }, 401);
+      return problem(c, 401, { detail: "unauthenticated" });
     if (identity.via === "open")
       return c.json({
         email: env.userEmail ?? null,

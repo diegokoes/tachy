@@ -5,7 +5,7 @@ import {
   updateKnowledgeEntry,
 } from "@tachy/core/knowledge";
 import { outboundLinks, backlinks } from "@tachy/core/library";
-import { parseWikilinks } from "@tachy/core";
+import { parseWikilinks, renameWikilinks } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "../database";
 
 afterAll(() => sql.end());
@@ -19,6 +19,10 @@ const article = async (slug: string, body = "body", over: object = {}) =>
     body,
     ...over,
   });
+
+/** Enough unclosed links that a scan quadratic in the body overruns the budget. */
+const UNCLOSED_LINKS = 100_000;
+const LINEAR_BUDGET_MS = 2_000;
 
 describe("wikilink syntax", () => {
   it("reads a bare target, a label, and a typed reference", () => {
@@ -46,6 +50,32 @@ describe("wikilink syntax", () => {
       "a",
       "b",
     ]);
+  });
+
+  it("gives up an unclosed link at the next bracket", () => {
+    expect(
+      parseWikilinks("[[unclosed and [[spooler]]").map((l) => l.target),
+    ).toEqual(["spooler"]);
+    expect(parseWikilinks("[[[spooler]]]").map((l) => l.target)).toEqual([
+      "spooler",
+    ]);
+    expect(parseWikilinks("[[spooler|see [1]]")).toEqual([]);
+  });
+
+  it("renames a target and keeps its label", () => {
+    expect(
+      renameWikilinks("[[old]], [[old|the old one]], [[other]]", "old", "new"),
+    ).toBe("[[new]], [[new|the old one]], [[other]]");
+  });
+
+  it("reads a body of unclosed links in time linear in its length", () => {
+    for (const unclosed of ["[[a", "[[a|"]) {
+      const body = unclosed.repeat(UNCLOSED_LINKS);
+      const startedMs = performance.now();
+      expect(parseWikilinks(body)).toEqual([]);
+      expect(renameWikilinks(body, "a", "b")).toBe(body);
+      expect(performance.now() - startedMs).toBeLessThan(LINEAR_BUDGET_MS);
+    }
   });
 });
 

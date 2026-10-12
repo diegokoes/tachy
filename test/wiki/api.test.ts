@@ -165,7 +165,7 @@ describe("wiki API", () => {
   it("rejects a reserved article slug", async () => {
     const response = await article("tpd", "toc");
     expect(response.status).toBe(400);
-    expect((await response.json()).error).toMatch(/reserved/);
+    expect((await response.json()).detail).toMatch(/reserved/);
   });
 
   // What the contents page sends to move a category: `parentSlug`, not
@@ -189,7 +189,7 @@ describe("wiki API", () => {
       parentSlug: "b",
     });
     expect(response.status).toBe(400);
-    expect((await response.json()).error).toMatch(/cycle/);
+    expect((await response.json()).detail).toMatch(/cycle/);
   });
 
   it("counts a read of an article", async () => {
@@ -233,13 +233,13 @@ describe("wiki coverage API", () => {
   it("refuses coverage for the org-wide wiki, which has no components", async () => {
     const response = await get("/api/library/wiki/general/coverage");
     expect(response.status).toBe(400);
-    expect((await response.json()).error).toMatch(/per product/);
+    expect((await response.json()).detail).toMatch(/per product/);
   });
 
   it("rejects 'coverage' as an article slug", async () => {
     const response = await article("tpd", "coverage");
     expect(response.status).toBe(400);
-    expect((await response.json()).error).toMatch(/reserved/);
+    expect((await response.json()).detail).toMatch(/reserved/);
   });
 });
 
@@ -358,7 +358,7 @@ describe("wiki images API", () => {
       Buffer.from("<html><script>x</script></html>"),
     );
     expect(response.status).toBe(400);
-    expect((await response.json()).error).toMatch(/PNG, JPEG, GIF or WebP/);
+    expect((await response.json()).detail).toMatch(/PNG, JPEG, GIF or WebP/);
   });
 
   it("refuses an image over the limit", async () => {
@@ -366,7 +366,7 @@ describe("wiki images API", () => {
     big.set(PNG);
     const response = await upload(big);
     expect(response.status).toBe(400);
-    expect((await response.json()).error).toMatch(/too large/);
+    expect((await response.json()).detail).toMatch(/too large/);
   });
 
   it("404s an image that does not exist", async () => {

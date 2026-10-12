@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { z } from "zod";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import {
   applyFormConfig,
   getComposeConfig,
@@ -34,7 +34,7 @@ import {
   requireCaller,
 } from "../authz";
 import { reviewTicket } from "@tachy/agent";
-import { MAX_UPLOAD_BYTES, tooLarge } from "../upload-limit";
+import { requestLimitBytes, tooLarge } from "../upload-limit";
 
 const draftSchema = z.object({
   type: z.string().min(1),
@@ -176,7 +176,7 @@ function toNewItem(
 
 export const compose = new Hono()
 
-  .post("/review", zValidator("json", reviewSchema), async (c) => {
+  .post("/review", validate("json", reviewSchema), async (c) => {
     const userId = await requireCaller(c);
     const { project_id, ...draft } = c.req.valid("json");
     let guidance: string | undefined;
@@ -246,26 +246,22 @@ export const compose = new Hono()
     );
   })
 
-  .post(
-    "/projects/:id/validate",
-    zValidator("json", draftSchema),
-    async (c) => {
-      const { project, composer } = await composeIn(c, c.req.param("id"));
-      if (!composer.validate) return c.json({ ok: true });
-      return c.json(
-        await composer.validate(
-          toNewItem(project, c.req.valid("json")),
-          project.config,
-        ),
-      );
-    },
-  )
+  .post("/projects/:id/validate", validate("json", draftSchema), async (c) => {
+    const { project, composer } = await composeIn(c, c.req.param("id"));
+    if (!composer.validate) return c.json({ ok: true });
+    return c.json(
+      await composer.validate(
+        toNewItem(project, c.req.valid("json")),
+        project.config,
+      ),
+    );
+  })
 
   // Multipart, because pasted images travel with the draft: a `draft` JSON part
   // and one `image:<key>` file per image the HTML fields refer to.
   .post("/projects/:id/items", async (c) => {
     const declared = Number(c.req.header("content-length") ?? 0);
-    if (declared > MAX_UPLOAD_BYTES) throw tooLarge(declared);
+    if (declared > requestLimitBytes()) throw tooLarge(declared);
     const { project, composer } = await composeIn(c, c.req.param("id"));
     const body = await c.req.parseBody();
     if (typeof body.draft !== "string")
@@ -311,7 +307,7 @@ export const compose = new Hono()
     return c.json(await getComposeConfig(id));
   })
 
-  .put("/projects/:id/config", zValidator("json", configSchema), async (c) => {
+  .put("/projects/:id/config", validate("json", configSchema), async (c) => {
     const id = c.req.param("id");
     await assertScopeEditor(c, await sourceProjectScope(id));
     return c.json(

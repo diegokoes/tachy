@@ -3,7 +3,10 @@ import { backgroundSettled, log, sql } from "@tachy/core/infra";
 import { loadSettingsIntoEnv } from "@tachy/core/config";
 import { registerSource, setSourceOrigin } from "@tachy/core/sources";
 import { startJobProcess } from "@tachy/core/jobs";
-import { registerAgentFlowActions } from "@tachy/agent";
+import {
+  registerAgentFlowActions,
+  registerAgentPageTranscriber,
+} from "@tachy/agent";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 import { createAzureDevopsSource } from "@tachy/source-azure-devops";
@@ -13,6 +16,7 @@ registerSource("github", createGithubSource);
 registerSource("azure-devops", createAzureDevopsSource);
 setSourceOrigin("sync");
 registerAgentFlowActions();
+registerAgentPageTranscriber();
 
 const commaSeparated = (value: string | undefined) =>
   (value ?? "")

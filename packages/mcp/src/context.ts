@@ -12,6 +12,7 @@ import {
   ingestWorkItem,
   extractAdoRefs,
   compactForLlm,
+  listFiles,
   summarizeCompaction,
   recordAdoRefs,
 } from "@tachy/core/work-items";
@@ -28,8 +29,14 @@ import {
 } from "@tachy/core/catalog";
 import { resolveRedactionPolicy, redactForLlm } from "@tachy/core/compliance";
 import type { IngestedItem } from "@tachy/core/work-items";
-import type { RawWorkItem } from "@tachy/core/sources";
-import { extractSource } from "./extract";
+import type { RawWorkItem, WorkItemSource } from "@tachy/core/sources";
+import {
+  extractFile,
+  isImageFile,
+  type ArchiveMember,
+  type StoredFile,
+} from "@tachy/core/files";
+import { openSource } from "./extract";
 
 /**
  * Tool results have a size ceiling that a whole transcript exceeds, so turns
@@ -170,6 +177,26 @@ export async function unresolvedUnit(
       name: u.name,
       kind: u.kind,
     })),
+  };
+}
+
+/**
+ * The item's files in one list, with what to do about them. Takes the item as
+ * the model sees it, so a name is scrubbed where the thread's text is.
+ */
+export function withFiles(
+  item: RawWorkItem,
+  sourceSlug: string,
+  source: WorkItemSource,
+): Record<string, unknown> {
+  const opens = Boolean(source.openAttachment);
+  const files = listFiles(item, { source: sourceSlug, opens });
+  if (!files.length) return {};
+  return {
+    files,
+    files_note: opens
+      ? "files lists what is on the ticket; none of them has been read. Open the ones that bear on the question with read_file and the file's path: a screenshot of the error, a log. Not all of them: an image costs as much context as pages of text. A file marked inline stood where the thread says [image]."
+      : "files lists what is on the ticket. This source's files cannot be opened from here; name the one that matters and say it is on the ticket.",
   };
 }
 
@@ -320,16 +347,41 @@ export async function componentIntoFilter(
   };
 }
 
+export interface ContextSource {
+  source: string;
+  text: string;
+  pages?: number;
+  scannedPages?: number[];
+  members?: ArchiveMember[];
+  /** Set for an image, which is shown and has no text. */
+  image?: StoredFile;
+  /** Whether an image may be shown; a file off a ticket follows its connection. */
+  imagesAllowed?: boolean;
+  /** Whether the text is scrubbed. Absent: as the deployment says. */
+  redact?: boolean;
+}
+
 export async function loadContextSources(input: {
   text?: string;
   paths?: string[];
   urls?: string[];
-}) {
-  const sources: { source: string; text: string; pages?: number }[] = [];
+  /** One file of an archive; only read with a single path. */
+  member?: string;
+}): Promise<ContextSource[]> {
+  if (input.member && input.paths?.length !== 1)
+    throw badInput("member names a file inside one zip: pass exactly one path");
+  const sources: ContextSource[] = [];
   if (input.text?.trim()) sources.push({ source: "inline", text: input.text });
   for (const path of input.paths ?? []) {
-    const { text, pages } = await extractSource(path);
-    sources.push({ source: path, text, ...(pages != null ? { pages } : {}) });
+    const { file, redact, imagesAllowed } = await openSource(path, {
+      member: input.member,
+    });
+    const source = input.member ? `${path} > ${input.member}` : path;
+    if (isImageFile(file)) {
+      sources.push({ source, text: "", image: file, imagesAllowed });
+      continue;
+    }
+    sources.push({ source, redact, ...(await extractFile(file)) });
   }
   for (const url of input.urls ?? []) {
     const response = await fetchUntrustedUrl("ingest_context", url);

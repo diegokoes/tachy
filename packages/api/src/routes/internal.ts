@@ -7,6 +7,8 @@ import {
   EmbedderUnavailable,
   type EmbedKind,
 } from "@tachy/core/search";
+import { problem } from "../problems";
+import { invalidRequest } from "../validation";
 
 export interface InternalOptions {
   secret: string;
@@ -55,10 +57,9 @@ export function internalRoutes(opts: InternalOptions) {
       "/embed",
       bodyLimit({ maxSize: 256 * (MAX_TEXT * 4 + 16) }),
       async (c) => {
-        if (!authorized(c.req.header("authorization")))
-          return c.json({ error: "unauthorized" }, 401);
+        if (!authorized(c.req.header("authorization"))) return problem(c, 401);
         const parsed = body.safeParse(await c.req.json().catch(() => null));
-        if (!parsed.success) return c.json({ error: "validation failed" }, 400);
+        if (!parsed.success) return invalidRequest(c, parsed.error.issues);
         const caller = (c.req.header("x-tachy-caller") ?? "remote").slice(
           0,
           80,
@@ -74,17 +75,16 @@ export function internalRoutes(opts: InternalOptions) {
         } catch (err) {
           if (err instanceof EmbedderUnavailable) {
             c.header("Retry-After", "2");
-            return c.json({ error: err.message }, 503);
+            return problem(c, 503, { detail: err.message });
           }
           throw err;
         }
       },
     )
     .post("/log", bodyLimit({ maxSize: 2_000_000 }), async (c) => {
-      if (!authorized(c.req.header("authorization")))
-        return c.json({ error: "unauthorized" }, 401);
+      if (!authorized(c.req.header("authorization"))) return problem(c, 401);
       const parsed = logBody.safeParse(await c.req.json().catch(() => null));
-      if (!parsed.success) return c.json({ error: "validation failed" }, 400);
+      if (!parsed.success) return invalidRequest(c, parsed.error.issues);
       for (const line of parsed.data.lines) {
         let fields: unknown;
         try {

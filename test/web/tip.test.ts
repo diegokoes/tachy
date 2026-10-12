@@ -80,6 +80,7 @@ describe("a tip on touch", () => {
 
   it("survives the focus a tap gives the control", () => {
     const { el } = control();
+    vi.spyOn(el, "matches").mockReturnValue(false);
     el.dispatchEvent(pointer("pointerdown", "touch"));
     el.focus();
     el.blur();

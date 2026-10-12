@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../../validation";
 import { z } from "zod";
 import {
   getProductIdBySlug,
@@ -79,7 +79,7 @@ const customerPatchSchema = z.object({
  */
 export const customers = new Hono()
   .get("/customers", async (c) => c.json(await listCustomers()))
-  .post("/customers", zValidator("json", customerSchema), async (c) => {
+  .post("/customers", validate("json", customerSchema), async (c) => {
     await assertAnyTeamAdminApi(c);
     const body = c.req.valid("json");
     return c.json(
@@ -90,7 +90,7 @@ export const customers = new Hono()
   })
   .patch(
     "/customers/:slug",
-    zValidator("json", customerPatchSchema),
+    validate("json", customerPatchSchema),
     async (c) => {
       await assertAnyTeamAdminApi(c);
       const slug = c.req.param("slug");
@@ -129,7 +129,7 @@ export const customers = new Hono()
   )
   .put(
     "/customers/:slug/units",
-    zValidator("json", customerUnitSchema),
+    validate("json", customerUnitSchema),
     async (c) => {
       await assertAnyTeamAdminApi(c);
       const body = c.req.valid("json");
@@ -155,7 +155,7 @@ export const customers = new Hono()
   )
   .patch(
     "/customers/:slug/units/:unit",
-    zValidator("json", customerUnitPatchSchema),
+    validate("json", customerUnitPatchSchema),
     async (c) => {
       await assertAnyTeamAdminApi(c);
       const body = c.req.valid("json");
@@ -206,7 +206,7 @@ export const customers = new Hono()
   )
   .put(
     "/customers/:slug/facts",
-    zValidator("json", customerFactSchema),
+    validate("json", customerFactSchema),
     async (c) => {
       await assertAnyTeamAdminApi(c);
       const body = c.req.valid("json");
@@ -250,7 +250,7 @@ export const customers = new Hono()
   })
   .put(
     "/customers/:slug/components",
-    zValidator("json", customerComponentSchema),
+    validate("json", customerComponentSchema),
     async (c) => {
       await assertAnyTeamAdminApi(c);
       const body = c.req.valid("json");

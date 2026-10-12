@@ -6,8 +6,14 @@
 import {
   globalRedactionEnabled,
   scrubDeep,
+  scrubText,
   TokenMap,
 } from "@tachy/core/compliance";
+import {
+  windowText,
+  type ModelImage,
+  type TextWindow,
+} from "@tachy/core/files";
 
 export function out(payload: unknown) {
   return {
@@ -22,6 +28,78 @@ export function out(payload: unknown) {
     ],
   };
 }
+
+/** Said with any text that went through the scrubber. */
+export const PLACEHOLDER_NOTE =
+  "Placeholders like [EMAIL_1]/[SECRET_1] are intentional redactions - treat them as opaque, never guess the originals.";
+
+/**
+ * A text as a read returns it: the part asked for, scrubbed under redaction,
+ * which a file off a ticket takes from its connection. `continue_at` is the
+ * offset the next read takes when this one was cut. Sources read in one call
+ * share `tokens`, so a value keeps its placeholder.
+ */
+export function shownText(
+  text: string,
+  window: TextWindow,
+  tokens = new TokenMap(),
+  redact = globalRedactionEnabled(),
+) {
+  const shown = windowText(text, window);
+  return {
+    chars: shown.chars,
+    ...(shown.matchedLines != null
+      ? { matched_lines: shown.matchedLines }
+      : {}),
+    truncated: shown.truncated,
+    text: redact ? scrubText(shown.text, tokens) : shown.text,
+    ...(shown.truncated
+      ? { continue_at: (window.offset ?? 0) + shown.text.length }
+      : {}),
+  };
+}
+
+/**
+ * What a read says of a PDF: its page count, and the pages whose text is not
+ * in the result because they hold none. Empty for any other file.
+ */
+export function pageFacts(extracted: {
+  pages?: number;
+  scannedPages?: number[];
+}): Record<string, unknown> {
+  if (extracted.pages == null) return {};
+  if (!extracted.scannedPages?.length) return { pages: extracted.pages };
+  return {
+    pages: extracted.pages,
+    scanned_pages: extracted.scannedPages,
+    pages_note:
+      "The text carries a [page N] line where each page starts: cite the page. scanned_pages hold no text layer (a scan, or a blank page), so what they say is not in this text; do not infer it.",
+  };
+}
+
+/**
+ * `out`, followed by pictures for the model to look at. Each is its own image
+ * block, which is the only form in which a model sees one.
+ */
+export function outWithImages(payload: unknown, images: ModelImage[]) {
+  return {
+    content: [
+      ...out(payload).content,
+      ...images.map((image) => ({
+        type: "image" as const,
+        data: Buffer.from(image.bytes).toString("base64"),
+        mimeType: image.mimeType,
+      })),
+    ],
+  };
+}
+
+/**
+ * Said where an image would have been, under redaction. The model then knows
+ * a picture exists and that asking for it again changes nothing.
+ */
+export const IMAGE_WITHHELD =
+  "This is an image, and it was withheld: PII redaction is on and a picture cannot be scrubbed. Say so, and ask the user to describe what it shows. An administrator can allow images under redaction.";
 
 export function outScrubbed(payload: unknown) {
   return out(

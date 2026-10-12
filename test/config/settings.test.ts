@@ -13,6 +13,7 @@ import {
   setSetting,
   effectiveSettings,
   clearSettingsCache,
+  loadSettingsIntoEnv,
   orgTimezone,
 } from "@tachy/core/config";
 import { createUser } from "@tachy/core/access";
@@ -181,6 +182,33 @@ describe("settings store", () => {
     await setSetting("agent_model", "claude-opus-4-8");
     eff = await effectiveSettings();
     expect(eff.agent_model).toEqual({ value: "claude-opus-4-8", source: "db" });
+  });
+
+  it("withholds images under redaction until the setting or TACHY_REDACT_IMAGES allows them", async () => {
+    await sql`delete from settings`;
+    clearSettingsCache();
+    delete process.env.TACHY_REDACT_IMAGES;
+    try {
+      expect((await effectiveSettings()).redaction_images).toEqual({
+        value: false,
+        source: "default",
+      });
+      process.env.TACHY_REDACT_IMAGES = "true";
+      expect((await effectiveSettings()).redaction_images).toEqual({
+        value: true,
+        source: "env",
+      });
+      await setSetting("redaction_images", false);
+      expect((await effectiveSettings()).redaction_images.source).toBe("db");
+      // The saved value wins, in the direction of withholding too.
+      await loadSettingsIntoEnv();
+      expect(process.env.TACHY_REDACT_IMAGES).toBeUndefined();
+      await setSetting("redaction_images", true);
+      await loadSettingsIntoEnv();
+      expect(process.env.TACHY_REDACT_IMAGES).toBe("true");
+    } finally {
+      delete process.env.TACHY_REDACT_IMAGES;
+    }
   });
 });
 

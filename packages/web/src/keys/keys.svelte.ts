@@ -5,6 +5,11 @@ export type Binding = {
   run: () => void;
   inFields?: boolean;
   hidden?: boolean;
+  /**
+   * Whether a held key runs it again on each auto-repeat. On by default, so a
+   * held j keeps moving; a toggle turns it off, or holding it flickers.
+   */
+  repeats?: boolean;
 };
 
 /** How long a half-typed sequence waits for its next key before lapsing. */
@@ -64,14 +69,22 @@ const KEY_CAPS = new Map([
   ["ArrowDown", "↓"],
 ]);
 
+/**
+ * Shift on a digit or a letter, read from the physical key: `e.key` is "!" or
+ * "P" there, which no chord spells. Shifted letters are their own binding -
+ * vim's G is not its j.
+ */
+function shifted(e: KeyboardEvent): string | undefined {
+  if (!e.shiftKey) return undefined;
+  if (/^Digit[1-9]$/.test(e.code)) return `shift+${e.code.slice(5)}`;
+  if (/^Key[A-Z]$/.test(e.code))
+    return `shift+${e.code.slice(3).toLowerCase()}`;
+  return undefined;
+}
+
 /** Exported so the rebind UI captures the shape dispatch matches on. */
 export function normalize(e: KeyboardEvent, ctrl = false): string {
-  if (e.shiftKey && /^Digit[1-9]$/.test(e.code))
-    return `shift+${e.code.slice(5)}`;
-  // Shifted letters are their own binding - vim's G is not its j.
-  if (e.shiftKey && /^Key[A-Z]$/.test(e.code))
-    return `shift+${e.code.slice(3).toLowerCase()}`;
-  const base = KEY_CAPS.get(e.key) ?? e.key.toLowerCase();
+  const base = shifted(e) ?? KEY_CAPS.get(e.key) ?? e.key.toLowerCase();
   return ctrl ? `ctrl+${base}` : base;
 }
 
@@ -106,6 +119,12 @@ export function startKeys() {
     return null;
   };
 
+  const fire = (binding: Binding, e: KeyboardEvent) => {
+    e.preventDefault();
+    if (e.repeat && binding.repeats === false) return;
+    binding.run();
+  };
+
   const onKey = (e: KeyboardEvent) => {
     if (e.metaKey || e.altKey) return;
     const pressed = normalize(e, e.ctrlKey);
@@ -123,8 +142,7 @@ export function startKeys() {
     }
     if (hit) {
       clearPending();
-      e.preventDefault();
-      hit.run();
+      fire(hit, e);
       return;
     }
 
@@ -140,8 +158,7 @@ export function startKeys() {
         return;
       }
       if (solo) {
-        e.preventDefault();
-        solo.run();
+        fire(solo, e);
         return;
       }
     }

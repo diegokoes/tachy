@@ -179,6 +179,9 @@ create table chat_uploads (
     id           uuid primary key default gen_random_uuid(),
     user_id      uuid references users(id) on delete cascade,
     filename     text not null,
+    -- What the upload route found in the bytes. Null: stored unchecked.
+    content_type text
+                     check (content_type in ('image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain','text/markdown','text/csv','text/tab-separated-values','application/json','application/xml','application/yaml','text/html','message/rfc822','application/zip','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')),
     byte_size    integer not null,
     bytes        bytea not null,
     created_at   timestamptz not null default now(),
@@ -879,6 +882,9 @@ create table reference_doc_chunks (
     id          uuid primary key default gen_random_uuid(),
     doc_id      uuid not null references reference_docs(id) on delete cascade,
     ordinal     integer not null,
+    -- The page of the source document the chunk came from, read from the page
+    -- marks a doc saved from a PDF keeps in its body. Null: the body has none.
+    page        integer,
     chunk_text  text not null,
     embedding   vector(768),
     embedding_model text,

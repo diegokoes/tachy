@@ -15,8 +15,11 @@ import {
 } from "@tachy/core/sources";
 import { addResolutionPattern } from "@tachy/core/catalog";
 import { sweepWikiGaps } from "@tachy/core/wiki";
+import { saveUpload } from "@tachy/core/chat";
 import { server } from "../../packages/mcp/src/index";
 import { resetData, sql, tpdProductId } from "../database";
+import sharp from "sharp";
+import { pdfOf, picture, zipOf } from "../fixtures/files";
 
 afterAll(() => sql.end());
 
@@ -313,6 +316,403 @@ describe("reference and wiki round trips", () => {
   });
 });
 
+describe("attached files through ingest_context", () => {
+  type Sources = {
+    sources: {
+      source: string;
+      chars: number;
+      truncated: boolean;
+      text: string;
+      note?: string;
+      matched_lines?: number;
+      members?: { name: string; sizeBytes: number }[];
+    }[];
+  };
+
+  const log = Array.from({ length: 400 }, (_, i) =>
+    i === 250 ? "10:02 ERROR timeout on line 3" : `10:0${i % 10} tick ${i}`,
+  ).join("\n");
+
+  const uploaded = (filename: string, bytes: Uint8Array) =>
+    saveUpload({
+      userId: null,
+      filename,
+      contentType: filename.endsWith(".zip") ? "application/zip" : "text/plain",
+      bytes,
+    });
+
+  it("says where a truncated read stopped, and reads on from there", async () => {
+    const { ref } = await uploaded("app.log", new TextEncoder().encode(log));
+    const first = await call("ingest_context", {
+      paths: [ref],
+      max_chars: 100,
+    });
+    const [source] = (first.json as Sources).sources;
+    expect(source).toMatchObject({ chars: log.length, truncated: true });
+    expect(source.note).toMatch(/continue with offset: 100/);
+
+    const next = await call("ingest_context", {
+      paths: [ref],
+      max_chars: 100,
+      offset: 100,
+    });
+    expect((next.json as Sources).sources[0].text).toBe(log.slice(100, 200));
+  });
+
+  it("narrows a log to the lines holding a term", async () => {
+    const { ref } = await uploaded("app.log", new TextEncoder().encode(log));
+    const found = await call("ingest_context", {
+      paths: [ref],
+      match: ["error"],
+    });
+    const [source] = (found.json as Sources).sources;
+    expect(source.matched_lines).toBe(1);
+    expect(source.truncated).toBe(false);
+    expect(source.text).toMatch(/^\[offset \d+\]/);
+    expect(source.text.split("\n")).toHaveLength(6);
+    expect(source.text).toContain("ERROR timeout on line 3");
+  });
+
+  it("lists a zip, then reads the member it is asked for", async () => {
+    const { ref } = await uploaded(
+      "logs.zip",
+      zipOf({ "app.log": log, "notes.md": "# notes" }),
+    );
+    const listed = await call("ingest_context", { paths: [ref] });
+    const [archive] = (listed.json as Sources).sources;
+    expect(archive.members?.map((m) => m.name)).toEqual([
+      "app.log",
+      "notes.md",
+    ]);
+    expect(archive.note).toMatch(/Read one with member/);
+
+    const member = await call("ingest_context", {
+      paths: [ref],
+      member: "notes.md",
+    });
+    expect((member.json as Sources).sources[0]).toMatchObject({
+      source: `${ref} > notes.md`,
+      text: "# notes",
+    });
+  });
+
+  it("does not save an archive's file list as a reference doc", async () => {
+    const { ref } = await uploaded("logs.zip", zipOf({ "app.log": log }));
+    const refused = await call("save_reference_doc", {
+      title: "Logs",
+      body_path: ref,
+    });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toMatch(/names an archive/);
+  });
+
+  it("refuses member with anything but one path", async () => {
+    const refused = await call("ingest_context", {
+      text: "pasted",
+      member: "notes.md",
+    });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toMatch(/exactly one path/);
+  });
+});
+
+describe("reading one attached file", () => {
+  type Block = {
+    type: string;
+    text?: string;
+    data?: string;
+    mimeType?: string;
+  };
+
+  /** The whole answer: an image arrives as a block of its own, after the text. */
+  async function read(name: string, args: Record<string, unknown>) {
+    const answer = (await client.callTool({ name, arguments: args })) as {
+      content: Block[];
+      isError?: boolean;
+    };
+    return {
+      isError: answer.isError === true,
+      json: JSON.parse(answer.content[0].text ?? "{}") as Record<string, any>,
+      images: answer.content.filter((block) => block.type === "image"),
+    };
+  }
+
+  const upload = (filename: string, contentType: string, bytes: Uint8Array) =>
+    saveUpload({
+      userId: null,
+      filename,
+      contentType: contentType as never,
+      bytes,
+    });
+
+  it("shows an image as an image, fitted to what a model is given", async () => {
+    const { ref } = await upload(
+      "screen.png",
+      "image/png",
+      await picture(3000, 1500),
+    );
+    const shown = await read("read_file", { path: ref });
+    expect(shown.json).toMatchObject({
+      file: "screen.png",
+      width_px: 2000,
+      height_px: 1000,
+    });
+    expect(shown.images).toHaveLength(1);
+    expect(shown.images[0].mimeType).toBe("image/png");
+    const sent = await sharp(
+      Buffer.from(shown.images[0].data!, "base64"),
+    ).metadata();
+    expect([sent.width, sent.height]).toEqual([2000, 1000]);
+  });
+
+  it("returns a text file as text, and says where to read on", async () => {
+    const { ref } = await upload(
+      "app.log",
+      "text/plain",
+      new TextEncoder().encode("0123456789".repeat(30)),
+    );
+    const shown = await read("read_file", { path: ref, max_chars: 100 });
+    expect(shown.images).toHaveLength(0);
+    expect(shown.json).toMatchObject({
+      file: "app.log",
+      chars: 300,
+      truncated: true,
+      continue_at: 100,
+    });
+    const rest = await read("read_file", { path: ref, offset: 290 });
+    expect(rest.json).toMatchObject({ text: "0123456789", truncated: false });
+  });
+
+  it("lists a zip, and shows an image or a text taken out of it", async () => {
+    const { ref } = await upload(
+      "bundle.zip",
+      "application/zip",
+      zipOf({ "shot.png": await picture(40, 30), "notes.md": "# notes" }),
+    );
+    const listed = await read("read_file", { path: ref });
+    expect(listed.json.members.map((m: { name: string }) => m.name)).toEqual([
+      "shot.png",
+      "notes.md",
+    ]);
+    const image = await read("read_file", { path: ref, member: "shot.png" });
+    expect(image.json).toMatchObject({ file: "shot.png", width_px: 40 });
+    expect(image.images).toHaveLength(1);
+    const text = await read("read_file", { path: ref, member: "notes.md" });
+    expect(text.json.text).toBe("# notes");
+  });
+
+  it("withholds an image under redaction until the organisation allows it", async () => {
+    const { ref } = await upload(
+      "screen.png",
+      "image/png",
+      await picture(40, 30),
+    );
+    process.env.TACHY_REDACT = "true";
+    try {
+      const withheld = await read("read_file", { path: ref });
+      expect(withheld.isError).toBe(false);
+      expect(withheld.images).toHaveLength(0);
+      expect(withheld.json.note).toMatch(/withheld: PII redaction is on/);
+
+      const viaIngest = await read("ingest_context", { paths: [ref] });
+      expect(viaIngest.images).toHaveLength(0);
+      expect(viaIngest.json.sources[0].note).toMatch(/withheld/);
+
+      process.env.TACHY_REDACT_IMAGES = "true";
+      expect((await read("read_file", { path: ref })).images).toHaveLength(1);
+    } finally {
+      delete process.env.TACHY_REDACT;
+      delete process.env.TACHY_REDACT_IMAGES;
+    }
+  });
+
+  it("scrubs a text file under redaction and says placeholders are deliberate", async () => {
+    const { ref } = await upload(
+      "mail.txt",
+      "text/plain",
+      new TextEncoder().encode("write to ana.ops@example.com about it"),
+    );
+    process.env.TACHY_REDACT = "true";
+    try {
+      const shown = await read("read_file", { path: ref });
+      expect(shown.json.text).not.toContain("ana.ops@example.com");
+      expect(shown.json.redaction).toMatch(/intentional redactions/);
+    } finally {
+      delete process.env.TACHY_REDACT;
+    }
+  });
+
+  it("puts each image of a context dump after the text, numbered", async () => {
+    const first = await upload("a.png", "image/png", await picture(40, 30));
+    const second = await upload(
+      "b.jpg",
+      "image/jpeg",
+      await picture(60, 20, "jpeg"),
+    );
+    const notes = await upload(
+      "notes.md",
+      "text/markdown",
+      new TextEncoder().encode("# notes"),
+    );
+    const loaded = await read("ingest_context", {
+      paths: [first.ref, notes.ref, second.ref],
+    });
+    expect(loaded.images.map((image) => image.mimeType)).toEqual([
+      "image/png",
+      "image/jpeg",
+    ]);
+    expect(loaded.json.sources).toMatchObject([
+      { source: first.ref, image: 1, width_px: 40 },
+      { source: notes.ref, text: "# notes" },
+      { source: second.ref, image: 2, width_px: 60 },
+    ]);
+  });
+
+  const manual = () =>
+    upload(
+      "manual.pdf",
+      "application/pdf",
+      pdfOf(["Install the controller", "", "Reset the heartbeat"]),
+    );
+
+  it("reads a PDF under its page marks, and names the pages with no text", async () => {
+    const { ref } = await manual();
+    const whole = await read("read_file", { path: ref });
+    expect(whole.json).toMatchObject({
+      pages: 3,
+      scanned_pages: [2],
+      text: "[page 1]\nInstall the controller\n\n[page 2]\n\n[page 3]\nReset the heartbeat",
+    });
+    expect(whole.json.pages_note).toMatch(/hold no text layer/);
+
+    const last = await read("read_file", { path: ref, pages: "3" });
+    expect(last.json.text).toBe("[page 3]\nReset the heartbeat");
+    const range = await read("read_file", { path: ref, pages: "1-2" });
+    expect(range.json.text).toBe(
+      "[page 1]\nInstall the controller\n\n[page 2]",
+    );
+  });
+
+  it("refuses a page range that is not one, or not of a PDF", async () => {
+    const { ref } = await manual();
+    for (const [pages, message] of [
+      ["two", /not a page or a range/],
+      ["9", /has 3 pages/],
+    ] as const) {
+      const refused = await call("read_file", { path: ref, pages });
+      expect(refused.isError).toBe(true);
+      expect(refused.text).toMatch(message);
+    }
+    const text = await upload(
+      "notes.md",
+      "text/markdown",
+      new TextEncoder().encode("# notes"),
+    );
+    const refused = await call("read_file", { path: text.ref, pages: "1" });
+    expect(refused.text).toMatch(/applies to a PDF/);
+  });
+
+  it("saves a PDF as a doc that knows its pages, and says which hold no text", async () => {
+    const { ref } = await manual();
+    const saved = await call("save_reference_doc", {
+      title: "Controller manual",
+      body_path: ref,
+    });
+    expect(saved.isError).toBe(false);
+    expect(saved.json).toMatchObject({
+      saved: true,
+      pages: 3,
+      scanned_pages: [2],
+    });
+    const pages = await sql`
+      select page from reference_doc_chunks
+      where doc_id = ${(saved.json as { id: string }).id} order by ordinal`;
+    expect(pages.map((row) => row.page)).toEqual([1, 3]);
+
+    const found = await call("search_reference", {
+      query: "reset the heartbeat",
+    });
+    expect((found.json as { page: number }[])[0].page).toBe(3);
+  });
+
+  it("queues the job that adds a PDF's figures and scanned pages, once it is saved", async () => {
+    const scan = await upload("scan.pdf", "application/pdf", pdfOf(["", ""]));
+    const saved = await call("save_reference_doc", {
+      title: "Scan",
+      body_path: scan.ref,
+    });
+    expect(saved.isError).toBe(false);
+    expect(saved.json).toMatchObject({
+      saved: true,
+      scanned_pages: [1, 2],
+      completion: "queued",
+    });
+    const runs = await sql`
+      select kind, status, params from job_runs where kind = 'reference.extract'`;
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({
+      status: "queued",
+      params: { doc_id: (saved.json as { id: string }).id, path: scan.ref },
+    });
+
+    const pasted = await call("save_reference_doc", {
+      title: "Pasted",
+      body: "Plain text, no file behind it.",
+    });
+    expect((pasted.json as Record<string, unknown>).completion).toBeUndefined();
+    expect(
+      await sql`select 1 from job_runs where kind = 'reference.extract'`,
+    ).toHaveLength(1);
+  });
+
+  it("keeps an image in the library and hands back the markdown for it", async () => {
+    const { ref } = await upload(
+      "wiring.png",
+      "image/png",
+      await picture(3000, 1500),
+    );
+    const kept = await call("save_library_image", {
+      path: ref,
+      alt: "Wiring of the [line]\ncontroller",
+      product_slug: "tpd",
+    });
+    expect(kept.isError).toBe(false);
+    const { id, markdown } = kept.json as { id: string; markdown: string };
+    expect(markdown).toBe(
+      `![Wiring of the line controller](/api/library/assets/${id})`,
+    );
+    const [asset] = await sql`
+      select content_type, filename, product_id, bytes from library_assets where id = ${id}`;
+    expect(asset).toMatchObject({
+      content_type: "image/png",
+      filename: "wiring.png",
+      product_id: await tpdProductId(),
+    });
+    const stored = await sharp(asset.bytes).metadata();
+    expect([stored.width, stored.height]).toEqual([2000, 1000]);
+  });
+
+  it("keeps only an image", async () => {
+    const { ref } = await upload(
+      "notes.md",
+      "text/markdown",
+      new TextEncoder().encode("# notes"),
+    );
+    const refused = await call("save_library_image", {
+      path: ref,
+      alt: "Some notes",
+    });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toMatch(/notes\.md is not an image/);
+  });
+
+  it("answers a reference that is not an upload as a tool error", async () => {
+    const refused = await call("read_file", { path: "/etc/passwd" });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toMatch(/is not an uploaded file/);
+  });
+});
+
 describe("taxonomy tools", () => {
   it("adds a component and lists it under its product", async () => {
     const added = await call("add_component", {
@@ -509,6 +909,26 @@ describe("notes written back to a ticket", () => {
       posted_private_note: { notes: 1 },
       next: expect.stringContaining("do not restate"),
     });
+  });
+
+  it("lists the files the summary names, with what each shows", async () => {
+    const answer = await call("post_work_item_summary", {
+      source: "notes-conn",
+      external_id: "n-1",
+      ...summary,
+      files: [
+        {
+          name: "screen.png",
+          from: "Ana",
+          date: "2026-06-16",
+          shows: "The spooler error E-209.",
+        },
+      ],
+    });
+    expect(answer.isError).toBe(false);
+    expect(posted[0]).toContain("<strong>Files</strong>");
+    expect(posted[0]).toContain("<strong>screen.png</strong>");
+    expect(posted[0]).toContain("The spooler error E-209.");
   });
 
   it("deletes the summary an earlier call left, and nothing else", async () => {

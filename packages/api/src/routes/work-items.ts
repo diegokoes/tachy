@@ -1,12 +1,15 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../validation";
 import { z } from "zod";
+import { checkFile, fileFamily } from "@tachy/core";
+import { imageForModel } from "@tachy/core/files";
 import { resolveSource } from "@tachy/core/sources";
 import {
   deleteStoredItems,
   filterForAudit,
   ingestWorkItem,
   previewStoredItems,
+  readAttachmentBytes,
   workItemScope,
   externalWorkItemScope,
   type StoredItemFilter,
@@ -22,6 +25,10 @@ import { badInput } from "@tachy/core/infra";
 import { audit } from "../audit";
 import { requireAdmin } from "../auth";
 import { assertScopeEditor, callerScope } from "../authz";
+import { INERT_HEADERS, contentDisposition } from "../downloads";
+
+/** The longest edge of a file's picture in a list of files. */
+const THUMBNAIL_EDGE_PX = 320;
 
 const customerSchema = z.object({
   customer_slug: z.string().nullable(),
@@ -65,14 +72,14 @@ export const workItems = new Hono()
   .post(
     "/stored/preview",
     requireAdmin,
-    zValidator("json", storedFilterSchema),
+    validate("json", storedFilterSchema),
     async (c) =>
       c.json(await previewStoredItems(storedFilter(c.req.valid("json")))),
   )
   .post(
     "/stored/delete",
     requireAdmin,
-    zValidator("json", storedDeleteSchema),
+    validate("json", storedDeleteSchema),
     async (c) => {
       const { expected, ...body } = c.req.valid("json");
       const filter = storedFilter(body);
@@ -107,10 +114,35 @@ export const workItems = new Hono()
       item: raw,
     });
   })
+  // A file of a ticket, read from its source with the reader's own token on
+  // each open: none of it is kept here. An image is served as a picture,
+  // fitted and without its metadata; anything else only as a download.
+  .get("/:source/:id/attachments/:attachmentId", async (c) => {
+    const { source, id, attachmentId } = c.req.param();
+    const { source: src } = await resolveSource(source, await callerScope(c));
+    const file = await readAttachmentBytes(src, id, attachmentId);
+    const check = checkFile(file.filename, file.bytes);
+    if ("refusal" in check || fileFamily(check.contentType) !== "image")
+      return c.body(new Uint8Array(file.bytes), 200, {
+        ...INERT_HEADERS,
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": contentDisposition(file.filename),
+        "Cache-Control": "private, no-store",
+      });
+    const image = await imageForModel(
+      file.bytes,
+      c.req.query("thumb") ? THUMBNAIL_EDGE_PX : undefined,
+    );
+    return c.body(new Uint8Array(image.bytes), 200, {
+      ...INERT_HEADERS,
+      "Content-Type": image.mimeType,
+      "Cache-Control": "private, max-age=3600",
+    });
+  })
   // A note goes onto the customer's own ticket, under the org's shared
   // credential: the most externally visible thing this API does, so it is held
   // to the same scope check as editing the item it hangs off.
-  .post("/:source/:id/notes", zValidator("json", noteSchema), async (c) => {
+  .post("/:source/:id/notes", validate("json", noteSchema), async (c) => {
     const { source, id } = c.req.param();
     const { body } = c.req.valid("json");
     const { conn, source: src } = await resolveSource(
@@ -122,7 +154,7 @@ export const workItems = new Hono()
     await src.postNote(id, body, { private: true });
     return c.json({ posted: true });
   })
-  .patch("/:id/customer", zValidator("json", customerSchema), async (c) => {
+  .patch("/:id/customer", validate("json", customerSchema), async (c) => {
     const id = c.req.param("id");
     await assertScopeEditor(c, await workItemScope(id));
     const { customer_slug, unit } = c.req.valid("json");
@@ -134,7 +166,7 @@ export const workItems = new Hono()
   })
   .patch(
     "/:id/observed-version",
-    zValidator("json", versionSchema),
+    validate("json", versionSchema),
     async (c) => {
       const id = c.req.param("id");
       await assertScopeEditor(c, await workItemScope(id));

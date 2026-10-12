@@ -19,6 +19,8 @@ import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { withoutImageData } from "../../packages/agent/src/claude";
+import { withImages } from "../../packages/agent/src/complete";
 import { AsyncQueue } from "../../packages/agent/src/queue";
 import { TurnBase } from "../../packages/agent/src/turn";
 
@@ -243,6 +245,59 @@ describe("claudePermission (approval gate)", () => {
       gate,
     );
     expect(decision).toEqual({ behavior: "deny", message: "wrong customer" });
+  });
+});
+
+describe("a one-shot call with pictures", () => {
+  it("sends them as one user message, pictures before the text", async () => {
+    const messages = [];
+    for await (const message of withImages("Transcribe this page.", [
+      {
+        mimeType: "image/png",
+        bytes: new Uint8Array([1, 2, 3]),
+        widthPx: 1,
+        heightPx: 1,
+      },
+    ]))
+      messages.push(message);
+    expect(messages).toEqual([
+      {
+        type: "user",
+        parent_tool_use_id: null,
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: { type: "base64", media_type: "image/png", data: "AQID" },
+            },
+            { type: "text", text: "Transcribe this page." },
+          ],
+        },
+      },
+    ]);
+  });
+});
+
+describe("what a tool result carries to the browser", () => {
+  it("keeps the text and drops an image's bytes", () => {
+    const content = [
+      { type: "text", text: '{"file":"screen.png"}' },
+      { type: "image", source: { type: "base64", data: "AAAA" } },
+    ];
+    expect(withoutImageData(content)).toEqual([
+      { type: "text", text: '{"file":"screen.png"}' },
+      { type: "image" },
+    ]);
+  });
+
+  it("leaves a result that is not a list of blocks as it is", () => {
+    expect(withoutImageData("plain text")).toBe("plain text");
+    expect(withoutImageData(undefined)).toBeUndefined();
+    expect(withoutImageData([null, { type: "text", text: "x" }])).toEqual([
+      null,
+      { type: "text", text: "x" },
+    ]);
   });
 });
 

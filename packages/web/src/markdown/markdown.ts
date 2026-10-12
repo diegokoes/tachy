@@ -17,6 +17,9 @@ marked.setOptions({ gfm: true, breaks: true });
 const esc = (v: string) =>
   v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 
+/** marked passes the text still unread and takes a token only from its start. */
+const WIKILINK_AT_START = new RegExp(`^${WIKILINK_RE.source}`);
+
 /**
  * Exported so it can be exercised without a DOM: the tokenizer and renderer are
  * this codebase's logic, while the sanitize step is DOMPurify's.
@@ -26,8 +29,8 @@ export const wikilinkExtension = {
   level: "inline" as const,
   start: (src: string) => src.indexOf("[["),
   tokenizer(src: string) {
-    const match = new RegExp(WIKILINK_RE.source).exec(src);
-    if (!match || match.index !== 0) return undefined;
+    const match = WIKILINK_AT_START.exec(src);
+    if (!match) return undefined;
     return {
       type: "wikilink",
       raw: match[0],

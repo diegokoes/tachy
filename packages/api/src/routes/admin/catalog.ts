@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../../validation";
 import { z } from "zod";
 import {
   listResolutionPatterns,
@@ -95,22 +95,18 @@ export const catalog = new Hono()
   .get("/resolution-patterns", async (c) =>
     c.json(await listResolutionPatterns()),
   )
-  .post(
-    "/resolution-patterns",
-    zValidator("json", patternSchema),
-    async (c) => {
-      await assertAnyTeamAdminApi(c);
-      const { slug, description } = c.req.valid("json");
-      return c.json(
-        await audited(c, "catalog_add", `pattern:${slug}`, () =>
-          addResolutionPattern(slug, description),
-        ),
-      );
-    },
-  )
+  .post("/resolution-patterns", validate("json", patternSchema), async (c) => {
+    await assertAnyTeamAdminApi(c);
+    const { slug, description } = c.req.valid("json");
+    return c.json(
+      await audited(c, "catalog_add", `pattern:${slug}`, () =>
+        addResolutionPattern(slug, description),
+      ),
+    );
+  })
   .patch(
     "/resolution-patterns/:slug",
-    zValidator("json", patternPatchSchema),
+    validate("json", patternPatchSchema),
     async (c) => {
       await assertAnyTeamAdminApi(c);
       const slug = c.req.param("slug");
@@ -136,7 +132,7 @@ export const catalog = new Hono()
   })
   .post(
     "/resolution-patterns/:slug/rename",
-    zValidator("json", renameSchema),
+    validate("json", renameSchema),
     async (c) => {
       await assertAnyTeamAdminApi(c);
       const slug = c.req.param("slug");
@@ -163,7 +159,7 @@ export const catalog = new Hono()
   })
   .post(
     "/products/:slug/components",
-    zValidator("json", componentSchema),
+    validate("json", componentSchema),
     async (c) => {
       const body = c.req.valid("json");
       const productId = await getProductIdBySlug(c.req.param("slug"));
@@ -180,7 +176,7 @@ export const catalog = new Hono()
   )
   .patch(
     "/products/:slug/components/:componentSlug",
-    zValidator("json", componentPatchSchema),
+    validate("json", componentPatchSchema),
     async (c) => {
       const productId = await getProductIdBySlug(c.req.param("slug"));
       await assertScopeEditor(c, { productId });
@@ -215,7 +211,7 @@ export const catalog = new Hono()
   })
   .post(
     "/products/:slug/components/:componentSlug/rename",
-    zValidator("json", renameSchema),
+    validate("json", renameSchema),
     async (c) => {
       const productId = await getProductIdBySlug(c.req.param("slug"));
       await assertScopeEditor(c, { productId });
@@ -236,26 +232,22 @@ export const catalog = new Hono()
       await listLabels(await getProductIdBySlug(c.req.param("slug"))),
     );
   })
-  .post(
-    "/products/:slug/labels",
-    zValidator("json", labelSchema),
-    async (c) => {
-      const { slug, description } = c.req.valid("json");
-      const productId = await getProductIdBySlug(c.req.param("slug"));
-      await assertScopeEditor(c, { productId });
-      return c.json(
-        await audited(
-          c,
-          "catalog_add",
-          `label:${c.req.param("slug")}/${slug}`,
-          () => addLabel(productId, slug, description),
-        ),
-      );
-    },
-  )
+  .post("/products/:slug/labels", validate("json", labelSchema), async (c) => {
+    const { slug, description } = c.req.valid("json");
+    const productId = await getProductIdBySlug(c.req.param("slug"));
+    await assertScopeEditor(c, { productId });
+    return c.json(
+      await audited(
+        c,
+        "catalog_add",
+        `label:${c.req.param("slug")}/${slug}`,
+        () => addLabel(productId, slug, description),
+      ),
+    );
+  })
   .patch(
     "/products/:slug/labels/:labelSlug",
-    zValidator("json", labelPatchSchema),
+    validate("json", labelPatchSchema),
     async (c) => {
       const productId = await getProductIdBySlug(c.req.param("slug"));
       await assertScopeEditor(c, { productId });
@@ -288,7 +280,7 @@ export const catalog = new Hono()
   })
   .post(
     "/products/:slug/labels/:labelSlug/rename",
-    zValidator("json", renameSchema),
+    validate("json", renameSchema),
     async (c) => {
       const productId = await getProductIdBySlug(c.req.param("slug"));
       await assertScopeEditor(c, { productId });
@@ -305,7 +297,7 @@ export const catalog = new Hono()
     },
   )
   .get("/teams", async (c) => c.json(await listTeams()))
-  .post("/teams", requireAdmin, zValidator("json", teamSchema), async (c) => {
+  .post("/teams", requireAdmin, validate("json", teamSchema), async (c) => {
     const { slug, name } = c.req.valid("json");
     return c.json(
       await audited(c, "catalog_add", `team:${slug}`, () =>
@@ -316,7 +308,7 @@ export const catalog = new Hono()
   .patch(
     "/teams/:slug",
     requireAdmin,
-    zValidator("json", teamPatchSchema),
+    validate("json", teamPatchSchema),
     async (c) => {
       const slug = c.req.param("slug")!;
       return c.json(
@@ -337,7 +329,7 @@ export const catalog = new Hono()
   .get("/products", async (c) =>
     c.json(await listProducts(c.req.query("team_slug"))),
   )
-  .post("/products", zValidator("json", productSchema), async (c) => {
+  .post("/products", validate("json", productSchema), async (c) => {
     const { team_slug, slug, name, aliases } = c.req.valid("json");
     await assertTeamAdmin(c, team_slug);
     return c.json(
@@ -346,32 +338,28 @@ export const catalog = new Hono()
       ),
     );
   })
-  .patch(
-    "/products/:slug",
-    zValidator("json", productPatchSchema),
-    async (c) => {
-      const productId = await getProductIdBySlug(c.req.param("slug"));
-      await assertScopeEditor(c, { productId });
-      const body = c.req.valid("json");
-      // Moving a product needs rights on the team it lands in, too.
-      if (body.team_slug) await assertTeamAdmin(c, body.team_slug);
-      return c.json(
-        await audited(
-          c,
-          "catalog_update",
-          `product:${c.req.param("slug")}`,
-          () =>
-            updateProduct(productId, {
-              name: body.name,
-              aliases: body.aliases,
-              slug: body.slug,
-              teamSlug: body.team_slug,
-            }),
-          { renamed_to: body.slug, moved_to: body.team_slug },
-        ),
-      );
-    },
-  )
+  .patch("/products/:slug", validate("json", productPatchSchema), async (c) => {
+    const productId = await getProductIdBySlug(c.req.param("slug"));
+    await assertScopeEditor(c, { productId });
+    const body = c.req.valid("json");
+    // Moving a product needs rights on the team it lands in, too.
+    if (body.team_slug) await assertTeamAdmin(c, body.team_slug);
+    return c.json(
+      await audited(
+        c,
+        "catalog_update",
+        `product:${c.req.param("slug")}`,
+        () =>
+          updateProduct(productId, {
+            name: body.name,
+            aliases: body.aliases,
+            slug: body.slug,
+            teamSlug: body.team_slug,
+          }),
+        { renamed_to: body.slug, moved_to: body.team_slug },
+      ),
+    );
+  })
   .delete("/products/:slug", async (c) => {
     const productId = await getProductIdBySlug(c.req.param("slug"));
     await assertScopeEditor(c, { productId });

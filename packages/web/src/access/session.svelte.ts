@@ -1,4 +1,5 @@
 import type { DeploymentProfile, UserRole } from "@tachy/contract";
+import { readError } from "../problems";
 import { uninvitedFrom } from "./uninvited";
 
 export interface Me {
@@ -119,9 +120,8 @@ export async function login(email: string, password: string): Promise<void> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok)
-    throw new Error(body.error ?? `login failed (${response.status})`);
+  if (!response.ok) throw await readError(response);
+  const body = await response.json();
   session.me = {
     email: body.email,
     name: body.name ?? null,

@@ -11,6 +11,10 @@ User={{ tachy_user }}
 WorkingDirectory={{ tachy_dir }}
 ExecStart=/usr/bin/docker compose -f docker-compose.yml -f deploy/compose.prod.yml up -d
 ExecStop=/usr/bin/docker compose -f docker-compose.yml -f deploy/compose.prod.yml stop
+# compose gives up when a dependency exits once, which a service does on a boot
+# that starts it before the network resolves names.
+Restart=on-failure
+RestartSec=15
 TimeoutStopSec=300
 
 [Install]

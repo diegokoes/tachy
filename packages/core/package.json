@@ -7,13 +7,16 @@
     "./*": "./src/*/index.ts"
   },
   "dependencies": {
-    "@huggingface/transformers": "^4.3.0",
+    "@huggingface/transformers": "^4.3.1",
     "@tachy/contract": "*",
     "croner": "^10.0.1",
-    "dotenv": "^18.0.5",
+    "dotenv": "^18.0.6",
     "fflate": "^0.8.2",
-    "material-icon-theme": "^5.38.1",
+    "material-icon-theme": "^5.39.0",
+    "postal-mime": "^4.0.5",
     "postgres": "^3.4.5",
+    "sharp": "^0.35.4",
+    "unpdf": "^1.8.1",
     "zod": "^4.6.5"
   }
 }

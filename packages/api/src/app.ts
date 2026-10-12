@@ -2,9 +2,10 @@ import { Hono, type Context, type Next } from "hono";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { requestId } from "hono/request-id";
 import { HTTPException } from "hono/http-exception";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { z } from "zod";
-import { env, AppError, errorText, maskSecrets } from "@tachy/core/infra";
+import { env, AppError, errorText } from "@tachy/core/infra";
 import { registerSource } from "@tachy/core/sources";
 import { registerCoreJobs } from "@tachy/core/jobs";
 import { effectiveSettings } from "@tachy/core/config";
@@ -36,6 +37,8 @@ import { httpLogger, noteError } from "./logging";
 import { readiness } from "./lifecycle";
 import { internalRoutes, type InternalOptions } from "./routes/internal";
 import { ingest } from "./routes/ingest";
+import { problem } from "./problems";
+import { invalidRequest } from "./validation";
 
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
@@ -72,19 +75,6 @@ function apiRoutes() {
     .route("/tests", diagnostics)
     .route("/", sourceProjects)
     .route("/", admin);
-}
-
-/**
- * An HTTPException carries its own response, whose body is whatever message it
- * was thrown with.
- */
-export async function withSecretsMasked(response: Response): Promise<Response> {
-  const headers = new Headers(response.headers);
-  headers.delete("content-length");
-  return new Response(maskSecrets(await response.text()), {
-    status: response.status,
-    headers,
-  });
 }
 
 /**
@@ -195,31 +185,38 @@ export function createApp(
     );
   }
 
-  app.notFound((c) => c.json({ error: "not found" }, 404));
+  app.notFound((c) => problem(c, 404));
 
   app.onError((err, c) => {
     if (err instanceof AppError) {
       const error = errorText(err);
-      noteError(c, { error, code: err.code });
-      return c.json({ error }, STATUS_BY_CODE[err.code]);
+      noteError(c, { ...err.extensions, error, code: err.code });
+      return problem(c, STATUS_BY_CODE[err.code], {
+        detail: error,
+        ...err.extensions,
+      });
     }
     if (err instanceof HTTPException) {
       noteError(c, { error: err.message });
-      return withSecretsMasked(err.getResponse());
+      // A 5xx message is a library's account of its own failure, such as the
+      // identity provider's answer to oidc-auth; only a 4xx is the caller's.
+      const forCaller = err.status < 500 && err.message;
+      return problem(
+        c,
+        err.status as ContentfulStatusCode,
+        forCaller ? { detail: err.message } : {},
+      );
     }
-    if (err instanceof z.ZodError) {
-      noteError(c, { error: "validation failed", issues: err.issues });
-      return c.json({ error: "validation failed", issues: err.issues }, 400);
-    }
+    if (err instanceof z.ZodError) return invalidRequest(c, err.issues);
     if (err instanceof SyntaxError) {
       noteError(c, { error: "invalid JSON body" });
-      return c.json({ error: "invalid JSON body" }, 400);
+      return problem(c, 400, { detail: "invalid JSON body" });
     }
     noteError(c, {
       error: errorText(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
-    return c.json({ error: "internal error" }, 500);
+    return problem(c, 500);
   });
 
   return app;

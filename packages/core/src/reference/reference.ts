@@ -1,7 +1,7 @@
 import { renameWikilinks, SLUG_RE, WIKI_RESERVED_SLUGS } from "@tachy/contract";
 import type { TransactionSql } from "postgres";
 import { sql, jsonb } from "../infra/db";
-import { chunkText } from "../search/chunk";
+import { chunkPages } from "../search/chunk";
 import {
   embedPassages,
   embedQueryLiteral,
@@ -115,16 +115,20 @@ export interface ReferenceDocUpdate {
 interface ChunkVectors {
   chunks: string[];
   ordinals: number[];
+  pages: (number | null)[];
   literals: string[];
 }
 
 async function chunkVectors(body: string): Promise<ChunkVectors> {
-  const chunks = chunkText(body);
-  if (!chunks.length) return { chunks: [], ordinals: [], literals: [] };
-  const vectors = await embedPassages(chunks);
+  const chunks = chunkPages(body);
+  if (!chunks.length)
+    return { chunks: [], ordinals: [], pages: [], literals: [] };
+  const texts = chunks.map((chunk) => chunk.text);
+  const vectors = await embedPassages(texts);
   return {
-    chunks,
+    chunks: texts,
     ordinals: chunks.map((_, i) => i),
+    pages: chunks.map((chunk) => chunk.page),
     literals: vectors.map(toVectorLiteral),
   };
 }
@@ -136,10 +140,10 @@ async function insertChunks(
 ): Promise<number> {
   if (!vectors.chunks.length) return 0;
   await db`
-    insert into reference_doc_chunks (doc_id, ordinal, chunk_text, embedding, embedding_model)
-    select ${docId}, u.ordinal, u.chunk_text, u.embedding::vector, ${EMBEDDING_MODEL}
-    from unnest(${vectors.ordinals}::int[], ${vectors.chunks}::text[], ${vectors.literals}::text[])
-      as u(ordinal, chunk_text, embedding)
+    insert into reference_doc_chunks (doc_id, ordinal, page, chunk_text, embedding, embedding_model)
+    select ${docId}, u.ordinal, u.page, u.chunk_text, u.embedding::vector, ${EMBEDDING_MODEL}
+    from unnest(${vectors.ordinals}::int[], ${vectors.pages}::int[], ${vectors.chunks}::text[], ${vectors.literals}::text[])
+      as u(ordinal, page, chunk_text, embedding)
   `;
   return vectors.chunks.length;
 }
@@ -506,7 +510,7 @@ export async function searchReferenceDocs(
     -- The vector leg is chunk-level and keyed back to the doc, so a long
     -- runbook is judged by its best passage rather than its average.
     chunk_hits as (
-      select c.doc_id, c.chunk_text,
+      select c.doc_id, c.chunk_text, c.page,
              1 - (c.embedding <=> ${qvec}::vector) as cos_sim
       from reference_doc_chunks c
       join reference_docs d on d.id = c.doc_id
@@ -516,7 +520,7 @@ export async function searchReferenceDocs(
       limit ${CANDIDATES}
     ),
     best_chunk as (
-      select distinct on (doc_id) doc_id as id, chunk_text as snippet, cos_sim
+      select distinct on (doc_id) doc_id as id, chunk_text as snippet, page, cos_sim
       from chunk_hits
       order by doc_id, cos_sim desc
     ),
@@ -550,7 +554,7 @@ export async function searchReferenceDocs(
     select d.id, d.title, d.tags, d.product_id, d.team_id, d.component_id, d.product_area,
            d.status, d.doc_version, d.version, d.structured, d.source, d.created_at, d.updated_at,
            d.customer_id, cu.slug as customer_slug, d.kind, d.slug,
-           coalesce(b.snippet, left(d.body, 400)) as snippet,
+           coalesce(b.snippet, left(d.body, 400)) as snippet, b.page,
            f.cos_sim, f.fts_rank, f.trgm_sim, f.rrf
     from fused f
     join reference_docs d on d.id = f.id
