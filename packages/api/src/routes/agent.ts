@@ -159,6 +159,7 @@ export const agent = new Hono()
         // The shared token and open mode are an app admin with no user row;
         // a minted token has an owner and is gated as them.
         !identity?.email && identity?.role === "admin" ? "admin" : undefined,
+      origin: c.req.header("origin"),
     });
     const requestId = requestIdOf(c);
     if (requestId) base.mcpEnv.TACHY_REQUEST_ID = requestId;

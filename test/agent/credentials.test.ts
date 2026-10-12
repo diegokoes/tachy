@@ -107,6 +107,29 @@ describe("per-turn agent config isolation (cross-user token safety)", () => {
     expect(on.mcpEnv.TACHY_REDACT_IMAGES).toBe("true");
   });
 
+  it("tells the subprocess the address a link back to the server should carry", async () => {
+    const settings = await effectiveSettings();
+    const unplaced = await mcpConfig("alice@example.com", settings, {
+      origin: "https://tachy.local",
+    });
+    expect(unplaced.mcpEnv.TACHY_PUBLIC_ORIGIN).toBeUndefined();
+    process.env.TACHY_PUBLIC_ORIGINS = "https://tachy.local,https://192.0.2.7";
+    try {
+      const byAddress = await mcpConfig("alice@example.com", settings, {
+        origin: "https://192.0.2.7",
+      });
+      expect(byAddress.mcpEnv.TACHY_PUBLIC_ORIGIN).toBe("https://192.0.2.7");
+      const foreign = await mcpConfig("alice@example.com", settings, {
+        origin: "https://evil.example",
+      });
+      expect(foreign.mcpEnv.TACHY_PUBLIC_ORIGIN).toBe("https://tachy.local");
+      const unnamed = await mcpConfig("alice@example.com", settings);
+      expect(unnamed.mcpEnv.TACHY_PUBLIC_ORIGIN).toBe("https://tachy.local");
+    } finally {
+      delete process.env.TACHY_PUBLIC_ORIGINS;
+    }
+  });
+
   it("materializes each caller's own source token into a fresh mcpEnv", async () => {
     const settings = await effectiveSettings();
     const aliceCfg = await mcpConfig("alice@example.com", settings);
