@@ -199,6 +199,9 @@ create table source_connections (
     -- run that fails at item 900 of 1000 commits the first 899 and discards the
     -- cursor, so the retry re-walks from wherever the operator pointed.
     last_synced_at timestamptz,
+    -- The earliest date a clean walk started from: every item changed on or
+    -- after it has been listed. Null while no walk was given a start.
+    listed_since  timestamptz,
     created_at    timestamptz not null default now()
 );
 

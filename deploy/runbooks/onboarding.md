@@ -27,8 +27,10 @@ on the overview.
    each maps to.
 5. A `source.sync` job for the connection, under Admin › workers › jobs, is
    optional. It copies each project's item rows (title, status, requester) for
-   the counts on the admin page. The agent reads a ticket live when it is asked
-   about one, with or without the job.
+   the counts on the admin page. Its `from` date is how far back the copy
+   reaches: one run walks from it, later runs resume from the last clean sync.
+   The agent reads a ticket live when it is asked about one, with or without
+   the job.
 
 The host must be able to reach the source: add it to the egress list if the
 office firewall keeps one.
