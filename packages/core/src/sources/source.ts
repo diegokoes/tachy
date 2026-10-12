@@ -7,7 +7,13 @@ import type {
 import type { TokenMap } from "../compliance/redaction";
 import type { RawWorkItem } from "../work-items/raw";
 
-export type { RawAttachment, RawMessage, RawWorkItem } from "../work-items/raw";
+export type {
+  RawAttachment,
+  RawCustomerRecord,
+  RawEvent,
+  RawMessage,
+  RawWorkItem,
+} from "../work-items/raw";
 
 export interface SourceCapabilities {
   postNote: boolean;

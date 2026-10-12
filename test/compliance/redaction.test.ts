@@ -264,6 +264,31 @@ describe("redactNormalized", () => {
     expect(JSON.stringify(redacted)).not.toContain("Bob");
   });
 
+  it("drops the history and the company record, which name people and the customer", () => {
+    const redacted = redactNormalized(
+      {
+        ...base,
+        events: [
+          {
+            externalId: "2:System.AssignedTo",
+            occurredAt: "2026-04-01T10:00:00Z",
+            actor: "Bob Dev",
+            field: "assignee",
+            newValue: "Carol Ops",
+          },
+        ],
+        customerRecord: {
+          name: "Acme GmbH",
+          record: { domains: ["acme.com"] },
+        },
+      },
+      { customerSlug: "acme-corp", map: new TokenMap() },
+    );
+    expect(redacted.events).toBeUndefined();
+    expect(redacted.customerRecord).toBeUndefined();
+    expect(JSON.stringify(redacted)).not.toMatch(/Bob|Carol|Acme GmbH/);
+  });
+
   it("scrubs a file's name where it scrubs the text, and keeps its id", () => {
     const withFile: RawWorkItem = {
       ...base,
