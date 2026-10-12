@@ -212,6 +212,12 @@ async function seedWorkItems(
       const symptom = pick(rng, SYMPTOMS);
       const errorCode = `E${intBetween(rng, 100, 999)}`;
       const created = pastDate(rng, 540);
+      // Drawn in this order whatever order the row lists them in: a draw
+      // moved is every later value of the row changed.
+      const kind = pick(rng, ["ticket", "issue", "bug", "task"]);
+      const context = pick(rng, CONTEXTS);
+      const status = pick(rng, STATUSES);
+      const hasCustomer = chance(rng, 0.75);
       const observedVersion = `${intBetween(rng, 3, 9)}.${intBetween(rng, 0, 12)}`;
       const priority = intBetween(rng, 1, 4);
       const updated = new Date(
@@ -223,16 +229,14 @@ async function seedWorkItems(
         source_connection_id: conn.id,
         external_id: externalId,
         external_url: `https://example.invalid/${conn.slug}/${externalId}`,
-        kind: pick(rng, ["ticket", "issue", "bug", "task"]),
-        title: `${symptom} on ${product.slug} ${pick(rng, CONTEXTS)} (${errorCode})`,
-        status: pick(rng, STATUSES),
+        kind,
+        title: `${symptom} on ${product.slug} ${context} (${errorCode})`,
+        status,
         external_group_key: `${480_000 + (i % 8)}`,
         source_project_id: project.id,
         product_id: product.id,
         team_id: product.teamId,
-        customer_id: chance(rng, 0.75)
-          ? customers[i % customers.length].id
-          : null,
+        customer_id: hasCustomer ? customers[i % customers.length].id : null,
         observed_version: observedVersion,
         requester: `contact${i % 200}@example.invalid`,
         priority: `${priority}`,
