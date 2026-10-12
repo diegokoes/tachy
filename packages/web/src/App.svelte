@@ -29,6 +29,7 @@
   import { loadVim, vimState, scrollBindings } from "./keys/vim.svelte";
   import { subnav, topActions } from "./shell/subnav.svelte";
   import { setScrollport } from "./shell/scrollport.svelte";
+  import { topbar } from "./shell/topbar.svelte";
   import {
     CaretHost,
     HintRule,
@@ -67,6 +68,7 @@
   }
 
   let topbarEl = $state<HTMLElement>();
+  let topbarH = $state(0);
   let mainEl = $state<HTMLElement>();
   let subEl = $state<HTMLElement>();
   let windowEl = $state<HTMLElement>();
@@ -294,10 +296,18 @@
   <FeedbackView />
 {:else}
   <div class="app" data-scene>
+    <!-- Ahead of the bar, so hovering it reaches the bar as a sibling. -->
+    {#if topbar.tucked && !themeState.navHidden}
+      <div class="nav-edge"></div>
+    {/if}
     <div
       class="topbar"
       class:hidden={themeState.navHidden}
+      class:tucked={topbar.tucked}
+      class:veiled={topbar.veiled}
       bind:this={topbarEl}
+      bind:offsetHeight={topbarH}
+      style:--topbar-h="{topbarH}px"
     >
       <div class="mark"><Wordmark /></div>
       <div class="navbar">
@@ -515,6 +525,73 @@
     display: flex;
     align-items: center;
     min-width: 0;
+  }
+
+  /* A view may tuck the bar away (shell/topbar): pulled up by its own height,
+     so the window takes the row, on the timing `reflow` gives the chat's dock.
+     Always above the window, which moves under a bar the pointer is holding. */
+  .topbar {
+    --tuck: calc(var(--topbar-h, 0px) + var(--pad-2));
+    position: relative;
+    z-index: 10;
+    transition:
+      margin-top 0.35s cubic-bezier(0.65, 0, 0.35, 1),
+      translate 0.35s cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  .topbar.tucked {
+    margin-top: calc(-1 * var(--tuck));
+  }
+  /* Faded on the bar's parts: `reflow` tweens the bar's own opacity when the
+     nav setting hides it, and a transition there would chase the tween. Not
+     visibility, which takes the bar out of the tab order focus returns by. */
+  .mark,
+  .navbar {
+    transition: opacity 0.2s ease;
+  }
+  .topbar.tucked,
+  .topbar.veiled {
+    pointer-events: none;
+  }
+  .topbar.tucked > div,
+  .topbar.veiled > div {
+    opacity: 0;
+  }
+  /* Back over the page, where it was, while the pointer is at the top edge
+     or on the pill, or focus is inside it. Margin and translate cancel out,
+     so nothing in the layout moves. */
+  .nav-edge:hover ~ .topbar.tucked,
+  .topbar.tucked:hover,
+  .topbar.tucked:focus-within {
+    translate: 0 var(--tuck);
+  }
+  /* Only the pill comes back: it lies over the conversation, where the
+     wordmark would be text over text. */
+  .nav-edge:hover ~ .topbar.tucked .navbar,
+  .topbar.tucked:hover .navbar,
+  .topbar.tucked:focus-within .navbar {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  /* Opaque for the same reason: the window's fill lets what is behind through. */
+  .topbar.tucked .navbar :global(> section) {
+    background: var(--panel-solid);
+  }
+  /* The strip that brings a tucked bar back. Under the bar, so the pill takes
+     the pointer where the two overlap; short enough to stop above the text. */
+  .nav-edge {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 9;
+    height: calc(var(--pad-3) * 2);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .topbar,
+    .mark,
+    .navbar {
+      transition: none;
+    }
   }
 
   /* A lone tab, styled like one of Tabs.svelte's own, without the indicator

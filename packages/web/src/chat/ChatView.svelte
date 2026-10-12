@@ -26,6 +26,7 @@
   import Launcher from "./Launcher.svelte";
   import { ArtifactMark, Button, Caret, caretSide, G, Icon, tip } from "../tui";
   import { pushScope } from "../keys/keys.svelte";
+  import { tuckTopbar } from "../shell/topbar.svelte";
   import { CHAT_UPLOAD_ACCEPT, uploadRefusal } from "@tachy/contract";
   import type {
     WorkItemTypeOption,
@@ -118,6 +119,10 @@
     const play = untrack(() => reflow([dockEl], { absolute: false }));
     void tick().then(play);
   });
+
+  // A conversation under way takes the nav's row. The disposer hands it back
+  // on clear and when the view goes, so every other section keeps its bar.
+  $effect(() => (empty ? undefined : tuckTopbar()));
 
   $effect(() =>
     pushScope([
