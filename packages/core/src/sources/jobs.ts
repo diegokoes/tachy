@@ -22,7 +22,7 @@ export function defineSourceJobs() {
         signal: ctx.signal,
         onPage: (n) => ctx.log(`${n} item(s) so far`),
       });
-      return { items: total, since: since ?? null };
+      return { total, since: since ?? null };
     },
   });
 }
