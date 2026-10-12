@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { ingestWorkItem, messageKey } from "@tachy/core/work-items";
 import { addCustomer, setWorkItemCustomer } from "@tachy/core/catalog";
-import type { RawMessage, RawWorkItem } from "@tachy/core/sources";
+import type { RawEvent, RawMessage, RawWorkItem } from "@tachy/core/sources";
 import {
   resetData,
   seededFreshdeskConnId,
@@ -442,5 +442,235 @@ describe("a listing over a stored copy", () => {
       item_type: "Incident",
       source_created_at: new Date("2026-04-01T10:00:00Z"),
     });
+  });
+});
+
+describe("an item's events", () => {
+  beforeEach(resetData);
+
+  const events = (itemId: string) => sql<
+    {
+      external_id: string;
+      field: string;
+      old_value: string | null;
+      new_value: string | null;
+      actor: string | null;
+      origin: string;
+      occurred_at: Date;
+    }[]
+  >`
+    select external_id, field, old_value, new_value, actor, origin, occurred_at
+    from work_item_events where work_item_id = ${itemId}
+    order by occurred_at, external_id
+  `;
+  const resolved = (at: string): RawEvent => ({
+    externalId: `stats:resolved_at:${at}`,
+    occurredAt: at,
+    field: "resolved",
+  });
+
+  it("keeps what the source says happened, once however often it is read", async () => {
+    const connId = await seededFreshdeskConnId();
+    const read = rawItem({
+      events: [
+        {
+          externalId: "created",
+          occurredAt: "2026-04-01T10:00:00Z",
+          field: "created",
+        },
+        resolved("2026-04-02T09:00:00Z"),
+      ],
+    });
+    const item = await ingestWorkItem(connId, read);
+    await ingestWorkItem(connId, read);
+    expect(await events(item.id)).toMatchObject([
+      { field: "created", origin: "source", old_value: null, new_value: null },
+      {
+        field: "resolved",
+        origin: "source",
+        occurred_at: new Date("2026-04-02T09:00:00Z"),
+      },
+    ]);
+  });
+
+  it("keeps the first resolution when a ticket is resolved again", async () => {
+    const connId = await seededFreshdeskConnId();
+    const item = await ingestWorkItem(
+      connId,
+      rawItem({ events: [resolved("2026-04-02T09:00:00Z")] }),
+    );
+    await ingestWorkItem(
+      connId,
+      rawItem({ listed: true, events: [resolved("2026-04-09T15:00:00Z")] }),
+    );
+    expect((await events(item.id)).map((e) => e.occurred_at)).toEqual([
+      new Date("2026-04-02T09:00:00Z"),
+      new Date("2026-04-09T15:00:00Z"),
+    ]);
+  });
+
+  it("leaves out an event the source did not date", async () => {
+    const connId = await seededFreshdeskConnId();
+    const item = await ingestWorkItem(
+      connId,
+      rawItem({
+        events: [{ externalId: "x", occurredAt: "soon", field: "closed" }],
+      }),
+    );
+    expect(await events(item.id)).toEqual([]);
+  });
+
+  it("records what differs between two reads, at the time the source last changed", async () => {
+    const connId = await seededFreshdeskConnId();
+    const item = await ingestWorkItem(
+      connId,
+      rawItem({ assignee: "7", sourceUpdatedAt: "2026-04-01T10:00:00Z" }),
+    );
+    expect(await events(item.id)).toEqual([]);
+
+    await ingestWorkItem(
+      connId,
+      rawItem({
+        status: "4",
+        assignee: undefined,
+        listed: true,
+        sourceUpdatedAt: "2026-04-03T08:30:00Z",
+      }),
+    );
+    expect(await events(item.id)).toEqual([
+      {
+        external_id: "observed:assignee:2026-04-03T08:30:00.000Z",
+        field: "assignee",
+        old_value: "7",
+        new_value: null,
+        actor: null,
+        origin: "observed",
+        occurred_at: new Date("2026-04-03T08:30:00Z"),
+      },
+      {
+        external_id: "observed:status:2026-04-03T08:30:00.000Z",
+        field: "status",
+        old_value: "2",
+        new_value: "4",
+        actor: null,
+        origin: "observed",
+        occurred_at: new Date("2026-04-03T08:30:00Z"),
+      },
+    ]);
+  });
+
+  it("records nothing when a value reads differently and the source says nothing changed", async () => {
+    const connId = await seededFreshdeskConnId();
+    const at = "2026-04-01T10:00:00Z";
+    const item = await ingestWorkItem(connId, rawItem({ sourceUpdatedAt: at }));
+    await ingestWorkItem(
+      connId,
+      rawItem({ priority: "3", sourceUpdatedAt: at }),
+    );
+    expect(await events(item.id)).toEqual([]);
+  });
+
+  it("replaces what it observed with the source's own history once that is read", async () => {
+    const connId = await seededFreshdeskConnId();
+    const item = await ingestWorkItem(
+      connId,
+      rawItem({ status: "New", sourceUpdatedAt: "2026-04-01T10:00:00Z" }),
+    );
+    await ingestWorkItem(
+      connId,
+      rawItem({
+        status: "Active",
+        listed: true,
+        sourceUpdatedAt: "2026-04-02T10:00:00Z",
+      }),
+    );
+    expect((await events(item.id)).map((e) => e.origin)).toEqual(["observed"]);
+
+    await ingestWorkItem(
+      connId,
+      rawItem({
+        status: "Closed",
+        sourceUpdatedAt: "2026-04-03T10:00:00Z",
+        historyComplete: true,
+        events: [
+          {
+            externalId: "2:System.State",
+            occurredAt: "2026-04-01T16:00:00Z",
+            actor: "Bob Dev",
+            field: "status",
+            oldValue: "New",
+            newValue: "Active",
+          },
+          {
+            externalId: "3:System.State",
+            occurredAt: "2026-04-03T10:00:00Z",
+            actor: "Bob Dev",
+            field: "status",
+            oldValue: "Active",
+            newValue: "Closed",
+          },
+        ],
+      }),
+    );
+    expect(await events(item.id)).toMatchObject([
+      { origin: "source", actor: "Bob Dev", new_value: "Active" },
+      { origin: "source", actor: "Bob Dev", new_value: "Closed" },
+    ]);
+  });
+});
+
+describe("the source's record of a customer", () => {
+  beforeEach(resetData);
+
+  const records = () => sql`
+    select external_id, name, record from source_customer_records order by external_id
+  `;
+  const acme = (over: Record<string, unknown> = {}) => ({
+    name: "Acme",
+    record: { id: 9, name: "Acme", tier: "gold", ...over },
+  });
+
+  it("keeps one record for a company however many of its tickets are fetched", async () => {
+    const connId = await seededFreshdeskConnId();
+    const first = await ingestWorkItem(
+      connId,
+      rawItem({ externalId: "1", customerKey: "9", customerRecord: acme() }),
+    );
+    await ingestWorkItem(
+      connId,
+      rawItem({
+        externalId: "2",
+        customerKey: "9",
+        customerRecord: acme({ tier: "platinum" }),
+      }),
+    );
+    expect(await records()).toEqual([
+      {
+        external_id: "9",
+        name: "Acme",
+        record: { id: 9, name: "Acme", tier: "platinum" },
+      },
+    ]);
+    const joined = await sql`
+      select count(*)::int as n from work_items wi
+      join source_customer_records r
+        on r.source_connection_id = wi.source_connection_id
+       and r.external_id = wi.external_customer_key
+    `;
+    expect(joined[0].n).toBe(2);
+    expect(first.id).toBeTruthy();
+  });
+
+  it("points a listed ticket at its company before any record is stored", async () => {
+    const connId = await seededFreshdeskConnId();
+    const item = await ingestWorkItem(
+      connId,
+      rawItem({ customerKey: "9", listed: true }),
+    );
+    const [row] = await sql`
+      select external_customer_key from work_items where id = ${item.id}
+    `;
+    expect(row.external_customer_key).toBe("9");
+    expect(await records()).toEqual([]);
   });
 });

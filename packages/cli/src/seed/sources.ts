@@ -30,6 +30,9 @@ export interface SeededWorkItem {
   id: string;
   connectionId: string;
   externalId: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 export interface Sources {
   connections: { id: string; slug: string }[];
@@ -44,6 +47,9 @@ const CONNECTIONS = [
 ] as const;
 
 const STATUSES = ["open", "pending", "resolved", "closed"];
+/** How many companies each connection's items are spread over. */
+const COMPANIES_PER_CONNECTION = 12;
+const COMPANY_TIERS = ["standard", "gold", "platinum"];
 
 export async function seedSources(
   tx: Tx,
@@ -119,6 +125,8 @@ export async function seedSources(
     customers,
   );
   await seedMessages(tx, volumes, workItems);
+  await seedEvents(tx, workItems);
+  await seedCustomerRecords(tx, connections);
   await seedLinks(tx, volumes, workItems, projects);
 
   return { connections, projects, workItems };
@@ -189,6 +197,7 @@ async function seedWorkItems(
       "observed_version",
       "requester",
       "priority",
+      "external_customer_key",
       "raw",
       "source_created_at",
       "source_updated_at",
@@ -201,7 +210,6 @@ async function seedWorkItems(
       counters.set(conn.id, next);
       const externalId = `${next}`;
       const id = uuidFor("work_item", i);
-      workItems.push({ id, connectionId: conn.id, externalId });
 
       const rng = rngFor("work_item", i);
       // Drawn from the row's stream, not by `i % list.length`: cycling repeats
@@ -223,6 +231,14 @@ async function seedWorkItems(
       const updated = new Date(
         created.getTime() + intBetween(rng, 0, 72) * 3_600_000,
       );
+      workItems.push({
+        id,
+        connectionId: conn.id,
+        externalId,
+        status,
+        createdAt: created,
+        updatedAt: updated,
+      });
 
       return {
         id,
@@ -240,6 +256,7 @@ async function seedWorkItems(
         observed_version: observedVersion,
         requester: `contact${i % 200}@example.invalid`,
         priority: `${priority}`,
+        external_customer_key: `${i % COMPANIES_PER_CONNECTION}`,
         // Capped: a realistic blob dominates the database's size at
         // --scale=large.
         raw: tx.json({ seeded: true, symptom, priority }),
@@ -306,6 +323,78 @@ async function seedMessages(
         created_at: pastDate(rng, 500),
       };
     },
+  );
+}
+
+/** Each item's opening, and the one change of status that left it where it is. */
+async function seedEvents(tx: Tx, workItems: SeededWorkItem[]): Promise<void> {
+  const columns = [
+    "id",
+    "work_item_id",
+    "external_id",
+    "occurred_at",
+    "actor",
+    "field",
+    "old_value",
+    "new_value",
+    "origin",
+  ];
+  await insertWindowed(
+    tx,
+    "work_item_events",
+    columns,
+    workItems.length,
+    (i) => ({
+      id: uuidFor("work_item_event_created", i),
+      work_item_id: workItems[i].id,
+      external_id: "created",
+      occurred_at: workItems[i].createdAt,
+      actor: null,
+      field: "created",
+      old_value: null,
+      new_value: null,
+      origin: "source",
+    }),
+  );
+  const moved = workItems.filter((item) => item.status !== "open");
+  await insertWindowed(tx, "work_item_events", columns, moved.length, (i) => ({
+    id: uuidFor("work_item_event_status", i),
+    work_item_id: moved[i].id,
+    external_id: `observed:status:${moved[i].updatedAt.toISOString()}`,
+    occurred_at: moved[i].updatedAt,
+    actor: null,
+    field: "status",
+    old_value: "open",
+    new_value: moved[i].status,
+    origin: "observed",
+  }));
+}
+
+async function seedCustomerRecords(
+  tx: Tx,
+  connections: { id: string; slug: string }[],
+): Promise<void> {
+  const rows = connections.flatMap((conn, c) =>
+    Array.from({ length: COMPANIES_PER_CONNECTION }, (_, k) => {
+      const name = `Company ${k + 1} (${conn.slug})`;
+      const rng = rngFor(
+        "source_customer_record",
+        c * COMPANIES_PER_CONNECTION + k,
+      );
+      return {
+        id: uuidFor("source_customer_record", c * COMPANIES_PER_CONNECTION + k),
+        source_connection_id: conn.id,
+        external_id: `${k}`,
+        name,
+        record: tx.json({ id: k, name, tier: pick(rng, COMPANY_TIERS) }),
+      };
+    }),
+  );
+  await insertRows(
+    tx,
+    "source_customer_records",
+    ["id", "source_connection_id", "external_id", "name", "record"],
+    rows,
   );
 }
 
