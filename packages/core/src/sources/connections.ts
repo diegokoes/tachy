@@ -73,7 +73,8 @@ export async function sourceCensus(): Promise<SourceCensus> {
       (select count(*)::int from source_projects where customer_id is not null)
         as projects_for_customer,
       (select count(*)::int from source_connections where last_synced_at is null)
-        as never_synced
+        as never_synced,
+      (select count(*)::int from work_items) as work_items
   `;
   const kinds = await sql<{ source_type: string; n: number }[]>`
     select source_type, count(*)::int as n

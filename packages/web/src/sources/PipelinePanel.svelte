@@ -211,6 +211,12 @@
       value: sources.projects,
       to: "projects",
     },
+    {
+      key: "tickets",
+      label: "stored tickets",
+      text: compact(sources.work_items),
+      to: "tickets",
+    },
     { key: "repos", label: "repos", value: repos.repos, to: "repos" },
     {
       key: "files",
