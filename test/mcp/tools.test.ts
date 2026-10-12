@@ -859,10 +859,18 @@ describe("notes written back to a ticket", () => {
   const posted: string[] = [];
   const deleted: string[] = [];
   let thread: RawWorkItem["messages"] = [];
+  let opensFiles = false;
 
   registerSource("fake-notes", () => ({
     type: "fake-notes",
     capabilities: { postNote: true, incrementalSync: false },
+    ...(opensFiles
+      ? {
+          async openAttachment() {
+            throw new Error("not opened in these tests");
+          },
+        }
+      : {}),
     async fetchItem() {
       return { ...fakeItem, externalId: "n-1", messages: thread };
     },
@@ -887,6 +895,8 @@ describe("notes written back to a ticket", () => {
   beforeEach(async () => {
     posted.length = 0;
     deleted.length = 0;
+    opensFiles = false;
+    delete process.env.TACHY_PUBLIC_ORIGIN;
     thread = [...fakeItem.messages];
     await addSourceConnection({
       sourceType: "fake-notes",
@@ -929,6 +939,45 @@ describe("notes written back to a ticket", () => {
     expect(posted[0]).toContain("<strong>Files</strong>");
     expect(posted[0]).toContain("<strong>screen.png</strong>");
     expect(posted[0]).toContain("The spooler error E-209.");
+  });
+
+  it("links a file the summary gives a path for, where the source opens files and the server knows its address", async () => {
+    thread.push({
+      externalId: "with-file",
+      direction: "incoming",
+      visibility: "public",
+      bodyText: "see the screenshot",
+      attachments: [{ id: "900", name: "screen.png" }],
+    });
+    const files = [
+      { name: "screen.png", path: "attachment:notes-conn/n-1/900" },
+      { name: "other.png", path: "attachment:notes-conn/n-1/999" },
+    ];
+    const post = () =>
+      call("post_work_item_summary", {
+        source: "notes-conn",
+        external_id: "n-1",
+        ...summary,
+        files,
+      });
+    const link =
+      '<a href="https://tachy.test/api/work-items/notes-conn/n-1/attachments/900" target="_blank" rel="noopener noreferrer">screen.png</a>';
+
+    process.env.TACHY_PUBLIC_ORIGIN = "https://tachy.test";
+    await post();
+    // This source opens no file, so there is nothing for a link to open.
+    expect(posted[0]).not.toContain("<a href");
+
+    opensFiles = true;
+    await post();
+    expect(posted[1]).toContain(link);
+    // The ticket lists no such file.
+    expect(posted[1]).toContain("<strong>other.png</strong>");
+
+    delete process.env.TACHY_PUBLIC_ORIGIN;
+    await post();
+    expect(posted[2]).not.toContain("<a href");
+    expect(posted[2]).toContain("<strong>screen.png</strong>");
   });
 
   it("deletes the summary an earlier call left, and nothing else", async () => {

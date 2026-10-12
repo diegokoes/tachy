@@ -8,6 +8,7 @@ import { resolveSource, resolveProjectContext } from "@tachy/core/sources";
 import {
   ingestWorkItem,
   compactWorkItem,
+  fileLinker,
   renderCompactNotes,
   renderSummaryHtml,
   priorSummaryIds,
@@ -235,7 +236,7 @@ tool(
   "post_work_item_summary",
   {
     description:
-      "Post a summary of a ticket onto it as a private note, replacing the summary an earlier call posted. Read the whole thread first (fetch_work_item), and open the files that bear on the problem (read_file), then pass the content only: the note's layout and markup are produced here, so write plain sentences with no markdown or HTML. Summarise what the thread and the files you opened say; where they do not say, leave it out.",
+      "Post a summary of a ticket onto it as a private note, replacing the summary an earlier call posted. Read the whole thread first (fetch_work_item), and open the files that bear on the problem (read_file), then pass the content only, with each file's path so the note can link to it: the note's layout and markup are produced here, so write plain sentences with no markdown or HTML. Summarise what the thread and the files you opened say; where they do not say, leave it out.",
     inputSchema: {
       source: sourceSlug,
       external_id: z.string(),
@@ -248,10 +249,15 @@ tool(
       throw badInput(`Source '${source}' does not support notes`);
     await requireCanEdit(await externalWorkItemScope(conn.id, external_id));
     const raw = await src.fetchItem(external_id);
+    const linkOf = fileLinker(raw, {
+      source,
+      // Only a source that opens files has something for the link to open.
+      origin: src.openAttachment ? process.env.TACHY_PUBLIC_ORIGIN : undefined,
+    });
     const posted = await replaceNotes(
       src,
       external_id,
-      [renderSummaryHtml({ external_id, title: raw.title }, summary)],
+      [renderSummaryHtml({ external_id, title: raw.title }, summary, linkOf)],
       priorSummaryIds(raw.messages),
     );
     return out({
