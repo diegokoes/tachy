@@ -226,6 +226,14 @@ export {
 export type { LibraryAssetType } from "./assets";
 
 export { MAX_PAGE } from "./paging";
+export type {
+  StoredItem,
+  StoredItemEntry,
+  StoredItemEvent,
+  StoredItemMessage,
+  StoredItemPage,
+  StoredItemRow,
+} from "./work-items";
 
 export { AUDIT_ACTIONS } from "./audit";
 export type { AuditAction, AuditEventRow } from "./audit";

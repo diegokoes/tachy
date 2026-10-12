@@ -64,6 +64,7 @@ export const overview = new Hono()
       counts: {
         sources: sources.connections,
         projects: sources.projects,
+        tickets: sources.work_items,
         repos: repos.repos,
         buckets: buckets.buckets,
         teams: catalog.teams,

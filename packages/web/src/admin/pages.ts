@@ -50,6 +50,7 @@ export function consoleSections(): Record<string, ConsoleSection[]> {
         n: "projects",
         add: "register project",
       },
+      { key: "tickets", label: "stored tickets", n: "tickets" },
       {
         key: "repos",
         label: "repos",

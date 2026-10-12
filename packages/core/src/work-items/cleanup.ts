@@ -1,31 +1,15 @@
 import { sql, type Db } from "../infra/db";
 import { badInput } from "../infra/errors";
-import { getCustomerIdBySlug } from "../catalog/customers";
-import { getProductIdBySlug } from "../catalog/products";
-import { getTeamIdBySlug } from "../catalog/teams";
+import {
+  CHANGED_AT,
+  NARROWING,
+  reaches,
+  resolveItemFilter,
+  type ResolvedItemFilter,
+  type StoredItemFilter,
+} from "./filter";
 
-/**
- * Which stored tickets a cleanup takes. Every field narrows; at least one has
- * to be given, so that an empty request is a mistake and not everything.
- */
-export interface StoredItemFilter {
-  /** A source connection's slug. */
-  connection?: string;
-  /** Statuses as the source spells them, matched without regard to case. */
-  statuses?: string[];
-  product?: string;
-  team?: string;
-  customer?: string;
-  /** The requester as stored, matched whole and without regard to case. */
-  requester?: string;
-  /** ISO date: tickets the source last changed before it. */
-  changedBefore?: string;
-  /**
-   * Also take tickets a knowledge entry was learned from. They are left by
-   * default: deleting one leaves the entry without its way back to the ticket.
-   */
-  includeLearnedFrom?: boolean;
-}
+export type { StoredItemFilter } from "./filter";
 
 export interface StoredItemSample {
   connection: string;
@@ -61,27 +45,9 @@ export function filterForAudit(
 
 const SAMPLE_SIZE = 10;
 
-const NARROWING: (keyof StoredItemFilter)[] = [
-  "connection",
-  "statuses",
-  "product",
-  "team",
-  "customer",
-  "requester",
-  "changedBefore",
-];
+type Resolved = ResolvedItemFilter;
 
-interface Resolved {
-  connectionId?: string;
-  statuses?: string[];
-  productId?: string;
-  teamId?: string;
-  customerId?: string;
-  requester?: string;
-  changedBefore?: Date;
-}
-
-/** Slugs to ids and the date to a date, refusing what names nothing. */
+/** The filter resolved. One that narrows nothing is a mistake and not everything. */
 async function resolve(filter: StoredItemFilter): Promise<Resolved> {
   const given = NARROWING.filter((key) => {
     const value = filter[key];
@@ -89,52 +55,12 @@ async function resolve(filter: StoredItemFilter): Promise<Resolved> {
   });
   if (!given.length)
     throw badInput(`a cleanup needs at least one of: ${NARROWING.join(", ")}`);
-
-  const resolved: Resolved = {};
-  if (filter.connection) {
-    const [connection] = await sql<{ id: string }[]>`
-      select id from source_connections where slug = ${filter.connection}
-    `;
-    if (!connection)
-      throw badInput(`unknown source connection '${filter.connection}'`);
-    resolved.connectionId = connection.id;
-  }
-  if (filter.statuses?.length)
-    resolved.statuses = filter.statuses.map((status) => status.toLowerCase());
-  if (filter.product)
-    resolved.productId = await getProductIdBySlug(filter.product);
-  if (filter.team) resolved.teamId = await getTeamIdBySlug(filter.team);
-  if (filter.customer)
-    resolved.customerId = await getCustomerIdBySlug(filter.customer);
-  if (filter.requester) resolved.requester = filter.requester.toLowerCase();
-  if (filter.changedBefore) {
-    const before = new Date(filter.changedBefore);
-    if (Number.isNaN(before.getTime()))
-      throw badInput(`'${filter.changedBefore}' is not a date`);
-    resolved.changedBefore = before;
-  }
-  return resolved;
+  return resolveItemFilter(filter);
 }
-
-/** A ticket the source never dated counts from when it was stored. */
-const CHANGED_AT = sql`coalesce(wi.source_updated_at, wi.ingested_at)`;
 
 const LEARNED_FROM = sql`
   exists (select 1 from knowledge_entries k where k.work_item_id = wi.id)
 `;
-
-function reaches(resolved: Resolved) {
-  return sql`
-    true
-    ${resolved.connectionId ? sql`and wi.source_connection_id = ${resolved.connectionId}` : sql``}
-    ${resolved.statuses ? sql`and lower(wi.status) = any(${resolved.statuses}::text[])` : sql``}
-    ${resolved.productId ? sql`and wi.product_id = ${resolved.productId}` : sql``}
-    ${resolved.teamId ? sql`and wi.team_id = ${resolved.teamId}` : sql``}
-    ${resolved.customerId ? sql`and wi.customer_id = ${resolved.customerId}` : sql``}
-    ${resolved.requester ? sql`and lower(wi.requester) = ${resolved.requester}` : sql``}
-    ${resolved.changedBefore ? sql`and ${CHANGED_AT} < ${resolved.changedBefore}` : sql``}
-  `;
-}
 
 /** The tickets a cleanup deletes: what the filter reaches, less the ones it leaves. */
 function taken(resolved: Resolved, includeLearnedFrom: boolean) {
