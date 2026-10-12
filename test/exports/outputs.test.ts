@@ -80,6 +80,8 @@ describe("output storage", () => {
   it("never lets a path or control character into the filename", () => {
     expect(safeFilename("../../etc/passwd")).toBe("passwd");
     expect(safeFilename("a/b:c*d?.xlsx")).toBe("b-c-d-.xlsx");
+    expect(safeFilename("out//report.xlsx///")).toBe("report.xlsx");
+    expect(safeFilename("///")).toBe("download");
     expect(safeFilename("")).toBe("download");
   });
 });
