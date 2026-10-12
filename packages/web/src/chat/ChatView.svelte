@@ -411,6 +411,11 @@
         return;
       }
     }
+    if (e.key === "Escape" && chat.busy) {
+      e.preventDefault();
+      void stop();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       send();
@@ -460,6 +465,8 @@
     const uploadPaths = chat.uploads.map((u) => u.path);
     chat.uploads = [];
     chat.busy = true;
+    chat.turnId = undefined;
+    stopRequested = false;
     clearArmed = false;
     snap(true);
     // Aborted when the view goes away, so a turn left running does not hold its
@@ -571,12 +578,15 @@
           if (approval) approval.status = data.approved ? "approved" : "denied";
         } else if (event === "result")
           chat.sessionId = data.sessionId as string;
-        else if (event === "error")
+        else if (event === "stopped") {
+          if (data.sessionId) chat.sessionId = data.sessionId as string;
+          addEntry({ kind: "stopped" });
+        } else if (event === "error")
           addEntry({ kind: "error", text: data.message as string });
         snap();
       }
     } catch (e) {
-      // An abort is this component going away, not something to report.
+      const aborted = e instanceof DOMException && e.name === "AbortError";
       if (e instanceof ChatRefused && e.status === 409 && e.turnId) {
         addEntry({
           kind: "running",
@@ -585,7 +595,10 @@
           stopped: false,
         });
         chat.input = message;
-      } else if (!(e instanceof DOMException && e.name === "AbortError"))
+      }
+      // Any other abort is this component going away, which reports nothing.
+      else if (aborted && stopRequested) addEntry({ kind: "stopped" });
+      else if (!aborted)
         addEntry({
           kind: "error",
           text: e instanceof Error ? e.message : String(e),
@@ -596,6 +609,31 @@
       chat.queuePosition = null;
       const answer = chat.entries[chat.entries.length - 1];
       if (readCode && answer?.kind === "assistant") answer.code = true;
+    }
+  }
+
+  /** The stop mark was pressed before the server had named the turn. */
+  let stopRequested = false;
+
+  /**
+   * Ends the turn under way. The server answers with `stopped`, which closes
+   * the stream. A turn it has not named yet has no id to stop, so its request
+   * is dropped instead, and the server gives up a turn nobody is reading.
+   */
+  async function stop() {
+    if (!chat.busy) return;
+    if (!chat.turnId) {
+      stopRequested = true;
+      turnAbort?.abort();
+      return;
+    }
+    try {
+      await stopTurn(chat.turnId);
+    } catch (e) {
+      addEntry({
+        kind: "error",
+        text: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
@@ -704,10 +742,15 @@
     } else armClear();
   }
 
-  // Both marks leave once they have nothing to act on, and focus would go with
-  // them.
+  // Every mark leaves once it has nothing to act on, and focus would go with
+  // it.
   function sendClick() {
     void send();
+    composerEl?.focus();
+  }
+
+  function stopClick() {
+    void stop();
     composerEl?.focus();
   }
 </script>
@@ -803,6 +846,11 @@
             <div class="turn">
               <span class="who err">{G.marker}error</span>
               <div class="body err">{entry.text}</div>
+            </div>
+          {:else if entry.kind === "stopped"}
+            <div class="tool">
+              <Icon name="stop" size="1em" weight={7} />
+              <span>stopped</span>
             </div>
           {:else if entry.kind === "running"}
             <div class="turn">
@@ -938,12 +986,20 @@
             {/if}
           </span>
           <span class="slot">
-            {#if chat.input.trim()}
+            {#if chat.busy}
+              <Button
+                variant="ghost"
+                icon="stop"
+                iconSize="1.25em"
+                aria-label="Stop"
+                title="Stop (esc)"
+                onclick={stopClick}
+              />
+            {:else if chat.input.trim()}
               <Button
                 variant="ghost"
                 icon="send"
                 iconSize="1.25em"
-                disabled={chat.busy}
                 aria-label="Send"
                 title="Send"
                 onclick={sendClick}

@@ -176,8 +176,8 @@ describe("chat admission", () => {
     const turnId = frames[0].data.turnId;
 
     expect((await post("ben", "/api/agent/stop", { turnId })).status).toBe(200);
-    const rest = await framesUntil(ben, (e) => e === "error");
-    expect(rest.at(-1)!.data.message).toBe("Stopped.");
+    const rest = await framesUntil(ben, (e) => e === "stopped");
+    expect(rest.at(-1)!.data).toEqual({ type: "stopped" });
 
     started[0].finish();
     await settle();

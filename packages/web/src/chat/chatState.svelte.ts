@@ -43,6 +43,8 @@ export type EntryData =
       color: string | null;
     }
   | { kind: "error"; text: string }
+  // The turn above was ended by the stop mark before it finished.
+  | { kind: "stopped" }
   | { kind: "running"; turnId: string; text: string; stopped: boolean };
 
 /** Stable per-entry key - index keys break on the export_table splice. */

@@ -228,7 +228,7 @@ export const agent = new Hono()
           await ticket.granted;
         } catch (err) {
           if (!(err instanceof AdmissionCancelled)) throw err;
-          await send("error", { type: "error", message: "Stopped." });
+          await send("stopped", { type: "stopped" });
           return;
         }
         waiting.delete(turnId);
