@@ -2,6 +2,7 @@ import type { CompactStats } from "./CompactPanel.svelte";
 import type { OutputFile } from "./OutputCard.svelte";
 import type { CreatedTicket, WorkItemFile } from "@tachy/contract";
 import type { ShownStep, WalkStep } from "../code/walkthrough";
+import type { ModelPick } from "./modelCommand";
 
 export type EntryData =
   | { kind: "user"; text: string }
@@ -69,4 +70,6 @@ export const chat = $state({
   queuePosition: null as number | null,
   uploads: [] as { path: string; filename: string; image: boolean }[],
   artifact: undefined as { id: string; title: string } | undefined,
+  /** Picked with `/model`, for this conversation only. */
+  model: undefined as ModelPick | undefined,
 });

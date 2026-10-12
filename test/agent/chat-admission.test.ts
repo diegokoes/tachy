@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearSettingsCache, setSetting } from "@tachy/core/config";
 import { createUser } from "@tachy/core/access";
-import type { AgentEvent, AgentTurn } from "@tachy/agent";
+import type { AgentConfig, AgentEvent, AgentTurn } from "@tachy/agent";
 import { createApp } from "../../packages/api/src/app";
 import { json, loginCookie } from "../http";
 import { resetData, sql } from "../database";
@@ -42,11 +42,14 @@ class FakeTurn implements AgentTurn {
 }
 
 const started: FakeTurn[] = [];
+/** What each started turn was configured with, in the order of `started`. */
+const configs: AgentConfig[] = [];
 vi.mock("@tachy/agent", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tachy/agent")>()),
-  startTurn: () => {
+  startTurn: (_prompt: string, config: AgentConfig) => {
     const turn = new FakeTurn();
     started.push(turn);
+    configs.push(config);
     return turn;
   },
 }));
@@ -56,9 +59,9 @@ afterAll(() => sql.end());
 const app = createApp({ passwordAuth: true });
 const cookies: Record<string, string> = {};
 
-async function chat(who: string) {
+async function chat(who: string, picked: Record<string, string> = {}) {
   const response = await app.request("/api/agent/chat", {
-    ...json({ message: "hi" }),
+    ...json({ message: "hi", ...picked }),
     headers: { "Content-Type": "application/json", Cookie: cookies[who] },
   });
   return response;
@@ -104,7 +107,9 @@ const settle = () => new Promise((r) => setTimeout(r, 50));
 
 beforeEach(async () => {
   await resetData();
+  await sql`delete from settings where key = 'allowed_models'`;
   started.length = 0;
+  configs.length = 0;
   for (const who of ["ana", "ben", "cai"]) {
     await createUser({
       email: `${who}@example.com`,
@@ -182,5 +187,46 @@ describe("chat admission", () => {
     started[0].finish();
     await settle();
     expect(started).toHaveLength(1);
+  });
+});
+
+describe("a conversation's own model", () => {
+  it("runs the turn on the model and effort the message names", async () => {
+    const picked = await chat("ana", {
+      model: "claude-opus-5-5",
+      effort: "high",
+    });
+    await framesUntil(picked, (e) => e === "start");
+    await settle();
+    expect(configs[0]).toMatchObject({
+      model: "claude-opus-5-5",
+      effort: "high",
+    });
+    started[0].finish();
+    await settle();
+
+    const plain = await chat("ana");
+    await framesUntil(plain, (e) => e === "start");
+    await settle();
+    expect(configs[1].model).not.toBe("claude-opus-5-5");
+    started[1].finish();
+    await settle();
+  });
+
+  it("refuses a model off the org's list, and an effort it does not know", async () => {
+    await setSetting("allowed_models", ["claude-sonnet-5"]);
+    clearSettingsCache();
+    const offList = await chat("ana", { model: "claude-opus-5-5" });
+    expect(offList.status).toBe(400);
+    expect(started).toHaveLength(0);
+
+    expect((await chat("ana", { effort: "heroic" })).status).toBe(400);
+
+    const listed = await chat("ana", { model: "claude-sonnet-5" });
+    await framesUntil(listed, (e) => e === "start");
+    await settle();
+    expect(configs[0].model).toBe("claude-sonnet-5");
+    started[0].finish();
+    await settle();
   });
 });

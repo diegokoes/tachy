@@ -16,6 +16,7 @@
   import ArtifactPanel from "./ArtifactPanel.svelte";
   import CommandMenu, {
     matchArtifacts,
+    MODEL_COMMAND,
     type CommandPick,
     type MenuCrumb,
     type MenuOption,
@@ -29,10 +30,20 @@
   import { tuckTopbar, unveilTopbar, veilTopbar } from "../shell/topbar.svelte";
   import { CHAT_UPLOAD_ACCEPT, uploadRefusal } from "@tachy/contract";
   import type {
+    AgentEffort,
     WorkItemTypeOption,
     CreatedTicket,
     WorkItemFile,
   } from "@tachy/contract";
+  import {
+    effortOptions,
+    modelOptions,
+    parseModel,
+    pickOf,
+    typedPick,
+    type ModelPick,
+  } from "./modelCommand";
+  import { agentPrefs, loadAgent } from "../settings/prefs.svelte";
   import FileTray from "../work-items/FileTray.svelte";
   import TicketComposer from "../work-items/TicketComposer.svelte";
   import TicketCard from "../work-items/TicketCard.svelte";
@@ -197,7 +208,11 @@
       : null,
   );
 
-  /** `/name` picks a command; `/artifact <query>`, `/az …` and `/code @…` pick arguments. */
+  const offeredModels = $derived(agentPrefs.models?.models ?? null);
+  const listedModels = $derived(offeredModels ?? []);
+  const modelCtx = $derived(parseModel(chat.input, offeredModels));
+
+  /** `/name` picks a command; `/artifact <query>`, `/az …`, `/code @…` and `/model …` pick arguments. */
   const cmdCtx = $derived.by(() => {
     const name = chat.input.match(/^\/([a-z0-9-]*)$/);
     if (name) return { mode: "command" as const, query: name[1] };
@@ -205,8 +220,61 @@
     if (arg) return { mode: "artifact" as const, query: arg[1] };
     if (azCtx) return { mode: "options" as const, query: azCtx.query };
     if (codeCtx) return { mode: "options" as const, query: codeCtx.query };
+    if (modelCtx) return { mode: "options" as const, query: modelCtx.query };
     return null;
   });
+
+  // Asked once per visit: the list comes from the runtime, and a failed ask
+  // repeated on every keystroke would not fare better.
+  let modelsAsked = false;
+  $effect(() => {
+    if (!modelCtx || modelsAsked) return;
+    modelsAsked = true;
+    void loadAgent();
+  });
+
+  function modelsNote() {
+    if (offeredModels?.length) return "no model matches";
+    if (offeredModels)
+      return "no list to pick from: type a model id, then enter";
+    return agentPrefs.error ?? "loading models…";
+  }
+
+  const modelMenu = $derived.by(
+    (): { options: MenuOption[]; crumb: MenuCrumb } | null => {
+      if (!modelCtx) return null;
+      const prefs = agentPrefs.prefs;
+      if (modelCtx.stage === "model")
+        return {
+          crumb: {
+            cmd: "/model",
+            param: "model",
+            desc: MODEL_COMMAND.description,
+            empty: modelsNote(),
+          },
+          options: modelOptions(
+            listedModels,
+            modelCtx.query,
+            prefs?.agent_model.value,
+          ),
+        };
+      return {
+        crumb: {
+          cmd: `/model ${modelCtx.model.label}`,
+          param: "effort",
+          desc: "how much it reasons before it answers",
+          empty: modelCtx.model.efforts.length
+            ? "no effort matches"
+            : "this model takes no effort: enter to use it",
+        },
+        options: effortOptions(
+          modelCtx.model,
+          modelCtx.query,
+          prefs?.agent_effort.value,
+        ),
+      };
+    },
+  );
 
   $effect(() => {
     if (codeCtx) ensureRepos();
@@ -313,7 +381,7 @@
       };
     },
   );
-  const optionsMenu = $derived(azMenu ?? codeMenu);
+  const optionsMenu = $derived(azMenu ?? codeMenu ?? modelMenu);
   const menuOpen = $derived(
     cmdCtx !== null && !cmdDismissed && !chat.busy && commands !== null,
   );
@@ -340,11 +408,31 @@
   function pickCommand(pick: CommandPick) {
     if (pick.kind === "builtin") chat.input = `/${pick.builtin.name} `;
     else if (pick.kind === "option" && azCtx) pickAz(pick.value);
+    else if (pick.kind === "option" && modelCtx) pickModel(pick.value);
     else if (pick.kind === "option") pickCode(pick.value);
     else {
       chat.artifact = { id: pick.artifact.id, title: pick.artifact.title };
       chat.input = "";
     }
+  }
+
+  function setModel(picked: ModelPick) {
+    chat.model = picked;
+    chat.input = "";
+  }
+
+  /** A model with efforts moves the line on to them; one without is taken. */
+  function pickModel(value: string) {
+    // Held in a local for the reason pickAz gives: the line it derives from
+    // is cleared on the way.
+    const ctx = modelCtx;
+    if (!ctx) return;
+    if (ctx.stage === "effort")
+      return setModel(pickOf(ctx.model, value as AgentEffort));
+    const model = listedModels.find((m) => m.id === value);
+    if (!model) return;
+    if (model.efforts.length) chat.input = `/model ${model.id} `;
+    else setModel(pickOf(model));
   }
 
   function pickCode(word: string) {
@@ -435,6 +523,13 @@
     const message = chat.input.trim();
     if (!message || chat.busy) return;
     if (isAzNew(message)) return openFromLine(message);
+    // A `/model` line is never a message: Enter with no row to pick takes the
+    // line when it is whole as typed, and otherwise waits for more.
+    if (modelCtx) {
+      const typed = typedPick(modelCtx, offeredModels);
+      if (typed) setModel(typed);
+      return;
+    }
     if (cmdCtx?.mode === "artifact") {
       const hits = matchArtifacts(commands?.artifacts ?? [], cmdCtx.query);
       if (hits.length === 1)
@@ -481,6 +576,8 @@
           uploadPaths: uploadPaths.length ? uploadPaths : undefined,
           artifactId: chat.artifact?.id,
           command,
+          model: chat.model?.id,
+          effort: chat.model?.effort,
         },
         turnAbort.signal,
       )) {
@@ -732,6 +829,7 @@
     chat.entries = [];
     chat.sessionId = undefined;
     chat.turnId = undefined;
+    chat.model = undefined;
   }
 
   function onClear() {
@@ -892,8 +990,23 @@
     </div>
 
     <div class="dock" bind:this={dockEl}>
-      {#if chat.uploads.length || chat.artifact || draftWaiting}
+      {#if chat.uploads.length || chat.artifact || chat.model || draftWaiting}
         <div class="attachments">
+          {#if chat.model}
+            <span class="attach model-chip">
+              <Icon name="ai" size="1em" />
+              {chat.model.label}{chat.model.effort
+                ? ` · ${chat.model.effort}`
+                : ""}
+              <button
+                class="chip-x"
+                aria-label="Back to your settings model"
+                use:tip={"Back to your settings model"}
+                onclick={() => (chat.model = undefined)}
+                ><Icon name="close" size="1em" weight={7} /></button
+              >
+            </span>
+          {/if}
           {#if draftWaiting}
             <button class="attach draft-chip" onclick={() => openComposer()}>
               <Icon name="review" size="1em" />
@@ -1339,7 +1452,8 @@
     opacity: 0.55;
     user-select: none;
   }
-  .artifact-chip {
+  .artifact-chip,
+  .model-chip {
     color: var(--accent);
   }
   .chip-x {
