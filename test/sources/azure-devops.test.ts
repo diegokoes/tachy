@@ -316,6 +316,27 @@ describe("azure-devops adapter", () => {
     });
   });
 
+  it("names who an item is assigned to, its priority and its type", async () => {
+    mockFetch({
+      ...routes,
+      "/_apis/wit/workitems/42": {
+        ...workItem,
+        fields: {
+          ...workItem.fields,
+          "System.AssignedTo": { displayName: "Bob Dev" },
+          "Microsoft.VSTS.Common.Priority": 2,
+        },
+      },
+    });
+    const item = await source().fetchItem("42");
+    expect(item).toMatchObject({
+      assignee: "Bob Dev",
+      priority: "2",
+      itemType: "Bug",
+    });
+    expect(item.listed).toBeUndefined();
+  });
+
   it("lists items per project with a JSON cursor", async () => {
     const { calls } = mockFetch({
       ...routes,
@@ -325,6 +346,7 @@ describe("azure-devops adapter", () => {
     const { items, nextCursor } = await source().listItems({});
     expect(items).toHaveLength(1);
     expect(items[0].externalId).toBe("42");
+    expect(items[0]).toMatchObject({ listed: true, itemType: "Bug" });
     expect(nextCursor).toBeUndefined();
     const wiql = calls.find((c) => c.includes("/wiql"));
     expect(wiql).toContain("timePrecision=true");

@@ -81,6 +81,52 @@ describe("freshdesk adapter", () => {
     ]);
   });
 
+  it("reads a ticket with its requester and the times it was answered and resolved", async () => {
+    const calls = mockFetch({
+      "/tickets/7?include=requester": {
+        ...ticket,
+        responder_id: 5,
+        priority: 3,
+        type: "Incident",
+        stats: { resolved_at: "2026-01-03T00:00:00Z" },
+      },
+      "/tickets/7/conversations?page=1": [],
+    });
+    const item = await source().fetchItem("7");
+    expect(calls[0]).toBe("/tickets/7?include=requester,stats");
+    expect(item).toMatchObject({
+      assignee: "5",
+      priority: "3",
+      itemType: "Incident",
+      raw: { stats: { resolved_at: "2026-01-03T00:00:00Z" } },
+    });
+    expect(item.listed).toBeUndefined();
+  });
+
+  it("lists tickets as listings, with their stats and no messages", async () => {
+    const calls = mockFetch({
+      "/tickets?": [
+        { ...ticket, responder_id: 5 },
+        { ...ticket, id: 8, group_id: 12 },
+      ],
+    });
+    const { items, nextCursor } = await source().listItems({
+      updatedSince: "2026-01-01T00:00:00Z",
+      groupKey: "11",
+    });
+    const query = new URLSearchParams(calls[0].split("?")[1]);
+    expect(query.get("include")).toBe("stats");
+    expect(query.get("updated_since")).toBe("2026-01-01T00:00:00Z");
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      externalId: "7",
+      assignee: "5",
+      listed: true,
+      messages: [],
+    });
+    expect(nextCursor).toBeUndefined();
+  });
+
   it("lists each message's files by id and name, and leaves their signed addresses behind", async () => {
     mockFetch({
       "/tickets/7?include=requester": {
