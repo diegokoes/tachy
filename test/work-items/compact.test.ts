@@ -623,6 +623,22 @@ describe("compactForLlm (ingest-path rule)", () => {
     expect(forLlm.item).toBe(i);
   });
 
+  it("takes out the history and the company record, which no model reads", () => {
+    const i: RawWorkItem = {
+      ...item([message({ externalId: "1", bodyText: "algo corto pero real" })]),
+      events: [
+        { externalId: "created", occurredAt: meta.opened, field: "created" },
+      ],
+      customerKey: "9",
+      customerRecord: { name: "Acme", record: { tier: "gold" } },
+    };
+    const sent = JSON.stringify(compactForLlm(i).item);
+    expect(sent).not.toContain("events");
+    expect(sent).not.toContain("Acme");
+    expect(JSON.parse(sent).customerKey).toBe("9");
+    expect(i.events).toHaveLength(1);
+  });
+
   it("leaves a long ticket alone when there is nothing to gain", () => {
     // distinct paragraphs, no quoting or repetition: compaction cannot help
     const i = item(

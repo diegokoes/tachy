@@ -22,6 +22,7 @@ import type {
 import { composerForm, creatableTypes, templateValues } from "./composer";
 import { createWorkItem, explainAdoError, validateWorkItem } from "./create";
 import { workItemDefaults } from "./fields";
+import { updateEvents } from "./history";
 import {
   createAdoClient,
   type AdoRelation,
@@ -473,7 +474,16 @@ export const createAzureDevopsSource: SourceFactory = (
       const messages = await itemMessages(workItem);
       const project = workItem.fields?.["System.TeamProject"];
       const relations = await resolveRelations(workItem, project ?? "");
-      return toItem(workItem, messages, relations);
+      // Best effort: the item reads without its history.
+      const updates = await client
+        .getUpdates(externalId, workItem.rev)
+        .catch(() => null);
+      return {
+        ...toItem(workItem, messages, relations),
+        ...(updates
+          ? { events: updateEvents(updates), historyComplete: true as const }
+          : {}),
+      };
     },
 
     async openAttachment(externalId, attachmentId) {

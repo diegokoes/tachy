@@ -31,6 +31,31 @@ export interface RawMessage {
   createdAt?: string;
 }
 
+/**
+ * Something that happened to an item besides a message: a field that changed,
+ * a moment the source reports, a link added.
+ */
+export interface RawEvent {
+  /** The same however often the change is read, and unique within the item. */
+  externalId: string;
+  occurredAt: string;
+  /** Who did it, as the source names them. */
+  actor?: string;
+  /**
+   * What changed: `status`, `assignee`, `group`, `priority`, `type`, `link`,
+   * `created`, or the source's own name for anything else.
+   */
+  field: string;
+  oldValue?: string | null;
+  newValue?: string | null;
+}
+
+/** A source's own record of the customer an item belongs to. */
+export interface RawCustomerRecord {
+  name?: string;
+  record: Record<string, unknown>;
+}
+
 export interface RawWorkItem {
   externalId: string;
   externalUrl?: string;
@@ -72,4 +97,18 @@ export interface RawWorkItem {
    */
   listed?: true;
   messages: RawMessage[];
+  /**
+   * What the source itself records as having happened. Kept with the item,
+   * and sent to no model: it runs long and names people.
+   */
+  events?: RawEvent[];
+  /**
+   * `events` holds every field change the item has had, so none is inferred
+   * from two reads differing.
+   */
+  historyComplete?: true;
+  /** The source's id for its record of the customer: a Freshdesk company id. */
+  customerKey?: string;
+  /** That record, when this read fetched it. Kept, and sent to no model. */
+  customerRecord?: RawCustomerRecord;
 }

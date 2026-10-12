@@ -314,6 +314,10 @@ create table work_items (
     assignee              text,
     priority              text,
     item_type             text,
+    -- The source's id for its own record of the customer: a Freshdesk company
+    -- id. Joined to source_customer_records by connection and key, and not by
+    -- a reference: a listing knows the key before any record is stored.
+    external_customer_key text,
     raw                   jsonb,
     source_created_at     timestamptz,
     source_updated_at     timestamptz,
@@ -330,6 +334,7 @@ create index work_items_team_idx        on work_items(team_id);
 create index work_items_customer_idx    on work_items(customer_id);
 create index work_items_updated_idx     on work_items(source_connection_id, source_updated_at);
 create index work_items_group_key_idx   on work_items(source_connection_id, external_group_key);
+create index work_items_customer_key_idx on work_items(source_connection_id, external_customer_key);
 
 create table work_item_messages (
     id              uuid primary key default gen_random_uuid(),
@@ -350,6 +355,44 @@ create table work_item_messages (
 );
 
 create index work_item_messages_item_idx on work_item_messages(work_item_id, created_at);
+
+-- What happened to an item besides its messages: a field that changed, a
+-- moment the source reports (first response, resolved), a link added. With the
+-- messages, in time order, this is the item's timeline.
+create table work_item_events (
+    id              uuid primary key default gen_random_uuid(),
+    work_item_id    uuid not null references work_items(id) on delete cascade,
+    -- The same however often the change is read.
+    external_id     text not null,
+    occurred_at     timestamptz not null,
+    actor           text,
+    -- status, assignee, group, priority, type, link, created, or the source's
+    -- own name for anything else.
+    field           text not null,
+    old_value       text,
+    new_value       text,
+    -- 'source': the source recorded it, at that time and by that person.
+    -- 'observed': two reads differed, so it happened at or before occurred_at,
+    -- and a change undone between the reads was never seen.
+    origin          text not null check (origin in ('source', 'observed')),
+    unique (work_item_id, external_id)
+);
+
+create index work_item_events_item_idx  on work_item_events(work_item_id, occurred_at);
+create index work_item_events_field_idx on work_item_events(field, occurred_at);
+
+-- A source's own record of a customer, as a Freshdesk company is: one per
+-- connection and id, however many items belong to it, refreshed when one of
+-- them is fetched.
+create table source_customer_records (
+    id                    uuid primary key default gen_random_uuid(),
+    source_connection_id  uuid not null references source_connections(id) on delete cascade,
+    external_id           text not null,
+    name                  text,
+    record                jsonb not null,
+    fetched_at            timestamptz not null default now(),
+    unique (source_connection_id, external_id)
+);
 
 -- "this Freshdesk ticket is tracked by ADO #50912": written when a fetched item
 -- mentions work item ids and when one is created from a ticket. The target is
