@@ -1,5 +1,6 @@
 /** Reference docs, and the freeform context they are drafted from. */
 import { z } from "zod";
+import { parseAttachmentRef } from "@tachy/core";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import { getCustomerIdBySlug } from "@tachy/core/catalog";
 import {
@@ -30,7 +31,7 @@ import { extractSource } from "../extract";
 import { tool } from "../server";
 import {
   GRADE_NOTE,
-  IMAGE_WITHHELD,
+  imageWithheld,
   PLACEHOLDER_NOTE,
   out,
   outScrubbed,
@@ -73,7 +74,12 @@ async function shownImage(
   images: ModelImage[],
 ) {
   if (!(source.imagesAllowed ?? globalImagesAllowed()))
-    return { source: source.source, note: IMAGE_WITHHELD };
+    return {
+      source: source.source,
+      note: imageWithheld(
+        parseAttachmentRef(source.source) ? "ticket" : "upload",
+      ),
+    };
   const image = await imageForModel(source.image.bytes);
   images.push(image);
   return {
