@@ -65,6 +65,31 @@ const convo = (id: number) => ({
   created_at: `2026-01-02T00:00:00Z`,
 });
 
+const listed = (id: number, updatedAt: string) => ({
+  ...ticket,
+  id,
+  updated_at: updatedAt,
+});
+
+/** Answers each ticket listing from its query, and returns the queries asked. */
+function mockListing(pageOf: (query: URLSearchParams) => unknown[]) {
+  const queries: URLSearchParams[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      const query = new URL(url).searchParams;
+      queries.push(query);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => pageOf(query),
+        text: async () => "",
+      } as Response;
+    }),
+  );
+  return queries;
+}
+
 describe("freshdesk adapter", () => {
   it("maps a ticket + conversations into a normalized work item", async () => {
     mockFetch({
@@ -199,6 +224,93 @@ describe("freshdesk adapter", () => {
     });
     expect(items[0].customerRecord).toBeUndefined();
     expect(nextCursor).toBeUndefined();
+  });
+
+  it("restarts a full page a second before its last change and leaves out what it reads again unchanged", async () => {
+    const full = [
+      ...Array.from({ length: 97 }, (_, i) =>
+        listed(i + 1, "2026-03-01T10:01:00Z"),
+      ),
+      listed(98, "2026-03-01T10:04:59Z"),
+      listed(99, "2026-03-01T10:05:00Z"),
+      listed(100, "2026-03-01T10:05:00Z"),
+    ];
+    const queries = mockListing((query) =>
+      query.get("updated_since") === "2026-03-01T10:00:00Z"
+        ? full
+        : [
+            full[97],
+            full[98],
+            listed(100, "2026-03-01T10:05:30Z"),
+            listed(101, "2026-03-01T10:06:00Z"),
+          ],
+    );
+
+    const first = await source().listItems({
+      updatedSince: "2026-03-01T10:00:00.500Z",
+    });
+    expect(first.items).toHaveLength(100);
+    expect(JSON.parse(first.nextCursor!)).toEqual({
+      since: "2026-03-01T10:04:59.000Z",
+      page: 1,
+      repeated: [
+        "98@2026-03-01T10:04:59Z",
+        "99@2026-03-01T10:05:00Z",
+        "100@2026-03-01T10:05:00Z",
+      ],
+    });
+
+    const second = await source().listItems({ cursor: first.nextCursor });
+    expect(queries[1].get("updated_since")).toBe("2026-03-01T10:04:59Z");
+    expect(queries[1].get("page")).toBe("1");
+    // 100 changed between the two reads, so it is handed over again.
+    expect(second.items.map((item) => item.externalId)).toEqual(["100", "101"]);
+    expect(second.nextCursor).toBeUndefined();
+  });
+
+  it("pages on when a full page ends in the second it started in", async () => {
+    const queries = mockListing(() =>
+      Array.from({ length: 100 }, (_, i) =>
+        listed(i + 1, "2026-03-01T10:00:00Z"),
+      ),
+    );
+    const { nextCursor } = await source().listItems({
+      updatedSince: "2026-03-01T10:00:00Z",
+    });
+    expect(JSON.parse(nextCursor!)).toEqual({
+      since: "2026-03-01T10:00:00Z",
+      page: 2,
+      repeated: [],
+    });
+    await source().listItems({ cursor: nextCursor });
+    expect(queries[1].get("page")).toBe("2");
+  });
+
+  it("pages a listing that was given no start", async () => {
+    const queries = mockListing(() =>
+      Array.from({ length: 100 }, (_, i) =>
+        listed(i + 1, `2026-03-01T10:${String(i % 60).padStart(2, "0")}:00Z`),
+      ),
+    );
+    const { nextCursor } = await source().listItems({});
+    expect(queries[0].has("updated_since")).toBe(false);
+    expect(JSON.parse(nextCursor!)).toEqual({ page: 2, repeated: [] });
+  });
+
+  it("stops at the pages one listing gives", async () => {
+    mockListing(() => []);
+    await expect(
+      source().listItems({
+        cursor: JSON.stringify({ page: 301, repeated: [] }),
+      }),
+    ).rejects.toThrow(/300 full pages from one start \(none given\)/);
+  });
+
+  it("refuses a start that is not a date", async () => {
+    mockListing(() => []);
+    await expect(
+      source().listItems({ updatedSince: "last week" }),
+    ).rejects.toThrow(/invalid updatedSince date: last week/);
   });
 
   it("lists each message's files by id and name, and leaves their signed addresses behind", async () => {

@@ -29,6 +29,12 @@ import type {
 } from "@tachy/core/sources";
 
 const PER_PAGE = 100;
+/**
+ * Pages one listing gives: "A maximum of 300 pages (30000 tickets) will be
+ * returned." https://developers.freshdesk.com/api/#list_all_tickets (v2)
+ */
+const MAX_LIST_PAGES = 300;
+const SECOND_MS = 1000;
 /** Conversations page at the API default: `per_page` is unreliable there. */
 const CONVERSATIONS_PER_PAGE = 30;
 const MAX_AGENT_PAGES = 5;
@@ -306,6 +312,56 @@ function ticketEvents(ticket: FreshdeskTicket): RawEvent[] {
     });
   }
   return events;
+}
+
+/** Where a listing reads on. */
+interface ListCursor {
+  /** The start the listing is asked from. None: the source's own default. */
+  since?: string;
+  page: number;
+  /** `listedKey` of tickets handed over that a read from `since` returns again. */
+  repeated: string[];
+}
+
+/** A ticket as one listing saw it: changed since, it is another. */
+const listedKey = (ticket: FreshdeskTicket) =>
+  `${ticket.id}@${ticket.updated_at ?? ""}`;
+
+/** A start as the reference writes one: UTC, to the second. */
+function toUpdatedSince(isoDate: string): string {
+  const start = new Date(isoDate);
+  if (Number.isNaN(start.getTime()))
+    throw badInput(`invalid updatedSince date: ${isoDate}`);
+  return start.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+/**
+ * Where to read on after a full page. A listing by change time restarts a
+ * second before the page's last change: a ticket changing meanwhile cannot
+ * move an unread one onto a page already read, and no start runs to
+ * `MAX_LIST_PAGES`. The second covers a start that excludes its own instant.
+ * A page that ends where it started is paged, as a listing with no start is.
+ */
+function nextListCursor(
+  cursor: ListCursor,
+  tickets: FreshdeskTicket[],
+): ListCursor {
+  const paged = { ...cursor, page: cursor.page + 1 };
+  if (!cursor.since) return paged;
+  const changedMs = tickets.map((ticket) =>
+    Date.parse(ticket.updated_at ?? ""),
+  );
+  const lastChangedMs = Math.max(...changedMs.filter(Number.isFinite));
+  const restartMs =
+    Math.floor(lastChangedMs / SECOND_MS) * SECOND_MS - SECOND_MS;
+  if (!(restartMs > Date.parse(cursor.since))) return paged;
+  return {
+    since: new Date(restartMs).toISOString(),
+    page: 1,
+    repeated: tickets
+      .filter((ticket) => Date.parse(ticket.updated_at ?? "") >= restartMs)
+      .map(listedKey),
+  };
 }
 
 /** Where a default ticket field sits on a ticket, by the field's name. */
@@ -638,29 +694,42 @@ export const createFreshdeskSource: SourceFactory = (
     },
 
     async listItems(opts: ListOptions) {
+      const cursor: ListCursor = opts.cursor
+        ? JSON.parse(opts.cursor)
+        : { since: opts.updatedSince, page: 1, repeated: [] };
+      if (cursor.page > MAX_LIST_PAGES)
+        throw new Error(
+          `Freshdesk gave ${MAX_LIST_PAGES} full pages from one start (${cursor.since ?? "none given"}) and lists no further; stopped`,
+        );
       const params = new URLSearchParams();
       params.set("per_page", String(PER_PAGE));
       params.set("order_by", "updated_at");
       params.set("order_type", "asc");
-      if (opts.updatedSince) params.set("updated_since", opts.updatedSince);
+      if (cursor.since)
+        params.set("updated_since", toUpdatedSince(cursor.since));
       // The times a ticket was first answered, resolved and closed.
       params.set("include", "stats");
-      const page = opts.cursor ? Number(opts.cursor) : 1;
-      params.set("page", String(page));
+      params.set("page", String(cursor.page));
 
       const list = await get<FreshdeskTicket[]>(
         `/tickets?${params.toString()}`,
       );
-      const raw = Array.isArray(list) ? list : [];
-      let items = raw.map((t): RawWorkItem => ({
-        ...metadataToItem(t, []),
-        listed: true,
-      }));
+      const tickets = Array.isArray(list) ? list : [];
+      const repeated = new Set(cursor.repeated);
+      let items = tickets
+        .filter((ticket) => !repeated.has(listedKey(ticket)))
+        .map((ticket): RawWorkItem => ({
+          ...metadataToItem(ticket, []),
+          listed: true,
+        }));
       if (opts.groupKey)
         items = items.filter((i) => i.groupKey === opts.groupKey);
 
-      const nextCursor = raw.length < PER_PAGE ? undefined : String(page + 1);
-      return { items, nextCursor };
+      if (tickets.length < PER_PAGE) return { items };
+      return {
+        items,
+        nextCursor: JSON.stringify(nextListCursor(cursor, tickets)),
+      };
     },
 
     async deleteNote(messageId) {
