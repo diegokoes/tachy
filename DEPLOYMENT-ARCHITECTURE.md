@@ -1151,6 +1151,14 @@ both live in Postgres with a TTL.
   two redirects, so it is listed from the HTML and found again the same way,
   by reading the messages. A picture a message only links from elsewhere is
   left out.
+- **A summary's files are links** back to that route, when the server knows
+  its own address (`TACHY_PUBLIC_ORIGINS`, which the production overlay fills
+  from `TACHY_HOSTNAME` and `TACHY_HOST_IP`). The link carries the address the
+  summary's writer was signed in on, since a session belongs to the name it
+  was opened under; a request from an address not on the list, or none, gets
+  the first. Only a file the ticket lists is linked, and only on a source
+  that opens files. The reader needs a tachy session and their own source
+  token, as in the chat; the note holds no address of the source's.
 - **Under a connection's redaction** a file's name is scrubbed, its text is
   scrubbed when read, and an image is withheld from the model unless that
   connection's own switch (`config.redaction.images`) allows it.

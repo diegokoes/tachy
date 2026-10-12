@@ -4,7 +4,7 @@
  */
 import { z } from "zod";
 import { TokenMap } from "@tachy/core/compliance";
-import { MAX_ASSET_BYTES } from "@tachy/core";
+import { MAX_ASSET_BYTES, parseAttachmentRef } from "@tachy/core";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import {
   extractFile,
@@ -23,7 +23,7 @@ import { requireCanEdit } from "../permissions";
 import { openSource } from "../extract";
 import { memberField, textWindowFields } from "../fields";
 import {
-  IMAGE_WITHHELD,
+  imageWithheld,
   PLACEHOLDER_NOTE,
   out,
   outWithImages,
@@ -80,7 +80,10 @@ tool(
     const { file, redact, imagesAllowed } = await openSource(path, { member });
     if (isImageFile(file)) {
       if (!imagesAllowed)
-        return out({ file: file.filename, note: IMAGE_WITHHELD });
+        return out({
+          file: file.filename,
+          note: imageWithheld(parseAttachmentRef(path) ? "ticket" : "upload"),
+        });
       const image = await imageForModel(file.bytes);
       return outWithImages(
         {

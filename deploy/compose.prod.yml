@@ -73,6 +73,9 @@ services:
       TACHY_MCP_DB_PASSWORD: ${TACHY_MCP_DB_PASSWORD:?set TACHY_MCP_DB_PASSWORD (openssl rand -hex 32)}
       # Caddy overwrites X-Forwarded-For, so it names the client here.
       TACHY_BEHIND_PROXY: "true"
+      # Where people reach this server, for the links it writes into a ticket
+      # note: the names Caddy answers to, unless .env says otherwise.
+      TACHY_PUBLIC_ORIGINS: ${TACHY_PUBLIC_ORIGINS:-https://${TACHY_HOSTNAME}${TACHY_HOST_IP:+,https://${TACHY_HOST_IP}}}
       TACHY_DB_POOL_MAX: ${TACHY_API_DB_POOL_MAX:-15}
       # Chat turns at once, sized to mem_limit below (§3.2). A cap saved in
       # Admin › system wins over it.

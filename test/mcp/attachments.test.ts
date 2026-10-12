@@ -195,6 +195,8 @@ describe("reading a ticket's file", () => {
     const image = await call("read_file", { path: SCREEN });
     expect(image.images).toHaveLength(0);
     expect(image.json.note).toMatch(/withheld: PII redaction is on/);
+    // A ticket's file: the switch is its connection's.
+    expect(image.json.note).toMatch(/this connection in console > sources/);
 
     const text = await call("read_file", { path: LOG });
     expect(text.json.text).toBe("ERROR timeout, mail [EMAIL_1]");
@@ -220,7 +222,7 @@ describe("reading a ticket's file", () => {
     await setRedaction({ enabled: true });
     const loaded = await call("ingest_context", { paths: [SCREEN, LOG] });
     expect(loaded.images).toHaveLength(0);
-    expect(loaded.json.sources[0].note).toMatch(/withheld/);
+    expect(loaded.json.sources[0].note).toMatch(/console > sources/);
     expect(loaded.json.sources[1].text).toBe("ERROR timeout, mail [EMAIL_1]");
     expect(loaded.json.redaction).toMatch(/intentional redactions/);
   });

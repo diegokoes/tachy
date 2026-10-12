@@ -5,6 +5,7 @@ import type {
   WorkItemSource,
 } from "@tachy/core/sources";
 import {
+  fileLinker,
   listFiles,
   readAttachment,
   readAttachmentBytes,
@@ -91,6 +92,39 @@ describe("listFiles", () => {
     expect(files).toHaveLength(2);
     expect(files.every((file) => file.path === undefined)).toBe(true);
     expect(listFiles(item)[0].path).toBeUndefined();
+  });
+});
+
+describe("fileLinker", () => {
+  const linkOf = fileLinker(item, {
+    source: "acme-fd",
+    origin: "https://tachy.test",
+  });
+
+  it("links a file the item lists to the route that opens it", () => {
+    expect(linkOf("attachment:acme-fd/4711/900")).toBe(
+      "https://tachy.test/api/work-items/acme-fd/4711/attachments/900",
+    );
+    expect(linkOf("attachment:acme-fd/4711/901")).toBe(
+      "https://tachy.test/api/work-items/acme-fd/4711/attachments/901",
+    );
+  });
+
+  it("gives no link to another item's file, an unlisted one, or text that is no reference", () => {
+    for (const path of [
+      "attachment:acme-fd/4712/900",
+      "attachment:other-fd/4711/900",
+      "attachment:acme-fd/4711/999",
+      "upload:0b0e2a7e-1111-4222-8333-444455556666/screen.png",
+      "https://evil.example/screen.png",
+      "screen.png",
+    ])
+      expect(linkOf(path)).toBeNull();
+  });
+
+  it("gives no link on a server that does not know its own address", () => {
+    const unplaced = fileLinker(item, { source: "acme-fd", origin: undefined });
+    expect(unplaced("attachment:acme-fd/4711/900")).toBeNull();
   });
 });
 
