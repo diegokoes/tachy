@@ -65,6 +65,25 @@
     mode: "0644"
   notify: Restart docker
 
+- name: A place for Docker's unit overrides
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    mode: "0755"
+
+# Docker copies the host's nameservers into a container when it starts it, and
+# at boot it restarts the containers itself, ahead of tachy.service. With
+# ifupdown, network-online.target is reached before dhcpcd writes
+# /etc/resolv.conf. A host that never resolves the name starts Docker anyway.
+- name: Docker starts once the host resolves names
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/docker.service.d/wait-for-dns.conf
+    content: |
+      [Service]
+      ExecStartPre=-/usr/bin/timeout {{ dns_wait_seconds }} /bin/sh -c 'until getent hosts {{ dns_probe_name }} >/dev/null; do sleep 1; done'
+    mode: "0644"
+  notify: Reload systemd
+
 - name: Docker starts at boot
   ansible.builtin.systemd_service:
     name: docker
