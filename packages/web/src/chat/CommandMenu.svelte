@@ -45,6 +45,13 @@
     description: "Run this conversation on another model",
   };
 
+  /** Client-side, and the only command there is while a turn runs. */
+  export const STOP_COMMAND: BuiltinCommandMeta = {
+    name: "stop",
+    args: "",
+    description: "Stop the turn that is running",
+  };
+
   export function matchArtifacts(
     artifacts: CommandArtifactMeta[],
     query: string,
@@ -66,6 +73,7 @@
     artifacts,
     options = [],
     crumb,
+    running = false,
     onpick,
   }: {
     mode?: CommandMode;
@@ -74,6 +82,8 @@
     artifacts: CommandArtifactMeta[];
     options?: MenuOption[];
     crumb?: MenuCrumb;
+    /** A turn is under way: nothing can be started, so only stop is offered. */
+    running?: boolean;
     onpick: (pick: CommandPick) => void;
   } = $props();
 
@@ -106,7 +116,10 @@
         desc: a.description ?? "",
         pick: { kind: "artifact", artifact: a } as CommandPick,
       }));
-    return [...builtins, ARTIFACT_COMMAND, MODEL_COMMAND]
+    const offered = running
+      ? [STOP_COMMAND]
+      : [...builtins, ARTIFACT_COMMAND, MODEL_COMMAND];
+    return offered
       .filter((b) => b.name.startsWith(query.toLowerCase()))
       .map((b) => ({
         key: `b:${b.name}`,

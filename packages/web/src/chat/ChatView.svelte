@@ -17,6 +17,7 @@
   import CommandMenu, {
     matchArtifacts,
     MODEL_COMMAND,
+    STOP_COMMAND,
     type CommandPick,
     type MenuCrumb,
     type MenuOption,
@@ -383,7 +384,11 @@
   );
   const optionsMenu = $derived(azMenu ?? codeMenu ?? modelMenu);
   const menuOpen = $derived(
-    cmdCtx !== null && !cmdDismissed && !chat.busy && commands !== null,
+    cmdCtx !== null &&
+      !cmdDismissed &&
+      commands !== null &&
+      // A turn under way leaves one command to offer: the one that stops it.
+      (!chat.busy || cmdCtx.mode === "command"),
   );
 
   $effect(() => {
@@ -406,7 +411,10 @@
   });
 
   function pickCommand(pick: CommandPick) {
-    if (pick.kind === "builtin") chat.input = `/${pick.builtin.name} `;
+    if (pick.kind === "builtin" && pick.builtin.name === STOP_COMMAND.name) {
+      chat.input = "";
+      void stop();
+    } else if (pick.kind === "builtin") chat.input = `/${pick.builtin.name} `;
     else if (pick.kind === "option" && azCtx) pickAz(pick.value);
     else if (pick.kind === "option" && modelCtx) pickModel(pick.value);
     else if (pick.kind === "option") pickCode(pick.value);
@@ -499,11 +507,6 @@
         return;
       }
     }
-    if (e.key === "Escape" && chat.busy) {
-      e.preventDefault();
-      void stop();
-      return;
-    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       send();
@@ -521,6 +524,11 @@
 
   async function send() {
     const message = chat.input.trim();
+    // Typed whole and entered with its row dismissed, it still is no message.
+    if (message === `/${STOP_COMMAND.name}`) {
+      chat.input = "";
+      return stop();
+    }
     if (!message || chat.busy) return;
     if (isAzNew(message)) return openFromLine(message);
     // A `/model` line is never a message: Enter with no row to pick takes the
@@ -1052,6 +1060,7 @@
             mode={cmdCtx?.mode ?? "command"}
             query={cmdCtx?.query ?? ""}
             builtins={commands.builtins}
+            running={chat.busy}
             artifacts={commands.artifacts}
             options={optionsMenu?.options}
             crumb={optionsMenu?.crumb}
@@ -1105,7 +1114,7 @@
                 icon="stop"
                 iconSize="1.25em"
                 aria-label="Stop"
-                title="Stop (esc)"
+                title="Stop (/stop)"
                 onclick={stopClick}
               />
             {:else if chat.input.trim()}
