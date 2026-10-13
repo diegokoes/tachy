@@ -134,7 +134,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: 0.75rem;
+    width: var(--scrollbar-w);
     align-self: stretch;
     overflow: hidden;
     cursor: pointer;

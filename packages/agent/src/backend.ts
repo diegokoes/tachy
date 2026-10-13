@@ -79,7 +79,10 @@ export type AgentEvent =
       sessionId: string;
       usage?: TurnUsage;
     }
-  | { type: "error"; message: string; kind?: AgentErrorKind };
+  | { type: "error"; message: string; kind?: AgentErrorKind }
+  // The turn was aborted before it finished. `sessionId` is set once an answer
+  // is on the transcript, which gives a follow-up a session to resume.
+  | { type: "stopped"; sessionId?: string };
 
 export interface Decision {
   approve: boolean;

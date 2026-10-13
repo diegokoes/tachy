@@ -109,4 +109,25 @@ describe("reflow", () => {
     reflow([undefined, null])();
     expect(from).not.toHaveBeenCalled();
   });
+
+  it("says when the nodes have landed", () => {
+    const from = vi.spyOn(Flip, "from");
+    const landed = vi.fn();
+    reflow([box()], { onComplete: landed })();
+    expect(landed).not.toHaveBeenCalled();
+    expect(from.mock.calls[0][1]).toMatchObject({ onComplete: landed });
+  });
+
+  // A caller waiting on the landing must not wait for a tween that never runs.
+  it("says so at once when nothing travels", () => {
+    const landed = vi.fn();
+    const play = reflow([undefined], { onComplete: landed });
+    expect(landed).not.toHaveBeenCalled();
+    play();
+    expect(landed).toHaveBeenCalledOnce();
+
+    media.reduced = true;
+    reflow([box()], { onComplete: landed })();
+    expect(landed).toHaveBeenCalledTimes(2);
+  });
 });

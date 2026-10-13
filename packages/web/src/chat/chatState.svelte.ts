@@ -2,6 +2,7 @@ import type { CompactStats } from "./CompactPanel.svelte";
 import type { OutputFile } from "./OutputCard.svelte";
 import type { CreatedTicket, WorkItemFile } from "@tachy/contract";
 import type { ShownStep, WalkStep } from "../code/walkthrough";
+import type { ModelPick } from "./modelCommand";
 
 export type EntryData =
   | { kind: "user"; text: string }
@@ -43,6 +44,8 @@ export type EntryData =
       color: string | null;
     }
   | { kind: "error"; text: string }
+  // The turn above was ended by the stop mark before it finished.
+  | { kind: "stopped" }
   | { kind: "running"; turnId: string; text: string; stopped: boolean };
 
 /** Stable per-entry key - index keys break on the export_table splice. */
@@ -67,4 +70,6 @@ export const chat = $state({
   queuePosition: null as number | null,
   uploads: [] as { path: string; filename: string; image: boolean }[],
   artifact: undefined as { id: string; title: string } | undefined,
+  /** Picked with `/model`, for this conversation only. */
+  model: undefined as ModelPick | undefined,
 });
