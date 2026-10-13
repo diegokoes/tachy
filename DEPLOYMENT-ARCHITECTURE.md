@@ -2482,6 +2482,15 @@ once fails the whole command, and the services after it are never started. So
 `tachy.service` has `Restart=on-failure` and runs it again every 15 s until the
 stack is up.
 
+**Docker waits for name resolution at boot.** Docker copies the host's
+nameservers into a container when it starts it, and at boot the daemon restarts
+the containers itself, before `tachy.service` runs. With ifupdown,
+`network-online.target` is reached before dhcpcd writes `/etc/resolv.conf`, so
+a container started then resolves no outside name until it is restarted. The
+drop-in `docker.service.d/wait-for-dns.conf` holds the daemon until the host
+resolves `dns_probe_name`, for at most `dns_wait_seconds` (60); after that
+Docker starts anyway, so a host with no uplink still serves the LAN.
+
 ## 10. CI/CD
 
 **GitHub Actions**
