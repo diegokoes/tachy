@@ -19,7 +19,12 @@ import {
 } from "@tachy/core/config";
 import { getUserByEmail, userSoleTeamId } from "@tachy/core/access";
 import { getArtifact, listVisibleArtifacts } from "@tachy/core/exports";
-import { fileFamily, uploadLimitBytes, uploadRef } from "@tachy/core";
+import {
+  AGENT_EFFORTS,
+  fileFamily,
+  uploadLimitBytes,
+  uploadRef,
+} from "@tachy/core";
 import { readUpload, saveUpload, uploadLimits } from "@tachy/core/chat";
 import { imageForModel, inspectFile, isImageFile } from "@tachy/core/files";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
@@ -44,6 +49,7 @@ import {
   mcpConfig,
   systemPrompt,
   turnAutoApprove,
+  turnChoice,
 } from "../turn-config";
 
 const ABANDONED_MS = 30_000;
@@ -57,6 +63,9 @@ const chatSchema = z.object({
   command: z
     .object({ name: z.string(), args: z.string().default("") })
     .optional(),
+  // The conversation's own pick, in place of the caller's preference.
+  model: z.string().min(1).max(200).optional(),
+  effort: z.enum(AGENT_EFFORTS).optional(),
 });
 
 const approveSchema = z.object({
@@ -120,8 +129,15 @@ export const agent = new Hono()
         "chat is paused for maintenance; everything else keeps working",
       );
     }
-    const { message, sessionId, uploadPaths, artifactId, command } =
-      c.req.valid("json");
+    const {
+      message,
+      sessionId,
+      uploadPaths,
+      artifactId,
+      command,
+      model,
+      effort,
+    } = c.req.valid("json");
     const userEmail = getIdentity(c)?.email ?? env.userEmail;
     const userKey = userEmail ?? "anonymous";
 
@@ -153,7 +169,7 @@ export const agent = new Hono()
     const turnId = randomUUID();
     const settings = await effectiveSettings();
     const identity = getIdentity(c);
-    const base = await mcpConfig(userEmail, settings, {
+    const preferred = await mcpConfig(userEmail, settings, {
       id: turnId,
       actorRole:
         // The shared token and open mode are an app admin with no user row;
@@ -161,6 +177,7 @@ export const agent = new Hono()
         !identity?.email && identity?.role === "admin" ? "admin" : undefined,
       origin: c.req.header("origin"),
     });
+    const base = turnChoice(preferred, { model, effort });
     const requestId = requestIdOf(c);
     if (requestId) base.mcpEnv.TACHY_REQUEST_ID = requestId;
     const config: AgentConfig = {
@@ -228,7 +245,7 @@ export const agent = new Hono()
           await ticket.granted;
         } catch (err) {
           if (!(err instanceof AdmissionCancelled)) throw err;
-          await send("error", { type: "error", message: "Stopped." });
+          await send("stopped", { type: "stopped" });
           return;
         }
         waiting.delete(turnId);

@@ -4,7 +4,7 @@ import {
   findCommand,
   commandAutoApprove,
 } from "../../packages/api/src/commands";
-import { buildPrompt } from "../../packages/api/src/turn-config";
+import { buildPrompt, turnChoice } from "../../packages/api/src/turn-config";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -198,5 +198,45 @@ describe("slash command registry", () => {
     expect(prompt.indexOf("<command")).toBeLessThan(
       prompt.indexOf("<artifact"),
     );
+  });
+});
+
+describe("a conversation's own model", () => {
+  const preferred = { model: "claude-sonnet-5", effort: "medium" as const };
+
+  it("leaves the preference alone when nothing was picked", () => {
+    expect(turnChoice(preferred, {})).toEqual(preferred);
+  });
+
+  it("lays the picked model and effort over the preference", () => {
+    expect(turnChoice(preferred, { model: "claude-opus-5" })).toEqual({
+      model: "claude-opus-5",
+      effort: "medium",
+    });
+    expect(
+      turnChoice(preferred, { model: "claude-opus-5", effort: "max" }),
+    ).toEqual({ model: "claude-opus-5", effort: "max" });
+    expect(turnChoice(preferred, { effort: "low" })).toEqual({
+      model: "claude-sonnet-5",
+      effort: "low",
+    });
+  });
+
+  // effectiveModel would run the first allowed model instead, unannounced.
+  it("refuses a model the org's list does not carry", () => {
+    const limited = { ...preferred, allowedModels: ["claude-sonnet-5"] };
+    expect(() => turnChoice(limited, { model: "claude-opus-5" })).toThrow(
+      /not on your org's list/,
+    );
+    expect(turnChoice(limited, { model: "claude-sonnet-5" }).model).toBe(
+      "claude-sonnet-5",
+    );
+  });
+
+  it("takes any model when the org keeps no list", () => {
+    expect(
+      turnChoice({ ...preferred, allowedModels: [] }, { model: "anything" })
+        .model,
+    ).toBe("anything");
   });
 });
