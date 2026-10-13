@@ -13,5 +13,7 @@ backup_recipients: []
 tailscale_enabled: false
 tailscale_cidr: "100.64.0.0/10"
 docker_major: "29"
+dns_probe_name: api.anthropic.com
+dns_wait_seconds: 60
 battery_stop_threshold: 80
 battery_start_threshold: 75
