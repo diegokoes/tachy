@@ -1151,6 +1151,14 @@ both live in Postgres with a TTL.
   two redirects, so it is listed from the HTML and found again the same way,
   by reading the messages. A picture a message only links from elsewhere is
   left out.
+- **A summary's files are links** back to that route, when the server knows
+  its own address (`TACHY_PUBLIC_ORIGINS`, which the production overlay fills
+  from `TACHY_HOSTNAME` and `TACHY_HOST_IP`). The link carries the address the
+  summary's writer was signed in on, since a session belongs to the name it
+  was opened under; a request from an address not on the list, or none, gets
+  the first. Only a file the ticket lists is linked, and only on a source
+  that opens files. The reader needs a tachy session and their own source
+  token, as in the chat; the note holds no address of the source's.
 - **Under a connection's redaction** a file's name is scrubbed, its text is
   scrubbed when read, and an image is withheld from the model unless that
   connection's own switch (`config.redaction.images`) allows it.
@@ -2473,6 +2481,15 @@ that fails counts as answered, because Postgres being down fails at once
 once fails the whole command, and the services after it are never started. So
 `tachy.service` has `Restart=on-failure` and runs it again every 15 s until the
 stack is up.
+
+**Docker waits for name resolution at boot.** Docker copies the host's
+nameservers into a container when it starts it, and at boot the daemon restarts
+the containers itself, before `tachy.service` runs. With ifupdown,
+`network-online.target` is reached before dhcpcd writes `/etc/resolv.conf`, so
+a container started then resolves no outside name until it is restarted. The
+drop-in `docker.service.d/wait-for-dns.conf` holds the daemon until the host
+resolves `dns_probe_name`, for at most `dns_wait_seconds` (60); after that
+Docker starts anyway, so a host with no uplink still serves the LAN.
 
 ## 10. CI/CD
 

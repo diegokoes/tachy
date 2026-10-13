@@ -96,10 +96,17 @@ export function outWithImages(payload: unknown, images: ModelImage[]) {
 
 /**
  * Said where an image would have been, under redaction. The model then knows
- * a picture exists and that asking for it again changes nothing.
+ * a picture exists, that asking for it again changes nothing, and which switch
+ * would let it through: a ticket's is its connection's, an upload's the
+ * server's.
  */
-export const IMAGE_WITHHELD =
-  "This is an image, and it was withheld: PII redaction is on and a picture cannot be scrubbed. Say so, and ask the user to describe what it shows. An administrator can allow images under redaction.";
+export function imageWithheld(from: "ticket" | "upload"): string {
+  const where =
+    from === "ticket"
+      ? "for this connection in console > sources (images under redaction)"
+      : "in console > system (Images under redaction)";
+  return `This is an image, and it was withheld: PII redaction is on and a picture cannot be scrubbed. Say so, say that an administrator can allow images ${where}, and ask the user to describe what it shows.`;
+}
 
 export function outScrubbed(payload: unknown) {
   return out(

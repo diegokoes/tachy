@@ -92,6 +92,38 @@ describe("the files of a summary", () => {
     );
   });
 
+  it("link a file's name to where it opens, given its path and a place to open it", () => {
+    const linked: TicketSummary = {
+      ...summary,
+      files: [
+        {
+          name: "image.png",
+          path: "attachment:fd/42/inline-7",
+          shows: "The error.",
+        },
+        { name: "image.png", path: "attachment:fd/42/inline-8" },
+        { name: "app.log", path: "attachment:other/1/9" },
+        { name: "export.csv" },
+      ],
+    };
+    const linkOf = (path: string) =>
+      path.startsWith("attachment:fd/42/")
+        ? `https://tachy.test/open?a=1&f=${path.slice(17)}`
+        : null;
+    const html = renderSummaryHtml({ external_id: "42" }, linked, linkOf);
+    expect(html).toContain(
+      `<strong><a href="https://tachy.test/open?a=1&amp;f=inline-7" target="_blank" rel="noopener noreferrer">image.png</a></strong><br>The error.`,
+    );
+    // Two files of one name are told apart by where each leads.
+    expect(html).toContain(`f=inline-8" target="_blank"`);
+    expect(html).toContain("<strong>app.log</strong>");
+    expect(html).toContain("<strong>export.csv</strong>");
+    expect(renderSummaryHtml({ external_id: "42" }, linked)).not.toContain(
+      "<a ",
+    );
+    expect(renderSummaryText(linked)).not.toContain("attachment:");
+  });
+
   it("are lines of the text a later flow step reads", () => {
     expect(renderSummaryText(withFiles).split("\n").slice(-4)).toEqual([
       "Files:",

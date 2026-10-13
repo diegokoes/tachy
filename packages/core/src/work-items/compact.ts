@@ -761,11 +761,16 @@ export function compactForLlm(
   opts: CompactOptions = {},
 ): { item: RawWorkItem; compacted?: CompactedWorkItem } {
   const compacted = compactWorkItem(item, opts);
+  // What is kept for the record and read by no model: it runs long.
+  const read: RawWorkItem =
+    item.events || item.customerRecord
+      ? { ...item, events: undefined, customerRecord: undefined }
+      : item;
   const { raw_chars, compact_chars } = compacted.compaction;
-  if (raw_chars < COMPACT_MIN_CHARS) return { item };
+  if (raw_chars < COMPACT_MIN_CHARS) return { item: read };
   const saving = raw_chars ? (raw_chars - compact_chars) / raw_chars : 0;
-  if (saving < COMPACT_MIN_SAVING) return { item };
-  return { item: { ...item, messages: [] }, compacted };
+  if (saving < COMPACT_MIN_SAVING) return { item: read };
+  return { item: { ...read, messages: [] }, compacted };
 }
 
 /**

@@ -7,7 +7,8 @@ export {
   MAX_ALLOWED_VALUES,
 } from "./fields";
 export type { FieldSpec, WorkItemSchema, AdoFieldType } from "./fields";
-export type { AdoClient, AdoCfg, JsonPatchOp } from "./client";
+export type { AdoClient, AdoCfg, AdoUpdate, JsonPatchOp } from "./client";
+export { updateEvents } from "./history";
 export {
   creatableTypes,
   composerForm,

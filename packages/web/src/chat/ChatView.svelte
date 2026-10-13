@@ -11,11 +11,13 @@
   } from "./agent";
   import { addEntry, chat, type Entry } from "./chatState.svelte";
   import { renderMarkdown } from "../markdown/markdown";
-  import { reflow, drainOut } from "../motion/motion";
+  import { reflow } from "../motion/motion";
   import Scrollbar from "../tui/Scrollbar.svelte";
   import ArtifactPanel from "./ArtifactPanel.svelte";
   import CommandMenu, {
     matchArtifacts,
+    MODEL_COMMAND,
+    STOP_COMMAND,
     type CommandPick,
     type MenuCrumb,
     type MenuOption,
@@ -26,12 +28,23 @@
   import Launcher from "./Launcher.svelte";
   import { ArtifactMark, Button, Caret, caretSide, G, Icon, tip } from "../tui";
   import { pushScope } from "../keys/keys.svelte";
+  import { tuckTopbar, unveilTopbar, veilTopbar } from "../shell/topbar.svelte";
   import { CHAT_UPLOAD_ACCEPT, uploadRefusal } from "@tachy/contract";
   import type {
+    AgentEffort,
     WorkItemTypeOption,
     CreatedTicket,
     WorkItemFile,
   } from "@tachy/contract";
+  import {
+    effortOptions,
+    modelOptions,
+    parseModel,
+    pickOf,
+    typedPick,
+    type ModelPick,
+  } from "./modelCommand";
+  import { agentPrefs, loadAgent } from "../settings/prefs.svelte";
   import FileTray from "../work-items/FileTray.svelte";
   import TicketComposer from "../work-items/TicketComposer.svelte";
   import TicketCard from "../work-items/TicketCard.svelte";
@@ -112,12 +125,19 @@
   const empty = $derived(chat.entries.length === 0);
 
   // A pre effect, so the dock is read where it still sits: centred before the
-  // first message, at the foot after it.
+  // first message, at the foot after it. Its landing shows a nav that a clear
+  // brought back veiled.
   $effect.pre(() => {
     void empty;
-    const play = untrack(() => reflow([dockEl], { absolute: false }));
+    const play = untrack(() =>
+      reflow([dockEl], { absolute: false, onComplete: unveilTopbar }),
+    );
     void tick().then(play);
   });
+
+  // A conversation under way takes the nav's row. The disposer hands it back
+  // on clear and when the view goes, so every other section keeps its bar.
+  $effect(() => (empty ? undefined : tuckTopbar()));
 
   $effect(() =>
     pushScope([
@@ -189,7 +209,11 @@
       : null,
   );
 
-  /** `/name` picks a command; `/artifact <query>`, `/az …` and `/code @…` pick arguments. */
+  const offeredModels = $derived(agentPrefs.models?.models ?? null);
+  const listedModels = $derived(offeredModels ?? []);
+  const modelCtx = $derived(parseModel(chat.input, offeredModels));
+
+  /** `/name` picks a command; `/artifact <query>`, `/az …`, `/code @…` and `/model …` pick arguments. */
   const cmdCtx = $derived.by(() => {
     const name = chat.input.match(/^\/([a-z0-9-]*)$/);
     if (name) return { mode: "command" as const, query: name[1] };
@@ -197,8 +221,61 @@
     if (arg) return { mode: "artifact" as const, query: arg[1] };
     if (azCtx) return { mode: "options" as const, query: azCtx.query };
     if (codeCtx) return { mode: "options" as const, query: codeCtx.query };
+    if (modelCtx) return { mode: "options" as const, query: modelCtx.query };
     return null;
   });
+
+  // Asked once per visit: the list comes from the runtime, and a failed ask
+  // repeated on every keystroke would not fare better.
+  let modelsAsked = false;
+  $effect(() => {
+    if (!modelCtx || modelsAsked) return;
+    modelsAsked = true;
+    void loadAgent();
+  });
+
+  function modelsNote() {
+    if (offeredModels?.length) return "no model matches";
+    if (offeredModels)
+      return "no list to pick from: type a model id, then enter";
+    return agentPrefs.error ?? "loading models…";
+  }
+
+  const modelMenu = $derived.by(
+    (): { options: MenuOption[]; crumb: MenuCrumb } | null => {
+      if (!modelCtx) return null;
+      const prefs = agentPrefs.prefs;
+      if (modelCtx.stage === "model")
+        return {
+          crumb: {
+            cmd: "/model",
+            param: "model",
+            desc: MODEL_COMMAND.description,
+            empty: modelsNote(),
+          },
+          options: modelOptions(
+            listedModels,
+            modelCtx.query,
+            prefs?.agent_model.value,
+          ),
+        };
+      return {
+        crumb: {
+          cmd: `/model ${modelCtx.model.label}`,
+          param: "effort",
+          desc: "how much it reasons before it answers",
+          empty: modelCtx.model.efforts.length
+            ? "no effort matches"
+            : "this model takes no effort: enter to use it",
+        },
+        options: effortOptions(
+          modelCtx.model,
+          modelCtx.query,
+          prefs?.agent_effort.value,
+        ),
+      };
+    },
+  );
 
   $effect(() => {
     if (codeCtx) ensureRepos();
@@ -305,9 +382,13 @@
       };
     },
   );
-  const optionsMenu = $derived(azMenu ?? codeMenu);
+  const optionsMenu = $derived(azMenu ?? codeMenu ?? modelMenu);
   const menuOpen = $derived(
-    cmdCtx !== null && !cmdDismissed && !chat.busy && commands !== null,
+    cmdCtx !== null &&
+      !cmdDismissed &&
+      commands !== null &&
+      // A turn under way leaves one command to offer: the one that stops it.
+      (!chat.busy || cmdCtx.mode === "command"),
   );
 
   $effect(() => {
@@ -330,13 +411,36 @@
   });
 
   function pickCommand(pick: CommandPick) {
-    if (pick.kind === "builtin") chat.input = `/${pick.builtin.name} `;
+    if (pick.kind === "builtin" && pick.builtin.name === STOP_COMMAND.name) {
+      chat.input = "";
+      void stop();
+    } else if (pick.kind === "builtin") chat.input = `/${pick.builtin.name} `;
     else if (pick.kind === "option" && azCtx) pickAz(pick.value);
+    else if (pick.kind === "option" && modelCtx) pickModel(pick.value);
     else if (pick.kind === "option") pickCode(pick.value);
     else {
       chat.artifact = { id: pick.artifact.id, title: pick.artifact.title };
       chat.input = "";
     }
+  }
+
+  function setModel(picked: ModelPick) {
+    chat.model = picked;
+    chat.input = "";
+  }
+
+  /** A model with efforts moves the line on to them; one without is taken. */
+  function pickModel(value: string) {
+    // Held in a local for the reason pickAz gives: the line it derives from
+    // is cleared on the way.
+    const ctx = modelCtx;
+    if (!ctx) return;
+    if (ctx.stage === "effort")
+      return setModel(pickOf(ctx.model, value as AgentEffort));
+    const model = listedModels.find((m) => m.id === value);
+    if (!model) return;
+    if (model.efforts.length) chat.input = `/model ${model.id} `;
+    else setModel(pickOf(model));
   }
 
   function pickCode(word: string) {
@@ -420,8 +524,20 @@
 
   async function send() {
     const message = chat.input.trim();
+    // Typed whole and entered with its row dismissed, it still is no message.
+    if (message === `/${STOP_COMMAND.name}`) {
+      chat.input = "";
+      return stop();
+    }
     if (!message || chat.busy) return;
     if (isAzNew(message)) return openFromLine(message);
+    // A `/model` line is never a message: Enter with no row to pick takes the
+    // line when it is whole as typed, and otherwise waits for more.
+    if (modelCtx) {
+      const typed = typedPick(modelCtx, offeredModels);
+      if (typed) setModel(typed);
+      return;
+    }
     if (cmdCtx?.mode === "artifact") {
       const hits = matchArtifacts(commands?.artifacts ?? [], cmdCtx.query);
       if (hits.length === 1)
@@ -452,6 +568,8 @@
     const uploadPaths = chat.uploads.map((u) => u.path);
     chat.uploads = [];
     chat.busy = true;
+    chat.turnId = undefined;
+    stopRequested = false;
     clearArmed = false;
     snap(true);
     // Aborted when the view goes away, so a turn left running does not hold its
@@ -466,6 +584,8 @@
           uploadPaths: uploadPaths.length ? uploadPaths : undefined,
           artifactId: chat.artifact?.id,
           command,
+          model: chat.model?.id,
+          effort: chat.model?.effort,
         },
         turnAbort.signal,
       )) {
@@ -563,12 +683,15 @@
           if (approval) approval.status = data.approved ? "approved" : "denied";
         } else if (event === "result")
           chat.sessionId = data.sessionId as string;
-        else if (event === "error")
+        else if (event === "stopped") {
+          if (data.sessionId) chat.sessionId = data.sessionId as string;
+          addEntry({ kind: "stopped" });
+        } else if (event === "error")
           addEntry({ kind: "error", text: data.message as string });
         snap();
       }
     } catch (e) {
-      // An abort is this component going away, not something to report.
+      const aborted = e instanceof DOMException && e.name === "AbortError";
       if (e instanceof ChatRefused && e.status === 409 && e.turnId) {
         addEntry({
           kind: "running",
@@ -577,7 +700,10 @@
           stopped: false,
         });
         chat.input = message;
-      } else if (!(e instanceof DOMException && e.name === "AbortError"))
+      }
+      // Any other abort is this component going away, which reports nothing.
+      else if (aborted && stopRequested) addEntry({ kind: "stopped" });
+      else if (!aborted)
         addEntry({
           kind: "error",
           text: e instanceof Error ? e.message : String(e),
@@ -588,6 +714,31 @@
       chat.queuePosition = null;
       const answer = chat.entries[chat.entries.length - 1];
       if (readCode && answer?.kind === "assistant") answer.code = true;
+    }
+  }
+
+  /** The stop mark was pressed before the server had named the turn. */
+  let stopRequested = false;
+
+  /**
+   * Ends the turn under way. The server answers with `stopped`, which closes
+   * the stream. A turn it has not named yet has no id to stop, so its request
+   * is dropped instead, and the server gives up a turn nobody is reading.
+   */
+  async function stop() {
+    if (!chat.busy) return;
+    if (!chat.turnId) {
+      stopRequested = true;
+      turnAbort?.abort();
+      return;
+    }
+    try {
+      await stopTurn(chat.turnId);
+    } catch (e) {
+      addEntry({
+        kind: "error",
+        text: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
@@ -661,16 +812,12 @@
   }
 
   let turnAbort: AbortController | undefined;
-  onDestroy(() => turnAbort?.abort());
+  onDestroy(() => {
+    turnAbort?.abort();
+    unveilTopbar();
+  });
   let clearArmed = $state(false);
   let disarmTimer: ReturnType<typeof setTimeout> | undefined;
-
-  /** The transcript's running text, which leaves word by word. */
-  const WORDED =
-    ":scope > .turn > .who, :scope > .turn > .body:not(.md), :scope > .turn > .body.md > :not(pre, table, hr)";
-  /** What a word clip would leave standing: cards, tool rows, code, buttons. */
-  const BOXED =
-    ":scope > :not(.turn), :scope > .turn :is(pre, table, code, img, hr, .btn)";
 
   function armClear() {
     clearArmed = true;
@@ -678,19 +825,19 @@
     disarmTimer = setTimeout(() => (clearArmed = false), 4000);
   }
 
-  function wipe() {
-    chat.entries = [];
-    chat.sessionId = undefined;
-    chat.turnId = undefined;
-  }
-
+  /**
+   * The transcript goes at once. The nav takes its row back veiled, so the
+   * window settles while the dock travels to the centre, and the dock's
+   * landing shows it.
+   */
   function confirmClear() {
     clearTimeout(disarmTimer);
     clearArmed = false;
-    if (!transcriptEl) return wipe();
-    const pick = (selector: string) =>
-      Array.from(transcriptEl!.querySelectorAll<HTMLElement>(selector));
-    drainOut(pick(WORDED), pick(BOXED), wipe);
+    veilTopbar();
+    chat.entries = [];
+    chat.sessionId = undefined;
+    chat.turnId = undefined;
+    chat.model = undefined;
   }
 
   function onClear() {
@@ -701,10 +848,15 @@
     } else armClear();
   }
 
-  // Both marks leave once they have nothing to act on, and focus would go with
-  // them.
+  // Every mark leaves once it has nothing to act on, and focus would go with
+  // it.
   function sendClick() {
     void send();
+    composerEl?.focus();
+  }
+
+  function stopClick() {
+    void stop();
     composerEl?.focus();
   }
 </script>
@@ -801,6 +953,11 @@
               <span class="who err">{G.marker}error</span>
               <div class="body err">{entry.text}</div>
             </div>
+          {:else if entry.kind === "stopped"}
+            <div class="tool">
+              <Icon name="stop" size="1em" weight={7} />
+              <span>stopped</span>
+            </div>
           {:else if entry.kind === "running"}
             <div class="turn">
               <span class="who err">{G.marker}busy</span>
@@ -833,14 +990,31 @@
         {/if}
       </div>
       {#if !empty}
-        <Scrollbar target={transcriptEl} controls="chat-transcript" />
+        <div class="bar-col">
+          <Scrollbar target={transcriptEl} controls="chat-transcript" />
+        </div>
       {/if}
       <ArtifactPanel />
     </div>
 
     <div class="dock" bind:this={dockEl}>
-      {#if chat.uploads.length || chat.artifact || draftWaiting}
+      {#if chat.uploads.length || chat.artifact || chat.model || draftWaiting}
         <div class="attachments">
+          {#if chat.model}
+            <span class="attach model-chip">
+              <Icon name="ai" size="1em" />
+              {chat.model.label}{chat.model.effort
+                ? ` · ${chat.model.effort}`
+                : ""}
+              <button
+                class="chip-x"
+                aria-label="Back to your settings model"
+                use:tip={"Back to your settings model"}
+                onclick={() => (chat.model = undefined)}
+                ><Icon name="close" size="1em" weight={7} /></button
+              >
+            </span>
+          {/if}
           {#if draftWaiting}
             <button class="attach draft-chip" onclick={() => openComposer()}>
               <Icon name="review" size="1em" />
@@ -886,6 +1060,7 @@
             mode={cmdCtx?.mode ?? "command"}
             query={cmdCtx?.query ?? ""}
             builtins={commands.builtins}
+            running={chat.busy}
             artifacts={commands.artifacts}
             options={optionsMenu?.options}
             crumb={optionsMenu?.crumb}
@@ -933,12 +1108,20 @@
             {/if}
           </span>
           <span class="slot">
-            {#if chat.input.trim()}
+            {#if chat.busy}
+              <Button
+                variant="ghost"
+                icon="stop"
+                iconSize="1.25em"
+                aria-label="Stop"
+                title="Stop (/stop)"
+                onclick={stopClick}
+              />
+            {:else if chat.input.trim()}
               <Button
                 variant="ghost"
                 icon="send"
                 iconSize="1.25em"
-                disabled={chat.busy}
                 aria-label="Send"
                 title="Send"
                 onclick={sendClick}
@@ -956,6 +1139,12 @@
     --side-w: 3.25rem;
     --upload-w: var(--side-w);
     --composer-gap: 0.5rem;
+    /* The artifact tab's width, and the room it keeps from its neighbours. */
+    --tab-w: 2.9rem;
+    --edge-gap: 0.35rem;
+    /* Where ArtifactPanel stands its tab: left of the scrollbar's column,
+       which reaches into the padding `main` keeps on that side. */
+    --edge-right: calc(var(--scrollbar-w) + var(--edge-gap) - var(--pad-2));
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -1112,12 +1301,14 @@
   .md.streaming > :global(:last-child)::after {
     content: "";
   }
+  /* The scrollbar is the last thing on the right, on the edge of `main`'s
+     padding box; the artifact tab stands between it and the text. */
   .transcript-wrap {
     flex: 1;
     min-height: 0;
     display: flex;
-    gap: 0.35rem;
-    padding-right: 2.8rem;
+    gap: var(--edge-gap);
+    margin-right: calc(-1 * var(--pad-2));
   }
   /* Native bar hidden - the ASCII scrollbar next to it takes over. */
   .transcript {
@@ -1128,10 +1319,16 @@
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
-    padding-right: 0.5rem;
+    padding-right: calc(var(--tab-w) + var(--gap));
   }
   .transcript::-webkit-scrollbar {
     display: none;
+  }
+  /* Kept whether or not the bar is drawn, so its arrival moves nothing. */
+  .bar-col {
+    flex: none;
+    display: flex;
+    width: var(--scrollbar-w);
   }
 
   /* Nothing said yet: the lede and the dock sit together in the middle. */
@@ -1140,7 +1337,7 @@
   }
   .chat.empty .transcript-wrap {
     flex: none;
-    padding-right: 0;
+    margin-right: 0;
   }
   .chat.empty .transcript {
     align-items: center;
@@ -1156,7 +1353,7 @@
     flex-direction: column;
     gap: 0.1rem;
     width: fit-content;
-    max-width: 60ch;
+    max-width: 70ch;
   }
   .turn .who {
     font-size: var(--fs-xs);
@@ -1264,7 +1461,8 @@
     opacity: 0.55;
     user-select: none;
   }
-  .artifact-chip {
+  .artifact-chip,
+  .model-chip {
     color: var(--accent);
   }
   .chip-x {

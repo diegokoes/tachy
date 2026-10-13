@@ -236,9 +236,12 @@ export class ClaudeTurn extends TurnBase {
     );
 
     const pending = new Map<string, string>();
+    let answeredSessionId: string | undefined;
+    let resulted = false;
     try {
       for await (const sdkMessage of query({ prompt, options })) {
         if (sdkMessage.type === "assistant") {
+          answeredSessionId = sdkMessage.session_id;
           for (const block of sdkMessage.message.content as ContentBlock[]) {
             if (block.type === "text" && block.text) {
               this.queue.push({ type: "text", text: block.text });
@@ -281,6 +284,7 @@ export class ClaudeTurn extends TurnBase {
             session_id: string;
             usage?: { input_tokens?: number; output_tokens?: number };
           };
+          resulted = true;
           this.queue.push({
             type: "result",
             result: resultMessage.result ?? "",
@@ -294,9 +298,15 @@ export class ClaudeTurn extends TurnBase {
         }
       }
     } catch (e) {
-      const raw = errorText(e);
-      this.queue.push({ type: "error", ...explainFailure(raw) });
+      // An abort reaches here as a throw; it is reported below as a stop.
+      if (!this.controller.signal.aborted)
+        this.queue.push({ type: "error", ...explainFailure(errorText(e)) });
     } finally {
+      if (this.controller.signal.aborted && !resulted)
+        this.queue.push({
+          type: "stopped",
+          ...(answeredSessionId ? { sessionId: answeredSessionId } : {}),
+        });
       this.finish();
     }
   }
