@@ -8,6 +8,7 @@ const API_VERSION = "7.1";
  * the point where a continuation token that never clears is a bug.
  */
 const MAX_PAGES = 100;
+const UPDATES_PAGE = 200;
 const WORK_ITEM_BATCH_SIZE = 200;
 
 /** No released version: the 7.1 reference itself documents 7.1-preview.4. */
@@ -62,6 +63,8 @@ export type AdoFields = {
   "System.AreaPath"?: string;
   "System.WorkItemType"?: string;
   "System.CreatedBy"?: AdoIdentity;
+  "System.AssignedTo"?: AdoIdentity;
+  "Microsoft.VSTS.Common.Priority"?: number;
   "System.CreatedDate"?: string;
   "System.ChangedDate"?: string;
   "System.Description"?: string;
@@ -81,6 +84,21 @@ export interface AdoWorkItem {
   fields?: AdoFields;
   relations?: AdoRelation[];
   _links?: { html?: { href?: string } };
+}
+
+/** What one revision, or one change of links, did to a work item. */
+export interface AdoUpdate {
+  /** Counts up through the item's updates; several can share a `rev`. */
+  id: number;
+  rev?: number;
+  revisedBy?: AdoIdentity;
+  /**
+   * When the revision this update made was replaced, year 9999 while nothing
+   * has. For an update of links only, when it happened.
+   */
+  revisedDate?: string;
+  fields?: Record<string, { oldValue?: unknown; newValue?: unknown }>;
+  relations?: { added?: AdoRelation[]; removed?: AdoRelation[] };
 }
 
 export interface AdoComment {
@@ -281,6 +299,12 @@ export interface AdoClient {
   listProjects(): Promise<{ id: string; name: string }[]>;
   getWorkItem(id: string): Promise<AdoWorkItem>;
   getWorkItemsBatch(ids: number[], fields?: string[]): Promise<AdoWorkItem[]>;
+  /**
+   * Every update of an item, oldest first. `currentRev` is the item's revision
+   * now: a short page that has not reached it is a server paging in smaller
+   * steps than asked, and the walk goes on.
+   */
+  getUpdates(id: string, currentRev?: number): Promise<AdoUpdate[]>;
   getComments(project: string, id: string): Promise<AdoComment[]>;
   queryWorkItemIds(
     project: string,
@@ -469,6 +493,25 @@ export function createAdoClient(connection: AdoCfg): AdoClient {
         workItems.push(...(response.value ?? []));
       }
       return workItems;
+    },
+
+    async getUpdates(id, currentRev) {
+      const updates: AdoUpdate[] = [];
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const params = new URLSearchParams({
+          $top: String(UPDATES_PAGE),
+          $skip: String(updates.length),
+        });
+        const response = await request<AdoList<AdoUpdate>>(
+          `/_apis/wit/workItems/${encodeURIComponent(String(id))}/updates?${params.toString()}`,
+        );
+        const batch = response.value ?? [];
+        updates.push(...batch);
+        const reached =
+          currentRev == null || batch.some((u) => (u.rev ?? 0) >= currentRev);
+        if (!batch.length || (batch.length < UPDATES_PAGE && reached)) break;
+      }
+      return updates;
     },
 
     async getComments(project, id) {

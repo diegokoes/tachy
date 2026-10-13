@@ -224,14 +224,19 @@
   function raise(node: HTMLElement, on: boolean) {
     const home = node.parentElement!;
     const edge = node.offsetParent ?? home;
+    // How far in from the edge the tab stood when it was lifted.
+    let insetPx = 0;
     const pin = () => {
       const box = edge.getBoundingClientRect();
       node.style.top = `${box.top + box.height / 2}px`;
-      node.style.left = `${box.right - node.offsetWidth}px`;
+      node.style.left = `${box.right - insetPx - node.offsetWidth}px`;
     };
     const set = (up: boolean) => {
       if (up === (node.parentElement !== home)) return;
       if (up) {
+        insetPx =
+          edge.getBoundingClientRect().right -
+          node.getBoundingClientRect().right;
         document.body.appendChild(node);
         node.style.position = "fixed";
         node.style.right = "auto";
@@ -661,9 +666,10 @@
   .edge-home {
     display: contents;
   }
+  /* --edge-right is the host view's: how far in from its edge the tab stands. */
   .edge-slot {
     position: absolute;
-    right: 0;
+    right: var(--edge-right, 0px);
     top: 50%;
     transform: translateY(-50%);
     z-index: 9;

@@ -145,6 +145,12 @@
   --control-h: calc(var(--row-h) + var(--pad-2));
 }
 
+/* The drawn scrollbar's column. A token because a view that stands something
+   beside the bar has to know how wide the bar is. */
+:root {
+  --scrollbar-w: 0.75rem;
+}
+
 /* View padding: the air a full view sits in. Multiples of the spacing scale,
    not new steps, named so the overview and the section views cannot drift
    apart. */

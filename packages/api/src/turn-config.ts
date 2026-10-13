@@ -2,7 +2,12 @@ import { mkdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { badInput, envVarName, rememberSecret } from "@tachy/core/infra";
+import {
+  badInput,
+  envVarName,
+  publicOrigin,
+  rememberSecret,
+} from "@tachy/core/infra";
 import {
   dateFormatOf,
   effectivePrefs,
@@ -16,6 +21,7 @@ import {
   encodeDateFormat,
   formatDateTime,
   DEFAULT_DATE_FORMAT,
+  type AgentEffort,
   type DateFormat,
 } from "@tachy/core";
 import { getUserByEmail, userSoleTeamId } from "@tachy/core/access";
@@ -109,9 +115,13 @@ export function toolsDatabaseUrl(serverUrl: string): string {
 export async function mcpConfig(
   userEmail: string | undefined,
   settings: EffectiveSettings,
-  turn: { id?: string; actorRole?: "admin" } = {},
+  turn: { id?: string; actorRole?: "admin"; origin?: string } = {},
 ): Promise<Omit<AgentConfig, "systemPrompt">> {
   const mcpEnv: Record<string, string> = {};
+  // What a link written during the turn points back at: the address this
+  // person is signed in on, so the link opens for them.
+  const origin = publicOrigin(turn.origin);
+  if (origin) mcpEnv.TACHY_PUBLIC_ORIGIN = origin;
   for (const name of INHERITED_ENV) {
     const value = process.env[name];
     if (typeof value === "string") mcpEnv[name] = value;
@@ -186,6 +196,28 @@ export async function mcpConfig(
     effort: prefs.agent_effort.value as AgentConfig["effort"],
     ...(agentAuth ? { agentAuth } : {}),
     ...(allowedModels.length ? { allowedModels } : {}),
+  };
+}
+
+/**
+ * What the caller picked for this conversation, laid over their preference. A
+ * model off the org's list is refused: `effectiveModel` would run the first
+ * allowed one in its place, and the caller asked for this one by name.
+ */
+export function turnChoice<
+  Config extends Pick<AgentConfig, "model" | "effort" | "allowedModels">,
+>(base: Config, picked: { model?: string; effort?: AgentEffort }): Config {
+  const { allowedModels } = base;
+  if (
+    picked.model &&
+    allowedModels?.length &&
+    !allowedModels.includes(picked.model)
+  )
+    throw badInput(`model '${picked.model}' is not on your org's list`);
+  return {
+    ...base,
+    ...(picked.model ? { model: picked.model } : {}),
+    ...(picked.effort ? { effort: picked.effort } : {}),
   };
 }
 

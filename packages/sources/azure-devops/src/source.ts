@@ -22,6 +22,7 @@ import type {
 import { composerForm, creatableTypes, templateValues } from "./composer";
 import { createWorkItem, explainAdoError, validateWorkItem } from "./create";
 import { workItemDefaults } from "./fields";
+import { updateEvents } from "./history";
 import {
   createAdoClient,
   type AdoRelation,
@@ -208,6 +209,9 @@ export const createAzureDevopsSource: SourceFactory = (
       status: fields["System.State"],
       groupKey: fields["System.TeamProject"],
       areaPath: fields["System.AreaPath"],
+      assignee: fields["System.AssignedTo"]?.displayName,
+      priority: fields["Microsoft.VSTS.Common.Priority"]?.toString(),
+      itemType: fields["System.WorkItemType"],
       requester: createdBy?.displayName ?? uniqueName ?? undefined,
       requesterEmail: uniqueName.includes("@") ? uniqueName : undefined,
       raw: {
@@ -470,7 +474,16 @@ export const createAzureDevopsSource: SourceFactory = (
       const messages = await itemMessages(workItem);
       const project = workItem.fields?.["System.TeamProject"];
       const relations = await resolveRelations(workItem, project ?? "");
-      return toItem(workItem, messages, relations);
+      // Best effort: the item reads without its history.
+      const updates = await client
+        .getUpdates(externalId, workItem.rev)
+        .catch(() => null);
+      return {
+        ...toItem(workItem, messages, relations),
+        ...(updates
+          ? { events: updateEvents(updates), historyComplete: true as const }
+          : {}),
+      };
     },
 
     async openAttachment(externalId, attachmentId) {
@@ -531,7 +544,10 @@ export const createAzureDevopsSource: SourceFactory = (
         SYNC_PAGE,
       );
       const fetched = ids.length ? await client.getWorkItemsBatch(ids) : [];
-      const items = fetched.map((workItem) => toItem(workItem, []));
+      const items = fetched.map((workItem): RawWorkItem => ({
+        ...toItem(workItem, []),
+        listed: true,
+      }));
 
       // ChangedDate watermark cursor: the >= query re-fetches boundary items,
       // which the ingest upsert dedupes; a full page that fails to advance the

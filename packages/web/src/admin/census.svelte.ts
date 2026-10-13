@@ -16,6 +16,7 @@ const EMPTY: Census = {
       by_type: {},
       untokened: 0,
       never_synced: 0,
+      work_items: 0,
     },
     repos: {
       repos: 0,

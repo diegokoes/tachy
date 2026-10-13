@@ -247,6 +247,7 @@ export function redactNormalized(
   const knownNames = [
     item.requester,
     item.requesterName,
+    item.assignee,
     ...(item.knownPeople ?? []),
     ...item.messages.flatMap((m) => [m.author, m.authorLabel]),
   ];
@@ -262,9 +263,14 @@ export function redactNormalized(
     ...item,
     title: item.title ? scrub(item.title) : item.title,
     requester: item.requester ? customerToken : item.requester,
+    // A display name on some sources, and then the token that person's own
+    // messages carry.
+    assignee: item.assignee ? map.token("USER", item.assignee) : item.assignee,
     requesterEmail: undefined,
     requesterName: undefined,
     knownPeople: undefined,
+    events: undefined,
+    customerRecord: undefined,
     messages: item.messages.map((m) => ({
       ...m,
       author: m.author ? map.token("USER", m.author) : m.author,

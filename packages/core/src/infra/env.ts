@@ -149,6 +149,32 @@ export const azureDevopsToken = (slug: string) =>
   sourceToken("AZURE_DEVOPS", slug);
 
 /**
+ * The addresses people reach this server on, from TACHY_PUBLIC_ORIGINS, comma
+ * separated. Empty on a host that sets none: nothing then links back here.
+ */
+export function publicOrigins(): string[] {
+  return (process.env.TACHY_PUBLIC_ORIGINS ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => /^https?:\/\//i.test(entry) && URL.canParse(entry))
+    .map((entry) => new URL(entry).origin);
+}
+
+/**
+ * The address a link back to this server carries for someone who came in on
+ * `requestOrigin`: that one when it is ours, since a session belongs to the
+ * name it was opened under, and otherwise the first.
+ */
+export function publicOrigin(
+  requestOrigin?: string | null,
+): string | undefined {
+  const origins = publicOrigins();
+  return requestOrigin && origins.includes(requestOrigin)
+    ? requestOrigin
+    : origins[0];
+}
+
+/**
  * Where the agent CLI keeps per-user state and transcripts. Read on each call
  * rather than fixed at import, so a process that changes it sees the change.
  */

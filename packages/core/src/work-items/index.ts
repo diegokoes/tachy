@@ -2,6 +2,7 @@ export type { RawAttachment, RawMessage, RawWorkItem } from "./raw";
 export * from "./attachments";
 export * from "./ingest";
 export * from "./cleanup";
+export * from "./stored";
 export * from "./linked-refs";
 export * from "./links";
 export * from "./compact";

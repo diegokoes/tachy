@@ -8,7 +8,8 @@ export async function resetData() {
   // of those inserts deadlocks.
   await backgroundSettled();
   await sql`
-    truncate work_item_messages, work_items, work_item_links, knowledge_feedback,
+    truncate work_item_messages, work_item_events, work_items, work_item_links,
+             source_customer_records, knowledge_feedback,
              reports, report_messages, notifications, audit_events, api_tokens,
              knowledge_entries, analysis_runs, team_members, users,
              customers, customer_facts, customer_components, customer_units,

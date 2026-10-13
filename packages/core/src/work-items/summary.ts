@@ -62,6 +62,12 @@ export const ticketSummarySchema = z.object({
           .string()
           .min(1)
           .describe("The file's name, as the ticket lists it."),
+        path: z
+          .string()
+          .optional()
+          .describe(
+            "The file's path from the ticket's files list, copied exactly. The note then links the name to the file, which also tells apart files that share a name.",
+          ),
         from: z
           .string()
           .optional()
@@ -113,11 +119,21 @@ function triedHtml(tried: TicketSummary["tried"]): string {
 const sentBy = (file: TicketSummary["files"][number]) =>
   [file.from, file.date].filter(Boolean).join(", ");
 
-function filesHtml(files: TicketSummary["files"]): string {
+/** Where a file of the ticket opens, by its reference, or null for no link. */
+export type FileLinker = (path: string) => string | null;
+
+function filesHtml(
+  files: TicketSummary["files"],
+  linkOf: FileLinker | undefined,
+): string {
   const items = files.map((file) => {
     const sent = sentBy(file);
+    const href = file.path ? linkOf?.(file.path) : null;
+    const name = href
+      ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(file.name)}</a>`
+      : escapeHtml(file.name);
     return (
-      `<li style="margin:0 0 4px 0"><strong>${escapeHtml(file.name)}</strong>` +
+      `<li style="margin:0 0 4px 0"><strong>${name}</strong>` +
       (sent ? ` <span style="color:#777">${escapeHtml(sent)}</span>` : "") +
       (file.shows ? `<br>${escapeHtml(file.shows)}` : "") +
       "</li>"
@@ -126,10 +142,14 @@ function filesHtml(files: TicketSummary["files"]): string {
   return `<ul style="margin:0 0 8px 0;padding-left:22px">${items.join("")}</ul>`;
 }
 
-/** The summary as one private-note body, stamped so the next one replaces it. */
+/**
+ * The summary as one private-note body, stamped so the next one replaces it.
+ * With `linkOf`, a file the summary gives a path for is a link to it.
+ */
 export function renderSummaryHtml(
   ticket: SummarizedTicket,
   summary: TicketSummaryInput,
+  linkOf?: FileLinker,
 ): string {
   const files = summary.files ?? [];
   const sections = [
@@ -143,7 +163,8 @@ export function renderSummaryHtml(
     sections.push(sectionRule("Timeline"), timelineHtml(summary.timeline));
   if (summary.tried.length)
     sections.push(sectionRule("Tried / ruled out"), triedHtml(summary.tried));
-  if (files.length) sections.push(sectionRule("Files"), filesHtml(files));
+  if (files.length)
+    sections.push(sectionRule("Files"), filesHtml(files, linkOf));
   sections.push(
     mutedLine(
       "Written by a model from the ticket thread; check it against the thread before acting on it.",

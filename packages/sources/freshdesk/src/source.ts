@@ -21,6 +21,7 @@ import type {
   WorkItemSource,
   OpenedAttachment,
   RawAttachment,
+  RawEvent,
   RawWorkItem,
   RawMessage,
   ListOptions,
@@ -230,7 +231,13 @@ interface FreshdeskTicket {
   status?: number | null;
   group_id?: number | null;
   requester_id?: number | null;
+  responder_id?: number | null;
+  company_id?: number | null;
+  priority?: number | null;
+  type?: string | null;
   requester?: { email?: string; name?: string };
+  /** With `include=stats`: the times it was first answered, resolved, closed. */
+  stats?: Record<string, unknown> | null;
   description?: string;
   description_text?: string;
   attachments?: FreshdeskAttachment[];
@@ -273,6 +280,32 @@ interface FreshdeskTicketField {
   label?: string;
   default?: boolean;
   choices?: unknown;
+}
+
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T/;
+
+/**
+ * What a ticket's own fields say happened to it: when it was opened, and each
+ * time its stats give, `resolved_at` as `resolved`. The time is part of the
+ * key, so a ticket resolved twice keeps both.
+ */
+function ticketEvents(ticket: FreshdeskTicket): RawEvent[] {
+  const events: RawEvent[] = [];
+  if (ticket.created_at)
+    events.push({
+      externalId: "created",
+      occurredAt: ticket.created_at,
+      field: "created",
+    });
+  for (const [key, value] of Object.entries(ticket.stats ?? {})) {
+    if (typeof value !== "string" || !TIMESTAMP.test(value)) continue;
+    events.push({
+      externalId: `stats:${key}:${value}`,
+      occurredAt: value,
+      field: key.replace(/_at$/, ""),
+    });
+  }
+  return events;
 }
 
 /** Where a default ticket field sits on a ticket, by the field's name. */
@@ -481,6 +514,10 @@ export const createFreshdeskSource: SourceFactory = (
       title: ticket.subject,
       status: ticket.status != null ? String(ticket.status) : undefined,
       groupKey: ticket.group_id != null ? String(ticket.group_id) : undefined,
+      assignee:
+        ticket.responder_id != null ? String(ticket.responder_id) : undefined,
+      priority: ticket.priority != null ? String(ticket.priority) : undefined,
+      itemType: ticket.type ?? undefined,
       requester:
         ticket.requester_id != null ? String(ticket.requester_id) : undefined,
       requesterEmail: ticket.requester?.email,
@@ -489,7 +526,21 @@ export const createFreshdeskSource: SourceFactory = (
       sourceCreatedAt: ticket.created_at,
       sourceUpdatedAt: ticket.updated_at,
       messages,
+      events: ticketEvents(ticket),
+      customerKey:
+        ticket.company_id != null ? String(ticket.company_id) : undefined,
     };
+  }
+
+  /** A company's record one level deep: its custom fields beside the standard ones. */
+  async function companyRecord(
+    companyId: unknown,
+  ): Promise<Record<string, unknown> | null> {
+    if (companyId == null) return null;
+    const { custom_fields, ...company } = await get<FreshdeskCompany>(
+      `/companies/${encodeURIComponent(String(companyId))}`,
+    );
+    return { ...company, ...(custom_fields ?? {}) };
   }
 
   return {
@@ -527,7 +578,7 @@ export const createFreshdeskSource: SourceFactory = (
       // pasted: unescaped it could carry its own query string into the path.
       const ticketId = encodeURIComponent(externalId);
       const ticket = await get<FreshdeskTicket>(
-        `/tickets/${ticketId}?include=requester`,
+        `/tickets/${ticketId}?include=requester,stats`,
       );
       const convos: FreshdeskConversation[] = [];
       for await (const batch of conversationPages(ticketId))
@@ -554,9 +605,20 @@ export const createFreshdeskSource: SourceFactory = (
           (a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""),
         ),
       );
+      // Best effort: a key that may not read companies still reads the ticket.
+      const company = await companyRecord(ticket.company_id).catch(() => null);
       return {
         ...metadataToItem(ticket, messages),
         knownPeople: [...names.values()],
+        ...(company
+          ? {
+              customerRecord: {
+                name:
+                  typeof company.name === "string" ? company.name : undefined,
+                record: company,
+              },
+            }
+          : {}),
       };
     },
 
@@ -581,6 +643,8 @@ export const createFreshdeskSource: SourceFactory = (
       params.set("order_by", "updated_at");
       params.set("order_type", "asc");
       if (opts.updatedSince) params.set("updated_since", opts.updatedSince);
+      // The times a ticket was first answered, resolved and closed.
+      params.set("include", "stats");
       const page = opts.cursor ? Number(opts.cursor) : 1;
       params.set("page", String(page));
 
@@ -588,7 +652,10 @@ export const createFreshdeskSource: SourceFactory = (
         `/tickets?${params.toString()}`,
       );
       const raw = Array.isArray(list) ? list : [];
-      let items = raw.map((t) => metadataToItem(t, []));
+      let items = raw.map((t): RawWorkItem => ({
+        ...metadataToItem(t, []),
+        listed: true,
+      }));
       if (opts.groupKey)
         items = items.filter((i) => i.groupKey === opts.groupKey);
 
@@ -651,14 +718,8 @@ export const createFreshdeskSource: SourceFactory = (
       return [];
     },
 
-    async customerRecord(raw) {
-      const id = (raw as { company_id?: unknown } | null)?.company_id;
-      if (id == null) return null;
-      const { custom_fields, ...company } = await get<FreshdeskCompany>(
-        `/companies/${encodeURIComponent(String(id))}`,
-      );
-      return { ...company, ...(custom_fields ?? {}) };
-    },
+    customerRecord: (raw) =>
+      companyRecord((raw as { company_id?: unknown } | null)?.company_id),
 
     async setTags(externalId, change) {
       const path = `/tickets/${encodeURIComponent(externalId)}`;

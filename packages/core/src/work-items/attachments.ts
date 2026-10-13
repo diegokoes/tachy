@@ -1,7 +1,9 @@
 import {
+  attachmentPath,
   attachmentRef,
   fileFamily,
   largestUploadBytes,
+  parseAttachmentRef,
   tooLargeReason,
   uploadLimitBytes,
   type WorkItemFile,
@@ -43,6 +45,30 @@ export function listFiles(
         : {}),
     })),
   );
+}
+
+/**
+ * Where a person opens one of this item's files in a browser, by the file's
+ * reference. Null for a reference to another item, for a file the item does
+ * not list, and on a server that does not know its own address (`origin`).
+ */
+export function fileLinker(
+  item: RawWorkItem,
+  opening: { source: string; origin: string | undefined },
+): (path: string) => string | null {
+  const listed = new Set(
+    item.messages.flatMap((message) =>
+      (message.attachments ?? []).map((file) => file.id),
+    ),
+  );
+  return (path) => {
+    const ref = parseAttachmentRef(path);
+    if (!opening.origin || !ref) return null;
+    const ofThisItem =
+      ref.source === opening.source && ref.externalId === item.externalId;
+    if (!ofThisItem || !listed.has(ref.attachmentId)) return null;
+    return opening.origin + attachmentPath(ref);
+  };
 }
 
 async function readCapped(

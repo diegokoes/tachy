@@ -10,6 +10,8 @@ import {
 import {
   createAzureDevopsSource,
   createAdoClient,
+  updateEvents,
+  type AdoUpdate,
 } from "@tachy/source-azure-devops";
 import { addSourceConnection, addSourceProject } from "@tachy/core/sources";
 import { extractAdoRefs } from "@tachy/core/work-items";
@@ -316,6 +318,27 @@ describe("azure-devops adapter", () => {
     });
   });
 
+  it("names who an item is assigned to, its priority and its type", async () => {
+    mockFetch({
+      ...routes,
+      "/_apis/wit/workitems/42": {
+        ...workItem,
+        fields: {
+          ...workItem.fields,
+          "System.AssignedTo": { displayName: "Bob Dev" },
+          "Microsoft.VSTS.Common.Priority": 2,
+        },
+      },
+    });
+    const item = await source().fetchItem("42");
+    expect(item).toMatchObject({
+      assignee: "Bob Dev",
+      priority: "2",
+      itemType: "Bug",
+    });
+    expect(item.listed).toBeUndefined();
+  });
+
   it("lists items per project with a JSON cursor", async () => {
     const { calls } = mockFetch({
       ...routes,
@@ -325,6 +348,7 @@ describe("azure-devops adapter", () => {
     const { items, nextCursor } = await source().listItems({});
     expect(items).toHaveLength(1);
     expect(items[0].externalId).toBe("42");
+    expect(items[0]).toMatchObject({ listed: true, itemType: "Bug" });
     expect(nextCursor).toBeUndefined();
     const wiql = calls.find((c) => c.includes("/wiql"));
     expect(wiql).toContain("timePrecision=true");
@@ -445,6 +469,223 @@ describe("azure-devops adapter", () => {
     expect(red.relations.commits[0].comment).not.toContain("dave@corp.example");
     expect(red.relations.commits[0].author).toMatch(/^\[USER_\d+\]$/);
     expect(red.relations.commits[0].sha).toBe("abc123");
+  });
+});
+
+describe("an item's updates as events", () => {
+  const alice = { displayName: "Alice Dev", uniqueName: "alice@corp.example" };
+  const bob = { displayName: "Bob Dev", uniqueName: "bob@corp.example" };
+  const changed = (oldValue: string | undefined, newValue: string) => ({
+    "System.ChangedDate": { oldValue, newValue },
+  });
+  const updates: AdoUpdate[] = [
+    {
+      id: 1,
+      rev: 1,
+      revisedBy: alice,
+      revisedDate: "2026-01-02T00:00:00Z",
+      fields: {
+        ...changed(undefined, "2026-01-01T00:00:00Z"),
+        "System.CreatedDate": { newValue: "2026-01-01T00:00:00Z" },
+        "System.State": { newValue: "New" },
+        "System.WorkItemType": { newValue: "Bug" },
+        "System.Title": { newValue: "Printer fails with 023" },
+        "System.Rev": { newValue: 1 },
+      },
+    },
+    {
+      id: 2,
+      rev: 2,
+      revisedBy: bob,
+      revisedDate: "2026-01-03T00:00:00Z",
+      fields: {
+        ...changed("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z"),
+        "System.Rev": { oldValue: 1, newValue: 2 },
+        "System.State": { oldValue: "New", newValue: "Active" },
+        "System.AssignedTo": { newValue: bob },
+        "Microsoft.VSTS.Common.StateChangeDate": {
+          newValue: "2026-01-02T00:00:00Z",
+        },
+        "WEF_0123_Kanban.Column": { oldValue: "New", newValue: "Doing" },
+        "System.History": { newValue: "taking this" },
+      },
+    },
+    {
+      id: 3,
+      rev: 2,
+      revisedBy: bob,
+      revisedDate: "2026-01-02T12:00:00Z",
+      relations: {
+        added: [
+          {
+            rel: "System.LinkTypes.Hierarchy-Reverse",
+            url: "https://dev.azure.com/myorg/_apis/wit/workItems/10",
+          },
+          {
+            rel: "AttachedFile",
+            url: "https://x/att/1",
+            attributes: { name: "5.jpg" },
+          },
+        ],
+        removed: [
+          { rel: "ArtifactLink", url: "vstfs:///Git/Commit/p%2Fr%2Fabc" },
+        ],
+      },
+    },
+    {
+      id: 4,
+      rev: 3,
+      revisedBy: alice,
+      revisedDate: "9999-01-01T00:00:00Z",
+      fields: {
+        ...changed("2026-01-02T00:00:00Z", "2026-01-03T00:00:00Z"),
+        "System.Description": {
+          oldValue: "short",
+          newValue: `<div>${"long ".repeat(60)}</div>`,
+        },
+        "Microsoft.VSTS.Common.Priority": { oldValue: 2, newValue: 1 },
+        "Custom.FaultVersion": { oldValue: "2.4.1", newValue: "" },
+      },
+    },
+    // Links only, on the revision nothing has replaced: no time to give it.
+    { id: 5, rev: 3, revisedDate: "9999-01-01T00:00:00Z", relations: {} },
+  ];
+  const events = updateEvents(updates);
+  const of = (updateId: number) =>
+    events.filter((e) => e.externalId.startsWith(`${updateId}:`));
+
+  it("gives the creating update as `created` and the fields tachy tracks", () => {
+    expect(of(1)).toEqual([
+      {
+        externalId: "1:created",
+        occurredAt: "2026-01-01T00:00:00Z",
+        actor: "Alice Dev",
+        field: "created",
+      },
+      {
+        externalId: "1:System.State",
+        occurredAt: "2026-01-01T00:00:00Z",
+        actor: "Alice Dev",
+        field: "status",
+        oldValue: null,
+        newValue: "New",
+      },
+      {
+        externalId: "1:System.WorkItemType",
+        occurredAt: "2026-01-01T00:00:00Z",
+        actor: "Alice Dev",
+        field: "type",
+        oldValue: null,
+        newValue: "Bug",
+      },
+    ]);
+  });
+
+  it("dates a change of fields by when it was made, names people, and skips the bookkeeping", () => {
+    expect(of(2)).toEqual([
+      {
+        externalId: "2:System.State",
+        occurredAt: "2026-01-02T00:00:00Z",
+        actor: "Bob Dev",
+        field: "status",
+        oldValue: "New",
+        newValue: "Active",
+      },
+      {
+        externalId: "2:System.AssignedTo",
+        occurredAt: "2026-01-02T00:00:00Z",
+        actor: "Bob Dev",
+        field: "assignee",
+        oldValue: null,
+        newValue: "Bob Dev",
+      },
+    ]);
+  });
+
+  it("dates a change of links by its own time and says what was linked", () => {
+    expect(of(3)).toEqual([
+      {
+        externalId: "3:link:added:0",
+        occurredAt: "2026-01-02T12:00:00Z",
+        actor: "Bob Dev",
+        field: "link",
+        newValue: "System.LinkTypes.Hierarchy-Reverse #10",
+      },
+      {
+        externalId: "3:link:added:1",
+        occurredAt: "2026-01-02T12:00:00Z",
+        actor: "Bob Dev",
+        field: "link",
+        newValue: "AttachedFile 5.jpg",
+      },
+      {
+        externalId: "3:link:removed:0",
+        occurredAt: "2026-01-02T12:00:00Z",
+        actor: "Bob Dev",
+        field: "link",
+        oldValue: "ArtifactLink vstfs:///Git/Commit/p%2Fr%2Fabc",
+      },
+    ]);
+  });
+
+  it("records prose as changed without its text, and an emptied field as null", () => {
+    expect(of(4)).toMatchObject([
+      { field: "System.Description", oldValue: "short", newValue: null },
+      { field: "priority", oldValue: "2", newValue: "1" },
+      { field: "Custom.FaultVersion", oldValue: "2.4.1", newValue: null },
+    ]);
+    expect(of(4)[0].occurredAt).toBe("2026-01-03T00:00:00Z");
+    expect(of(5)).toEqual([]);
+  });
+
+  it("reads the updates with the item and marks its history as whole", async () => {
+    const { calls } = mockFetch({
+      ...routes,
+      "/_apis/wit/workItems/42/updates": {
+        count: 2,
+        value: updates.slice(0, 2),
+      },
+    });
+    const item = await source().fetchItem("42");
+    expect(item.historyComplete).toBe(true);
+    expect(item.events?.map((e) => e.field)).toEqual([
+      "created",
+      "status",
+      "type",
+      "status",
+      "assignee",
+    ]);
+    const call = calls.find((c) => c.includes("/updates"))!;
+    expect(call).toContain("%24top=200");
+    expect(call).toContain("%24skip=0");
+  });
+
+  it("still reads the item when its updates cannot be read", async () => {
+    mockFetch(routes);
+    const item = await source().fetchItem("42");
+    expect(item.events).toBeUndefined();
+    expect(item.historyComplete).toBeUndefined();
+    expect(item.messages.length).toBeGreaterThan(0);
+  });
+
+  it("walks on when a short page has not reached the item's revision", async () => {
+    const pages = [updates.slice(0, 2), updates.slice(2, 4), []];
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        calls.push(url);
+        const skip = Number(new URL(url).searchParams.get("$skip"));
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ value: pages[skip / 2] }),
+        } as Response;
+      }),
+    );
+    const read = await client().getUpdates("42", 3);
+    expect(read.map((u) => u.id)).toEqual([1, 2, 3, 4]);
+    expect(calls).toHaveLength(2);
   });
 });
 
