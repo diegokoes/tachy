@@ -15,6 +15,8 @@ export interface ChatBody {
   /** The conversation's `/model` pick; unset, the settings decide. */
   model?: string;
   effort?: AgentEffort;
+  /** Asks for the turn's debug frames, which only an app admin is sent. */
+  debug?: boolean;
 }
 
 export interface SubcommandMeta {

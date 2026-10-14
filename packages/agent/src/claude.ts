@@ -4,12 +4,14 @@ import {
   type CanUseTool,
   type Options,
   type PermissionResult,
+  type SDKSystemMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import { classifyCall, qualify, READ_TOOLS, MCP_SERVER } from "./tools";
 import {
   effectiveModel,
   type AgentConfig,
   type AgentErrorKind,
+  type SessionFacts,
 } from "./backend";
 import { TurnBase, type ApprovalGate } from "./turn";
 
@@ -188,6 +190,18 @@ export function withoutImageData(content: unknown): unknown {
   );
 }
 
+/** The start-of-turn message, cut down to what a debug view names. */
+export function sessionFacts(init: SDKSystemMessage): SessionFacts {
+  return {
+    model: init.model,
+    tools: init.tools,
+    mcpServers: init.mcp_servers.map(({ name, status }) => ({ name, status })),
+    credentialSource: init.apiKeySource,
+    skills: init.skills,
+    plugins: init.plugins.map((plugin) => plugin.name),
+  };
+}
+
 export class ClaudeTurn extends TurnBase {
   private controller = new AbortController();
 
@@ -238,10 +252,15 @@ export class ClaudeTurn extends TurnBase {
     const pending = new Map<string, string>();
     let answeredSessionId: string | undefined;
     let resulted = false;
+    const answeredBy = new Set<string>();
     try {
       for await (const sdkMessage of query({ prompt, options })) {
-        if (sdkMessage.type === "assistant") {
+        if (sdkMessage.type === "system" && sdkMessage.subtype === "init") {
+          this.queue.push({ type: "session", ...sessionFacts(sdkMessage) });
+        } else if (sdkMessage.type === "assistant") {
           answeredSessionId = sdkMessage.session_id;
+          if (sdkMessage.message.model)
+            answeredBy.add(sdkMessage.message.model);
           for (const block of sdkMessage.message.content as ContentBlock[]) {
             if (block.type === "text" && block.text) {
               this.queue.push({ type: "text", text: block.text });
@@ -294,6 +313,7 @@ export class ClaudeTurn extends TurnBase {
               inputTokens: resultMessage.usage?.input_tokens ?? null,
               outputTokens: resultMessage.usage?.output_tokens ?? null,
             },
+            models: [...answeredBy],
           });
         }
       }

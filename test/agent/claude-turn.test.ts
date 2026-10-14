@@ -86,3 +86,48 @@ describe("a stopped Claude turn", () => {
     ]);
   });
 });
+
+describe("a Claude turn's own account of its model", () => {
+  const INIT = {
+    type: "system",
+    subtype: "init",
+    model: "claude-haiku-5-5",
+    tools: ["ToolSearch"],
+    mcp_servers: [{ name: "tachy", status: "connected", source: "sdk" }],
+    apiKeySource: "ANTHROPIC_API_KEY",
+    skills: [],
+    plugins: [{ name: "none-loaded", path: "/nowhere" }],
+  };
+  const answerFrom = (model: string) => ({
+    ...ANSWER,
+    message: { ...ANSWER.message, model },
+  });
+
+  it("reports what the session started with", async () => {
+    const [session] = await eventsOf(async function* () {
+      yield INIT;
+    });
+    expect(session).toEqual({
+      type: "session",
+      model: "claude-haiku-5-5",
+      tools: ["ToolSearch"],
+      mcpServers: [{ name: "tachy", status: "connected" }],
+      credentialSource: "ANTHROPIC_API_KEY",
+      skills: [],
+      plugins: ["none-loaded"],
+    });
+  });
+
+  it("lists each model that answered once, in order of first use", async () => {
+    const events = await eventsOf(async function* () {
+      yield answerFrom("claude-haiku-5-5");
+      yield answerFrom("claude-sonnet-5-5");
+      yield answerFrom("claude-haiku-5-5");
+      yield RESULT;
+    });
+    expect(events.at(-1)).toMatchObject({
+      type: "result",
+      models: ["claude-haiku-5-5", "claude-sonnet-5-5"],
+    });
+  });
+});

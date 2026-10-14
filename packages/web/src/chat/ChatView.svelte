@@ -16,6 +16,7 @@
   import ArtifactPanel from "./ArtifactPanel.svelte";
   import CommandMenu, {
     matchArtifacts,
+    DEBUG_COMMAND,
     MODEL_COMMAND,
     STOP_COMMAND,
     type CommandPick,
@@ -68,6 +69,9 @@
   } from "../work-items/azCommand";
   import { typeColor, typeIcon } from "../work-items/ado-icons";
   import { tallyCalls, tallyLabel } from "./toolCalls";
+  import { recordFrame, type TurnSent, type TurnTrace } from "./trace";
+  import TracePanel from "./TracePanel.svelte";
+  import { isGlobalAdmin } from "../access/session.svelte";
   import Walkthrough from "../code/Walkthrough.svelte";
   import { parseCode, scopeOptions, withScopeWord } from "../code/codeCommand";
   import { codeScope, ensureRepos, scopeNote } from "../code/codeScope.svelte";
@@ -414,6 +418,12 @@
     if (pick.kind === "builtin" && pick.builtin.name === STOP_COMMAND.name) {
       chat.input = "";
       void stop();
+    } else if (
+      pick.kind === "builtin" &&
+      pick.builtin.name === DEBUG_COMMAND.name
+    ) {
+      chat.input = "";
+      chat.debug = !chat.debug;
     } else if (pick.kind === "builtin") chat.input = `/${pick.builtin.name} `;
     else if (pick.kind === "option" && azCtx) pickAz(pick.value);
     else if (pick.kind === "option" && modelCtx) pickModel(pick.value);
@@ -530,6 +540,11 @@
       return stop();
     }
     if (!message || chat.busy) return;
+    if (message === `/${DEBUG_COMMAND.name}` && isGlobalAdmin()) {
+      chat.input = "";
+      chat.debug = !chat.debug;
+      return;
+    }
     if (isAzNew(message)) return openFromLine(message);
     // A `/model` line is never a message: Enter with no row to pick takes the
     // line when it is whole as typed, and otherwise waits for more.
@@ -564,6 +579,7 @@
     command?: { name: string; args: string },
   ) {
     let readCode = false;
+    let trace: TurnTrace | undefined;
     addEntry({ kind: "user", text: message });
     const uploadPaths = chat.uploads.map((u) => u.path);
     chat.uploads = [];
@@ -586,9 +602,19 @@
           command,
           model: chat.model?.id,
           effort: chat.model?.effort,
+          debug: chat.debug || undefined,
         },
         turnAbort.signal,
       )) {
+        if (event === "debug") {
+          addEntry({
+            kind: "trace",
+            trace: { sent: data as unknown as TurnSent, calls: [] },
+          });
+          // Read back from the list: that one is reactive, the literal is not.
+          const added = chat.entries[chat.entries.length - 1];
+          if (added.kind === "trace") trace = added.trace;
+        } else if (trace) recordFrame(trace, event, data);
         chat.queuePosition =
           event === "queued" ? (data.position as number) : null;
         if (event === "tool_result") showFiles(data);
@@ -838,6 +864,7 @@
     chat.sessionId = undefined;
     chat.turnId = undefined;
     chat.model = undefined;
+    chat.debug = false;
   }
 
   function onClear() {
@@ -953,6 +980,8 @@
               <span class="who err">{G.marker}error</span>
               <div class="body err">{entry.text}</div>
             </div>
+          {:else if entry.kind === "trace"}
+            <TracePanel trace={entry.trace} />
           {:else if entry.kind === "stopped"}
             <div class="tool">
               <Icon name="stop" size="1em" weight={7} />
@@ -998,7 +1027,7 @@
     </div>
 
     <div class="dock" bind:this={dockEl}>
-      {#if chat.uploads.length || chat.artifact || chat.model || draftWaiting}
+      {#if chat.uploads.length || chat.artifact || chat.model || chat.debug || draftWaiting}
         <div class="attachments">
           {#if chat.model}
             <span class="attach model-chip">
@@ -1011,6 +1040,19 @@
                 aria-label="Back to your settings model"
                 use:tip={"Back to your settings model"}
                 onclick={() => (chat.model = undefined)}
+                ><Icon name="close" size="1em" weight={7} /></button
+              >
+            </span>
+          {/if}
+          {#if chat.debug}
+            <span class="attach model-chip">
+              <Icon name="bug" size="1em" />
+              debug
+              <button
+                class="chip-x"
+                aria-label="Switch debug off"
+                use:tip={"Switch debug off"}
+                onclick={() => (chat.debug = false)}
                 ><Icon name="close" size="1em" weight={7} /></button
               >
             </span>
@@ -1061,6 +1103,7 @@
             query={cmdCtx?.query ?? ""}
             builtins={commands.builtins}
             running={chat.busy}
+            debuggable={isGlobalAdmin()}
             artifacts={commands.artifacts}
             options={optionsMenu?.options}
             crumb={optionsMenu?.crumb}
