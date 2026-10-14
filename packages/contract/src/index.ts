@@ -351,3 +351,19 @@ export {
   parseDateFormat,
 } from "./dates";
 export type { DateOrder, Clock, DateFormat, Moment } from "./dates";
+export {
+  THEMES,
+  TEXT_SIZES,
+  NAV_LABELS,
+  FONT_KEYS,
+  isHexColor,
+  parseAppearanceDefaults,
+} from "./appearance";
+export type {
+  Theme,
+  TextSize,
+  NavLabels,
+  FontAxis,
+  FontKey,
+  AppearanceDefaults,
+} from "./appearance";

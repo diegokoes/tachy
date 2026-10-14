@@ -19,6 +19,7 @@ import {
   upsertScoped,
   type Scope,
   type ScopeContext,
+  type ScopedHit,
 } from "./scoped";
 
 /**
@@ -38,8 +39,8 @@ export const PREF_KEYS = Object.keys(PREF_SCHEMAS) as PrefKey[];
 export type PrefValue<K extends PrefKey> = z.infer<(typeof PREF_SCHEMAS)[K]>;
 
 /**
- * How one person reads dates is theirs alone: no team or deployment default,
- * so an unset key is its built-in value.
+ * How one person reads dates is theirs: only they write it, no team sets it.
+ * An unset key follows the deployment's appearance, then the built-in value.
  */
 const PERSONAL = {
   date_order: DEFAULT_DATE_FORMAT.order,
@@ -69,20 +70,26 @@ function checkKey(key: string): asserts key is PrefKey {
     );
 }
 
+async function resolvePersonal<K extends PersonalKey>(
+  key: K,
+  hit: ScopedHit | undefined,
+): Promise<{ value: PrefValue<K>; source: PrefSource }> {
+  const own =
+    hit?.scope === "user" ? PREF_SCHEMAS[key].safeParse(hit.row.value) : null;
+  if (own?.success) return { value: own.data as PrefValue<K>, source: "user" };
+  const appearance = (await effectiveSettings()).appearance.value;
+  const orgValue = appearance[key];
+  if (orgValue !== undefined)
+    return { value: orgValue as PrefValue<K>, source: "db" };
+  return { value: PERSONAL[key] as PrefValue<K>, source: "default" };
+}
+
 export async function resolvePref<K extends PrefKey>(
   key: K,
   ctx: ScopeContext,
 ): Promise<{ value: PrefValue<K>; source: PrefSource }> {
   const hit = await resolveScoped("preferences", key, ctx);
-  if (isPersonal(key)) {
-    const parsed =
-      hit?.scope === "user"
-        ? PREF_SCHEMAS[key].safeParse(hit.row.value)
-        : undefined;
-    return parsed?.success
-      ? { value: parsed.data as PrefValue<K>, source: "user" }
-      : { value: PERSONAL[key] as PrefValue<K>, source: "default" };
-  }
+  if (isPersonal(key)) return resolvePersonal(key, hit);
   if (hit && hit.scope !== "global") {
     const parsed = PREF_SCHEMAS[key].safeParse(hit.row.value);
     if (parsed.success)
