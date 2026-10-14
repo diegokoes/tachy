@@ -23,7 +23,7 @@ const media = vi.hoisted(() => {
 import { Flip, gsap } from "../../packages/web/src/motion/gsap";
 import { reflow } from "../../packages/web/src/motion/motion";
 import {
-  loadThemeFromStorage,
+  loadTheme,
   setNavHidden,
   themeState,
 } from "../../packages/web/src/theme/theme.svelte";
@@ -39,18 +39,18 @@ afterEach(() => {
 
 describe("the hidden nav bar", () => {
   it("is shown until someone hides it", () => {
-    loadThemeFromStorage();
+    loadTheme();
     expect(themeState.navHidden).toBe(false);
   });
 
   it("survives a reload", () => {
     setNavHidden(true);
     themeState.navHidden = false;
-    loadThemeFromStorage();
+    loadTheme();
     expect(themeState.navHidden).toBe(true);
 
     setNavHidden(false);
-    loadThemeFromStorage();
+    loadTheme();
     expect(themeState.navHidden).toBe(false);
   });
 });

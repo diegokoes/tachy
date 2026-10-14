@@ -16,7 +16,8 @@
   import { jellyPress, reflow } from "./motion/motion";
   import StarField from "./motion/StarField.svelte";
   import Wordmark from "./motion/Wordmark.svelte";
-  import { loadThemeFromStorage, themeState } from "./theme/theme.svelte";
+  import { loadTheme, themeState } from "./theme/theme.svelte";
+  import { applyOrgDefaults } from "./theme/defaults";
   import { loadFonts } from "./theme/fonts.svelte";
   import { loadDateFormat } from "./dates.svelte";
   import { openSection, section, startRouter } from "./shell/router.svelte";
@@ -264,8 +265,14 @@
     if (session.me) void loadDateFormat();
   });
 
+  // Repainting reads the theme state it writes; only the config may rerun it.
+  $effect(() => {
+    const config = session.config;
+    if (config) untrack(() => applyOrgDefaults(config.appearance));
+  });
+
   onMount(() => {
-    loadThemeFromStorage();
+    loadTheme();
     loadFonts();
     loadVim();
     initSession();

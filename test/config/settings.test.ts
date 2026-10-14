@@ -11,6 +11,7 @@ import { createApp } from "../../packages/api/src/app";
 import {
   getSettings,
   setSetting,
+  clearSetting,
   effectiveSettings,
   clearSettingsCache,
   loadSettingsIntoEnv,
@@ -210,6 +211,30 @@ describe("settings store", () => {
       delete process.env.TACHY_REDACT_IMAGES;
     }
   });
+
+  it("keeps a partial appearance and refuses a field the contract drops", async () => {
+    expect((await effectiveSettings()).appearance).toEqual({
+      value: {},
+      source: "default",
+    });
+    await setSetting("appearance", { theme: "light", accent: "#0dbc79" });
+    expect((await effectiveSettings()).appearance).toEqual({
+      value: { theme: "light", accent: "#0dbc79" },
+      source: "db",
+    });
+
+    for (const bad of [
+      { accent: "green" },
+      { font_ui: "comic-sans" },
+      { warp: true },
+    ])
+      await expect(setSetting("appearance", bad)).rejects.toThrow(/invalid/);
+
+    expect(await clearSetting("appearance")).toBe(true);
+    expect(await clearSetting("appearance")).toBe(false);
+    expect((await effectiveSettings()).appearance.source).toBe("default");
+    await expect(clearSetting("warp_drive")).rejects.toThrow(/unknown/);
+  });
 });
 
 describe("settings API gating", () => {
@@ -286,5 +311,26 @@ describe("settings API gating", () => {
     expect(bad.status).toBe(400);
     const unknown = await put(adminCookie, "warp_drive", true);
     expect(unknown.status).toBe(400);
+  });
+
+  it("serves the appearance on the public config, and only admins clear it", async () => {
+    const clear = (cookie: string) =>
+      app.request("/api/settings/appearance", {
+        method: "DELETE",
+        headers: { cookie },
+      });
+    const config = async () =>
+      (await (await app.request("/auth/config")).json()).appearance;
+
+    expect(
+      (await put(adminCookie, "appearance", { nav_labels: "both" })).status,
+    ).toBe(200);
+    expect(await config()).toEqual({ nav_labels: "both" });
+
+    expect((await clear(memberCookie)).status).toBe(403);
+    const cleared = await clear(adminCookie);
+    expect(cleared.status).toBe(200);
+    expect((await cleared.json()).settings.appearance.value).toEqual({});
+    expect(await config()).toEqual({});
   });
 });
