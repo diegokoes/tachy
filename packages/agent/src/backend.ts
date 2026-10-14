@@ -66,6 +66,20 @@ export interface TurnUsage {
   outputTokens: number | null;
 }
 
+/**
+ * What Claude Code says it started the turn with, as opposed to what it was
+ * asked for: the model it resolved, and everything it loaded beside the prompt.
+ */
+export interface SessionFacts {
+  model: string;
+  tools: string[];
+  mcpServers: { name: string; status: string }[];
+  /** Where the credential came from, never its value. */
+  credentialSource: string;
+  skills: string[];
+  plugins: string[];
+}
+
 export type AgentEvent =
   | { type: "text"; text: string }
   | { type: "tool_use"; tool: string; input: unknown; id: string }
@@ -78,7 +92,10 @@ export type AgentEvent =
       costUsd: number;
       sessionId: string;
       usage?: TurnUsage;
+      /** Each model that answered in this turn, in order of first use. */
+      models: string[];
     }
+  | ({ type: "session" } & SessionFacts)
   | { type: "error"; message: string; kind?: AgentErrorKind }
   // The turn was aborted before it finished. `sessionId` is set once an answer
   // is on the transcript, which gives a follow-up a session to resume.
