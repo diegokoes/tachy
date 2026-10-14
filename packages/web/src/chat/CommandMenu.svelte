@@ -45,6 +45,13 @@
     description: "Run this conversation on another model",
   };
 
+  /** Client-side, and offered to an app admin only. */
+  export const DEBUG_COMMAND: BuiltinCommandMeta = {
+    name: "debug",
+    args: "",
+    description: "Show what each turn sends to the agent",
+  };
+
   /** Client-side, and the only command there is while a turn runs. */
   export const STOP_COMMAND: BuiltinCommandMeta = {
     name: "stop",
@@ -74,6 +81,7 @@
     options = [],
     crumb,
     running = false,
+    debuggable = false,
     onpick,
   }: {
     mode?: CommandMode;
@@ -84,6 +92,8 @@
     crumb?: MenuCrumb;
     /** A turn is under way: nothing can be started, so only stop is offered. */
     running?: boolean;
+    /** The caller is an app admin, who is offered `/debug`. */
+    debuggable?: boolean;
     onpick: (pick: CommandPick) => void;
   } = $props();
 
@@ -118,7 +128,12 @@
       }));
     const offered = running
       ? [STOP_COMMAND]
-      : [...builtins, ARTIFACT_COMMAND, MODEL_COMMAND];
+      : [
+          ...builtins,
+          ARTIFACT_COMMAND,
+          MODEL_COMMAND,
+          ...(debuggable ? [DEBUG_COMMAND] : []),
+        ];
     return offered
       .filter((b) => b.name.startsWith(query.toLowerCase()))
       .map((b) => ({

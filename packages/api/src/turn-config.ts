@@ -28,7 +28,8 @@ import { getUserByEmail, userSoleTeamId } from "@tachy/core/access";
 import { listSourceConnections } from "@tachy/core/sources";
 import { ANONYMOUS_UPLOADS } from "@tachy/core/chat";
 import { renderColumnContract, type ArtifactSpec } from "@tachy/core/exports";
-import { userStateDir, type AgentConfig } from "@tachy/agent";
+import { globalRedactionEnabled } from "@tachy/core/compliance";
+import { effectiveModel, userStateDir, type AgentConfig } from "@tachy/agent";
 import { internalEndpoint } from "./internal-endpoint";
 import { findCommand, commandAutoApprove } from "./commands";
 
@@ -218,6 +219,41 @@ export function turnChoice<
     ...base,
     ...(picked.model ? { model: picked.model } : {}),
     ...(picked.effort ? { effort: picked.effort } : {}),
+  };
+}
+
+/** What a turn was started with, for an app admin's debug view. */
+export interface TurnDebug {
+  systemPrompt: string;
+  /** The user's message as the model gets it, expansions included. */
+  prompt: string;
+  /** Unset when neither the caller nor the org names one. */
+  model?: string;
+  effort?: AgentEffort;
+  /** The turn continues a session, whose earlier turns are not shown. */
+  resumed: boolean;
+  autoApprove: string[];
+  /** TACHY_REDACT is on, so every connection is scrubbed. */
+  redactionForced: boolean;
+}
+
+/**
+ * Each field is named: `config` also holds the MCP environment and the
+ * caller's credential, which a spread would send to the browser.
+ */
+export function turnDebug(
+  prompt: string,
+  config: AgentConfig,
+  opts: { resumed: boolean },
+): TurnDebug {
+  return {
+    systemPrompt: config.systemPrompt,
+    prompt,
+    model: effectiveModel(config),
+    effort: config.effort,
+    resumed: opts.resumed,
+    autoApprove: config.autoApprove ?? [],
+    redactionForced: globalRedactionEnabled(),
   };
 }
 
