@@ -15,6 +15,7 @@ export {
   claudeOptions,
   BUILTIN_TOOLS,
   explainFailure,
+  sessionFacts,
 } from "./claude";
 export { userStateDir } from "./state";
 export { completeOnce } from "./complete";
@@ -34,6 +35,7 @@ export {
   type AgentErrorKind,
   type AgentEvent,
   type AgentTurn,
+  type SessionFacts,
   type Decision,
   type AgentEffort,
   type TurnUsage,

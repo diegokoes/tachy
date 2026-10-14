@@ -3,6 +3,7 @@ import type { OutputFile } from "./OutputCard.svelte";
 import type { CreatedTicket, WorkItemFile } from "@tachy/contract";
 import type { ShownStep, WalkStep } from "../code/walkthrough";
 import type { ModelPick } from "./modelCommand";
+import type { TurnTrace } from "./trace";
 
 export type EntryData =
   | { kind: "user"; text: string }
@@ -44,6 +45,8 @@ export type EntryData =
       color: string | null;
     }
   | { kind: "error"; text: string }
+  // What the turn below sent to the agent, while debug is on.
+  | { kind: "trace"; trace: TurnTrace }
   // The turn above was ended by the stop mark before it finished.
   | { kind: "stopped" }
   | { kind: "running"; turnId: string; text: string; stopped: boolean };
@@ -72,4 +75,6 @@ export const chat = $state({
   artifact: undefined as { id: string; title: string } | undefined,
   /** Picked with `/model`, for this conversation only. */
   model: undefined as ModelPick | undefined,
+  /** Switched with `/debug`: each turn shows what it sent to the agent. */
+  debug: false,
 });
