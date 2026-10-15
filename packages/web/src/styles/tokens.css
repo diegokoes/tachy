@@ -39,6 +39,7 @@
   --accent-fill: var(--accent);
   --accent-dim: color-mix(in srgb, var(--accent) 14%, transparent);
   --star-ink: rgba(255, 255, 255, 0.3);
+  --star-ink-red: rgba(248, 81, 73, 0.5);
   /* Fainter than the starfield: the wordmark sits in the top row next to the
      nav, so it has live UI beside it and has to stay behind it. */
   --wordmark-ink: rgba(255, 255, 255, 0.115);
@@ -97,6 +98,7 @@
      perceptual contrast at this size than a light one on dark, so equal
      alpha leaves the light theme's sky nearly blank. */
   --star-ink: rgba(30, 28, 20, 0.42);
+  --star-ink-red: rgba(207, 34, 46, 0.5);
   --wordmark-ink: rgba(30, 28, 20, 0.16);
   --ok: #1a7f37;
   --warn: #9a6700;

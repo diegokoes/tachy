@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { gsap, reducedMotion } from "./gsap";
   import { rand, scatter, twinkle, type Star } from "./stars";
+  import { skyTint } from "./sky.svelte";
 
   /** Density decides whether this reads as a sky or a few specks. At 220 on a
    *  1920px viewport the mean spacing is ~97px, and the ~160px gutter beside
@@ -23,6 +24,7 @@
   let { intense = false }: { intense?: boolean } = $props();
 
   const stars: Speck[] = scatter(COUNT);
+  const tint = $derived(skyTint());
 
   const motes: Speck[] = Array.from({ length: MOTES }, () => ({
     glyph: "·",
@@ -140,7 +142,12 @@
   });
 </script>
 
-<div class="starfield" bind:this={root} aria-hidden="true">
+<div
+  class="starfield"
+  bind:this={root}
+  style:--star-ink={tint ? `var(--star-ink-${tint})` : null}
+  aria-hidden="true"
+>
   {#each stars as s}
     <span
       bind:this={s.el}
@@ -177,6 +184,7 @@
     font-family: var(--font-mono);
     line-height: 1;
     color: var(--star-ink);
+    transition: color 1.2s ease;
     will-change: transform, opacity;
   }
 </style>
