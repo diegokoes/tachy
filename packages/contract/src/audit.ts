@@ -12,6 +12,7 @@ export const AUDIT_ACTIONS = [
   "source_connection_save",
   "source_connection_delete",
   "setting_set",
+  "setting_delete",
   "maintenance_set",
   "bucket_create",
   "bucket_delete",
