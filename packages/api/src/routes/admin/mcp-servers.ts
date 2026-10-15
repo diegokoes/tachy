@@ -85,7 +85,7 @@ async function consoleToken(c: Context, server: McpServerRow): Promise<string> {
     const own = await ownToken(server.slug, await requireCaller(c));
     if (!own)
       throw badInput(
-        `save your own token for '${server.slug}' under Settings › Keys first`,
+        `save your own token for '${server.slug}' under Settings › Agent first`,
       );
     return own.token;
   }

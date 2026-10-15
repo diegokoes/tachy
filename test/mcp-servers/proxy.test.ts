@@ -311,7 +311,7 @@ describe("calls", () => {
         "events_search",
         {},
       ),
-    ).rejects.toThrow(/Settings › Keys/);
+    ).rejects.toThrow(/Settings › Agent/);
     const pooled = await hub();
     await expect(
       callServerTool(

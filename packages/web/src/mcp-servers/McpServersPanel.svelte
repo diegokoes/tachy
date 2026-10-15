@@ -21,7 +21,6 @@
   } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
   import type { Team } from "../catalog/rows";
-  import { INFO } from "../admin/help";
   import { sectionHoist } from "../admin/sectionAction.svelte";
   import { isGlobalAdmin } from "../access/session.svelte";
   import {
@@ -33,7 +32,7 @@
     httpConfig,
     serverPayload,
     stdioConfig,
-    toolPrefixFor,
+    uniqueToolPrefix,
     type Draft,
   } from "./form";
   import ToolsModal from "./ToolsModal.svelte";
@@ -86,7 +85,7 @@
   let poolOf = $state<McpServerRow | null>(null);
 
   const isHttp = (draft: Draft) => draft.transport !== "stdio";
-  const TEMPLATE_INFO = `${TOKEN_PLACEHOLDER} becomes the credential; ${DIR_PLACEHOLDER} the connection's own temporary directory.`;
+  const TEMPLATE_INFO = `${TOKEN_PLACEHOLDER}: the token. ${DIR_PLACEHOLDER}: a private temp directory.`;
 
   const columns: Column<McpServerRow>[] = $derived([
     {
@@ -95,27 +94,6 @@
       width: "14rem",
       edit: "text",
       required: true,
-      group: "server",
-    },
-    {
-      key: "slug",
-      label: "id",
-      formOnly: true,
-      edit: "text",
-      required: true,
-      info: INFO.slug,
-      derive: (d) => uniqueSlug(slugify(String(d.name ?? "")), slugs),
-      editable: () => false,
-      group: "server",
-    },
-    {
-      key: "tool_prefix",
-      label: "tool prefix",
-      formOnly: true,
-      edit: "text",
-      info: "Starts every tool name this server offers: prefix_toolname. Up to 20 lowercase letters, digits or _. Fixed once saved.",
-      placeholder: (d) => toolPrefixFor(slugify(String(d.name ?? ""))),
-      editable: () => false,
       group: "server",
     },
     {
@@ -135,7 +113,6 @@
       label: "url",
       formOnly: true,
       edit: "text",
-      placeholder: "https://host/path/mcp",
       value: (row) => httpConfig(row)?.url ?? "",
       visible: isHttp,
       group: "connection",
@@ -145,8 +122,8 @@
       label: "headers",
       formOnly: true,
       edit: "textarea",
-      placeholder: `Authorization: Bearer ${TOKEN_PLACEHOLDER}`,
-      info: `One 'Name: value' per line. ${TEMPLATE_INFO}`,
+      info: `Name: value, one per line. ${TOKEN_PLACEHOLDER}: the token.`,
+      initial: `Authorization: Bearer ${TOKEN_PLACEHOLDER}`,
       value: (row) => formatPairs(httpConfig(row)?.headers, ": "),
       visible: isHttp,
       group: "connection",
@@ -157,7 +134,7 @@
       formOnly: true,
       edit: "select",
       options: () => commandOptions,
-      info: "Only the programs listed in TACHY_MCP_STDIO_COMMANDS on the host can be started.",
+      info: "Programs listed in TACHY_MCP_STDIO_COMMANDS.",
       value: (row) => stdioConfig(row)?.command ?? "",
       visible: (d) => !isHttp(d),
       group: "connection",
@@ -167,7 +144,7 @@
       label: "arguments",
       formOnly: true,
       edit: "textarea",
-      info: `One argument per line. ${TEMPLATE_INFO}`,
+      info: `One per line. ${TEMPLATE_INFO}`,
       value: (row) => formatLines(stdioConfig(row)?.args),
       visible: (d) => !isHttp(d),
       group: "connection",
@@ -177,8 +154,7 @@
       label: "environment",
       formOnly: true,
       edit: "textarea",
-      placeholder: `CONFIG_DIR=${DIR_PLACEHOLDER}`,
-      info: `One NAME=value per line; nothing else of tachy's environment reaches the program. ${TEMPLATE_INFO}`,
+      info: `NAME=value, one per line. ${TEMPLATE_INFO}`,
       value: (row) => formatPairs(stdioConfig(row)?.env, "="),
       visible: (d) => !isHttp(d),
       group: "connection",
@@ -188,8 +164,7 @@
       label: "files",
       formOnly: true,
       edit: "textarea",
-      placeholder: `--- config/env.yaml\ntoken: ${TOKEN_PLACEHOLDER}`,
-      info: `Written into the connection's directory before the program starts, readable only by tachy. Start each file with a '--- relative/path' line. ${TEMPLATE_INFO}`,
+      info: `Each file starts with a '--- path' line. ${TEMPLATE_INFO}`,
       value: (row) => formatFiles(stdioConfig(row)?.files),
       visible: (d) => !isHttp(d),
       group: "connection",
@@ -204,7 +179,7 @@
         { value: "personal", label: "personal" },
       ],
       initial: "shared",
-      info: "Shared: a pool of service tokens kept here; when one is rate limited the next takes over. Personal: each person saves their own under Settings › Keys, and a person without one does not get this server's tools.",
+      info: "Shared: a pool kept here. Personal: each person's own, saved in Settings › Agent.",
       group: "access",
     },
     {
@@ -218,8 +193,7 @@
       label: "rate budget",
       formOnly: true,
       edit: "text",
-      placeholder: "60/15, 3600/150, 86400/400",
-      info: "Calls each token may make per window, as seconds/limit. tachy holds a call back rather than send one the server would refuse. Empty: no budget.",
+      info: "seconds/calls per token, comma-separated.",
       value: (row) => formatWindows(row.rate_windows),
       group: "limits",
     },
@@ -228,8 +202,7 @@
       label: "rate-limit codes",
       formOnly: true,
       edit: "text",
-      placeholder: "-32029",
-      info: "JSON-RPC error codes the server answers a rate-limited call with. HTTP 429 always counts.",
+      info: "JSON-RPC codes, comma-separated. HTTP 429 always counts.",
       value: (row) => formatCodes(row.rate_limit_codes),
       group: "limits",
     },
@@ -254,8 +227,7 @@
       label: `${t("customer")} bindings`,
       formOnly: true,
       edit: "textarea",
-      placeholder: "customer = hub_customer",
-      info: `One 'argument = fact kind' per line. A tool with that argument gains tachy_customer, and the value is read from that ${t("customer")}'s fact of the kind (labelled with this server's id, or unlabelled).`,
+      info: `argument = fact kind, one per line. The agent passes a ${t("customer")}; the argument is filled from its fact.`,
       value: (row) => formatPairs(row.argument_bindings, " = "),
       group: "agent",
     },
@@ -264,7 +236,7 @@
       label: "note for the agent",
       formOnly: true,
       edit: "textarea",
-      info: "Added to every tool's description. Say what the agent cannot tell from the tools alone: units, which ids it needs.",
+      info: "Appended to every tool's description.",
       group: "agent",
     },
     {
@@ -272,7 +244,7 @@
       label: "redaction",
       formOnly: true,
       edit: "checkbox",
-      info: "Scrub emails, phone numbers and secrets from this server's answers before the agent reads them. Always on when redaction is forced in console › system.",
+      info: "Scrub emails, phone numbers and secrets from answers.",
       group: "agent",
     },
     {
@@ -301,10 +273,18 @@
     picked = form?.row ? form.row.teams.map((team) => team.slug) : [];
   }
 
-  async function save(draft: Draft) {
+  async function save(draft: Draft, row: McpServerRow | null) {
+    const slug =
+      row?.slug ?? uniqueSlug(slugify(String(draft.name ?? "")), slugs);
+    const toolPrefix =
+      row?.tool_prefix ??
+      uniqueToolPrefix(
+        slug,
+        servers.map((server) => server.tool_prefix),
+      );
     let body;
     try {
-      body = serverPayload(draft, picked);
+      body = serverPayload(draft, { slug, toolPrefix }, picked);
     } catch (e) {
       formError = errText(e);
       throw e;
@@ -372,14 +352,14 @@
     variant="ghost"
     size="sm"
     icon="tool"
-    onclick={() => (toolsOf = server)}>tools</Button
+    onclick={() => (toolsOf = server)}><span class="caps">tools</span></Button
   >
   {#if admin && server.credential_mode === "shared"}
     <Button
       variant="ghost"
       size="sm"
       icon="token"
-      onclick={() => (poolOf = server)}>pool</Button
+      onclick={() => (poolOf = server)}><span class="caps">pool</span></Button
     >
   {/if}
 {/snippet}
@@ -392,7 +372,7 @@
   row: McpServerRow | null;
 })}
   <div class="extra">
-    <GroupHead label={`${t("teams")} whose turns get it`} />
+    <GroupHead label={t("teams")} />
     {#each teams.data as team (team.slug)}
       <label class="opt">
         <Checkbox
@@ -406,7 +386,7 @@
         <span>{team.name}</span>
       </label>
     {/each}
-    <Note>None ticked: everyone's turns get it.</Note>
+    <Note>None ticked: everyone.</Note>
     {#if mode === "edit" && row && probes[row.slug]}
       {@const probe = probes[row.slug]}
       {#if probe.ok}
@@ -436,7 +416,7 @@
   loading={listing.loading}
   error={listing.error ?? teams.error}
   emptyTitle="No MCP servers linked yet."
-  emptyDetail="Link a server and its read-only tools join the agent's, behind tachy's redaction, budget and logging."
+  emptyDetail="Its read-only tools join the agent's."
   addLabel="link server"
   noun="MCP server"
   width="48rem"
@@ -447,8 +427,8 @@
   canEdit={isGlobalAdmin}
   canDelete={isGlobalAdmin}
   canCreate={admin}
-  oncreate={save}
-  onsave={(_row, draft) => save(draft)}
+  oncreate={(draft) => save(draft, null)}
+  onsave={(row, draft) => save(draft, row)}
   ondelete={(row) =>
     listing.mutate(() => api.delete(`/mcp-servers/${row.slug}`))}
 />
@@ -493,6 +473,10 @@
   }
   .dim {
     color: var(--muted);
+  }
+  .caps {
+    text-transform: uppercase;
+    letter-spacing: var(--label-spacing);
   }
   .link {
     background: none;

@@ -9,6 +9,7 @@ import {
   parseWindows,
   serverPayload,
   toolPrefixFor,
+  uniqueToolPrefix,
 } from "../../packages/web/src/mcp-servers/form";
 
 describe("linked-server form fields", () => {
@@ -57,12 +58,19 @@ describe("linked-server form fields", () => {
     expect(toolPrefixFor("a".repeat(30))).toHaveLength(20);
   });
 
+  it("suffixes a prefix another server holds", () => {
+    expect(uniqueToolPrefix("hub", [])).toBe("hub");
+    expect(uniqueToolPrefix("hub", ["hub", "hub_2"])).toBe("hub_3");
+    expect(uniqueToolPrefix("a".repeat(30), ["a".repeat(20)])).toBe(
+      `${"a".repeat(18)}_2`,
+    );
+    expect(uniqueToolPrefix("42", [])).toBe("mcp");
+  });
+
   it("builds the request body for each transport", () => {
     const http = serverPayload(
       {
-        slug: "hub",
         name: "Hub",
-        tool_prefix: "hub",
         transport: "http",
         url: "https://hub.example/mcp",
         headers: "Authorization: Bearer {{token}}",
@@ -76,9 +84,12 @@ describe("linked-server form fields", () => {
         enabled: true,
         note: "",
       },
+      { slug: "hub", toolPrefix: "hub" },
       ["ops"],
     );
     expect(http).toMatchObject({
+      slug: "hub",
+      toolPrefix: "hub",
       transport: "http",
       config: {
         url: "https://hub.example/mcp",
@@ -94,9 +105,7 @@ describe("linked-server form fields", () => {
     });
     const stdio = serverPayload(
       {
-        slug: "gw",
         name: "Gateway",
-        tool_prefix: "gw",
         transport: "stdio",
         command: "/usr/bin/gateway",
         args: "mcp\n--lock-config",
@@ -105,6 +114,7 @@ describe("linked-server form fields", () => {
         credential_mode: "personal",
         enabled: false,
       },
+      { slug: "gw", toolPrefix: "gw" },
       [],
     );
     expect(stdio).toMatchObject({
@@ -118,13 +128,12 @@ describe("linked-server form fields", () => {
       credentialMode: "personal",
       enabled: false,
     });
-    expect(
-      serverPayload({ slug: "hub-x", transport: "http" }, []),
-    ).toMatchObject({
-      toolPrefix: "hub_x",
-    });
     expect(() =>
-      serverPayload({ transport: "http", result_max_chars: "-3" }, []),
+      serverPayload(
+        { transport: "http", result_max_chars: "-3" },
+        { slug: "hub", toolPrefix: "hub" },
+        [],
+      ),
     ).toThrow(/whole number/);
   });
 });
