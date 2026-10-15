@@ -129,8 +129,10 @@
     </Field>
     <Button
       type="submit"
+      variant="ghost"
+      tone="ok"
       size="sm"
-      icon="save"
+      icon="plus"
       busy={saving}
       disabled={!labelOk || !value.trim()}>add</Button
     >
@@ -145,6 +147,10 @@
     align-items: end;
     gap: var(--pad-2);
     margin-top: var(--pad-2);
+  }
+  /* Level with the inputs beside it. */
+  .add :global(.btn) {
+    min-height: var(--control-h);
   }
   .dim {
     color: var(--muted);
