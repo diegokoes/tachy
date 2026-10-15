@@ -311,6 +311,8 @@ export interface AdoClient {
     since?: string,
     top?: number,
   ): Promise<number[]>;
+  /** Ids a WIQL query matches, in its order; `@project` is `project`. */
+  runWiql(project: string, query: string, top: number): Promise<number[]>;
   getPullRequest(
     project: string,
     repoId: string,
@@ -456,6 +458,26 @@ export function createAdoClient(connection: AdoCfg): AdoClient {
   const teamIn = (project: string, team: string) =>
     `${proj(project)}/${encodeURIComponent(team)}`;
 
+  async function runWiql(
+    project: string,
+    query: string,
+    top: number,
+  ): Promise<number[]> {
+    const params = new URLSearchParams({
+      timePrecision: "true",
+      $top: String(top),
+    });
+    const response = await request<{ workItems?: { id: number }[] }>(
+      `${proj(project)}/_apis/wit/wiql?${params.toString()}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      },
+    );
+    return (response.workItems ?? []).map((w) => Number(w.id));
+  }
+
   return {
     orgUrl,
 
@@ -546,21 +568,14 @@ export function createAdoClient(connection: AdoCfg): AdoClient {
           throw badInput(`invalid updatedSince date: ${since}`);
         where.push(`[System.ChangedDate] >= '${sinceDate.toISOString()}'`);
       }
-      const query = `Select [System.Id] From WorkItems Where ${where.join(" And ")} Order By [System.ChangedDate] Asc`;
-      const params = new URLSearchParams({
-        timePrecision: "true",
-        $top: String(top ?? 200),
-      });
-      const response = await request<{ workItems?: { id: number }[] }>(
-        `${proj(project)}/_apis/wit/wiql?${params.toString()}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query }),
-        },
+      return runWiql(
+        project,
+        `Select [System.Id] From WorkItems Where ${where.join(" And ")} Order By [System.ChangedDate] Asc`,
+        top ?? 200,
       );
-      return (response.workItems ?? []).map((w) => Number(w.id));
     },
+
+    runWiql,
 
     async getPullRequest(project, repoId, prId) {
       return request<AdoPullRequest>(

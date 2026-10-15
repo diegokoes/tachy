@@ -2,6 +2,7 @@
   import { onMount, tick, untrack } from "svelte";
   import ChatView from "./chat/ChatView.svelte";
   import LibraryView from "./library/LibraryView.svelte";
+  import BoardView from "./work-items/BoardView.svelte";
   import WikiView from "./wiki/WikiView.svelte";
   import AdminView from "./admin/AdminView.svelte";
   import SettingsView from "./settings/SettingsView.svelte";
@@ -411,7 +412,9 @@
         <div class="shell">
           <div class="content">
             <main id="main-content" bind:this={mainEl}>
-              {#if view === "library"}
+              {#if view === "board"}
+                <BoardView />
+              {:else if view === "library"}
                 <LibraryView />
               {:else if view === "wiki"}
                 <WikiView />

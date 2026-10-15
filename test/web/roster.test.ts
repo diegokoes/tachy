@@ -59,6 +59,7 @@ describe("the tab bar", () => {
   it("offers the console to everyone", () => {
     expect(navItems().map((n) => n.key)).toEqual([
       "chat",
+      "board",
       "library",
       "wiki",
       "console",
