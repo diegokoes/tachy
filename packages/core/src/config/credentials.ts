@@ -20,6 +20,7 @@ import {
   ANTHROPIC_OAUTH_CREDENTIAL,
   API_KEY_EXAMPLE,
   API_KEY_PREFIX,
+  MCP_TOKEN_CREDENTIAL,
   OAUTH_PREFIX,
   validateCredential,
 } from "@tachy/contract";
@@ -49,7 +50,8 @@ export type CredentialSource = CredentialScope | "env";
 export const sourceCredentialName = (sourceType: string, slug: string) =>
   `${sourceType}_token:${slug}`;
 
-const NAME_RE = /^[a-z0-9_-]+(:[a-z0-9][a-z0-9-]*)?$/;
+/** A kind, then up to two qualifiers: `mcp_token:<server>:<pool label>`. */
+const NAME_RE = /^[a-z0-9_-]+(:[a-z0-9][a-z0-9-]*){0,2}$/;
 
 function checkName(name: string): void {
   if (!NAME_RE.test(name))
@@ -60,6 +62,9 @@ function checkName(name: string): void {
 
 /** Env-var fallback for a credential name, for pre-vault deployments. */
 export function envCredential(name: string): string | undefined {
+  // A linked MCP server's token lives only in the vault: a personal one must
+  // never be answered by a value the whole host shares.
+  if (name.startsWith(`${MCP_TOKEN_CREDENTIAL}:`)) return undefined;
   if (name === "anthropic_api_key") return process.env.ANTHROPIC_API_KEY;
   if (name === ANTHROPIC_OAUTH_CREDENTIAL)
     return process.env.CLAUDE_CODE_OAUTH_TOKEN;
@@ -103,6 +108,50 @@ export async function resolveCredential(
       );
   }
   return rememberSecret(envCredential(name));
+}
+
+type StoredSecret = {
+  value_ciphertext: Buffer;
+  nonce: Buffer;
+  key_id: string | null;
+};
+
+/**
+ * The user's own row and nothing else: no global row, no env var. Undefined
+ * when the vault is off or the user saved none.
+ */
+export async function getUserCredential(
+  name: string,
+  userId: string,
+): Promise<string | undefined> {
+  checkName(name);
+  if (!secretsEnabled()) return undefined;
+  const [row] = await sql`
+    select * from credentials
+    where scope = 'user' and user_id = ${userId} and name = ${name}
+  `;
+  if (!row) return undefined;
+  return rememberSecret(
+    decryptSecret(row as unknown as StoredSecret, credentialAad(row)),
+  );
+}
+
+/** Every global row whose name starts with `prefix`, decrypted, by name. */
+export async function listGlobalCredentialValues(
+  prefix: string,
+): Promise<{ name: string; value: string }[]> {
+  if (!secretsEnabled()) return [];
+  const rows = await sql`
+    select * from credentials
+    where scope = 'global' and starts_with(name, ${prefix})
+    order by name
+  `;
+  return rows.map((row) => ({
+    name: row.name as string,
+    value: rememberSecret(
+      decryptSecret(row as unknown as StoredSecret, credentialAad(row)),
+    ),
+  }));
 }
 
 /** Availability without decryption - safe to report through the API. */

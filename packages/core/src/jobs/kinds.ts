@@ -2,6 +2,7 @@ import { defineBucketJobs } from "../buckets/jobs";
 import { defineCodeJobs } from "../code/jobs";
 import { defineFlowJobs } from "../flows/jobs";
 import { defineRetentionJobs } from "../compliance/retention";
+import { defineMcpServerJobs } from "../mcp-servers/jobs";
 import { defineReferenceJobs } from "../reference/jobs";
 import { sql } from "../infra/db";
 import { log } from "../infra/log";
@@ -25,6 +26,7 @@ export function registerCoreJobs(): void {
   defineFlowJobs();
   defineBucketJobs();
   defineReferenceJobs();
+  defineMcpServerJobs();
 }
 
 /**

@@ -31,6 +31,11 @@ export const AUDIT_ACTIONS = [
   "work_items_cleanup",
   "api_token_mint",
   "api_token_revoke",
+  "mcp_server_save",
+  "mcp_server_delete",
+  "mcp_server_tool_expose",
+  "mcp_server_credential_set",
+  "mcp_server_credential_delete",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
