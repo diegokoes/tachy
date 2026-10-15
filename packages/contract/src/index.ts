@@ -318,6 +318,7 @@ export type {
 } from "./jobs";
 export {
   FIELD_SHOWS,
+  VIEW_SHOWS,
   FLOW_TRIGGER_KINDS,
   CONDITION_OPS,
   FLOW_ACTION_CATEGORIES,
@@ -330,6 +331,9 @@ export {
 export type {
   ComposeConfig,
   TypeFormConfig,
+  TypeViewConfig,
+  ViewDisplay,
+  ViewShow,
   FieldFormConfig,
   FieldDefault,
   FieldShow,

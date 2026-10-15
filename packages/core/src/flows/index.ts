@@ -4,6 +4,7 @@ export {
   offeredTypes,
   typeConfig,
   applyFormConfig,
+  applyViewConfig,
 } from "./forms";
 export {
   defineFlowAction,

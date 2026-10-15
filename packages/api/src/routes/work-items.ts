@@ -13,6 +13,7 @@ import {
 } from "@tachy/core";
 import { imageForModel } from "@tachy/core/files";
 import { getSourceProject, resolveSource } from "@tachy/core/sources";
+import { applyViewConfig, getComposeConfig } from "@tachy/core/flows";
 import {
   deleteStoredItems,
   filterForAudit,
@@ -230,17 +231,39 @@ export const workItems = new Hono()
       );
     },
   )
+  // The source's form for a type, read-only fields included, for the view editor.
+  .get(
+    "/projects/:id/layout",
+    validate("param", browseParam),
+    validate("query", z.object({ type: z.string().min(1).max(200) })),
+    async (c) => {
+      const { project, browser } = await browseIn(c, c.req.valid("param").id);
+      return c.json(
+        await askSource(
+          browser.layout(project.external_key, c.req.valid("query").type),
+        ),
+      );
+    },
+  )
   // Reading an item whole refreshes its stored copy, as a fetch in chat does.
   .get(
     "/projects/:id/items/:itemId",
     validate("param", itemParam),
     async (c) => {
       const { id, itemId } = c.req.valid("param");
-      const { conn, browser } = await browseIn(c, id);
+      const { project, conn, browser } = await browseIn(c, id);
       const { raw, view } = await askSource(browser.read(itemId));
       const stored = await ingestWorkItem(conn.id, raw);
-      const { timeline } = await readStoredItem(stored.id);
-      const answer: WorkItemView = { ...view, stored_id: stored.id, timeline };
+      const [{ timeline }, config] = await Promise.all([
+        readStoredItem(stored.id),
+        getComposeConfig(project.id),
+      ]);
+      const answer: WorkItemView = {
+        ...view,
+        layout: applyViewConfig(view.layout, config, view.item.type),
+        stored_id: stored.id,
+        timeline,
+      };
       return c.json(answer);
     },
   )
