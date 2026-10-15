@@ -1,8 +1,4 @@
-/**
- * Linked MCP servers: each exposed tool of each server this turn has a token
- * for, offered here under its proxied name. Registered before the transport
- * connects, from the stored catalog, so a turn's start makes no remote call.
- */
+/** Linked servers' exposed tools, registered from the stored catalog before the transport connects, so a turn starts without remote calls. */
 import { z } from "zod";
 import { proxiedToolName, type McpServerRow } from "@tachy/core";
 import { log, errorText } from "@tachy/core/infra";
@@ -21,16 +17,12 @@ import {
 import type { McpServerToolRow } from "@tachy/core";
 import { runTool, server } from "../server";
 
-/** How much of a schema that does not convert is quoted in the description instead. */
+/** Chars of an unconvertible schema quoted in the description. */
 const SCHEMA_QUOTE_CHARS = 4000;
 
 type ObjectSchema = z.ZodObject<z.ZodRawShape>;
 
-/**
- * The remote schema as zod, so the SDK lists it and checks calls against it.
- * Unknown keys pass on to the server, which checks them itself. A schema zod
- * cannot read becomes an open object, quoted in the description.
- */
+/** Unknown keys pass through for the server to check. Unconvertible: an open object, schema quoted. */
 function inputSchemaOf(jsonSchema: Record<string, unknown>): {
   schema: ObjectSchema;
   quoted: string | null;
@@ -40,7 +32,7 @@ function inputSchemaOf(jsonSchema: Record<string, unknown>): {
     if (converted instanceof z.ZodObject)
       return { schema: (converted as ObjectSchema).loose(), quoted: null };
   } catch {
-    // Quoted below instead.
+    // Falls through to the open object.
   }
   return {
     schema: z.looseObject({}),
@@ -48,7 +40,7 @@ function inputSchemaOf(jsonSchema: Record<string, unknown>): {
   };
 }
 
-/** The bound arguments turn optional and `tachy_customer` is added to fill them. */
+/** Bound arguments become optional; `tachy_customer` fills them. */
 function withCustomerArgument(
   schema: ObjectSchema,
   bound: string[],
@@ -124,11 +116,7 @@ function registerProxiedTool(
   return name;
 }
 
-/**
- * Registers the exposed tools of every server `tokens` holds credentials for,
- * and returns their names. A name already taken, by a tachy tool or another
- * server's, is skipped and logged.
- */
+/** Returns the registered names. A name already taken is skipped and logged. */
 export async function registerProxiedTools(
   tokens: TurnTokens = readTurnTokens(),
 ): Promise<string[]> {

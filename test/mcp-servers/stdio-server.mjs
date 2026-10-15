@@ -1,7 +1,5 @@
-// A stdio MCP server for the linked-server suite. It reads its token from the
-// file the connection wrote into its directory, the way a CLI gateway reads its
-// config, and reports what it sees. Plain JavaScript: it runs from a temporary
-// directory where tsx does not resolve.
+// Stdio MCP server that reports its token file, env and argv. Plain JavaScript:
+// it runs from a temporary directory where tsx does not resolve.
 import { readFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";

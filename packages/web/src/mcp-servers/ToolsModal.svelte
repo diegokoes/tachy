@@ -30,8 +30,7 @@
 
   let refreshing = $state(false);
   let error = $state<string | null>(null);
-  // A tool that does not say it only reads is exposed in two steps: the admin
-  // first confirms, by name, that it only reads.
+  // A tool without readOnlyHint takes a second click confirming it only reads.
   let confirming = $state<string | null>(null);
 
   const readOnly = (tool: McpServerToolRow) =>

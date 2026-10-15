@@ -1,13 +1,12 @@
 /**
- * The rate budget each credential of a linked server spends. Every chat turn
- * runs its own MCP process, so the count lives in Postgres: a call reserves a
- * slot in every window before it goes out, and a window that is full refuses
- * the reservation for that credential. Windows are fixed, aligned to the epoch.
+ * Per-credential rate budget, in Postgres because each turn runs its own MCP
+ * process. A call reserves a slot in every window before it is sent; a full
+ * window refuses it. Windows are fixed and epoch-aligned.
  */
 import type { RateWindow } from "@tachy/contract";
 import { sql } from "../infra/db";
 
-/** How long a credential rests after a rate-limit answer, when no window is configured. */
+/** Rest after a rate-limit answer when the server has no windows. */
 export const DEFAULT_COOLDOWN_SECONDS = 60;
 
 const MS_PER_SECOND = 1000;
@@ -23,10 +22,7 @@ export function windowEnd(at: Date, seconds: number): Date {
 
 class WindowFull extends Error {}
 
-/**
- * Takes one call from every window of the credential, or none when any is
- * full. With no windows nothing is counted and the call may go.
- */
+/** One call from every window, or none if any is full. No windows: allowed, not counted. */
 export async function reserveCall(
   serverId: string,
   credentialKey: string,
@@ -57,7 +53,7 @@ export async function reserveCall(
   }
 }
 
-/** Rests a credential the server refused as rate limited; an earlier rest is never shortened. */
+/** Never shortens an existing rest. */
 export async function coolDown(
   serverId: string,
   credentialKey: string,
@@ -71,7 +67,7 @@ export async function coolDown(
   `;
 }
 
-/** Until when a rate-limit answer rests the credential: the end of its shortest window. */
+/** End of the shortest window. */
 export function cooldownEnd(windows: RateWindow[], at = new Date()): Date {
   const shortest = Math.min(...windows.map((window) => window.seconds));
   if (!Number.isFinite(shortest))
@@ -82,13 +78,12 @@ export function cooldownEnd(windows: RateWindow[], at = new Date()): Date {
 export interface CredentialState {
   key: string;
   coolingUntil: Date | null;
-  /** Calls spent in each window that is open now. */
+  /** Calls in each currently open window. */
   usage: { seconds: number; calls: number; limit: number }[];
-  /** When the credential may call again; null when it may now. */
+  /** Null: may call now. */
   blockedUntil: Date | null;
 }
 
-/** Where each credential stands at `at`, from the windows open then. */
 export async function credentialStates(
   serverId: string,
   keys: string[],
@@ -139,11 +134,7 @@ function earliestReset(states: CredentialState[]): Date | null {
   return times.length ? new Date(Math.min(...times)) : null;
 }
 
-/**
- * The credential to call with, its slot already reserved: the least used of
- * those not resting, so a pool spreads its calls. When none has room, when the
- * first of them will.
- */
+/** Reserves a slot on the least used credential not resting; without room, the earliest reset. */
 export async function pickCredential<T extends { key: string }>(
   serverId: string,
   candidates: T[],
@@ -176,7 +167,7 @@ export async function pickCredential<T extends { key: string }>(
   };
 }
 
-/** Usage rows of windows that closed over a day ago, which no reservation reads again. */
+/** Deletes usage of windows closed over a day ago, and expired rests. */
 export async function sweepUsage(): Promise<number> {
   const rows = await sql`
     delete from mcp_server_usage

@@ -31,18 +31,14 @@ export interface McpServerInput {
   redaction?: boolean;
   enabled?: boolean;
   note?: string | null;
-  /** Team slugs; empty or absent means everyone. */
+  /** Team slugs; empty means everyone. */
   teams?: string[];
 }
 
 const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const HEADER_NAME_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 
-/**
- * The programs a stdio server may be started with, from
- * TACHY_MCP_STDIO_COMMANDS (comma-separated). Kept in the host's env, out of
- * reach of the console, so an admin account cannot run an arbitrary program.
- */
+/** From TACHY_MCP_STDIO_COMMANDS: in the host env, so the console cannot start arbitrary programs. */
 export function allowedStdioCommands(): string[] {
   return (process.env.TACHY_MCP_STDIO_COMMANDS ?? "")
     .split(",")
@@ -76,7 +72,7 @@ function assertHttpConfig(config: McpHttpConfig): void {
   assertStringRecord(config.headers, "headers", HEADER_NAME_RE);
 }
 
-/** A file stays inside the connection's directory: relative, no `..`. */
+/** Keeps a file inside the connection's directory. */
 function assertRelativePath(path: unknown): void {
   if (typeof path !== "string" || !path || isAbsolute(path))
     throw badInput("a file path must be relative");
@@ -180,7 +176,7 @@ async function setServerTeams(db: Db, serverId: string, teams: string[]) {
     `;
 }
 
-/** Creates the server, or replaces every setting of the one with this slug. */
+/** Creates, or replaces all settings of, the server with this slug. */
 export async function saveMcpServer(
   input: McpServerInput,
   userId: string | null,
@@ -220,7 +216,7 @@ export async function saveMcpServer(
   return getMcpServer(input.slug);
 }
 
-/** Deletes the server with its tools, budget and every token saved for it. */
+/** Also deletes its tools, budget and saved tokens. */
 export async function deleteMcpServer(slug: string): Promise<void> {
   await sql.begin(async (tx) => {
     const rows =
@@ -234,11 +230,7 @@ export async function deleteMcpServer(slug: string): Promise<void> {
   });
 }
 
-/**
- * The enabled servers whose tools a person's turns get: those with no teams,
- * and those shared with a team the person is in. A null user, as in open mode,
- * reaches only the servers with no teams.
- */
+/** Enabled servers with no teams or one of the person's teams. A null user gets only the former. */
 export async function serversFor(
   userId: string | null,
 ): Promise<McpServerRow[]> {

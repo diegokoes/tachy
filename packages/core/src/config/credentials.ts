@@ -62,8 +62,7 @@ function checkName(name: string): void {
 
 /** Env-var fallback for a credential name, for pre-vault deployments. */
 export function envCredential(name: string): string | undefined {
-  // A linked MCP server's token lives only in the vault: a personal one must
-  // never be answered by a value the whole host shares.
+  // Vault only: a personal MCP token must never fall back to a host-wide value.
   if (name.startsWith(`${MCP_TOKEN_CREDENTIAL}:`)) return undefined;
   if (name === "anthropic_api_key") return process.env.ANTHROPIC_API_KEY;
   if (name === ANTHROPIC_OAUTH_CREDENTIAL)
@@ -116,10 +115,7 @@ type StoredSecret = {
   key_id: string | null;
 };
 
-/**
- * The user's own row and nothing else: no global row, no env var. Undefined
- * when the vault is off or the user saved none.
- */
+/** The user's own row only: no global row, no env var. Undefined when the vault is off or there is none. */
 export async function getUserCredential(
   name: string,
   userId: string,

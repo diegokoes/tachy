@@ -10,10 +10,7 @@ import { listMcpServers } from "./servers";
 
 export const REFRESH_KIND = "mcp-server.refresh";
 
-/**
- * A personal server is left out: its tools/list answers for whoever's token
- * asks, and a job has nobody's. An admin refreshes it from the console.
- */
+/** Personal servers are skipped: their tool list depends on whose token asks. */
 async function refreshSharedServers(): Promise<Record<string, unknown>> {
   const refreshed: string[] = [];
   const failed: Record<string, string> = {};
