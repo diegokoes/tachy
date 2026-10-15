@@ -6,11 +6,13 @@ import {
   assertAnyTeamAdmin,
   isAnyTeamAdmin,
   userSoleTeamId,
+  userTeams,
   type EntryScope,
 } from "@tachy/core/access";
 import { env, forbidden } from "@tachy/core/infra";
 import { type ScopeContext } from "@tachy/core/config";
 import { type ActorRef } from "@tachy/core/library";
+import { listSourceProjects, type SourceProjectRow } from "@tachy/core/sources";
 import { getIdentity } from "./auth";
 
 export async function callerUserId(c: Context): Promise<string | null> {
@@ -73,4 +75,35 @@ export async function isAnyTeamAdminApi(c: Context): Promise<boolean> {
 export async function assertAnyTeamAdminApi(c: Context): Promise<void> {
   if (isAdminIdentity(c)) return;
   await assertAnyTeamAdmin(await requireCaller(c));
+}
+
+/** The caller's teams, or null for an app admin, who sees every project. */
+export async function callerTeamIds(c: Context): Promise<Set<string> | null> {
+  if (isAdminIdentity(c)) return null;
+  const userId = await callerUserId(c);
+  if (!userId)
+    throw forbidden("no user account is associated with this session");
+  return new Set((await userTeams(userId)).map((t) => t.team_id));
+}
+
+export async function assertProjectMember(
+  c: Context,
+  project: SourceProjectRow,
+): Promise<void> {
+  const teams = await callerTeamIds(c);
+  if (teams && !teams.has(project.team_id))
+    throw forbidden(`'${project.name}' belongs to a team you are not in`);
+}
+
+/** The registered projects of the caller's teams; every one for an app admin. */
+export async function callerSourceProjects(
+  c: Context,
+  sourceType?: string,
+): Promise<SourceProjectRow[]> {
+  const teams = await callerTeamIds(c);
+  return (await listSourceProjects()).filter(
+    (p) =>
+      (!sourceType || p.source_type === sourceType) &&
+      (!teams || teams.has(p.team_id)),
+  );
 }
