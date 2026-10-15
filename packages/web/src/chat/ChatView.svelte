@@ -69,6 +69,13 @@
     parseAz,
   } from "../work-items/azCommand";
   import { typeColor, typeIcon } from "../work-items/ado-icons";
+  import ItemPeek from "../work-items/ItemPeek.svelte";
+  import {
+    clearPeek,
+    peek,
+    peekLater,
+    workItemNumber,
+  } from "../work-items/peek.svelte";
   import { tallyCalls, tallyLabel } from "./toolCalls";
   import { recordFrame, type TurnSent, type TurnTrace } from "./trace";
   import TracePanel from "./TracePanel.svelte";
@@ -321,8 +328,16 @@
   );
 
   $effect(() => {
-    if (azCtx && azCtx.stage !== "sub") ensureProjects();
+    if (azCtx?.stage === "project" || azCtx?.stage === "type") ensureProjects();
     if (azCtx?.stage === "type") ensureTypes(azCtx.project.id);
+  });
+
+  const explainId = $derived(
+    azCtx?.stage === "id" ? workItemNumber(azCtx.query) : null,
+  );
+  $effect(() => {
+    if (explainId) return peekLater(explainId);
+    clearPeek();
   });
 
   function projectsEmpty() {
@@ -350,6 +365,15 @@
               hint: s.args,
               desc: s.description,
             })),
+        };
+      if (azCtx.stage === "id")
+        return {
+          crumb: {
+            cmd: "/az explain",
+            param: "id",
+            desc: "an Azure DevOps work item number",
+          },
+          options: [],
         };
       if (azCtx.stage === "project")
         return {
@@ -471,7 +495,7 @@
     else if (ctx.stage === "project") {
       const project = az.projects?.find((x) => x.id === value);
       if (project) chat.input = `/az new ${project.name} `;
-    } else {
+    } else if (ctx.stage === "type") {
       const type = typesOf(ctx.project.id).find((x) => x.name === value);
       chat.input = "";
       openComposer(ctx.project, type);
@@ -892,6 +916,15 @@
   }
 </script>
 
+{#snippet explainPeek()}
+  <ItemPeek
+    state={peek.current}
+    idle={azCtx?.query
+      ? "a work item number is digits, like 4521"
+      : "type the number, then enter"}
+  />
+{/snippet}
+
 {#if composer.open}
   <div class="chat">
     <TicketComposer oncreated={ticketMade} />
@@ -1111,6 +1144,7 @@
             artifacts={commands.artifacts}
             options={optionsMenu?.options}
             crumb={optionsMenu?.crumb}
+            preview={azCtx?.stage === "id" ? explainPeek : undefined}
             onpick={pickCommand}
           />
         {/if}
