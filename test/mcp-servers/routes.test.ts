@@ -169,7 +169,7 @@ describe("MCP server admin", () => {
     ).json();
     expect(missing).toMatchObject({
       ok: false,
-      error: expect.stringMatching(/Settings › Keys/),
+      error: expect.stringMatching(/Settings › Agent/),
     });
     await admin("/api/me/credentials/mcp_token:hub", "PUT", {
       value: TOKENS.ok,
@@ -180,14 +180,18 @@ describe("MCP server admin", () => {
     expect(tested).toMatchObject({ ok: true });
   });
 
-  it("lists a personal server's token among the person's own keys", async () => {
+  it("lists the personal servers a person reaches, apart from their keys", async () => {
     await as(adminCookie)("/api/mcp-servers", "POST", server("personal"));
     const keys = (await (
       await as(memberCookie)("/api/me/credentials")
     ).json()) as {
       effective: Record<string, string | null>;
+      mcp_servers: { slug: string; name: string; credential: string }[];
     };
-    expect(keys.effective).toHaveProperty("mcp_token:hub", null);
+    expect(keys.effective).not.toHaveProperty("mcp_token:hub");
+    expect(keys.mcp_servers).toEqual([
+      { slug: "hub", name: expect.any(String), credential: "mcp_token:hub" },
+    ]);
   });
 
   it("names a pool token by label when testing, and drops one", async () => {

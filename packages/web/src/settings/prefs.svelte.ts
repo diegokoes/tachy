@@ -19,6 +19,8 @@ export type MyCreds = {
   vault_enabled: boolean;
   mine: { name: string; updated_at: string }[];
   effective: Record<string, KeyScope | null>;
+  /** Servers that run on the person's own token; `credential` names it in the vault. */
+  mcp_servers: { slug: string; name: string; credential: string }[];
   /** The credential a chat turn would pick right now. */
   agent: {
     in_use: string | null;

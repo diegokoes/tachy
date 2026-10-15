@@ -16,9 +16,17 @@
   import Keybinds from "./Keybinds.svelte";
   import Columns from "./Columns.svelte";
   import Group from "./Group.svelte";
+  import OwnTokens from "../mcp-servers/OwnTokens.svelte";
+  import { agentPrefs } from "./prefs.svelte";
   import { SETTINGS_TABS } from "./tabs";
 
-  type Section = { label: string; hint?: string; view: Component };
+  type Section = {
+    label: string;
+    hint?: string;
+    view: Component;
+    /** Left out while it returns false. */
+    shown?: () => boolean;
+  };
 
   /** A tab is a pair of columns of groups, or one view that lays itself out. */
   type Layout = { left: Section[]; right: Section[] } | { view: Component };
@@ -52,6 +60,11 @@
           label: "keys",
           hint: "Stored encrypted. A shared key answers until you paste your own.",
           view: Credentials,
+        },
+        {
+          label: "mcp servers",
+          view: OwnTokens,
+          shown: () => Boolean(agentPrefs.creds?.mcp_servers.length),
         },
         {
           label: "api tokens",
@@ -131,7 +144,7 @@
 {/snippet}
 
 {#snippet column(sections: Section[])}
-  {#each sections as section (section.label)}
+  {#each sections.filter((s) => !s.shown || s.shown()) as section (section.label)}
     {@const View = section.view}
     <Group label={section.label} hint={section.hint}><View /></Group>
   {/each}

@@ -120,7 +120,7 @@ function tokenRefused(
 ): Error {
   if (server.credential_mode === "personal")
     return forbidden(
-      `${server.name} refused your token. Tell the user to save a new one under Settings › Keys.`,
+      `${server.name} refused your token. Tell the user to save a new one under Settings › Agent.`,
     );
   return forbidden(
     `${server.name} refused the shared token '${credential.key.replace(/^shared:/, "")}'. Tell the user to ask an admin to check the server's token pool.`,
