@@ -105,9 +105,7 @@
 <Modal
   title={`token pool: ${server.name}`}
   width="52rem"
-  confirmLabel="done"
-  confirmIcon="confirm"
-  onConfirm={onclose}
+  cancelLabel="close"
   onCancel={onclose}
 >
   <Note>
