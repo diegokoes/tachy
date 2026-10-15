@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { buckets } from "./buckets";
 import { catalog } from "./catalog";
 import { customers } from "./customers";
+import { mcpServers } from "./mcp-servers";
 import { overview } from "./overview";
 import { sources } from "./sources";
 import { system } from "./system";
@@ -13,4 +14,5 @@ export const admin = new Hono()
   .route("/", catalog)
   .route("/", customers)
   .route("/", sources)
-  .route("/", buckets);
+  .route("/", buckets)
+  .route("/", mcpServers);
