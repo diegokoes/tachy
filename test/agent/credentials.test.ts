@@ -10,6 +10,12 @@ import {
   resolveAgentAuth,
 } from "@tachy/core/config";
 import { ANTHROPIC_OAUTH_CREDENTIAL, validateCredential } from "@tachy/core";
+import {
+  saveMcpServer,
+  setPoolToken,
+  storeToolList,
+  TURN_TOKENS_ENV,
+} from "@tachy/core/mcp-servers";
 import { mcpConfig } from "../../packages/api/src/turn-config";
 import { setInternalEndpoint } from "../../packages/api/src/internal-endpoint";
 import { enableVault } from "../vault";
@@ -375,6 +381,100 @@ describe("server-env credential is the lowest rung (deployment-wide fallback)", 
       expect(config.mcpEnv.TACHY_INTERNAL_SECRET).toBe("per-boot");
     } finally {
       setInternalEndpoint(undefined);
+    }
+  });
+});
+
+describe("linked MCP servers in a turn", () => {
+  let dana: { id: string };
+  let eve: { id: string };
+
+  beforeAll(async () => {
+    await resetData();
+    enableVault();
+    const root = await createUser({ email: "root@example.com", role: "admin" });
+    dana = await createUser({ email: "dana@example.com" });
+    eve = await createUser({ email: "eve@example.com" });
+    const http = (slug: string, credentialMode: "personal" | "shared") =>
+      saveMcpServer(
+        {
+          slug,
+          name: slug,
+          transport: "http",
+          config: { url: "https://hub.example.invalid/mcp" },
+          credentialMode,
+          toolPrefix: slug.replace(/-/g, "_"),
+        },
+        root.id,
+      );
+    const mine = await http("mine", "personal");
+    const pool = await http("pool", "shared");
+    const tool = { name: "lookup", inputSchema: { type: "object" as const } };
+    await storeToolList(mine.id, [
+      { ...tool, annotations: { readOnlyHint: true } },
+    ]);
+    await storeToolList(pool.id, [
+      { ...tool, annotations: { readOnlyHint: true } },
+    ]);
+    await setPoolToken(root.id, "pool", "svc-1", "pool-secret-1");
+    await setPoolToken(root.id, "pool", "svc-2", "pool-secret-2");
+    await setCredential(
+      dana.id,
+      "user",
+      dana.id,
+      "mcp_token:mine",
+      "dana-secret",
+    );
+    // An org-wide row under the personal name must never reach anybody.
+    await setCredential(
+      root.id,
+      "global",
+      undefined,
+      "mcp_token:mine",
+      "org-secret",
+    );
+  });
+
+  it("gives each caller their own personal token, the pool, and the tools they reach", async () => {
+    const settings = await effectiveSettings();
+    const danaConfig = await mcpConfig("dana@example.com", settings);
+    expect(JSON.parse(danaConfig.mcpEnv[TURN_TOKENS_ENV]!)).toEqual({
+      mine: [{ key: `user:${dana.id}`, token: "dana-secret" }],
+      pool: [
+        { key: "shared:svc-1", token: "pool-secret-1" },
+        { key: "shared:svc-2", token: "pool-secret-2" },
+      ],
+    });
+    expect(danaConfig.proxiedTools?.sort()).toEqual([
+      "mine_lookup",
+      "pool_lookup",
+    ]);
+
+    const eveConfig = await mcpConfig("eve@example.com", settings);
+    const eveTokens = JSON.parse(eveConfig.mcpEnv[TURN_TOKENS_ENV]!);
+    expect(Object.keys(eveTokens)).toEqual(["pool"]);
+    expect(eveConfig.mcpEnv[TURN_TOKENS_ENV]).not.toContain("org-secret");
+    expect(eveConfig.proxiedTools).toEqual(["pool_lookup"]);
+    expect(eveConfig.linkedServers).toEqual([
+      { slug: "mine", credential: "missing", tools: 0 },
+      { slug: "pool", credential: "shared", tools: 1 },
+    ]);
+    void eve;
+  });
+
+  it("passes the host's stdio command list on, and leaves the tokens out when there are none", async () => {
+    process.env.TACHY_MCP_STDIO_COMMANDS = "/usr/bin/gateway";
+    try {
+      await sql`delete from mcp_servers`;
+      const config = await mcpConfig(
+        "dana@example.com",
+        await effectiveSettings(),
+      );
+      expect(config.mcpEnv.TACHY_MCP_STDIO_COMMANDS).toBe("/usr/bin/gateway");
+      expect(config.mcpEnv[TURN_TOKENS_ENV]).toBeUndefined();
+      expect(config.proxiedTools).toEqual([]);
+    } finally {
+      delete process.env.TACHY_MCP_STDIO_COMMANDS;
     }
   });
 });

@@ -8,6 +8,11 @@ export interface TurnSent {
   resumed: boolean;
   autoApprove: string[];
   redactionForced: boolean;
+  linkedServers: {
+    slug: string;
+    credential: "personal" | "shared" | "missing";
+    tools: number;
+  }[];
 }
 
 /** What Claude Code says it started with: the `session` frame. */

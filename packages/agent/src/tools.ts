@@ -78,18 +78,28 @@ export const WRITE_TOOLS = [
 export const qualify = (base: string) => `mcp__${MCP_SERVER}__${base}`;
 
 const READ = new Set<string>(READ_TOOLS);
+const WRITE = new Set<string>(WRITE_TOOLS);
 
 export type ToolClass = "read" | "write" | "denied";
 
+/** Proxied names minus any that shadow a tachy tool. */
+export function proxiedReads(proxied: readonly string[] = []): string[] {
+  return proxied.filter((base) => !WRITE.has(base) && !READ.has(base));
+}
+
 /**
  * A tachy tool not listed as a read is a write, so an unlisted tool still gets
- * the review box.
+ * the review box. `proxied`: the turn's linked-server tools, all reads.
  */
-export function classify(toolName: string): { cls: ToolClass; base: string } {
+export function classify(
+  toolName: string,
+  proxied: readonly string[] = [],
+): { cls: ToolClass; base: string } {
   const prefix = `mcp__${MCP_SERVER}__`;
   if (!toolName.startsWith(prefix)) return { cls: "denied", base: toolName };
   const base = toolName.slice(prefix.length);
-  return { cls: READ.has(base) ? "read" : "write", base };
+  const isRead = READ.has(base) || proxiedReads(proxied).includes(base);
+  return { cls: isRead ? "read" : "write", base };
 }
 
 /**
@@ -116,8 +126,9 @@ export const CONDITIONAL_WRITES: Record<
 export function classifyCall(
   toolName: string,
   input: unknown,
+  proxied: readonly string[] = [],
 ): { cls: ToolClass; base: string } {
-  const classified = classify(toolName);
+  const classified = classify(toolName, proxied);
   const needsReview = CONDITIONAL_WRITES[classified.base];
   if (classified.cls === "denied" || !needsReview) return classified;
   const writes =

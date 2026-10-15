@@ -24,6 +24,7 @@ import { reportsCensus } from "@tachy/core/reports";
 import { agentUsageCensus, toolUsageCensus } from "@tachy/core/analytics";
 import { libraryEngagementCensus } from "@tachy/core/library";
 import { jobIssues } from "@tachy/core/jobs";
+import { mcpServerCount } from "@tachy/core/mcp-servers";
 import { forbidden, ISSUE_ITEMS, type IssueList } from "@tachy/core/infra";
 import { callerScope, isAdminIdentity } from "../../authz";
 import { runtimeSnapshot, systemIssues } from "../../runtime";
@@ -50,6 +51,7 @@ export const overview = new Hono()
       reports,
       untokened,
       buckets,
+      mcpServers,
     ] = await Promise.all([
       catalogCensus(),
       userCensus(),
@@ -59,6 +61,7 @@ export const overview = new Hono()
       reportsCensus(),
       untokenedConnections(ctx).then((slugs) => slugs.length),
       bucketCensus(),
+      mcpServerCount(),
     ]);
     return c.json({
       counts: {
@@ -67,6 +70,7 @@ export const overview = new Hono()
         tickets: sources.work_items,
         repos: repos.repos,
         buckets: buckets.buckets,
+        mcp_servers: mcpServers,
         teams: catalog.teams,
         products: catalog.products,
         components: catalog.components,

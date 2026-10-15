@@ -22,10 +22,12 @@ import {
   userSoleTeamId,
 } from "@tachy/core/access";
 import { listSourceConnections } from "@tachy/core/sources";
+import { serversFor } from "@tachy/core/mcp-servers";
 import {
   ANTHROPIC_API_KEY_CREDENTIAL,
   AGENT_EFFORTS,
   ANTHROPIC_OAUTH_CREDENTIAL,
+  mcpServerCredentialName,
 } from "@tachy/core";
 import {
   listNotifications,
@@ -42,13 +44,17 @@ import { userConfigDir } from "../turn-config";
 const valueSchema = z.object({ value: z.string().min(1) });
 const prefSchema = z.object({ value: z.unknown() });
 
-/** Agent-credential names plus one source-token name per connection. */
-async function knownCredentialNames(): Promise<string[]> {
+/** Agent credentials, one per source connection, one per personal MCP server the person reaches. */
+async function knownCredentialNames(userId: string): Promise<string[]> {
   const connections = await listSourceConnections();
+  const personalServers = (await serversFor(userId)).filter(
+    (server) => server.credential_mode === "personal",
+  );
   return [
     ANTHROPIC_API_KEY_CREDENTIAL,
     ANTHROPIC_OAUTH_CREDENTIAL,
     ...connections.map((s) => sourceCredentialName(s.source_type, s.slug)),
+    ...personalServers.map((server) => mcpServerCredentialName(server.slug)),
   ];
 }
 
@@ -57,7 +63,7 @@ export const me = new Hono()
   .get("/credentials", async (c) => {
     const userId = await requireCaller(c);
     const teamId = (await userSoleTeamId(userId)) ?? undefined;
-    const names = await knownCredentialNames();
+    const names = await knownCredentialNames(userId);
     const effective: Record<string, string | null> = {};
     for (const name of names)
       effective[name] =

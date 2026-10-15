@@ -51,6 +51,19 @@ export interface AgentConfig {
    * that performs it. Never set it from anything the model controls.
    */
   autoApprove?: string[];
+
+  /** Linked-server tools offered this turn. All read-only, so unreviewed. */
+  proxiedTools?: string[];
+
+  /** For the debug view. */
+  linkedServers?: LinkedServer[];
+}
+
+export interface LinkedServer {
+  slug: string;
+  /** "missing": personal server without the caller's token; left out. */
+  credential: "personal" | "shared" | "missing";
+  tools: number;
 }
 
 export function effectiveModel(

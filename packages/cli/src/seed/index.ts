@@ -31,6 +31,7 @@ import { seedReports } from "./reports";
 import { seedAudit } from "./audit";
 import { seedFlows } from "./flows";
 import { seedBuckets } from "./buckets";
+import { seedMcpServers } from "./mcp-servers";
 import { seedJobs } from "./jobs";
 
 export { SCALE_NAMES, type ScaleName } from "./scale";
@@ -54,6 +55,12 @@ const MARKER = "dev_seed";
 
 /** Everything the seeder writes, in an order the FKs tolerate. */
 const TABLES = [
+  "mcp_server_calls",
+  "mcp_server_cooldowns",
+  "mcp_server_usage",
+  "mcp_server_tools",
+  "mcp_server_teams",
+  "mcp_servers",
   "flow_runs",
   "flows",
   "bucket_doc_chunks",
@@ -388,6 +395,9 @@ export async function seed(opts: SeedOptions): Promise<void> {
     );
     await phases.run("buckets", () =>
       seedBuckets(tx, org.teams, org.users, embed),
+    );
+    await phases.run("mcp servers", () =>
+      seedMcpServers(tx, org.teams, org.users),
     );
   });
 
