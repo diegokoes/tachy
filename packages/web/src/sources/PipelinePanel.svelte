@@ -239,6 +239,12 @@
       to: "buckets",
     },
     {
+      key: "mcp-servers",
+      label: "mcp servers",
+      value: census.data.counts.mcp_servers ?? 0,
+      to: "mcp-servers",
+    },
+    {
       key: "calls",
       label: `calls ${traffic.days} d`,
       text: compact(calls),
