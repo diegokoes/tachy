@@ -6,7 +6,13 @@ import {
   type PermissionResult,
   type SDKSystemMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import { classifyCall, qualify, READ_TOOLS, MCP_SERVER } from "./tools";
+import {
+  classifyCall,
+  proxiedReads,
+  qualify,
+  READ_TOOLS,
+  MCP_SERVER,
+} from "./tools";
 import {
   effectiveModel,
   type AgentConfig,
@@ -141,7 +147,9 @@ export function claudeOptions(
     // Set so Claude Code does not spend a model call naming each session.
     title: "tachy",
     permissionMode: "default",
-    allowedTools: READ_TOOLS.map(qualify),
+    allowedTools: [...READ_TOOLS, ...proxiedReads(config.proxiedTools)].map(
+      qualify,
+    ),
     mcpServers: {
       [MCP_SERVER]: {
         type: "stdio",
@@ -163,8 +171,9 @@ export async function claudePermission(
   toolUseID: string,
   gate: ApprovalGate,
   autoApprove: string[] = [],
+  proxied: readonly string[] = [],
 ): Promise<PermissionResult> {
-  const { cls, base } = classifyCall(toolName, input);
+  const { cls, base } = classifyCall(toolName, input, proxied);
   if (cls === "read") return { behavior: "allow", updatedInput: input };
   if (cls === "write" && autoApprove.includes(base))
     return { behavior: "allow", updatedInput: input };
@@ -234,10 +243,15 @@ export class ClaudeTurn extends TurnBase {
           toolUseID,
           this.requestApproval,
           config.autoApprove,
+          config.proxiedTools,
         );
         // A read is announced from its assistant block. A write is announced
         // here, once allowed, so the UI shows it running.
-        const { cls, base } = classifyCall(toolName, input);
+        const { cls, base } = classifyCall(
+          toolName,
+          input,
+          config.proxiedTools,
+        );
         if (permission.behavior === "allow" && cls === "write")
           this.queue.push({
             type: "tool_use",
@@ -265,7 +279,11 @@ export class ClaudeTurn extends TurnBase {
             if (block.type === "text" && block.text) {
               this.queue.push({ type: "text", text: block.text });
             } else if (block.type === "tool_use") {
-              const { cls, base } = classifyCall(block.name ?? "", block.input);
+              const { cls, base } = classifyCall(
+                block.name ?? "",
+                block.input,
+                config.proxiedTools,
+              );
               if (cls === "read") {
                 this.queue.push({
                   type: "tool_use",

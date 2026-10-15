@@ -23,6 +23,7 @@
   import RepoDetail from "../code/RepoDetail.svelte";
   import AuditPanel from "../audit/AuditPanel.svelte";
   import BucketsPanel from "../buckets/BucketsPanel.svelte";
+  import McpServersPanel from "../mcp-servers/McpServersPanel.svelte";
   import BulkLink from "../code/BulkLink.svelte";
   import TeamsPanel from "../catalog/TeamsPanel.svelte";
   import ProductsPanel from "../catalog/ProductsPanel.svelte";
@@ -75,6 +76,7 @@
       tickets: { view: StoredPanel, detail: StoredTimeline },
       repos: { view: ReposPanel, detail: RepoDetail },
       buckets: { view: BucketsPanel },
+      "mcp-servers": { view: McpServersPanel },
       "bulk-link": { view: BulkLink },
     },
     structure: {

@@ -1492,3 +1492,94 @@ create table api_tokens (
 );
 
 create index api_tokens_user_idx on api_tokens(user_id);
+
+-- An external MCP server. The per-turn MCP process connects to it as a client
+-- and offers its exposed tools as `<tool_prefix>_<name>`. Only read-only tools
+-- are exposed.
+create table mcp_servers (
+    id                uuid primary key default gen_random_uuid(),
+    slug              text not null unique,
+    name              text not null,
+    transport         text not null check (transport in ('http','stdio')),
+    -- http: {url, headers}. stdio: {command, args, env, files: [{path, content}]}.
+    -- Values may hold {{token}} and {{dir}} (the connection's temp directory).
+    config            jsonb not null default '{}'::jsonb,
+    -- personal: each person's own token, no fallback. shared: a pool of global
+    -- tokens, rotated on rate limits.
+    credential_mode   text not null check (credential_mode in ('personal','shared')),
+    tool_prefix       text not null unique,
+    -- [{seconds, limit}], per credential.
+    rate_windows      jsonb not null default '[]'::jsonb,
+    -- JSON-RPC error codes that mean rate limited. HTTP 429 always does.
+    rate_limit_codes  integer[] not null default '{}',
+    -- {argument: customer fact kind}: the argument is read from that fact of the
+    -- customer the model names.
+    argument_bindings jsonb not null default '{}'::jsonb,
+    result_max_chars  integer not null default 60000 check (result_max_chars > 0),
+    call_timeout_ms   integer not null default 30000 check (call_timeout_ms > 0),
+    redaction         boolean not null default false,
+    enabled           boolean not null default true,
+    -- Appended to every proxied tool's description.
+    note              text,
+    tools_refreshed_at timestamptz,
+    created_by        uuid references users(id) on delete set null,
+    created_at        timestamptz not null default now(),
+    updated_at        timestamptz not null default now()
+);
+
+create trigger mcp_servers_updated_at
+    before update on mcp_servers
+    for each row execute function set_updated_at();
+
+-- Teams whose members get a server's tools. No rows: everyone.
+create table mcp_server_teams (
+    server_id uuid not null references mcp_servers(id) on delete cascade,
+    team_id   uuid not null references teams(id) on delete cascade,
+    primary key (server_id, team_id)
+);
+
+create index mcp_server_teams_team_idx on mcp_server_teams(team_id);
+
+-- A server's tools from its last tools/list. A tool without readOnlyHint is
+-- exposed only with `attested_by`: the admin who confirmed it only reads.
+create table mcp_server_tools (
+    server_id    uuid not null references mcp_servers(id) on delete cascade,
+    name         text not null,
+    description  text not null default '',
+    input_schema jsonb not null default '{}'::jsonb,
+    annotations  jsonb not null default '{}'::jsonb,
+    exposed      boolean not null default false,
+    attested_by  uuid references users(id) on delete set null,
+    primary key (server_id, name)
+);
+
+-- Calls per credential per rate window, here because each turn is its own
+-- process. `credential_key` is 'user:<id>' or 'shared:<label>', never the secret.
+create table mcp_server_usage (
+    server_id      uuid not null references mcp_servers(id) on delete cascade,
+    credential_key text not null,
+    window_seconds integer not null,
+    window_start   timestamptz not null,
+    calls          integer not null default 0,
+    primary key (server_id, credential_key, window_seconds, window_start)
+);
+
+-- A credential the server refused as rate limited rests until `until`.
+create table mcp_server_cooldowns (
+    server_id      uuid not null references mcp_servers(id) on delete cascade,
+    credential_key text not null,
+    until          timestamptz not null,
+    primary key (server_id, credential_key)
+);
+
+-- Per server and day, like source_calls. `budget_refused`: calls held back
+-- because every credential's budget was spent.
+create table mcp_server_calls (
+    server_id      uuid not null references mcp_servers(id) on delete cascade,
+    day            date not null,
+    calls          integer not null default 0,
+    rate_limited   integer not null default 0,
+    auth_failures  integer not null default 0,
+    budget_refused integer not null default 0,
+    primary key (server_id, day)
+);

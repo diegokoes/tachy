@@ -107,6 +107,7 @@ describe("chat debug", () => {
     expect(Object.keys(sent).sort()).toEqual([
       "autoApprove",
       "effort",
+      "linkedServers",
       "model",
       "prompt",
       "redactionForced",

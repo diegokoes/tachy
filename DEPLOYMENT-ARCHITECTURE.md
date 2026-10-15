@@ -975,6 +975,7 @@ page shows them (§5.13) and never schedules them.
 | `wiki.gaps`           | maintenance | hourly         | finds wiki gaps                                          |
 | `flow.run`            | flows       | per flow       | one pass of a flow over one item                         |
 | `load.test`           | testing     | -              | runs a k6 script against a named target (§11.3)          |
+| `mcp-server.refresh`  | maintenance | 04:30 daily    | lists each shared linked MCP server's tools (§5.16)      |
 
 **Why.** It extends what was already there: the index status on `repo_lines`,
 `sweepInterruptedIndexes` (`core/src/code/repos.ts`) and
@@ -1912,6 +1913,49 @@ HNSW indexes, backfill, recreate the indexes, maintenance off.
   ([model card](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5)).
 - **Not built:** a second model beside the first. `EMBEDDING_SPEC` is one
   value, and an embed request carries only `kind` and `texts`.
+
+### 5.16 Linked MCP servers run inside the turn's child
+
+**Decision.** An admin links an external MCP server in console › integrations
+› mcp servers. The per-turn MCP child connects to it as a client and offers
+its exposed tools under `<tool_prefix>_<name>`, next to tachy's own
+(`mcp/src/tools/mcp-servers.ts`, `core/src/mcp-servers`).
+
+**Why in the child, not the agent SDK or a shared service.**
+
+- The child is already per caller (§5.12), so a personal token reaches only
+  its owner's turn. The API resolves the tokens and passes them as
+  `TACHY_MCP_SERVER_TOKENS`; the child never opens the vault.
+- Every call goes through `runTool`: secret masking, `mcp_tool_calls`, and
+  redaction when the server or `TACHY_REDACT` asks for it. Any MCP client
+  pointed at tachy gets the same tools.
+
+**Rules.**
+
+- **Reads only.** A tool is offered only when its `readOnlyHint` is set or an
+  admin vouches that it reads; a `destructiveHint` tool never is. Offered tools
+  run without the review box.
+- **Tokens.** `personal`: the person's own `mcp_token:<slug>`, no fallback.
+  `shared`: a pool of global `mcp_token:<slug>:<label>` rows. The least used
+  token with budget left takes the call; one the server answers as rate
+  limited rests until its shortest window ends.
+- **Budget.** `rate_windows` per token, counted in Postgres
+  (`mcp_server_usage`), since each turn is its own process. Only `tools/call`
+  counts.
+- **stdio.** The command must be listed in `TACHY_MCP_STDIO_COMMANDS` on the
+  host, checked on save and again at spawn. The program gets the SDK's login
+  variables and its rendered `env`, never the child's environment. Templated
+  files go into a private temporary directory, removed when the connection
+  closes.
+- **Customers.** `argument_bindings` maps a tool argument to a customer fact
+  kind. A tool with that argument gains `tachy_customer`; the value comes from
+  the customer's fact labelled with the server's slug, or unlabelled.
+- **Catalog.** Tools are listed by an admin (console) and by the daily
+  `mcp-server.refresh` job for shared servers. A turn registers tools from the
+  stored list and connects on first use, so its start makes no remote call.
+
+**Not built:** result caching for slow-changing tools; per-person budgets on a
+shared pool.
 
 ## 6. Durability, backup, restore
 

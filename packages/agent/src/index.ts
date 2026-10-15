@@ -7,6 +7,7 @@ export {
   CONDITIONAL_WRITES,
   classify,
   classifyCall,
+  proxiedReads,
   qualify,
 } from "./tools";
 export {
@@ -31,6 +32,7 @@ export type { ApprovalGate } from "./turn";
 export {
   effectiveModel,
   type AgentConfig,
+  type LinkedServer,
   type AgentAuth,
   type AgentErrorKind,
   type AgentEvent,
