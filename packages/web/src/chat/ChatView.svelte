@@ -12,6 +12,7 @@
   import { addEntry, chat, type Entry } from "./chatState.svelte";
   import { renderMarkdown } from "../markdown/markdown";
   import { reflow } from "../motion/motion";
+  import { tintSky } from "../motion/sky.svelte";
   import Scrollbar from "../tui/Scrollbar.svelte";
   import ArtifactPanel from "./ArtifactPanel.svelte";
   import CommandMenu, {
@@ -412,6 +413,9 @@
   $effect(() => {
     void chat.input;
     cmdDismissed = false;
+  });
+  $effect(() => {
+    if (chat.debug) return tintSky("red");
   });
 
   function pickCommand(pick: CommandPick) {
