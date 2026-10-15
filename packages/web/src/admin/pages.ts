@@ -65,6 +65,13 @@ export function consoleSections(): Record<string, ConsoleSection[]> {
         present: "modal",
         add: "add bucket",
       },
+      {
+        key: "mcp-servers",
+        label: "mcp servers",
+        icon: "tool",
+        n: "mcp_servers",
+        add: "link server",
+      },
       { key: "bulk-link", label: "bulk link", fill: true },
     ],
     structure: [
