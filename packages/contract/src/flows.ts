@@ -27,10 +27,25 @@ export interface TypeFormConfig {
   guidance?: string;
 }
 
+/**
+ * How a field shows when an item is read. "pin" puts it in the item's header;
+ * "always" shows it even when it holds nothing; "hidden" leaves it out. With
+ * no entry it shows in its form place when it holds something.
+ */
+export type ViewShow = "pin" | "always" | "hidden";
+
+export interface TypeViewConfig {
+  fields?: Record<string, { show?: ViewShow }>;
+  /** Field ids in the order they are drawn; ones not listed keep their place after. */
+  order?: string[];
+}
+
 export interface ComposeConfig {
   /** The types offered, in order. Absent: every type the source can create. */
   types?: string[];
   forms?: Record<string, TypeFormConfig>;
+  /** How an item of each type reads, apart from how it is created. */
+  views?: Record<string, TypeViewConfig>;
 }
 
 /** What the composer draws differently because of a team's config. */
@@ -40,6 +55,13 @@ export interface FormDisplay {
 }
 
 export const FIELD_SHOWS: readonly FieldShow[] = ["form", "fold", "hidden"];
+export const VIEW_SHOWS: readonly ViewShow[] = ["pin", "always", "hidden"];
+
+/** What the board draws differently because of a team's view config. */
+export interface ViewDisplay {
+  show: Record<string, ViewShow>;
+  order: string[];
+}
 
 /**
  * A flow is triggers and a tree of steps. Each list of steps runs in order; an

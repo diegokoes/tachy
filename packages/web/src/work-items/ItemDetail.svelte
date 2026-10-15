@@ -11,7 +11,7 @@
   import { link, navigate } from "../shell/router.svelte";
   import { Badge, Button, Icon, Note, Spinner, Time } from "../tui";
   import { typeColor, typeIcon } from "./ado-icons";
-  import { boardItemPath, shownSections } from "./board";
+  import { boardItemPath, shownSections, type ShownField } from "./board";
   import { itemHtml } from "./itemHtml";
   import TimelineList from "./TimelineList.svelte";
 
@@ -64,6 +64,13 @@
   </li>
 {/snippet}
 
+{#snippet value(field: ShownField)}
+  {#if field.kind === "date"}<Time
+      at={field.value}
+    />{:else if field.kind === "empty"}<span class="dim">none</span
+    >{:else}{field.value}{/if}
+{/snippet}
+
 {#snippet code(entry: LinkedCode)}
   <li class="code">
     {#if entry.url}
@@ -111,6 +118,12 @@
       {/if}
       <span class="dim">opened <Time at={view.item.created_at} /></span>
       <span class="dim">changed <Time at={view.item.changed_at} /></span>
+      {#each sections.pinned as field (field.ref)}
+        <span
+          ><span class="dim">{field.label}</span>
+          {@render value(field)}</span
+        >
+      {/each}
       <span class="grow"></span>
       <Button size="sm" variant="ghost" icon="ai" onclick={explainInChat}
         >explain in chat</Button
@@ -123,7 +136,11 @@
       {#each sections.body as field (field.ref)}
         <section>
           <h3>{field.label}</h3>
-          <div class="prose">{@html html(field.value)}</div>
+          {#if field.kind === "html"}
+            <div class="prose">{@html html(field.value)}</div>
+          {:else}
+            <p>{@render value(field)}</p>
+          {/if}
         </section>
       {/each}
       <section>

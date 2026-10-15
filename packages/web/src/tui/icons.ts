@@ -104,6 +104,7 @@ import {
   Pause,
   Pickaxe,
   PencilSparkles,
+  PanelTop,
   Pin,
   Plane,
   Play,
@@ -393,6 +394,8 @@ export const ICONS = {
   placePinned: Pin,
   placeFolded: FoldVertical,
   placeOmitted: EyeClosed,
+  /** A field drawn in an item's header when the item is read. */
+  placeHeader: PanelTop,
 
   // Flows
   /** A synced item starting a flow. */

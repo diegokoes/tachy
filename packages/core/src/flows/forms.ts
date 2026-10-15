@@ -2,6 +2,8 @@ import type {
   ComposeConfig,
   ComposerForm,
   TypeFormConfig,
+  ViewDisplay,
+  WorkItemLayout,
   WorkItemTypeOption,
 } from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
@@ -81,5 +83,26 @@ export function applyFormConfig(
       show,
       order: (typeConfig.order ?? []).filter((r) => known.has(r)),
     },
+  };
+}
+
+/**
+ * The team's view config for a type, as `display` on the source's layout. A
+ * choice for a field the type no longer has is dropped.
+ */
+export function applyViewConfig(
+  layout: WorkItemLayout,
+  config: ComposeConfig,
+  type: string,
+): WorkItemLayout {
+  const view = config.views?.[type];
+  if (!view) return layout;
+  const known = (ref: string) => ref in layout.fields;
+  const show: ViewDisplay["show"] = {};
+  for (const [ref, fieldConfig] of Object.entries(view.fields ?? {}))
+    if (fieldConfig.show && known(ref)) show[ref] = fieldConfig.show;
+  return {
+    ...layout,
+    display: { show, order: (view.order ?? []).filter(known) },
   };
 }

@@ -132,6 +132,85 @@ describe("item fields", () => {
     ]);
   });
 
+  it("pins, keeps, hides and orders fields the team's way", () => {
+    const base = reading(fields, {
+      body: ["System.Description"],
+      groups: [
+        {
+          label: "Approval",
+          fields: ["Custom.ApprovalDate", "Custom.Approver"],
+        },
+      ],
+    });
+    const sections = shownSections({
+      ...base,
+      fields: { ...fields, "Custom.ApprovalDate": null },
+      layout: {
+        ...base.layout,
+        display: {
+          show: {
+            "Custom.ApprovalDate": "always",
+            "Microsoft.VSTS.Common.Priority": "pin",
+            "System.Description": "hidden",
+          },
+          order: ["Custom.Approver"],
+        },
+      },
+    });
+    expect(sections.pinned).toEqual([
+      {
+        ref: "Microsoft.VSTS.Common.Priority",
+        label: "Priority",
+        kind: "text",
+        value: "2",
+      },
+    ]);
+    expect(sections.body).toEqual([]);
+    expect(sections.groups).toEqual([
+      {
+        label: "Approval",
+        fields: [
+          {
+            ref: "Custom.Approver",
+            label: "Approver",
+            kind: "text",
+            value: "Ana Ruiz",
+          },
+          {
+            ref: "Custom.ApprovalDate",
+            label: "Approval date",
+            kind: "empty",
+            value: "",
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("shows a field the form does not place when it is always shown", () => {
+    const base = reading(fields, { body: [], groups: [] });
+    const sections = shownSections({
+      ...base,
+      layout: {
+        ...base.layout,
+        display: { show: { "Custom.Approver": "always" }, order: [] },
+      },
+    });
+    expect(sections.groups).toEqual([
+      {
+        label: "other fields",
+        fields: [
+          {
+            ref: "Custom.Approver",
+            label: "Approver",
+            kind: "text",
+            value: "Ana Ruiz",
+          },
+        ],
+      },
+    ]);
+  });
+
   it("reads people, flags and numbers as text", () => {
     expect(fieldText({ uniqueName: "a@x.io" })).toBe("a@x.io");
     expect(fieldText(false)).toBe("no");
