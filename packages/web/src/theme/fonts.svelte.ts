@@ -7,10 +7,13 @@
  * never take those away.
  */
 
-export type FontAxis = "ui" | "prose" | "mono";
+import { FONT_KEYS, type FontAxis, type FontKey } from "@tachy/contract";
+import { orgAppearance } from "./org.svelte";
 
-type Family = {
-  key: string;
+export type { FontAxis };
+
+type Family<A extends FontAxis = FontAxis> = {
+  key: FontKey<A>;
   label: string;
   /** The primary face(s), before the shared tail. */
   stack: string;
@@ -24,13 +27,13 @@ const TAIL = {
   mono: 'ui-monospace, "DejaVu Mono", monospace',
 } as const;
 
-const PLEX_SANS: Family = {
+const PLEX_SANS: Family<"ui"> & Family<"prose"> = {
   key: "plex-sans",
   label: "IBM Plex Sans",
   stack: '"IBM Plex Sans Variable", "IBM Plex Sans"',
 };
 
-export const FAMILIES: Record<FontAxis, Family[]> = {
+export const FAMILIES: { [A in FontAxis]: Family<A>[] } = {
   ui: [
     PLEX_SANS,
     {
@@ -92,45 +95,55 @@ export const FAMILIES: Record<FontAxis, Family[]> = {
   ],
 };
 
-const DEFAULTS: Record<FontAxis, string> = {
+const DEFAULTS: { [A in FontAxis]: FontKey<A> } = {
   ui: "plex-sans",
   prose: "match",
   mono: "plex-mono",
 };
 
-export const fontState = $state({ ...DEFAULTS });
+const AXES = Object.keys(FONT_KEYS) as FontAxis[];
+
+export const fontState = $state<Record<FontAxis, string>>({ ...DEFAULTS });
 
 const storageKey = (axis: FontAxis) => `tachy-font-${axis}`;
 
 function family(axis: FontAxis, key: string): Family {
+  const families: Family[] = FAMILIES[axis];
   return (
-    FAMILIES[axis].find((f) => f.key === key) ??
-    FAMILIES[axis].find((f) => f.key === DEFAULTS[axis])!
+    families.find((f) => f.key === key) ??
+    families.find((f) => f.key === DEFAULTS[axis])!
   );
 }
 
-function apply(axis: FontAxis, fam: Family) {
+/** The built-in face is the one tokens.css names, so it needs no override. */
+function applyFont(axis: FontAxis, key: string) {
+  const fam = family(axis, key);
+  fontState[axis] = fam.key;
+  const root = document.documentElement.style;
+  if (fam.key === DEFAULTS[axis]) {
+    root.removeProperty(`--font-${axis}`);
+    return;
+  }
   // "match" resolves to var(--font-ui), which already carries its own tail.
   const value = fam.stack.startsWith("var(")
     ? fam.stack
     : `${fam.stack}, ${TAIL[axis]}`;
-  document.documentElement.style.setProperty(`--font-${axis}`, value);
-}
-
-export function setFont(axis: FontAxis, key: string) {
-  const fam = family(axis, key);
-  fontState[axis] = fam.key;
-  localStorage.setItem(storageKey(axis), fam.key);
   // Swap the stack first: font-display is swap, so the face arrives without a
   // blank frame and the picker feels immediate either way.
-  apply(axis, fam);
+  root.setProperty(`--font-${axis}`, value);
   fam.load?.();
 }
 
+export function setFont(axis: FontAxis, key: string) {
+  applyFont(axis, key);
+  localStorage.setItem(storageKey(axis), fontState[axis]);
+}
+
+/** What this browser saved, else the org default, else the built-in. */
 export function loadFonts() {
-  for (const axis of ["ui", "prose", "mono"] as FontAxis[]) {
+  for (const axis of AXES) {
     const saved = localStorage.getItem(storageKey(axis));
-    if (saved && saved !== DEFAULTS[axis]) setFont(axis, saved);
-    else fontState[axis] = DEFAULTS[axis];
+    const org = orgAppearance.value[`font_${axis}`];
+    applyFont(axis, saved ?? org ?? DEFAULTS[axis]);
   }
 }
