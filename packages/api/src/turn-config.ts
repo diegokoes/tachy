@@ -26,10 +26,16 @@ import {
 } from "@tachy/core";
 import { getUserByEmail, userSoleTeamId } from "@tachy/core/access";
 import { listSourceConnections } from "@tachy/core/sources";
+import { resolveTurnServers, TURN_TOKENS_ENV } from "@tachy/core/mcp-servers";
 import { ANONYMOUS_UPLOADS } from "@tachy/core/chat";
 import { renderColumnContract, type ArtifactSpec } from "@tachy/core/exports";
 import { globalRedactionEnabled } from "@tachy/core/compliance";
-import { effectiveModel, userStateDir, type AgentConfig } from "@tachy/agent";
+import {
+  effectiveModel,
+  userStateDir,
+  type AgentConfig,
+  type LinkedServer,
+} from "@tachy/agent";
 import { internalEndpoint } from "./internal-endpoint";
 import { findCommand, commandAutoApprove } from "./commands";
 
@@ -95,6 +101,9 @@ const INHERITED_ENV = [
   // What a file read off a ticket may weigh: the host's upload limits.
   "TACHY_UPLOAD_MAX_MB",
   "TACHY_UPLOAD_IMAGE_MAX_MB",
+  // A linked stdio server is started from the subprocess, which checks its
+  // command against the host's list again.
+  "TACHY_MCP_STDIO_COMMANDS",
   // Set per test worker; the subprocess reads the same schema as its parent.
   "TEST_SCHEMA",
 ];
@@ -173,6 +182,12 @@ export async function mcpConfig(
         token;
   }
 
+  // The same rule as the source tokens: this caller's own personal tokens,
+  // and the shared pools, for this turn's subprocess alone.
+  const linked = await resolveTurnServers(user?.id ?? null);
+  if (Object.keys(linked.tokens).length)
+    mcpEnv[TURN_TOKENS_ENV] = JSON.stringify(linked.tokens);
+
   if (user)
     mcpEnv.TACHY_DATE_FORMAT = encodeDateFormat(await dateFormatOf(ctx));
 
@@ -197,6 +212,8 @@ export async function mcpConfig(
     effort: prefs.agent_effort.value as AgentConfig["effort"],
     ...(agentAuth ? { agentAuth } : {}),
     ...(allowedModels.length ? { allowedModels } : {}),
+    proxiedTools: linked.proxiedTools,
+    linkedServers: linked.servers,
   };
 }
 
@@ -235,6 +252,8 @@ export interface TurnDebug {
   autoApprove: string[];
   /** TACHY_REDACT is on, so every connection is scrubbed. */
   redactionForced: boolean;
+  /** Each linked server this caller reaches, and why one offers no tools. */
+  linkedServers: LinkedServer[];
 }
 
 /**
@@ -254,6 +273,7 @@ export function turnDebug(
     resumed: opts.resumed,
     autoApprove: config.autoApprove ?? [],
     redactionForced: globalRedactionEnabled(),
+    linkedServers: config.linkedServers ?? [],
   };
 }
 
