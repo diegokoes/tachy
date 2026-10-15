@@ -20,6 +20,11 @@ import {
   Asterisk,
   Ban,
   BookDashed,
+  Bell,
+  BellDot,
+  BellMinus,
+  BellPlus,
+  BellRing,
   BookOpen,
   BookOpenText,
   BookText,
@@ -231,6 +236,14 @@ export const ICONS = {
   enlarge: Maximize2,
   login: LogIn,
   logout: LogOut,
+  /** Following an item on the board, and stopping. */
+  follow: BellPlus,
+  unfollow: BellMinus,
+  /** An item the reader follows, in a list. */
+  followed: BellRing,
+  /** What changed on followed items, with and without unread ones. */
+  changes: Bell,
+  changesUnread: BellDot,
   sortAscending: ArrowUpNarrowWide,
   sortDescending: ArrowDownWideNarrow,
   moveUp: ChevronUp,

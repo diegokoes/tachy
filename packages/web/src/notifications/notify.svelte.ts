@@ -37,6 +37,10 @@ export function dismissToast(id: number): void {
 export const unread = (): NotificationRow[] =>
   notifyState.items.filter((n) => !n.read_at);
 
+/** What changed on items the reader follows, newest first. */
+export const itemChanges = (): NotificationRow[] =>
+  notifyState.items.filter((n) => n.kind === "work_item_changed");
+
 export async function refreshNotifications(): Promise<void> {
   if (!session.me) return;
   try {

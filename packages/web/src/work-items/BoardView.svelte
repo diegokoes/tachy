@@ -22,6 +22,7 @@
   import { BOARD_SOURCE, boardItemPath, boardListPath } from "./board";
   import { landingProject, rememberProject } from "./board.svelte";
   import { composer, openComposer, setProject } from "./composer.svelte";
+  import ChangesMenu from "./ChangesMenu.svelte";
   import ItemDetail from "./ItemDetail.svelte";
   import ItemList from "./ItemList.svelte";
   import TicketComposer from "./TicketComposer.svelte";
@@ -108,6 +109,7 @@
       aria-label="project"
       onchange={(id) => pickProject(String(id))}
     />
+    <ChangesMenu />
     {#if project}
       <TypeMenu bind:this={typeMenu} projectId={project.id} onpick={startNew} />
     {/if}

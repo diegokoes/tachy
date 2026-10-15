@@ -14,6 +14,8 @@
     icon?: IconName;
     /** A brand logo drawn in its own colours, in place of `icon`. */
     mark?: Component<{ size?: string }>;
+    /** Unread things waiting there; zero or absent draws nothing. */
+    badge?: number;
   };
 
   let {
@@ -105,10 +107,11 @@
             ><Mark size="1em" /></span
           >{:else if icon}<span class="ico"
             ><Icon name={icon} weight={7} /></span
-          >{/if}{#if !bare}<span class="txt">{item.label}</span>{/if}<span
-          class="br"
-          aria-hidden="true">]</span
-        ></span
+          >{/if}{#if !bare}<span class="txt">{item.label}</span
+          >{/if}{#if item.badge}<span
+            class="badge"
+            aria-label={`${item.badge} unread`}>{item.badge}</span
+          >{/if}<span class="br" aria-hidden="true">]</span></span
       >
     </button>
   {/each}
@@ -195,6 +198,16 @@
   }
   .ico + .txt {
     margin-left: 0.4em;
+  }
+
+  .badge {
+    margin-left: 0.3em;
+    padding: 0 0.35em;
+    border-radius: 0.6em;
+    font-size: 0.7em;
+    vertical-align: super;
+    color: var(--bg);
+    background: var(--accent-fill);
   }
 
   .rule {

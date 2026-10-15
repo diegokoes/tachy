@@ -23,6 +23,7 @@
   import { loadDateFormat } from "./dates.svelte";
   import { openSection, section, startRouter } from "./shell/router.svelte";
   import {
+    itemChanges,
     refreshNotifications,
     startNotifications,
   } from "./notifications/notify.svelte";
@@ -43,7 +44,13 @@
     tip,
   } from "./tui";
 
-  const nav = $derived(navItems());
+  const nav = $derived(
+    navItems().map((item) =>
+      item.key === "board"
+        ? { ...item, badge: itemChanges().filter((n) => !n.read_at).length }
+        : item,
+    ),
+  );
 
   const view = $derived(section("chat"));
 
