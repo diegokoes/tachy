@@ -1,9 +1,6 @@
 # tachý deployment architecture
 
-Describes the system as of 2026-10-05. File references are paths in that
-tree. Where a claim depends on a third party's behaviour, the source is
-linked or the claim is marked **to verify**. Measurements keep the date they
-were taken.
+just a file to keep track of my ideas, Claude suggestions, etc
 
 ## 1. Scope
 
