@@ -87,7 +87,12 @@
     { key: "exposed", label: "offered", width: "5rem", cell: offeredCell },
     { key: "name", label: "tool", width: "16rem" },
     { key: "kind", label: "read-only", width: "7rem", cell: kindCell },
-    { key: "description", label: "description", cell: descriptionCell },
+    {
+      key: "description",
+      label: "description",
+      cell: descriptionCell,
+      head: descriptionHead,
+    },
   ];
 
   onMount(() => tools.reload());
@@ -120,6 +125,21 @@
   >
 {/snippet}
 
+{#snippet descriptionHead()}
+  <span class="head">
+    description
+    {#if canChange}
+      <Button
+        variant="ghost"
+        size="sm"
+        icon="refresh"
+        busy={refreshing}
+        onclick={refresh}>list again</Button
+      >
+    {/if}
+  </span>
+{/snippet}
+
 <Modal
   title={`tools: ${server.name}`}
   width="64rem"
@@ -129,21 +149,6 @@
   cancelLabel={canChange ? "cancel" : "close"}
   onCancel={onclose}
 >
-  <Note>
-    Offered tools run without review: offer only tools that read. Click a row
-    for its full description.
-  </Note>
-  {#if canChange}
-    <div class="bar">
-      <Button
-        variant="ghost"
-        size="sm"
-        icon="refresh"
-        busy={refreshing}
-        onclick={refresh}>list again</Button
-      >
-    </div>
-  {/if}
   {#if error}<Note tone="warn">{error}</Note>{/if}
   <DataTable
     {columns}
@@ -159,10 +164,16 @@
 </Modal>
 
 <style>
-  .bar {
+  .head {
     display: flex;
-    justify-content: flex-end;
-    margin: var(--pad-2) 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pad-2);
+  }
+  /* The header's caps and tracking are for the label, not the button. */
+  .head :global(.btn) {
+    text-transform: none;
+    letter-spacing: normal;
   }
   .desc {
     display: block;
