@@ -5,6 +5,7 @@ import { log, env, secretsEnabled } from "@tachy/core/infra";
 import {
   effectiveSettings,
   setSetting,
+  clearSetting,
   credentialSource,
   envCredential,
 } from "@tachy/core/config";
@@ -78,4 +79,10 @@ export const system = new Hono()
       });
       return c.json({ settings: await effectiveSettings() });
     },
-  );
+  )
+
+  .delete("/settings/:key", requireAdmin, async (c) => {
+    const key = c.req.param("key")!;
+    if (await clearSetting(key)) await audit(c, "setting_delete", key);
+    return c.json({ settings: await effectiveSettings() });
+  });

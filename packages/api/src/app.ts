@@ -148,10 +148,14 @@ export function createApp(
 
   const tokenMode = opts.apiToken ? "token" : "open";
   const authMode = opts.oidc ? "sso" : tokenMode;
+  // Public: the sign-in page is drawn in the deployment's look too.
   base.get("/auth/config", async (c) => {
     let profile = "support";
+    let appearance = {};
     try {
-      profile = (await effectiveSettings()).deployment_profile.value;
+      const settings = await effectiveSettings();
+      profile = settings.deployment_profile.value;
+      appearance = settings.appearance.value;
     } catch {}
     return c.json({
       authMode,
@@ -159,6 +163,7 @@ export function createApp(
       passwordLogin: Boolean(opts.passwordAuth) && (await isBootstrapped()),
       envBadge: env.envBadge ?? null,
       profile,
+      appearance,
     });
   });
 

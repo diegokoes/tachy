@@ -19,6 +19,8 @@ export interface AuthConfig {
   envBadge: string | null;
 
   profile?: DeploymentProfile;
+  /** The org's appearance defaults, unvalidated. */
+  appearance?: unknown;
 }
 
 export const session = $state<{

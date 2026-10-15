@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   isHexColor,
-  loadThemeFromStorage,
+  loadTheme,
   resetAccent,
   selectAccent,
   setTheme,
@@ -77,12 +77,12 @@ describe("accent", () => {
   it("restores a stored gradient, and ignores a second colour that is not one", () => {
     localStorage.setItem("tachy-accent", "#123456");
     localStorage.setItem("tachy-accent-2", "#abcdef");
-    loadThemeFromStorage();
+    loadTheme();
     expect(themeState.accentColor2).toBe("#abcdef");
     expect(root.getPropertyValue("--accent-fill")).toContain("#abcdef");
 
     localStorage.setItem("tachy-accent-2", "red; --x: 1");
-    loadThemeFromStorage();
+    loadTheme();
     expect(themeState.accentColor2).toBeNull();
     expect(root.getPropertyValue("--accent-fill")).toBe("");
   });

@@ -27,8 +27,13 @@ import {
 } from "@tachy/core";
 import { readUpload, saveUpload, uploadLimits } from "@tachy/core/chat";
 import { imageForModel, inspectFile, isImageFile } from "@tachy/core/files";
-import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
-import { requireCaller } from "../authz";
+import {
+  effectiveModel,
+  startTurn,
+  type AgentConfig,
+  type AgentTurn,
+} from "@tachy/agent";
+import { isAdminIdentity, requireCaller } from "../authz";
 import { getIdentity } from "../auth";
 import { lifecycle } from "../lifecycle";
 import { problem } from "../problems";
@@ -49,6 +54,7 @@ import {
   mcpConfig,
   systemPrompt,
   turnAutoApprove,
+  turnDebug,
   turnChoice,
 } from "../turn-config";
 
@@ -66,6 +72,8 @@ const chatSchema = z.object({
   // The conversation's own pick, in place of the caller's preference.
   model: z.string().min(1).max(200).optional(),
   effort: z.enum(AGENT_EFFORTS).optional(),
+  // Honoured for an app admin only; from anyone else it changes nothing.
+  debug: z.boolean().optional(),
 });
 
 const approveSchema = z.object({
@@ -137,7 +145,9 @@ export const agent = new Hono()
       command,
       model,
       effort,
+      debug,
     } = c.req.valid("json");
+    const debugging = debug === true && isAdminIdentity(c);
     const userEmail = getIdentity(c)?.email ?? env.userEmail;
     const userKey = userEmail ?? "anonymous";
 
@@ -258,6 +268,11 @@ export const agent = new Hono()
           return;
         }
 
+        if (debugging)
+          await send(
+            "debug",
+            turnDebug(prompt, config, { resumed: Boolean(sessionId) }),
+          );
         turn = startTurn(
           prompt,
           config,
@@ -274,7 +289,7 @@ export const agent = new Hono()
             await recordRun({
               mode: "chat",
               userId: user?.id ?? null,
-              model: config.model,
+              model: event.models[0] ?? effectiveModel(config),
               inputTokens: event.usage?.inputTokens ?? undefined,
               outputTokens: event.usage?.outputTokens ?? undefined,
               meta: {
@@ -284,6 +299,7 @@ export const agent = new Hono()
               },
             }).catch(() => {});
           }
+          if (event.type === "session" && !debugging) continue;
           await send(event.type, event);
         }
       } finally {

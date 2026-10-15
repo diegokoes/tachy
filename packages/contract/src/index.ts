@@ -351,3 +351,43 @@ export {
   parseDateFormat,
 } from "./dates";
 export type { DateOrder, Clock, DateFormat, Moment } from "./dates";
+export {
+  THEMES,
+  TEXT_SIZES,
+  NAV_LABELS,
+  FONT_KEYS,
+  isHexColor,
+  parseAppearanceDefaults,
+} from "./appearance";
+export type {
+  Theme,
+  TextSize,
+  NavLabels,
+  FontAxis,
+  FontKey,
+  AppearanceDefaults,
+} from "./appearance";
+export {
+  MCP_TRANSPORTS,
+  MCP_CREDENTIAL_MODES,
+  MCP_TOKEN_CREDENTIAL,
+  TOKEN_PLACEHOLDER,
+  DIR_PLACEHOLDER,
+  POOL_LABEL_RE,
+  TOOL_PREFIX_RE,
+  MAX_PROXIED_NAME_CHARS,
+  mcpServerCredentialName,
+  proxiedToolName,
+  isMcpServerUrl,
+} from "./mcp-servers";
+export type {
+  McpTransport,
+  McpCredentialMode,
+  McpHttpConfig,
+  McpStdioConfig,
+  McpStdioFile,
+  RateWindow,
+  McpServerRow,
+  McpServerToolRow,
+  McpPoolCredential,
+} from "./mcp-servers";

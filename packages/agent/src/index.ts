@@ -7,6 +7,7 @@ export {
   CONDITIONAL_WRITES,
   classify,
   classifyCall,
+  proxiedReads,
   qualify,
 } from "./tools";
 export {
@@ -15,6 +16,7 @@ export {
   claudeOptions,
   BUILTIN_TOOLS,
   explainFailure,
+  sessionFacts,
 } from "./claude";
 export { userStateDir } from "./state";
 export { completeOnce } from "./complete";
@@ -30,10 +32,12 @@ export type { ApprovalGate } from "./turn";
 export {
   effectiveModel,
   type AgentConfig,
+  type LinkedServer,
   type AgentAuth,
   type AgentErrorKind,
   type AgentEvent,
   type AgentTurn,
+  type SessionFacts,
   type Decision,
   type AgentEffort,
   type TurnUsage,
