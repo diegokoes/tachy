@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Component } from "svelte";
   import { navigate, segment } from "../shell/router.svelte";
-  import { session, logout } from "../access/session.svelte";
+  import { isGlobalAdmin, session, logout } from "../access/session.svelte";
   import { setSubnav, type SubnavItem } from "../shell/subnav.svelte";
   import { Button } from "../tui";
   import { close, rebind } from "./rebind.svelte";
@@ -12,6 +12,7 @@
   import Appearance from "./Appearance.svelte";
   import Fonts from "./Fonts.svelte";
   import Dates from "./Dates.svelte";
+  import OrgDefaults from "./OrgDefaults.svelte";
   import Keybinds from "./Keybinds.svelte";
   import Columns from "./Columns.svelte";
   import Group from "./Group.svelte";
@@ -22,6 +23,12 @@
   /** A tab is a pair of columns of groups, or one view that lays itself out. */
   type Layout = { left: Section[]; right: Section[] } | { view: Component };
   type Tab = SubnavItem & Layout;
+
+  const ORG_DEFAULTS: Section = {
+    label: "org defaults",
+    hint: "What a person sees until they pick their own.",
+    view: OrgDefaults,
+  };
 
   const LAYOUTS: Record<string, Layout> = {
     theme: {
@@ -55,10 +62,17 @@
     },
   };
 
-  const TABS: Tab[] = SETTINGS_TABS.map((tab) => ({
-    ...tab,
-    ...LAYOUTS[tab.key],
-  }));
+  /** Admins see the org defaults beside the look they publish from. */
+  function layoutOf(key: string): Layout {
+    const layout = LAYOUTS[key];
+    if (key !== "theme" || "view" in layout) return layout;
+    if (!session.me || !isGlobalAdmin()) return layout;
+    return { ...layout, right: [...layout.right, ORG_DEFAULTS] };
+  }
+
+  const TABS: Tab[] = $derived(
+    SETTINGS_TABS.map((tab) => ({ ...tab, ...layoutOf(tab.key) })),
+  );
 
   /**
    * Section URLs from before the tabs survive in bookmarks and history; each

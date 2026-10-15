@@ -3,9 +3,11 @@ import {
   AGENT_EFFORTS,
   DEPLOYMENT_PROFILES,
   SSO_ADMISSIONS,
+  parseAppearanceDefaults,
 } from "@tachy/contract";
 import type {
   AgentEffort,
+  AppearanceDefaults,
   DeploymentProfile,
   SsoAdmission,
 } from "@tachy/contract";
@@ -28,6 +30,18 @@ export function isTimezone(zone: string | undefined): zone is string {
   }
 }
 
+/** The contract decides what is valid; a field it drops is named as the error. */
+const appearanceSchema = z
+  .record(z.string(), z.unknown())
+  .superRefine((raw, ctx) => {
+    const kept = parseAppearanceDefaults(raw);
+    for (const field of Object.keys(raw)) {
+      if (!(field in kept))
+        ctx.addIssue({ code: "custom", message: `invalid '${field}'` });
+    }
+  })
+  .transform(parseAppearanceDefaults);
+
 const SETTING_SCHEMAS = {
   redaction_global: z.boolean(),
   redaction_images: z.boolean(),
@@ -42,6 +56,7 @@ const SETTING_SCHEMAS = {
     .string()
     .refine(isTimezone, "not an IANA timezone, e.g. Europe/Madrid"),
   sso_admission: z.enum(SSO_ADMISSIONS),
+  appearance: appearanceSchema,
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;
@@ -76,12 +91,16 @@ export async function getSettings(): Promise<SettingsMap> {
   return settings;
 }
 
-export async function setSetting(key: string, value: unknown): Promise<void> {
+function assertSettingKey(key: string): asserts key is SettingKey {
   if (!(key in SETTING_SCHEMAS))
     throw badInput(
       `unknown setting '${key}' (known: ${SETTING_KEYS.join(", ")})`,
     );
-  const parsed = SETTING_SCHEMAS[key as SettingKey].safeParse(value);
+}
+
+export async function setSetting(key: string, value: unknown): Promise<void> {
+  assertSettingKey(key);
+  const parsed = SETTING_SCHEMAS[key].safeParse(value);
   if (!parsed.success)
     throw badInput(
       `invalid value for '${key}': ${parsed.error.issues.map((i) => i.message).join("; ")}`,
@@ -91,6 +110,14 @@ export async function setSetting(key: string, value: unknown): Promise<void> {
     on conflict (key) do update set value = excluded.value, updated_at = now()
   `;
   cache = undefined;
+}
+
+/** Back to the environment's value or the built-in one. */
+export async function clearSetting(key: string): Promise<boolean> {
+  assertSettingKey(key);
+  const rows = await sql`delete from settings where key = ${key} returning key`;
+  cache = undefined;
+  return rows.length > 0;
 }
 
 export type SettingSource = "db" | "env" | "default";
@@ -111,6 +138,7 @@ export interface EffectiveSettings {
   agent_queue_max: { value: number; source: SettingSource };
   org_timezone: { value: string; source: SettingSource };
   sso_admission: { value: SsoAdmission; source: SettingSource };
+  appearance: { value: AppearanceDefaults; source: SettingSource };
 }
 
 export async function effectiveSettings(): Promise<EffectiveSettings> {
@@ -176,6 +204,7 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
     // Invited by default: who reads every ticket is then decided here, and not
     // only by how the provider's app registration is assigned.
     sso_admission: pick(db.sso_admission, undefined, "invited"),
+    appearance: pick<AppearanceDefaults>(db.appearance, undefined, {}),
   };
 }
 

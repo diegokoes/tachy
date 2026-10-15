@@ -13,6 +13,7 @@ import {
   resolvePref,
   dateFormatOf,
   setSetting,
+  clearSetting,
   clearSettingsCache,
 } from "@tachy/core/config";
 import {
@@ -304,7 +305,7 @@ describe("scoped preferences", () => {
 });
 
 describe("personal preferences", () => {
-  it("are the reader's own, never a team or global default", async () => {
+  it("are written by the reader alone, never by a team or globally", async () => {
     const { admin, alice, teamId } = await seedPeople();
     const ctx = { userId: alice.id, teamId };
 
@@ -332,6 +333,27 @@ describe("personal preferences", () => {
     await expect(
       setPref(alice.id, "user", alice.id, "clock", "25h"),
     ).rejects.toThrow(/invalid value/);
+  });
+
+  it("follow the org appearance until the reader picks their own", async () => {
+    const { alice, teamId } = await seedPeople();
+    const ctx = { userId: alice.id, teamId };
+    await setSetting("appearance", { date_order: "iso" });
+    try {
+      expect(await resolvePref("date_order", ctx)).toEqual({
+        value: "iso",
+        source: "db",
+      });
+      expect(await dateFormatOf(ctx)).toEqual({ order: "iso", clock: "24h" });
+
+      await setPref(alice.id, "user", alice.id, "date_order", "mdy");
+      expect(await resolvePref("date_order", ctx)).toEqual({
+        value: "mdy",
+        source: "user",
+      });
+    } finally {
+      await clearSetting("appearance");
+    }
   });
 
   it("ignore a team row written before the rule", async () => {

@@ -4,12 +4,20 @@ import {
   type CanUseTool,
   type Options,
   type PermissionResult,
+  type SDKSystemMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import { classifyCall, qualify, READ_TOOLS, MCP_SERVER } from "./tools";
+import {
+  classifyCall,
+  proxiedReads,
+  qualify,
+  READ_TOOLS,
+  MCP_SERVER,
+} from "./tools";
 import {
   effectiveModel,
   type AgentConfig,
   type AgentErrorKind,
+  type SessionFacts,
 } from "./backend";
 import { TurnBase, type ApprovalGate } from "./turn";
 
@@ -139,7 +147,9 @@ export function claudeOptions(
     // Set so Claude Code does not spend a model call naming each session.
     title: "tachy",
     permissionMode: "default",
-    allowedTools: READ_TOOLS.map(qualify),
+    allowedTools: [...READ_TOOLS, ...proxiedReads(config.proxiedTools)].map(
+      qualify,
+    ),
     mcpServers: {
       [MCP_SERVER]: {
         type: "stdio",
@@ -161,8 +171,9 @@ export async function claudePermission(
   toolUseID: string,
   gate: ApprovalGate,
   autoApprove: string[] = [],
+  proxied: readonly string[] = [],
 ): Promise<PermissionResult> {
-  const { cls, base } = classifyCall(toolName, input);
+  const { cls, base } = classifyCall(toolName, input, proxied);
   if (cls === "read") return { behavior: "allow", updatedInput: input };
   if (cls === "write" && autoApprove.includes(base))
     return { behavior: "allow", updatedInput: input };
@@ -186,6 +197,18 @@ export function withoutImageData(content: unknown): unknown {
   return content.map((block: ContentBlock | null) =>
     block?.type === "image" ? { type: "image" } : block,
   );
+}
+
+/** The start-of-turn message, cut down to what a debug view names. */
+export function sessionFacts(init: SDKSystemMessage): SessionFacts {
+  return {
+    model: init.model,
+    tools: init.tools,
+    mcpServers: init.mcp_servers.map(({ name, status }) => ({ name, status })),
+    credentialSource: init.apiKeySource,
+    skills: init.skills,
+    plugins: init.plugins.map((plugin) => plugin.name),
+  };
 }
 
 export class ClaudeTurn extends TurnBase {
@@ -220,10 +243,15 @@ export class ClaudeTurn extends TurnBase {
           toolUseID,
           this.requestApproval,
           config.autoApprove,
+          config.proxiedTools,
         );
         // A read is announced from its assistant block. A write is announced
         // here, once allowed, so the UI shows it running.
-        const { cls, base } = classifyCall(toolName, input);
+        const { cls, base } = classifyCall(
+          toolName,
+          input,
+          config.proxiedTools,
+        );
         if (permission.behavior === "allow" && cls === "write")
           this.queue.push({
             type: "tool_use",
@@ -238,15 +266,24 @@ export class ClaudeTurn extends TurnBase {
     const pending = new Map<string, string>();
     let answeredSessionId: string | undefined;
     let resulted = false;
+    const answeredBy = new Set<string>();
     try {
       for await (const sdkMessage of query({ prompt, options })) {
-        if (sdkMessage.type === "assistant") {
+        if (sdkMessage.type === "system" && sdkMessage.subtype === "init") {
+          this.queue.push({ type: "session", ...sessionFacts(sdkMessage) });
+        } else if (sdkMessage.type === "assistant") {
           answeredSessionId = sdkMessage.session_id;
+          if (sdkMessage.message.model)
+            answeredBy.add(sdkMessage.message.model);
           for (const block of sdkMessage.message.content as ContentBlock[]) {
             if (block.type === "text" && block.text) {
               this.queue.push({ type: "text", text: block.text });
             } else if (block.type === "tool_use") {
-              const { cls, base } = classifyCall(block.name ?? "", block.input);
+              const { cls, base } = classifyCall(
+                block.name ?? "",
+                block.input,
+                config.proxiedTools,
+              );
               if (cls === "read") {
                 this.queue.push({
                   type: "tool_use",
@@ -294,6 +331,7 @@ export class ClaudeTurn extends TurnBase {
               inputTokens: resultMessage.usage?.input_tokens ?? null,
               outputTokens: resultMessage.usage?.output_tokens ?? null,
             },
+            models: [...answeredBy],
           });
         }
       }

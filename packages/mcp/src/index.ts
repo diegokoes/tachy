@@ -1,11 +1,13 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { pathToFileURL } from "node:url";
 import { loadSettingsIntoEnv } from "@tachy/core/config";
+import { errorText, log } from "@tachy/core/infra";
 import { registerSource, setSourceOrigin } from "@tachy/core/sources";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 import { createAzureDevopsSource } from "@tachy/source-azure-devops";
 import { server } from "./server";
+import { registerProxiedTools } from "./tools/mcp-servers";
 
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
@@ -30,7 +32,7 @@ import "./tools/code";
 import "./tools/exports";
 import "./tools/buckets";
 
-export { server };
+export { server, registerProxiedTools };
 export { runTool } from "./server";
 
 const isMain =
@@ -40,6 +42,12 @@ if (isMain) {
     await loadSettingsIntoEnv();
   } catch {
     // The env alone still configures the server.
+  }
+  try {
+    await registerProxiedTools();
+  } catch (err) {
+    // tachy's own tools still serve the turn.
+    log("error", "mcp_server_tools_unavailable", { error: errorText(err) });
   }
   const transport = new StdioServerTransport();
   await server.connect(transport);

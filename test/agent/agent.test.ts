@@ -492,6 +492,48 @@ describe("claude subprocess environment (per-user credential isolation)", () => 
   });
 });
 
+describe("linked-server tools", () => {
+  const proxied = ["hub_events_search", "post_private_note"];
+
+  it("runs a turn's proxied tools as reads, and never one that shadows a tachy write", () => {
+    expect(classify(qualify("hub_events_search"), proxied).cls).toBe("read");
+    expect(classify(qualify("hub_events_search")).cls).toBe("write");
+    expect(classify(qualify("post_private_note"), proxied).cls).toBe("write");
+    expect(classifyCall(qualify("hub_events_search"), {}, proxied).cls).toBe(
+      "read",
+    );
+  });
+
+  it("allows them without the gate, and lists them in allowedTools", async () => {
+    const gate = gateWith({ approve: false });
+    const decision = await claudePermission(
+      qualify("hub_events_search"),
+      {},
+      "id7",
+      gate,
+      [],
+      proxied,
+    );
+    expect(decision).toMatchObject({ behavior: "allow" });
+    expect(gate).not.toHaveBeenCalled();
+    const options = claudeOptions(
+      {
+        mcpCommand: "node",
+        mcpArgs: [],
+        mcpEnv: {},
+        cwd: "/app",
+        systemPrompt: "",
+        proxiedTools: proxied,
+      },
+      {},
+      new AbortController(),
+      async () => ({ behavior: "deny", message: "" }),
+    );
+    expect(options.allowedTools).toContain(qualify("hub_events_search"));
+    expect(options.allowedTools).not.toContain(qualify("post_private_note"));
+  });
+});
+
 // What reaches the model besides the conversation. The SDK defaults to reading
 // instructions, settings and servers from disk, and a file picked up that way
 // is paid for on every turn without anyone having written it for the agent.
