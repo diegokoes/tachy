@@ -260,8 +260,7 @@ describe("calls", () => {
     expect(JSON.parse(firstText(result)).token).toBe(TOKENS.other);
     const [rest] = await sql`select credential_key from mcp_server_cooldowns`;
     expect(rest!.credential_key).toBe("shared:a");
-    // The resting token is not tried again while it rests: three calls
-    // reached the server, one of them answered as rate limited.
+    // The resting token is skipped: three calls reached the server, one rate limited.
     await callServerTool(
       server,
       [shared("a", TOKENS.limited), shared("b", TOKENS.other)],

@@ -52,19 +52,16 @@ export interface AgentConfig {
    */
   autoApprove?: string[];
 
-  /**
-   * Base names of the linked servers' tools the MCP subprocess offers this
-   * turn. Only tools that read are ever exposed, so these run unreviewed.
-   */
+  /** Linked-server tools offered this turn. All read-only, so unreviewed. */
   proxiedTools?: string[];
 
-  /** The linked servers this caller's turns reach, for the debug view. */
+  /** For the debug view. */
   linkedServers?: LinkedServer[];
 }
 
 export interface LinkedServer {
   slug: string;
-  /** "missing": a personal server the caller saved no token for, left out. */
+  /** "missing": personal server without the caller's token; left out. */
   credential: "personal" | "shared" | "missing";
   tools: number;
 }

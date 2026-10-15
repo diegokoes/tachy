@@ -1,7 +1,4 @@
-/**
- * What one chat turn gets of the linked servers. The API resolves it, since
- * only it opens the vault; the MCP subprocess reads it back from its env.
- */
+/** Linked servers for one turn: resolved by the API, which holds the vault key, read back by the MCP subprocess. */
 import { proxiedToolName, type McpServerRow } from "@tachy/contract";
 import { rememberSecret } from "../infra/known-secrets";
 import { exposedTools } from "./catalog";
@@ -21,7 +18,6 @@ export interface TurnServer {
 
 export interface TurnServers {
   tokens: TurnTokens;
-  /** The names the subprocess offers the servers' exposed tools under. */
   proxiedTools: string[];
   servers: TurnServer[];
 }
@@ -36,11 +32,7 @@ async function credentialsFor(
   return own ? [own] : [];
 }
 
-/**
- * The servers this person's turn can call and the credentials to call them
- * with. A personal server the person saved no token for is left out: it is
- * never answered with somebody else's.
- */
+/** A personal server without the person's own token is left out. */
 export async function resolveTurnServers(
   userId: string | null,
 ): Promise<TurnServers> {
@@ -79,10 +71,7 @@ function parseTurnTokens(value: string): TurnTokens {
   }
 }
 
-/**
- * The turn's credentials, as the subprocess was given them; empty when none
- * or unreadable. Each token is remembered, so a server echoing it is masked.
- */
+/** Empty when unset or unreadable. Remembers each token so an echo of it is masked. */
 export function readTurnTokens(
   value = process.env[TURN_TOKENS_ENV],
 ): TurnTokens {

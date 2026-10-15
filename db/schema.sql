@@ -1493,29 +1493,27 @@ create table api_tokens (
 
 create index api_tokens_user_idx on api_tokens(user_id);
 
--- An MCP server an admin linked: tachy's own MCP process connects to it as a
--- client and offers its exposed tools to the turn under `tool_prefix`. Tools
--- are read-only by policy; a tool that writes is never exposed.
+-- An external MCP server. The per-turn MCP process connects to it as a client
+-- and offers its exposed tools as `<tool_prefix>_<name>`. Only read-only tools
+-- are exposed.
 create table mcp_servers (
     id                uuid primary key default gen_random_uuid(),
     slug              text not null unique,
     name              text not null,
     transport         text not null check (transport in ('http','stdio')),
-    -- http: {url, headers: {name: template}}. stdio: {command, args: [template],
-    -- env: {name: template}, files: [{path, content: template}]}. A template may
-    -- hold {{token}} and {{dir}}, the connection's own temporary directory.
+    -- http: {url, headers}. stdio: {command, args, env, files: [{path, content}]}.
+    -- Values may hold {{token}} and {{dir}} (the connection's temp directory).
     config            jsonb not null default '{}'::jsonb,
-    -- personal: each person's own token, never another's. shared: the pool of
-    -- global tokens, one taking over when another is rate limited.
+    -- personal: each person's own token, no fallback. shared: a pool of global
+    -- tokens, rotated on rate limits.
     credential_mode   text not null check (credential_mode in ('personal','shared')),
     tool_prefix       text not null unique,
-    -- [{seconds, limit}]: calls each credential may make per window.
+    -- [{seconds, limit}], per credential.
     rate_windows      jsonb not null default '[]'::jsonb,
-    -- JSON-RPC error codes the server answers a rate-limited call with. An HTTP
-    -- 429 always counts.
+    -- JSON-RPC error codes that mean rate limited. HTTP 429 always does.
     rate_limit_codes  integer[] not null default '{}',
-    -- {argument: customer fact kind}: fills that argument from the customer the
-    -- model names, so a tenant id is read from the catalog, not guessed.
+    -- {argument: customer fact kind}: the argument is read from that fact of the
+    -- customer the model names.
     argument_bindings jsonb not null default '{}'::jsonb,
     result_max_chars  integer not null default 60000 check (result_max_chars > 0),
     call_timeout_ms   integer not null default 30000 check (call_timeout_ms > 0),
@@ -1533,7 +1531,7 @@ create trigger mcp_servers_updated_at
     before update on mcp_servers
     for each row execute function set_updated_at();
 
--- The teams whose members' turns get a server's tools. None: everyone's.
+-- Teams whose members get a server's tools. No rows: everyone.
 create table mcp_server_teams (
     server_id uuid not null references mcp_servers(id) on delete cascade,
     team_id   uuid not null references teams(id) on delete cascade,
@@ -1542,9 +1540,8 @@ create table mcp_server_teams (
 
 create index mcp_server_teams_team_idx on mcp_server_teams(team_id);
 
--- A server's tools as its last tools/list returned them. `exposed` is the
--- admin's choice; a tool without a read-only hint is exposed only with
--- `attested_by` set, the admin who checked that it only reads.
+-- A server's tools from its last tools/list. A tool without readOnlyHint is
+-- exposed only with `attested_by`: the admin who confirmed it only reads.
 create table mcp_server_tools (
     server_id    uuid not null references mcp_servers(id) on delete cascade,
     name         text not null,
@@ -1556,9 +1553,8 @@ create table mcp_server_tools (
     primary key (server_id, name)
 );
 
--- Calls spent per credential per rate window. `credential_key` is 'user:<id>'
--- or 'shared:<label>', never the secret. Each turn is its own process, so the
--- budget is kept here rather than in memory.
+-- Calls per credential per rate window, here because each turn is its own
+-- process. `credential_key` is 'user:<id>' or 'shared:<label>', never the secret.
 create table mcp_server_usage (
     server_id      uuid not null references mcp_servers(id) on delete cascade,
     credential_key text not null,
@@ -1576,8 +1572,8 @@ create table mcp_server_cooldowns (
     primary key (server_id, credential_key)
 );
 
--- Traffic per server and day, bucketed like source_calls. `budget_refused`
--- counts calls tachy held back because every credential's budget was spent.
+-- Per server and day, like source_calls. `budget_refused`: calls held back
+-- because every credential's budget was spent.
 create table mcp_server_calls (
     server_id      uuid not null references mcp_servers(id) on delete cascade,
     day            date not null,

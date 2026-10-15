@@ -1,8 +1,4 @@
-/**
- * One call to a linked server's tool on a turn's behalf: arguments filled from
- * the catalog, a credential with budget left, the call, and its answer cut to
- * size and scrubbed before the model reads it.
- */
+/** A proxied tool call: bindings, a credential with budget, the call, the shaped answer. */
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServerRow } from "@tachy/contract";
 import { resolveCustomer } from "../catalog/customers";
@@ -20,13 +16,12 @@ import { classifyFailure, openConnection, type McpConnection } from "./connect";
 import type { ServerCredential } from "./credentials";
 import { countServerCall } from "./traffic";
 
-/** The argument a proxied tool gains when the server binds any of its arguments to customer facts. */
+/** Added to a tool that has a bound argument. */
 export const CUSTOMER_ARGUMENT = "tachy_customer";
 
-/** A shared pool tries this many credentials on rate-limit answers before giving up. */
+/** Credentials a pool tries on rate-limit answers. */
 const MAX_POOL_ATTEMPTS = 2;
 
-/** The bound arguments a tool's input schema has. */
 export function boundArguments(
   server: Pick<McpServerRow, "argument_bindings">,
   inputSchema: Record<string, unknown>,
@@ -53,10 +48,9 @@ async function factValue(
 }
 
 /**
- * The arguments as the server gets them: `tachy_customer` replaced by the
- * bound arguments read from that customer's facts. An argument the model
- * passed itself wins; a fact labelled with the server's slug wins over one
- * with no label.
+ * Replaces `tachy_customer` with the bound arguments from that customer's
+ * facts. Explicit arguments win; a fact labelled with the server slug wins
+ * over an unlabelled one.
  */
 export async function applyBindings(
   server: Pick<McpServerRow, "slug" | "argument_bindings">,
@@ -84,7 +78,7 @@ const connections = new Map<string, Promise<McpConnection>>();
 const connectionKey = (serverId: string, credentialKey: string) =>
   `${serverId}|${credentialKey}`;
 
-/** One connection per server and credential for the life of the process. */
+/** Cached per server and credential for the process lifetime. */
 function connectionFor(
   server: McpServerRow,
   credential: ServerCredential,
@@ -133,10 +127,7 @@ function tokenRefused(
   );
 }
 
-/**
- * Calls the tool with the first credential that has budget. A rate-limit
- * answer rests that credential and, in a pool, hands the call to the next.
- */
+/** A rate-limit answer rests the credential; in a pool the call moves to the next. */
 export async function callServerTool(
   server: McpServerRow,
   credentials: ServerCredential[],
@@ -200,11 +191,7 @@ function scrubbed(text: string): string {
   }
 }
 
-/**
- * The remote's answer as a tachy tool returns it: its text, scrubbed under
- * redaction and cut at the server's limit with a note. Pictures and other
- * blocks are not passed on. A remote error throws, so `runTool` reports it.
- */
+/** Text only, scrubbed under redaction, cut at the server's limit with a note. A remote error throws. */
 export function shapeResult(
   server: Pick<McpServerRow, "name" | "redaction" | "result_max_chars">,
   result: CallToolResult,

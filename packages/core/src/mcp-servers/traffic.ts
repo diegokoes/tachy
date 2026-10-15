@@ -4,7 +4,7 @@ import { inBackground } from "../infra/background";
 export interface ServerCallOutcome {
   rateLimited?: boolean;
   authFailed?: boolean;
-  /** tachy held the call back: every credential's budget was spent. */
+  /** Held back: every credential's budget was spent. */
   budgetRefused?: boolean;
 }
 
@@ -45,7 +45,6 @@ export interface ServerTraffic {
   budget_refused: number;
 }
 
-/** Totals per server over the last `days` days, for the console. */
 export async function serverTraffic(days = 14): Promise<ServerTraffic[]> {
   const rows = await sql`
     select s.slug,

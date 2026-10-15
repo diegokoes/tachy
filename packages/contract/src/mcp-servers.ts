@@ -1,8 +1,4 @@
-/**
- * MCP servers an admin links: what the console form, the vault and tachy's own
- * MCP process agree on about a server's shape, its credential names and the
- * names its tools are offered under.
- */
+/** Linked MCP servers: shapes, credential names and proxied tool names shared by the console, the vault and the MCP process. */
 import { SLUG_RE } from "./vocabulary";
 import { isSourceBaseUrl } from "./sources";
 
@@ -58,7 +54,7 @@ export interface McpServerRow {
   note: string | null;
   tools_refreshed_at: string | null;
   teams: { slug: string; name: string }[];
-  /** Tools the last refresh listed, and how many of them are exposed. */
+  /** Tools from the last refresh, and how many are exposed. */
   tools: number;
   exposed: number;
   created_at: string;
@@ -70,15 +66,15 @@ export interface McpServerToolRow {
   input_schema: Record<string, unknown>;
   annotations: Record<string, unknown>;
   exposed: boolean;
-  /** Set when an admin vouched that a tool without a read-only hint only reads. */
+  /** The admin who confirmed that a tool without readOnlyHint only reads. */
   attested_by: string | null;
 }
 
-/** A shared-pool credential as the console lists it: never the value. */
+/** Pool credential metadata; never the value. */
 export interface McpPoolCredential {
   label: string;
   updated_at: string;
-  /** Calls spent in each rate window that is open now. */
+  /** Calls in each currently open window. */
   usage: { seconds: number; calls: number; limit: number }[];
   cooling_until: string | null;
 }
@@ -97,7 +93,6 @@ export function mcpServerCredentialName(slug: string, label?: string): string {
 
 export const POOL_LABEL_RE = SLUG_RE;
 
-/** Lowercase, starts with a letter: it opens every proxied tool name. */
 export const TOOL_PREFIX_RE = /^[a-z][a-z0-9_]{0,19}$/;
 
 /** Claude caps a tool name at 64 characters, and `mcp__tachy__` takes 12. */
@@ -105,7 +100,7 @@ export const MAX_PROXIED_NAME_CHARS = 52;
 
 const HASH_HEX_CHARS = 8;
 
-/** FNV-1a: a stable short suffix for a name cut to fit, with no dependency. */
+/** FNV-1a, 32-bit. */
 function shortHash(text: string): string {
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
@@ -116,9 +111,8 @@ function shortHash(text: string): string {
 }
 
 /**
- * The name a remote tool is offered under. Characters a tool name may not hold
- * become `_`; a name too long keeps its start and gains a hash of the whole, so
- * two long names that share a start stay apart.
+ * Disallowed characters become `_`. A name over the limit keeps its start and
+ * gains a hash of the whole, so two long names with the same start differ.
  */
 export function proxiedToolName(prefix: string, name: string): string {
   const full = `${prefix}_${name}`.replace(/[^A-Za-z0-9_-]/g, "_");
@@ -127,5 +121,5 @@ export function proxiedToolName(prefix: string, name: string): string {
   return `${kept}_${shortHash(full)}`;
 }
 
-/** http or https with no credentials in it, like a source connection's address. */
+/** Same rule as a source connection's base URL. */
 export const isMcpServerUrl = isSourceBaseUrl;

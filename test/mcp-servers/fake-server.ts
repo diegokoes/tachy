@@ -1,8 +1,4 @@
-/**
- * A remote MCP server over Streamable HTTP for the linked-server suites. Each
- * bearer token behaves one way, so a pool can be made of tokens that work, are
- * rate limited (JSON-RPC -32029, or HTTP 429) or are refused (HTTP 401).
- */
+/** Streamable HTTP MCP server. Each bearer token behaves one way: works, rate limited (-32029 or 429), or refused (401). */
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { z } from "zod";

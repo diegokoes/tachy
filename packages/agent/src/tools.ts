@@ -82,17 +82,14 @@ const WRITE = new Set<string>(WRITE_TOOLS);
 
 export type ToolClass = "read" | "write" | "denied";
 
-/**
- * The linked servers' tools a turn may run unreviewed: its proxied names,
- * minus any that would shadow one of tachy's own writes.
- */
+/** Proxied names minus any that shadow a tachy tool. */
 export function proxiedReads(proxied: readonly string[] = []): string[] {
   return proxied.filter((base) => !WRITE.has(base) && !READ.has(base));
 }
 
 /**
  * A tachy tool not listed as a read is a write, so an unlisted tool still gets
- * the review box. `proxied` names the turn's linked-server tools, all reads.
+ * the review box. `proxied`: the turn's linked-server tools, all reads.
  */
 export function classify(
   toolName: string,

@@ -1,8 +1,4 @@
-/**
- * Linked servers' tools as tachy's MCP server offers them: registered from the
- * stored catalog, called through to the fake remote, and answered under the
- * same envelope and masking as tachy's own tools.
- */
+/** Linked servers' tools on tachy's MCP server, called through to the fake remote. */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";

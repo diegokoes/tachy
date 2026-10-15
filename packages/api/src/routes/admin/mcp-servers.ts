@@ -79,10 +79,7 @@ const labelParam = (c: Context) => {
   return label;
 };
 
-/**
- * The token a console action connects with: the caller's own for a personal
- * server, a pool member for a shared one (`label`, or the first).
- */
+/** Personal server: the caller's own token. Shared: pool member `label`, else the first. */
 async function consoleToken(c: Context, server: McpServerRow): Promise<string> {
   if (server.credential_mode === "personal") {
     const own = await ownToken(server.slug, await requireCaller(c));
@@ -106,10 +103,7 @@ async function consoleToken(c: Context, server: McpServerRow): Promise<string> {
   return credential.token;
 }
 
-/**
- * Linked MCP servers. Anyone signed in reads their settings and tools; app
- * admins change them, hold the pool and run the test and refresh calls.
- */
+/** Reads for anyone signed in; changes, pool, test and refresh for app admins. */
 export const mcpServers = new Hono()
   .get("/mcp-servers", async (c) =>
     c.json({

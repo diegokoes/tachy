@@ -39,9 +39,8 @@ export interface RefreshOutcome {
 }
 
 /**
- * Stores what the server lists now. A new tool starts exposed only when it
- * says it reads; a tool that stops saying so loses its exposure unless an admin
- * vouched for it, and a destructive one is never exposed.
+ * A new tool starts exposed only with readOnlyHint. A tool that loses the hint
+ * loses exposure unless an admin vouched for it; a destructive one never has it.
  */
 export async function storeToolList(
   serverId: string,
@@ -85,7 +84,6 @@ export async function storeToolList(
   });
 }
 
-/** Asks the server for its tools with one credential and stores the answer. */
 export async function refreshTools(
   server: McpServerRow,
   token: string,
@@ -94,7 +92,7 @@ export async function refreshTools(
   return storeToolList(server.id, tools);
 }
 
-/** Connects, uses and disconnects; a failure says what the server answered. */
+/** A failure carries what the server answered. */
 async function withConnection<T>(
   server: McpServerRow,
   token: string,
@@ -121,7 +119,7 @@ export interface ServerProbe {
   tools: number;
 }
 
-/** Connects and lists, storing nothing: what the console's test button shows. */
+/** Lists without storing: the console's test. */
 export async function probeServer(
   server: McpServerRow,
   token: string,
@@ -151,11 +149,7 @@ export async function listServerTools(
   return rows as unknown as McpServerToolRow[];
 }
 
-/**
- * Exposes or hides one tool. A tool that does not say it reads needs
- * `attested`: the admin vouching that it only reads, since every exposed tool
- * runs without review.
- */
+/** A tool without readOnlyHint needs `attested`: exposed tools run unreviewed. */
 export async function setToolExposed(
   slug: string,
   name: string,
@@ -187,7 +181,6 @@ export async function setToolExposed(
   return row as unknown as McpServerToolRow;
 }
 
-/** The exposed tools of the given servers, as tachy's MCP process registers them. */
 export async function exposedTools(
   serverIds: string[],
 ): Promise<(McpServerToolRow & { server_id: string })[]> {

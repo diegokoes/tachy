@@ -14,7 +14,7 @@ import { sql } from "../infra/db";
 import { badInput } from "../infra/errors";
 import { credentialStates } from "./budget";
 
-/** One credential a call may go out with. `key` names it in the budget and never holds the secret. */
+/** `key` names the credential in the budget; never the secret. */
 export interface ServerCredential {
   key: string;
   token: string;
@@ -23,7 +23,7 @@ export interface ServerCredential {
 export const userCredentialKey = (userId: string) => `user:${userId}`;
 export const poolCredentialKey = (label: string) => `shared:${label}`;
 
-/** The person's own token for a personal server: their row only, never a shared one. */
+/** The person's own row only. */
 export async function ownToken(
   slug: string,
   userId: string,
@@ -80,7 +80,7 @@ export async function deletePoolToken(
   );
 }
 
-/** The pool as the console shows it: labels, budget and rest, no values. */
+/** Labels, budget and rest; no values. */
 export async function listPoolCredentials(
   server: McpServerRow,
 ): Promise<McpPoolCredential[]> {

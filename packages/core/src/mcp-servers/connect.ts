@@ -65,7 +65,7 @@ async function connectHttp(
   return { client, close: () => client.close() };
 }
 
-/** The connection's own directory: files it is given, and its working directory. */
+/** Holds the rendered files; also the program's cwd. */
 async function prepareDirectory(
   config: McpStdioConfig,
   token: string,
@@ -91,8 +91,7 @@ async function connectStdio(
   const removeDir = () => rmSync(dir, { recursive: true, force: true });
   process.once("exit", removeDir);
   const values = { token, dir };
-  // Only the SDK's short list of login variables is inherited, never the
-  // process env, which holds the database URL and every caller's tokens.
+  // Only the SDK's login variables, never this env: it holds DATABASE_URL and tokens.
   const transport = new StdioClientTransport({
     command: config.command,
     args: (config.args ?? []).map((arg) => renderTemplate(arg, values)),
@@ -123,7 +122,6 @@ async function connectStdio(
   };
 }
 
-/** A connected client for one server, authenticated with one credential. */
 export function openConnection(
   server: Pick<McpServerRow, "transport" | "config" | "call_timeout_ms">,
   token: string,
@@ -142,7 +140,7 @@ export type FailureKind = "rate_limited" | "auth" | "other";
 const HTTP_TOO_MANY_REQUESTS = 429;
 const HTTP_AUTH_REFUSED = [401, 403];
 
-/** A connect or list failure as the console shows it. */
+/** For the console. */
 export function connectFailureText(err: unknown): string {
   if (!(err instanceof StreamableHTTPError)) return errorText(err);
   if (err.code !== undefined && HTTP_AUTH_REFUSED.includes(err.code))
@@ -150,7 +148,6 @@ export function connectFailureText(err: unknown): string {
   return `the server answered HTTP ${err.code}: ${errorText(err)}`;
 }
 
-/** What a failed call means for its credential. */
 export function classifyFailure(
   err: unknown,
   rateLimitCodes: number[],

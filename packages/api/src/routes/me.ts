@@ -44,10 +44,7 @@ import { userConfigDir } from "../turn-config";
 const valueSchema = z.object({ value: z.string().min(1) });
 const prefSchema = z.object({ value: z.unknown() });
 
-/**
- * Agent-credential names, one source-token name per connection, and one per
- * personal MCP server the person's turns reach.
- */
+/** Agent credentials, one per source connection, one per personal MCP server the person reaches. */
 async function knownCredentialNames(userId: string): Promise<string[]> {
   const connections = await listSourceConnections();
   const personalServers = (await serversFor(userId)).filter(

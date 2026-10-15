@@ -5,11 +5,7 @@ import type { SeededTeam, SeededUser } from "./org";
 const DAY_MS = 86_400_000;
 const TRAFFIC_DAYS = 7;
 
-/**
- * One linked server with a stored catalog, a spent window and a week of
- * traffic. It points at an address that does not resolve: test and refresh
- * fail until an admin points it at a real server.
- */
+/** One server with a catalog, a spent window and a week of traffic. Its URL does not resolve. */
 export async function seedMcpServers(
   tx: Tx,
   teams: SeededTeam[],

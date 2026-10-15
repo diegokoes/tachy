@@ -1,7 +1,4 @@
-/**
- * The linked-server form keeps every setting as one text field; these read
- * the fields into the API's shape and write a stored server back out.
- */
+/** Converts between the form's text fields and the API shape. */
 import type {
   McpHttpConfig,
   McpServerRow,
@@ -102,7 +99,6 @@ export function formatFiles(files: McpStdioFile[] | undefined): string {
     .join("\n");
 }
 
-/** A tool prefix from a slug: underscores for hyphens, starting with a letter. */
 export function toolPrefixFor(slug: string): string {
   return slug
     .replace(/-/g, "_")
