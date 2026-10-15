@@ -1,6 +1,10 @@
 import { sql } from "../infra/db";
 import { badInput } from "../infra/errors";
-import { resolveCredential, sourceCredentialName } from "../config/credentials";
+import {
+  getUserCredential,
+  resolveCredential,
+  sourceCredentialName,
+} from "../config/credentials";
 import type { ScopeContext } from "../config/scoped";
 import type { SourceFactory, WorkItemSource } from "./source";
 
@@ -30,20 +34,53 @@ export async function resolveSource(
   slug: string,
   ctx: ScopeContext = {},
 ): Promise<ResolvedSource> {
-  const [conn] = await sql`
+  const conn = await getConnection(slug);
+  const token = await resolveCredential(
+    sourceCredentialName(conn.source_type, conn.slug),
+    ctx,
+  );
+  return built(conn, token);
+}
+
+/**
+ * The connection's adapter with the person's own token, never another: null
+ * when they have saved none, for work done on their behalf without them.
+ */
+export async function resolvePersonalSource(
+  slug: string,
+  userId: string,
+): Promise<ResolvedSource | null> {
+  const conn = await getConnection(slug);
+  const token = await getUserCredential(
+    sourceCredentialName(conn.source_type, conn.slug),
+    userId,
+  );
+  return token ? built(conn, token) : null;
+}
+
+interface ConnectionRow {
+  id: string;
+  source_type: string;
+  base_url: string | null;
+  slug: string;
+  config: Record<string, unknown> | null;
+}
+
+async function getConnection(slug: string): Promise<ConnectionRow> {
+  const [conn] = await sql<ConnectionRow[]>`
     select id, source_type, base_url, slug, config
     from source_connections where slug = ${slug}
   `;
   if (!conn) throw badInput(`Unknown source connection: ${slug}`);
+  return conn;
+}
+
+function built(conn: ConnectionRow, token: string | undefined): ResolvedSource {
   const factory = factories.get(conn.source_type);
   if (!factory)
     throw badInput(
       `No adapter registered for source type: ${conn.source_type}`,
     );
-  const token = await resolveCredential(
-    sourceCredentialName(conn.source_type, conn.slug),
-    ctx,
-  );
   return {
     conn: {
       id: conn.id,

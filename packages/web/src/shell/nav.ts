@@ -1,6 +1,11 @@
 import type { IconName } from "../tui/icons";
 
-export type NavItem = { key: string; label: string; icon?: IconName };
+export type NavItem = {
+  key: string;
+  label: string;
+  icon?: IconName;
+  badge?: number;
+};
 
 const SECTIONS: NavItem[] = [
   { key: "chat", label: "chat", icon: "chat" },

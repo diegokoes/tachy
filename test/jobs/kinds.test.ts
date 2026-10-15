@@ -49,11 +49,12 @@ describe("core job kinds", () => {
       "wiki.gaps": "maintenance/light",
       "bucket.embed": "embed/heavy",
       "mcp-server.refresh": "maintenance/light",
+      "work_items.follows": "sync/light",
     });
   });
 
   it("creates default schedules once, and never brings back a deleted one", async () => {
-    expect(await ensureDefaultDefinitions()).toHaveLength(4);
+    expect(await ensureDefaultDefinitions()).toHaveLength(5);
     expect(await ensureDefaultDefinitions()).toEqual([]);
     const defs = await listJobDefinitions();
     expect(defs.map((d) => [d.kind, d.schedule]).sort()).toEqual([
@@ -61,6 +62,7 @@ describe("core job kinds", () => {
       ["repos.refresh", "40 2 * * *"],
       ["retention.sweep", "30 3 * * *"],
       ["wiki.gaps", "7 * * * *"],
+      ["work_items.follows", "*/10 * * * *"],
     ]);
     await deleteJobDefinition(
       defs.find((d) => d.kind === "wiki.gaps")!.id,

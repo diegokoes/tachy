@@ -14,12 +14,14 @@ import type {
 import type {
   AdoClient,
   AdoFields,
+  AdoUpdate,
   AdoWorkItem,
   AdoWorkItemSummary,
   AdoWorkItemType,
 } from "./client";
-import type { RawWorkItem } from "@tachy/core/sources";
+import type { FollowedChange, RawWorkItem } from "@tachy/core/sources";
 import { projectLayout, readLayout } from "./composer";
+import { updateEvents } from "./history";
 import { workItemSchema } from "./fields";
 
 const PEEK_FIELDS = [
@@ -160,6 +162,10 @@ export function listWiql(query: WorkItemQuery): string {
   const where = ["[System.TeamProject] = @project"];
   if (query.scope === "assigned") where.push("[System.AssignedTo] = @Me");
   if (query.scope === "created") where.push("[System.CreatedBy] = @Me");
+  if (query.scope === "followed") {
+    const ids = (query.ids ?? []).filter((id) => /^\d+$/.test(id));
+    where.push(`[System.Id] In (${ids.join(", ")})`);
+  }
   if (query.type)
     where.push(`[System.WorkItemType] = ${wiqlString(query.type)}`);
   if (query.state) where.push(`[System.State] = ${wiqlString(query.state)}`);
@@ -299,4 +305,100 @@ export async function itemReading(
     layout,
     relations: relationsOf(relations),
   };
+}
+
+const CHANGE_FIELDS = ["System.Id", "System.Title", "System.TeamProject"];
+
+/** Lines a change note keeps; the item's page has the rest. */
+const MAX_CHANGE_LINES = 5;
+
+/** The field's own name without its namespace: `Priority`, not `Microsoft.VSTS.Common.Priority`. */
+const shortName = (field: string) => field.split(".").pop() ?? field;
+
+/**
+ * What a run of updates changed, one line each: new comments first, then
+ * state and assignee from their first value to their last, links, and the
+ * names of any other fields.
+ */
+export function changeLines(updates: AdoUpdate[]): string[] {
+  const comments = updates.filter(
+    (update) => typeof update.fields?.["System.History"]?.newValue === "string",
+  ).length;
+  const lines: string[] = [];
+  if (comments)
+    lines.push(comments === 1 ? "1 new comment" : `${comments} new comments`);
+  const spans = new Map<string, { from?: string | null; to?: string | null }>();
+  const others = new Set<string>();
+  for (const event of updateEvents(updates)) {
+    if (event.field === "created") continue;
+    if (event.field === "link") {
+      lines.push(
+        event.newValue
+          ? `link added: ${event.newValue}`
+          : `link removed: ${event.oldValue}`,
+      );
+      continue;
+    }
+    if (event.field !== "status" && event.field !== "assignee") {
+      others.add(shortName(event.field));
+      continue;
+    }
+    const span = spans.get(event.field);
+    if (span) span.to = event.newValue;
+    else spans.set(event.field, { from: event.oldValue, to: event.newValue });
+  }
+  const status = spans.get("status");
+  if (status)
+    lines.unshift(`state ${status.from ?? "none"} → ${status.to ?? "none"}`);
+  const assignee = spans.get("assignee");
+  if (assignee)
+    lines.push(assignee.to ? `assigned to ${assignee.to}` : "unassigned");
+  if (others.size) lines.push(`also changed: ${[...others].join(", ")}`);
+  return lines.slice(0, MAX_CHANGE_LINES);
+}
+
+async function readerAccount(client: AdoClient): Promise<string | null> {
+  const user = (await client.getConnectionData()).authenticatedUser;
+  return user?.properties?.Account?.$value?.toLowerCase() ?? null;
+}
+
+export async function followedChanges(
+  client: AdoClient,
+  followed: { id: string; seenRev: number | null }[],
+): Promise<FollowedChange[]> {
+  const seenRevs = new Map(followed.map((item) => [item.id, item.seenRev]));
+  const ids = followed
+    .map((item) => item.id)
+    .filter((id) => /^\d+$/.test(id))
+    .map(Number);
+  if (!ids.length) return [];
+  const [workItems, reader] = await Promise.all([
+    client.getWorkItemsBatch(ids, CHANGE_FIELDS),
+    // Without the reader's name their own changes are reported too.
+    readerAccount(client).catch(() => null),
+  ]);
+  const byOthers = (update: AdoUpdate) =>
+    !reader || update.revisedBy?.uniqueName?.toLowerCase() !== reader;
+  return Promise.all(
+    workItems
+      .filter((workItem): workItem is AdoWorkItem => workItem != null)
+      .map(async (workItem) => {
+        const id = String(workItem.id);
+        const rev = workItem.rev ?? 0;
+        const fields = workItem.fields ?? {};
+        const seenRev = seenRevs.get(id) ?? null;
+        const change = {
+          id,
+          rev,
+          title: String(fields["System.Title"] ?? ""),
+          url: itemUrl(client.orgUrl, fields["System.TeamProject"] ?? "", id),
+        };
+        if (seenRev == null || rev <= seenRev) return { ...change, lines: [] };
+        const updates = await client.getUpdates(id, rev);
+        const newer = updates.filter(
+          (update) => (update.rev ?? 0) > seenRev && byOthers(update),
+        );
+        return { ...change, lines: changeLines(newer) };
+      }),
+  );
 }
