@@ -29,34 +29,43 @@
   );
 
   let refreshing = $state(false);
+  let saving = $state(false);
   let error = $state<string | null>(null);
-  // A tool without readOnlyHint takes a second click confirming it only reads.
-  let confirming = $state<string | null>(null);
+  /** Ticks not saved yet, by tool name; survives "list again". */
+  let pending = $state<Record<string, boolean>>({});
+  let expanded = $state<string | null>(null);
 
   const readOnly = (tool: McpServerToolRow) =>
     tool.annotations.readOnlyHint === true;
   const destructive = (tool: McpServerToolRow) =>
     tool.annotations.destructiveHint === true;
+  const offered = (tool: McpServerToolRow) =>
+    pending[tool.name] ?? tool.exposed;
 
-  async function setExposed(tool: McpServerToolRow, exposed: boolean) {
-    if (exposed && !readOnly(tool) && confirming !== tool.name) {
-      confirming = tool.name;
-      return;
-    }
+  const changed = $derived(
+    tools.data.filter(
+      (tool) => tool.name in pending && pending[tool.name] !== tool.exposed,
+    ),
+  );
+
+  /** Ticking a tool without readOnlyHint is the admin's word that it only reads. */
+  async function save() {
+    saving = true;
     error = null;
-    confirming = null;
     try {
-      await tools.mutate(() =>
-        api.put(
+      for (const tool of changed) {
+        const exposed = offered(tool);
+        await api.put(
           `/mcp-servers/${server.slug}/tools/${encodeURIComponent(tool.name)}`,
-          {
-            exposed,
-            attested: exposed && !readOnly(tool),
-          },
-        ),
-      );
+          { exposed, attested: exposed && !readOnly(tool) },
+        );
+      }
+      onclose();
     } catch (e) {
       error = errText(e);
+      await tools.reload();
+    } finally {
+      saving = false;
     }
   }
 
@@ -75,54 +84,55 @@
   }
 
   const columns: Column<McpServerToolRow>[] = [
-    { key: "exposed", label: "offered", width: "6rem", cell: exposedCell },
+    { key: "exposed", label: "offered", width: "5rem", cell: offeredCell },
     { key: "name", label: "tool", width: "16rem" },
-    { key: "kind", label: "says", width: "8rem", cell: kindCell },
-    { key: "description", label: "description" },
+    { key: "kind", label: "read-only", width: "7rem", cell: kindCell },
+    { key: "description", label: "description", cell: descriptionCell },
   ];
 
   onMount(() => tools.reload());
 </script>
 
-{#snippet exposedCell(tool: McpServerToolRow)}
-  {#if confirming === tool.name}
-    <Button
-      size="sm"
-      tone="warn"
-      icon="confirm"
-      onclick={() => setExposed(tool, true)}>only reads</Button
-    >
-  {:else}
-    <Checkbox
-      checked={tool.exposed}
-      disabled={!canChange || destructive(tool)}
-      ariaLabel={`offer ${tool.name}`}
-      onchange={(on) => setExposed(tool, on)}
-    />
-  {/if}
+{#snippet offeredCell(tool: McpServerToolRow)}
+  <Checkbox
+    checked={offered(tool)}
+    disabled={!canChange || destructive(tool)}
+    ariaLabel={`offer ${tool.name}`}
+    onchange={(on) => (pending[tool.name] = on)}
+  />
 {/snippet}
 
 {#snippet kindCell(tool: McpServerToolRow)}
   {#if destructive(tool)}
     <Badge tone="danger">destructive</Badge>
   {:else if readOnly(tool)}
-    <Badge tone="ok">reads</Badge>
-  {:else if tool.attested_by}
-    <Badge tone="warn">vouched</Badge>
+    <Badge tone="ok">declared</Badge>
+  {:else if offered(tool)}
+    <Badge tone="warn">confirmed</Badge>
   {:else}
-    <Badge tone="warn">no hint</Badge>
+    <span class="dim">unknown</span>
   {/if}
+{/snippet}
+
+{#snippet descriptionCell(tool: McpServerToolRow)}
+  <span class="desc" class:full={expanded === tool.name}
+    >{tool.description}</span
+  >
 {/snippet}
 
 <Modal
   title={`tools: ${server.name}`}
   width="64rem"
-  confirmLabel="done"
-  confirmIcon="confirm"
-  onConfirm={onclose}
+  confirmLabel="save"
+  busy={saving}
+  onConfirm={canChange ? save : undefined}
+  cancelLabel={canChange ? "cancel" : "close"}
   onCancel={onclose}
 >
-  <Note>Offered tools run without review. Offer only tools that read.</Note>
+  <Note>
+    Offered tools run without review: offer only tools that read. Click a row
+    for its full description.
+  </Note>
   {#if canChange}
     <div class="bar">
       <Button
@@ -143,6 +153,8 @@
     error={tools.error}
     emptyTitle="No tools listed yet."
     emptyDetail="Save a token, then list the server's tools."
+    onrowclick={(tool) =>
+      (expanded = expanded === tool.name ? null : tool.name)}
   />
 </Modal>
 
@@ -151,5 +163,18 @@
     display: flex;
     justify-content: flex-end;
     margin: var(--pad-2) 0;
+  }
+  .desc {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .desc.full {
+    white-space: normal;
+    padding: var(--pad-1) 0;
+  }
+  .dim {
+    color: var(--muted);
   }
 </style>
