@@ -1,14 +1,18 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { validate } from "../validation";
 import { z } from "zod";
 import {
   MAX_PAGE,
   checkFile,
   fileFamily,
+  WORK_ITEM_SCOPES,
+  WORK_ITEM_SORTS,
   type WorkItemPeek,
+  type WorkItemView,
 } from "@tachy/core";
 import { imageForModel } from "@tachy/core/files";
-import { resolveSource } from "@tachy/core/sources";
+import { getSourceProject, resolveSource } from "@tachy/core/sources";
 import {
   deleteStoredItems,
   filterForAudit,
@@ -28,25 +32,68 @@ import {
   setWorkItemCustomer,
   setObservedVersion,
 } from "@tachy/core/catalog";
-import { AppError, badInput, unavailable } from "@tachy/core/infra";
+import { AppError, badInput, notFound, unavailable } from "@tachy/core/infra";
 import { audit } from "../audit";
 import { requireAdmin } from "../auth";
-import { assertScopeEditor, callerScope, callerSourceProjects } from "../authz";
+import {
+  assertProjectMember,
+  assertScopeEditor,
+  callerScope,
+  callerSourceProjects,
+} from "../authz";
 import { callerSource } from "../sources";
 import { INERT_HEADERS, contentDisposition } from "../downloads";
 
 /** A source's status codes for a token it does not accept. */
 const TOKEN_REFUSED = /-> (401|403|203)\b/;
+const ITEM_MISSING = /-> 404\b/;
 
 /** An upstream failure, said so that the person knows what to do about it. */
-function lookupRefusal(reason: unknown): Error {
+function sourceRefusal(reason: unknown): Error {
   if (reason instanceof AppError) return reason;
-  if (reason instanceof Error && TOKEN_REFUSED.test(reason.message))
+  const message = reason instanceof Error ? reason.message : "";
+  if (TOKEN_REFUSED.test(message))
     return badInput(
       "The source refused your token. Check it under Settings › credentials.",
     );
-  return unavailable("The source did not answer the lookup. Try again.");
+  if (ITEM_MISSING.test(message))
+    return notFound("No such item, or your token cannot read it.");
+  return unavailable("The source did not answer. Try again.");
 }
+
+async function askSource<T>(ask: Promise<T>): Promise<T> {
+  try {
+    return await ask;
+  } catch (e) {
+    throw sourceRefusal(e);
+  }
+}
+
+/** A registered project of the caller's team, and its source's live reads. */
+async function browseIn(c: Context, projectId: string) {
+  const project = await getSourceProject(projectId);
+  await assertProjectMember(c, project);
+  const { conn, source } = await callerSource(c, project.source_slug);
+  if (!source.browser)
+    throw badInput(`${project.source_type} items cannot be browsed yet`);
+  return { project, conn, browser: source.browser };
+}
+
+const listSchema = z.object({
+  sort: z.enum(WORK_ITEM_SORTS).default("changed"),
+  direction: z.enum(["asc", "desc"]).default("desc"),
+  scope: z.enum(WORK_ITEM_SCOPES).default("all"),
+  type: z.string().max(200).optional(),
+  state: z.string().max(200).optional(),
+  q: z.string().max(200).optional(),
+  offset: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE).default(50),
+});
+const browseParam = z.object({ id: z.string().uuid() });
+const itemParam = z.object({
+  id: z.string().uuid(),
+  itemId: z.string().regex(/^\d+$/),
+});
 
 /** The longest edge of a file's picture in a list of files. */
 const THUMBNAIL_EDGE_PX = 320;
@@ -165,9 +212,38 @@ export const workItems = new Hono()
       answer.status === "fulfilled" ? answer.value : [],
     );
     const refusal = answers.find((answer) => answer.status === "rejected");
-    if (!peeks.length && refusal) throw lookupRefusal(refusal.reason);
+    if (!peeks.length && refusal) throw sourceRefusal(refusal.reason);
     return c.json(peeks);
   })
+
+  .get(
+    "/projects/:id/items",
+    validate("param", browseParam),
+    validate("query", listSchema),
+    async (c) => {
+      const { project, browser } = await browseIn(c, c.req.valid("param").id);
+      const { q, ...query } = c.req.valid("query");
+      return c.json(
+        await askSource(
+          browser.list(project.external_key, { ...query, text: q }),
+        ),
+      );
+    },
+  )
+  // Reading an item whole refreshes its stored copy, as a fetch in chat does.
+  .get(
+    "/projects/:id/items/:itemId",
+    validate("param", itemParam),
+    async (c) => {
+      const { id, itemId } = c.req.valid("param");
+      const { conn, browser } = await browseIn(c, id);
+      const { raw, view } = await askSource(browser.read(itemId));
+      const stored = await ingestWorkItem(conn.id, raw);
+      const { timeline } = await readStoredItem(stored.id);
+      const answer: WorkItemView = { ...view, stored_id: stored.id, timeline };
+      return c.json(answer);
+    },
+  )
 
   .post("/:source/:id/fetch", async (c) => {
     const { source, id } = c.req.param();
