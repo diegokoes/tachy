@@ -31,6 +31,16 @@
       "mcp servers",
       list(trace.session?.mcpServers.map((s) => `${s.name} (${s.status})`)),
     ],
+    [
+      "linked servers",
+      list(
+        trace.sent.linkedServers.map((server) =>
+          server.credential === "missing"
+            ? `${server.slug} (no token saved)`
+            : `${server.slug} (${server.credential}, ${server.tools} tools)`,
+        ),
+      ),
+    ],
     ["skills", list(trace.session?.skills)],
     ["plugins", list(trace.session?.plugins)],
     ["auto-approved", list(trace.sent.autoApprove)],
