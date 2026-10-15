@@ -108,9 +108,6 @@
   cancelLabel="close"
   onCancel={onclose}
 >
-  <Note>
-    Least used token goes first; a rate-limited one rests until its window ends.
-  </Note>
   <DataTable
     {columns}
     rows={pool.data}
@@ -124,7 +121,10 @@
     <Field label="label" info="Lowercase letters, digits and hyphens.">
       <input bind:value={label} />
     </Field>
-    <Field label="token">
+    <Field
+      label="token"
+      info="Least used token goes first; a rate-limited one rests until its window ends."
+    >
       <input type="password" autocomplete="off" bind:value />
     </Field>
     <Button
