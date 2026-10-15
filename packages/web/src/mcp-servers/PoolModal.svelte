@@ -12,6 +12,7 @@
     Button,
     DataTable,
     DeleteButton,
+    Field,
     Modal,
     Note,
     Time,
@@ -110,9 +111,7 @@
   onCancel={onclose}
 >
   <Note>
-    Each call goes out with the least used token that has budget left. A token
-    the server answers as rate limited rests until its window ends, and the call
-    moves to the next.
+    Least used token goes first; a rate-limited one rests until its window ends.
   </Note>
   <DataTable
     {columns}
@@ -121,21 +120,15 @@
     loading={pool.loading}
     error={pool.error}
     emptyTitle="No tokens in the pool."
-    emptyDetail="Chat turns get none of this server's tools until one is added."
+    emptyDetail="No tools in chat until one is added."
   />
   <form class="add" onsubmit={(e) => (e.preventDefault(), add())}>
-    <input
-      aria-label="label"
-      placeholder="label, e.g. svc-1"
-      bind:value={label}
-    />
-    <input
-      aria-label="token"
-      type="password"
-      autocomplete="off"
-      placeholder="paste a token"
-      bind:value
-    />
+    <Field label="label" info="Lowercase letters, digits and hyphens.">
+      <input bind:value={label} />
+    </Field>
+    <Field label="token">
+      <input type="password" autocomplete="off" bind:value />
+    </Field>
     <Button
       type="submit"
       size="sm"
@@ -151,6 +144,7 @@
   .add {
     display: grid;
     grid-template-columns: 12rem 1fr auto;
+    align-items: end;
     gap: var(--pad-2);
     margin-top: var(--pad-2);
   }

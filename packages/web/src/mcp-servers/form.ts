@@ -11,6 +11,7 @@ export type Draft = Record<string, string | number | boolean | null>;
 
 const FILE_MARK = "--- ";
 const PREFIX_MAX_CHARS = 20;
+const FALLBACK_PREFIX = "mcp";
 
 const lines = (text: string) =>
   text
@@ -106,6 +107,17 @@ export function toolPrefixFor(slug: string): string {
     .slice(0, PREFIX_MAX_CHARS);
 }
 
+/** `toolPrefixFor(slug)`, or with a `_<n>` suffix when another server holds it. */
+export function uniqueToolPrefix(slug: string, taken: string[]): string {
+  const base = toolPrefixFor(slug) || FALLBACK_PREFIX;
+  if (!taken.includes(base)) return base;
+  for (let n = 2; ; n++) {
+    const suffix = `_${n}`;
+    const candidate = base.slice(0, PREFIX_MAX_CHARS - suffix.length) + suffix;
+    if (!taken.includes(candidate)) return candidate;
+  }
+}
+
 const text = (draft: Draft, key: string) => String(draft[key] ?? "").trim();
 
 function optionalNumber(draft: Draft, key: string): number | undefined {
@@ -131,17 +143,26 @@ function configOf(draft: Draft): McpHttpConfig | McpStdioConfig {
   };
 }
 
+/** Fixed when a server is created; the form does not show them. */
+export interface ServerIdentity {
+  slug: string;
+  toolPrefix: string;
+}
+
 /** The POST body for a draft. Throws with a message the form can show. */
-export function serverPayload(draft: Draft, teams: string[]) {
+export function serverPayload(
+  draft: Draft,
+  identity: ServerIdentity,
+  teams: string[],
+) {
   return {
-    slug: text(draft, "slug"),
+    slug: identity.slug,
     name: text(draft, "name"),
     transport: draft.transport === "stdio" ? "stdio" : "http",
     config: configOf(draft),
     credentialMode:
       draft.credential_mode === "personal" ? "personal" : "shared",
-    toolPrefix:
-      text(draft, "tool_prefix") || toolPrefixFor(text(draft, "slug")),
+    toolPrefix: identity.toolPrefix,
     rateWindows: parseWindows(text(draft, "rate_windows")),
     rateLimitCodes: parseCodes(text(draft, "rate_limit_codes")),
     argumentBindings: parsePairs(text(draft, "argument_bindings"), "="),

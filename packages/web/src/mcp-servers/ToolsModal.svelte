@@ -122,11 +122,7 @@
   onConfirm={onclose}
   onCancel={onclose}
 >
-  <Note>
-    Offered tools run in chat without review, so only tools that read can be
-    offered. A tool that does not say it reads needs your confirmation that it
-    does; a destructive one is never offered.
-  </Note>
+  <Note>Offered tools run without review. Offer only tools that read.</Note>
   {#if canChange}
     <div class="bar">
       <Button
