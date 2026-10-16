@@ -34,6 +34,7 @@ import {
 } from "../authz";
 import { reviewTicket } from "@tachy/agent";
 import { callerSource } from "../sources";
+import { followWorkItem } from "@tachy/core/work-items";
 import { requestLimitBytes, tooLarge } from "../upload-limit";
 
 const draftSchema = z.object({
@@ -264,16 +265,25 @@ export const compose = new Hono()
       });
     }
 
+    const userId = await callerUserId(c);
     const created = await composer.create(
       toNewItem(project, draft, images),
       {
         sourceSlug: project.source_slug,
-        userId: await callerUserId(c),
+        userId,
         sourceProjectId: project.id,
         workItemIds: draft.work_item_ids,
       },
       project.config,
     );
+    // Whoever raises an item follows it; the next check reads its revision.
+    if (userId)
+      await followWorkItem({
+        userId,
+        connectionId: project.source_connection_id,
+        externalId: String(created.id),
+        sourceProjectId: project.id,
+      });
     return c.json({
       id: created.id,
       url: created.url,

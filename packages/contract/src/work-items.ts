@@ -95,8 +95,13 @@ export const WORK_ITEM_SORTS = [
 ] as const;
 export type WorkItemSort = (typeof WORK_ITEM_SORTS)[number];
 
-/** Whose items: everyone's, or the ones assigned to or created by the reader. */
-export const WORK_ITEM_SCOPES = ["all", "assigned", "created"] as const;
+/** Whose items: everyone's, or the ones assigned to, created or followed by the reader. */
+export const WORK_ITEM_SCOPES = [
+  "all",
+  "assigned",
+  "created",
+  "followed",
+] as const;
 export type WorkItemScope = (typeof WORK_ITEM_SCOPES)[number];
 
 export interface WorkItemQuery {
@@ -107,6 +112,8 @@ export interface WorkItemQuery {
   state?: string;
   /** Matched against the title; digits also match the id. */
   text?: string;
+  /** The reader's followed items, for the `followed` scope. */
+  ids?: string[];
   offset: number;
   limit: number;
 }
@@ -181,5 +188,6 @@ export interface WorkItemReading {
 export interface WorkItemView extends WorkItemReading {
   /** The stored copy the read refreshed. */
   stored_id: string;
+  following: boolean;
   timeline: StoredItemEntry[];
 }

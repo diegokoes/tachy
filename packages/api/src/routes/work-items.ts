@@ -8,6 +8,7 @@ import {
   fileFamily,
   WORK_ITEM_SCOPES,
   WORK_ITEM_SORTS,
+  type WorkItemPage,
   type WorkItemPeek,
   type WorkItemView,
 } from "@tachy/core";
@@ -24,6 +25,11 @@ import {
   readStoredItem,
   workItemScope,
   externalWorkItemScope,
+  followWorkItem,
+  isFollowing,
+  listFollows,
+  markItemNotesRead,
+  unfollowWorkItem,
   type StoredItemFilter,
 } from "@tachy/core/work-items";
 import { recordRun } from "@tachy/core/analytics";
@@ -41,6 +47,8 @@ import {
   assertScopeEditor,
   callerScope,
   callerSourceProjects,
+  callerUserId,
+  requireCaller,
 } from "../authz";
 import { callerSource } from "../sources";
 import { INERT_HEADERS, contentDisposition } from "../downloads";
@@ -222,15 +230,35 @@ export const workItems = new Hono()
     validate("param", browseParam),
     validate("query", listSchema),
     async (c) => {
-      const { project, browser } = await browseIn(c, c.req.valid("param").id);
+      const { project, conn, browser } = await browseIn(
+        c,
+        c.req.valid("param").id,
+      );
       const { q, ...query } = c.req.valid("query");
+      const ids =
+        query.scope === "followed"
+          ? (await listFollows(await requireCaller(c), conn.id)).map(
+              (follow) => follow.external_id,
+            )
+          : undefined;
+      if (ids && !ids.length) {
+        const nothing: WorkItemPage = { items: [], total: 0, capped: false };
+        return c.json(nothing);
+      }
       return c.json(
         await askSource(
-          browser.list(project.external_key, { ...query, text: q }),
+          browser.list(project.external_key, { ...query, text: q, ids }),
         ),
       );
     },
   )
+  .get("/projects/:id/follows", validate("param", browseParam), async (c) => {
+    const userId = await requireCaller(c);
+    const project = await getSourceProject(c.req.valid("param").id);
+    await assertProjectMember(c, project);
+    const follows = await listFollows(userId, project.source_connection_id);
+    return c.json(follows.map((follow) => follow.external_id));
+  })
   // The source's form for a type, read-only fields included, for the view editor.
   .get(
     "/projects/:id/layout",
@@ -254,17 +282,56 @@ export const workItems = new Hono()
       const { project, conn, browser } = await browseIn(c, id);
       const { raw, view } = await askSource(browser.read(itemId));
       const stored = await ingestWorkItem(conn.id, raw);
-      const [{ timeline }, config] = await Promise.all([
+      const userId = await callerUserId(c);
+      if (userId) await markItemNotesRead(userId, conn.id, itemId);
+      const [{ timeline }, config, following] = await Promise.all([
         readStoredItem(stored.id),
         getComposeConfig(project.id),
+        userId ? isFollowing(userId, conn.id, itemId) : false,
       ]);
       const answer: WorkItemView = {
         ...view,
         layout: applyViewConfig(view.layout, config, view.item.type),
         stored_id: stored.id,
+        following,
         timeline,
       };
       return c.json(answer);
+    },
+  )
+  // Following starts at the revision the reader sees now, so it notes only
+  // what changes after.
+  .put(
+    "/projects/:id/items/:itemId/follow",
+    validate("param", itemParam),
+    async (c) => {
+      const { id, itemId } = c.req.valid("param");
+      const userId = await requireCaller(c);
+      const { project, conn, browser } = await browseIn(c, id);
+      const [current] = await askSource(
+        browser.changes([{ id: itemId, seenRev: null }]),
+      );
+      if (!current)
+        throw notFound("No such item, or your token cannot read it.");
+      await followWorkItem({
+        userId,
+        connectionId: conn.id,
+        externalId: itemId,
+        sourceProjectId: project.id,
+        seenRev: current.rev,
+      });
+      return c.json({ following: true });
+    },
+  )
+  .delete(
+    "/projects/:id/items/:itemId/follow",
+    validate("param", itemParam),
+    async (c) => {
+      const { id, itemId } = c.req.valid("param");
+      const userId = await requireCaller(c);
+      const { conn } = await browseIn(c, id);
+      await unfollowWorkItem(userId, conn.id, itemId);
+      return c.json({ following: false });
     },
   )
 

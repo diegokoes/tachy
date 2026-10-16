@@ -194,6 +194,22 @@ export interface WorkItemBrowser {
   layout(project: string, type: string): Promise<WorkItemLayout>;
   /** One item whole: `raw` for its stored copy, `view` for the reader. */
   read(id: string): Promise<{ raw: RawWorkItem; view: WorkItemReading }>;
+  /**
+   * Each item's current revision and what others changed past `seenRev`,
+   * one line per change. An item with no `seenRev` has no lines.
+   */
+  changes(
+    followed: { id: string; seenRev: number | null }[],
+  ): Promise<FollowedChange[]>;
+}
+
+export interface FollowedChange {
+  id: string;
+  rev: number;
+  title: string;
+  url: string;
+  /** Empty when nothing changed, or only the reader did. */
+  lines: string[];
 }
 
 export type SourceFactory = (connection: {
