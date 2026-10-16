@@ -32,12 +32,7 @@
   import { pushScope } from "../keys/keys.svelte";
   import { tuckTopbar, unveilTopbar, veilTopbar } from "../shell/topbar.svelte";
   import { CHAT_UPLOAD_ACCEPT, uploadRefusal } from "@tachy/contract";
-  import type {
-    AgentEffort,
-    WorkItemTypeOption,
-    CreatedTicket,
-    WorkItemFile,
-  } from "@tachy/contract";
+  import type { AgentEffort, WorkItemFile } from "@tachy/contract";
   import {
     effortOptions,
     modelOptions,
@@ -48,7 +43,6 @@
   } from "./modelCommand";
   import { agentPrefs, loadAgent } from "../settings/prefs.svelte";
   import FileTray from "../work-items/FileTray.svelte";
-  import TicketComposer from "../work-items/TicketComposer.svelte";
   import TicketCard from "../work-items/TicketCard.svelte";
   import {
     composer,
@@ -498,7 +492,7 @@
     } else if (ctx.stage === "type") {
       const type = typesOf(ctx.project.id).find((x) => x.name === value);
       chat.input = "";
-      openComposer(ctx.project, type);
+      openComposer(ctx.project, type, { from: "chat" });
     }
   }
 
@@ -507,21 +501,16 @@
     chat.input = "";
     const rest = message.replace(/^\/az[ \t]+new[ \t]*/, "");
     const hit = rest ? matchProject(`${rest} `, await ensureProjects()) : null;
-    if (!hit) return openComposer();
+    if (!hit) return openComposer(null, null, { from: "chat" });
     const types = await ensureTypes(hit.project.id);
     const type = types.find(
       (t) => t.name.toLowerCase() === hit.rest.toLowerCase(),
     );
-    openComposer(hit.project, type);
-  }
-
-  function ticketMade(ticket: CreatedTicket, type: WorkItemTypeOption) {
-    addEntry({ kind: "ticket", ticket, icon: type.icon, color: type.color });
-    snap(true);
+    openComposer(hit.project, type, { from: "chat" });
   }
 
   /** A draft set aside with the X: the chat says so and offers it back. */
-  const draftWaiting = $derived(!composer.open && hasDraft());
+  const draftWaiting = $derived(hasDraft());
 
   function composerKeydown(e: KeyboardEvent) {
     if (
@@ -925,295 +914,291 @@
   />
 {/snippet}
 
-{#if composer.open}
-  <div class="chat">
-    <TicketComposer oncreated={ticketMade} />
-  </div>
-{:else}
-  <div
-    class="chat bare"
-    class:empty
-    role="region"
-    aria-label="Chat"
-    ondragenter={(e) => {
-      e.preventDefault();
-      dragDepth++;
-    }}
-    ondragover={(e) => e.preventDefault()}
-    ondragleave={() => (dragDepth = Math.max(0, dragDepth - 1))}
-    ondrop={onDrop}
-  >
-    {#if dragDepth > 0}
-      <div class="dropzone">drop to attach</div>
-    {/if}
-    <div class="transcript-wrap">
-      <div
-        class="transcript"
-        id="chat-transcript"
-        bind:this={transcriptEl}
-        onscroll={onScroll}
-      >
-        {#each chat.entries as entry, i (entry.key)}
-          {#if entry.kind === "user"}
-            <div class="turn user">
-              <span class="who"
-                >you<span class="mk" aria-hidden="true">{G.marker}</span></span
-              >
-              <div class="body">{entry.text}</div>
-            </div>
-          {:else if entry.kind === "assistant"}
-            <div class="turn">
-              <span class="who"
-                ><span class="mk" aria-hidden="true">{G.marker}</span
-                >tachy</span
-              >
-              <div
-                class="body md"
-                class:streaming={chat.busy && i === chat.entries.length - 1}
-              >
-                {@html renderMarkdown(entry.text)}
-              </div>
-              {#if entry.key === walkableKey && !chat.busy}
-                <Button
-                  size="sm"
-                  square
-                  icon="flows"
-                  title="Walk me through it"
-                  onclick={() =>
-                    startTurn("walk me through it", WALKTHROUGH_COMMAND)}
-                />
-              {/if}
-            </div>
-          {:else if entry.kind === "tools"}
-            <div class="tool">
-              <Icon name="tool" size="1em" weight={7} />
-              <span class="calls">
-                {#each tallyCalls(entry.calls) as tally, n (n)}
-                  {#if n > 0}<span class="sep" aria-hidden="true">·</span>{/if}
-                  <span>{tallyLabel(tally)}</span>
-                {/each}
-              </span>
-            </div>
-          {:else if entry.kind === "compact"}
-            <CompactPanel title={entry.title} stats={entry.stats} />
-          {:else if entry.kind === "output"}
-            <OutputCard file={entry.file} />
-          {:else if entry.kind === "files"}
-            <FileTray files={entry.files} />
-          {:else if entry.kind === "walkthrough"}
-            <Walkthrough
-              title={entry.title}
-              steps={entry.steps}
-              shown={entry.shown}
-            />
-          {:else if entry.kind === "ticket"}
-            <TicketCard
-              ticket={entry.ticket}
-              icon={entry.icon}
-              color={entry.color}
-            />
-          {:else if entry.kind === "error"}
-            <div class="turn">
-              <span class="who err">{G.marker}error</span>
-              <div class="body err">{entry.text}</div>
-            </div>
-          {:else if entry.kind === "trace"}
-            <TracePanel trace={entry.trace} />
-          {:else if entry.kind === "stopped"}
-            <div class="tool">
-              <Icon name="stop" size="1em" weight={7} />
-              <span>stopped</span>
-            </div>
-          {:else if entry.kind === "running"}
-            <div class="turn">
-              <span class="who err">{G.marker}busy</span>
-              <div class="body err">
-                {#if entry.stopped}stopped. send your message again.{:else}{entry.text}
-                  <Button size="sm" onclick={() => stopRunning(entry)}
-                    >stop it</Button
-                  >{/if}
-              </div>
-            </div>
-          {:else if entry.kind === "approval"}
-            <Approval
-              {entry}
-              ondecide={(ok, reason) => decide(entry, ok, reason)}
-            />
-          {/if}
-        {/each}
-        {#if chat.busy && chat.entries[chat.entries.length - 1]?.kind !== "assistant"}
+<div
+  class="chat bare"
+  class:empty
+  role="region"
+  aria-label="Chat"
+  ondragenter={(e) => {
+    e.preventDefault();
+    dragDepth++;
+  }}
+  ondragover={(e) => e.preventDefault()}
+  ondragleave={() => (dragDepth = Math.max(0, dragDepth - 1))}
+  ondrop={onDrop}
+>
+  {#if dragDepth > 0}
+    <div class="dropzone">drop to attach</div>
+  {/if}
+  <div class="transcript-wrap">
+    <div
+      class="transcript"
+      id="chat-transcript"
+      bind:this={transcriptEl}
+      onscroll={onScroll}
+    >
+      {#each chat.entries as entry, i (entry.key)}
+        {#if entry.kind === "user"}
+          <div class="turn user">
+            <span class="who"
+              >you<span class="mk" aria-hidden="true">{G.marker}</span></span
+            >
+            <div class="body">{entry.text}</div>
+          </div>
+        {:else if entry.kind === "assistant"}
           <div class="turn">
-            <span class="who">{G.marker}tachy</span>
-            <div class="body waiting">
-              {#if chat.queuePosition}<span class="muted"
-                  >waiting for a free chat slot · #{chat.queuePosition}
-                </span>{/if}<Caret />
+            <span class="who"
+              ><span class="mk" aria-hidden="true">{G.marker}</span>tachy</span
+            >
+            <div
+              class="body md"
+              class:streaming={chat.busy && i === chat.entries.length - 1}
+            >
+              {@html renderMarkdown(entry.text)}
+            </div>
+            {#if entry.key === walkableKey && !chat.busy}
+              <Button
+                size="sm"
+                square
+                icon="flows"
+                title="Walk me through it"
+                onclick={() =>
+                  startTurn("walk me through it", WALKTHROUGH_COMMAND)}
+              />
+            {/if}
+          </div>
+        {:else if entry.kind === "tools"}
+          <div class="tool">
+            <Icon name="tool" size="1em" weight={7} />
+            <span class="calls">
+              {#each tallyCalls(entry.calls) as tally, n (n)}
+                {#if n > 0}<span class="sep" aria-hidden="true">·</span>{/if}
+                <span>{tallyLabel(tally)}</span>
+              {/each}
+            </span>
+          </div>
+        {:else if entry.kind === "compact"}
+          <CompactPanel title={entry.title} stats={entry.stats} />
+        {:else if entry.kind === "output"}
+          <OutputCard file={entry.file} />
+        {:else if entry.kind === "files"}
+          <FileTray files={entry.files} />
+        {:else if entry.kind === "walkthrough"}
+          <Walkthrough
+            title={entry.title}
+            steps={entry.steps}
+            shown={entry.shown}
+          />
+        {:else if entry.kind === "ticket"}
+          <TicketCard
+            ticket={entry.ticket}
+            icon={entry.icon}
+            color={entry.color}
+          />
+        {:else if entry.kind === "error"}
+          <div class="turn">
+            <span class="who err">{G.marker}error</span>
+            <div class="body err">{entry.text}</div>
+          </div>
+        {:else if entry.kind === "trace"}
+          <TracePanel trace={entry.trace} />
+        {:else if entry.kind === "stopped"}
+          <div class="tool">
+            <Icon name="stop" size="1em" weight={7} />
+            <span>stopped</span>
+          </div>
+        {:else if entry.kind === "running"}
+          <div class="turn">
+            <span class="who err">{G.marker}busy</span>
+            <div class="body err">
+              {#if entry.stopped}stopped. send your message again.{:else}{entry.text}
+                <Button size="sm" onclick={() => stopRunning(entry)}
+                  >stop it</Button
+                >{/if}
             </div>
           </div>
-        {/if}
-        {#if empty}
-          <Launcher />
-        {/if}
-      </div>
-      {#if !empty}
-        <div class="bar-col">
-          <Scrollbar target={transcriptEl} controls="chat-transcript" />
-        </div>
-      {/if}
-      <ArtifactPanel />
-    </div>
-
-    <div class="dock" bind:this={dockEl}>
-      {#if chat.uploads.length || chat.artifact || chat.model || chat.debug || draftWaiting}
-        <div class="attachments">
-          {#if chat.model}
-            <span class="attach model-chip">
-              <Icon name="ai" size="1em" />
-              {chat.model.label}{chat.model.effort
-                ? ` · ${chat.model.effort}`
-                : ""}
-              <button
-                class="chip-x"
-                aria-label="Back to your settings model"
-                use:tip={"Back to your settings model"}
-                onclick={() => (chat.model = undefined)}
-                ><Icon name="close" size="1em" weight={7} /></button
-              >
-            </span>
-          {/if}
-          {#if chat.debug}
-            <span class="attach model-chip">
-              <Icon name="bug" size="1em" />
-              debug
-              <button
-                class="chip-x"
-                aria-label="Switch debug off"
-                use:tip={"Switch debug off"}
-                onclick={() => (chat.debug = false)}
-                ><Icon name="close" size="1em" weight={7} /></button
-              >
-            </span>
-          {/if}
-          {#if draftWaiting}
-            <button class="attach draft-chip" onclick={() => openComposer()}>
-              <Icon name="review" size="1em" />
-              draft {composer.type?.name ?? "work item"}{composer.title.trim()
-                ? `: ${composer.title.trim()}`
-                : ""}
-            </button>
-          {/if}
-          {#if chat.artifact}
-            <span class="attach artifact-chip">
-              <ArtifactMark size="1em" />
-              {chat.artifact.title}
-              <button
-                class="chip-x"
-                aria-label="Detach artifact"
-                use:tip={"Detach artifact"}
-                onclick={() => (chat.artifact = undefined)}
-                ><Icon name="close" size="1em" weight={7} /></button
-              >
-            </span>
-          {/if}
-          {#each chat.uploads as upload, i (upload.path)}
-            {#if i > 0}<span class="sep" aria-hidden="true">~~</span>{/if}
-            <span class="attach">
-              <Icon name={upload.image ? "image" : "file"} size="1.1em" />
-              {upload.filename}
-              <button
-                class="chip-x"
-                aria-label="Remove attachment"
-                use:tip={"Remove attachment"}
-                onclick={() => chat.uploads.splice(i, 1)}
-                ><Icon name="close" size="1em" weight={7} /></button
-              >
-            </span>
-          {/each}
-        </div>
-      {/if}
-
-      <div class="composer">
-        {#if menuOpen && commands}
-          <CommandMenu
-            bind:this={cmdMenu}
-            mode={cmdCtx?.mode ?? "command"}
-            query={cmdCtx?.query ?? ""}
-            builtins={commands.builtins}
-            running={chat.busy}
-            debuggable={isGlobalAdmin()}
-            artifacts={commands.artifacts}
-            options={optionsMenu?.options}
-            crumb={optionsMenu?.crumb}
-            preview={azCtx?.stage === "id" ? explainPeek : undefined}
-            onpick={pickCommand}
+        {:else if entry.kind === "approval"}
+          <Approval
+            {entry}
+            ondecide={(ok, reason) => decide(entry, ok, reason)}
           />
         {/if}
-        <label class="upload" use:tip={"Attach a document"}>
-          <Icon name="attach" label="Attach a document" />
-          <input type="file" accept={CHAT_UPLOAD_ACCEPT} onchange={onFile} />
-        </label>
-        <span class="field">
-          <textarea
-            bind:this={composerEl}
-            aria-label="Message the assistant, / for commands"
-            bind:value={chat.input}
-            rows="2"
-            onscroll={restSync}
-            onkeydown={composerKeydown}></textarea>
-          <span
-            class="rest"
-            aria-hidden="true"
-            style:padding-right="calc(var(--pad-3) + {rest.gutter}px)"
-            ><span class="rest-line" style:translate="0 {-rest.scroll}px"
-              ><span class="typed">{chat.input}</span><span class="mark"
-                ><Caret side={caretSide(chat.input, chat.input.length)} /></span
-              ></span
-            ></span
-          >
-        </span>
-        <div class="send-col">
-          <span class="slot">
-            {#if chat.entries.length}
-              <Button
-                variant={clearArmed ? "danger" : "ghost"}
-                icon={clearArmed ? "confirm" : "clear"}
-                iconSize="1.25em"
-                morph
-                disabled={chat.busy}
-                aria-label="Clear the conversation"
-                title={clearArmed
-                  ? "click again to clear"
-                  : "Clear the conversation"}
-                onclick={onClear}
-              />
-            {/if}
-          </span>
-          <span class="slot">
-            {#if chat.busy}
-              <Button
-                variant="ghost"
-                icon="stop"
-                iconSize="1.25em"
-                aria-label="Stop"
-                title="Stop (/stop)"
-                onclick={stopClick}
-              />
-            {:else if chat.input.trim()}
-              <Button
-                variant="ghost"
-                icon="send"
-                iconSize="1.25em"
-                aria-label="Send"
-                title="Send"
-                onclick={sendClick}
-              />
-            {/if}
-          </span>
+      {/each}
+      {#if chat.busy && chat.entries[chat.entries.length - 1]?.kind !== "assistant"}
+        <div class="turn">
+          <span class="who">{G.marker}tachy</span>
+          <div class="body waiting">
+            {#if chat.queuePosition}<span class="muted"
+                >waiting for a free chat slot · #{chat.queuePosition}
+              </span>{/if}<Caret />
+          </div>
         </div>
+      {/if}
+      {#if empty}
+        <Launcher />
+      {/if}
+    </div>
+    {#if !empty}
+      <div class="bar-col">
+        <Scrollbar target={transcriptEl} controls="chat-transcript" />
+      </div>
+    {/if}
+    <ArtifactPanel />
+  </div>
+
+  <div class="dock" bind:this={dockEl}>
+    {#if chat.uploads.length || chat.artifact || chat.model || chat.debug || draftWaiting}
+      <div class="attachments">
+        {#if chat.model}
+          <span class="attach model-chip">
+            <Icon name="ai" size="1em" />
+            {chat.model.label}{chat.model.effort
+              ? ` · ${chat.model.effort}`
+              : ""}
+            <button
+              class="chip-x"
+              aria-label="Back to your settings model"
+              use:tip={"Back to your settings model"}
+              onclick={() => (chat.model = undefined)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/if}
+        {#if chat.debug}
+          <span class="attach model-chip">
+            <Icon name="bug" size="1em" />
+            debug
+            <button
+              class="chip-x"
+              aria-label="Switch debug off"
+              use:tip={"Switch debug off"}
+              onclick={() => (chat.debug = false)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/if}
+        {#if draftWaiting}
+          <button
+            class="attach draft-chip"
+            onclick={() => openComposer(null, null, { from: "chat" })}
+          >
+            <Icon name="review" size="1em" />
+            draft {composer.type?.name ?? "work item"}{composer.title.trim()
+              ? `: ${composer.title.trim()}`
+              : ""}
+          </button>
+        {/if}
+        {#if chat.artifact}
+          <span class="attach artifact-chip">
+            <ArtifactMark size="1em" />
+            {chat.artifact.title}
+            <button
+              class="chip-x"
+              aria-label="Detach artifact"
+              use:tip={"Detach artifact"}
+              onclick={() => (chat.artifact = undefined)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/if}
+        {#each chat.uploads as upload, i (upload.path)}
+          {#if i > 0}<span class="sep" aria-hidden="true">~~</span>{/if}
+          <span class="attach">
+            <Icon name={upload.image ? "image" : "file"} size="1.1em" />
+            {upload.filename}
+            <button
+              class="chip-x"
+              aria-label="Remove attachment"
+              use:tip={"Remove attachment"}
+              onclick={() => chat.uploads.splice(i, 1)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/each}
+      </div>
+    {/if}
+
+    <div class="composer">
+      {#if menuOpen && commands}
+        <CommandMenu
+          bind:this={cmdMenu}
+          mode={cmdCtx?.mode ?? "command"}
+          query={cmdCtx?.query ?? ""}
+          builtins={commands.builtins}
+          running={chat.busy}
+          debuggable={isGlobalAdmin()}
+          artifacts={commands.artifacts}
+          options={optionsMenu?.options}
+          crumb={optionsMenu?.crumb}
+          preview={azCtx?.stage === "id" ? explainPeek : undefined}
+          onpick={pickCommand}
+        />
+      {/if}
+      <label class="upload" use:tip={"Attach a document"}>
+        <Icon name="attach" label="Attach a document" />
+        <input type="file" accept={CHAT_UPLOAD_ACCEPT} onchange={onFile} />
+      </label>
+      <span class="field">
+        <textarea
+          bind:this={composerEl}
+          aria-label="Message the assistant, / for commands"
+          bind:value={chat.input}
+          rows="2"
+          onscroll={restSync}
+          onkeydown={composerKeydown}></textarea>
+        <span
+          class="rest"
+          aria-hidden="true"
+          style:padding-right="calc(var(--pad-3) + {rest.gutter}px)"
+          ><span class="rest-line" style:translate="0 {-rest.scroll}px"
+            ><span class="typed">{chat.input}</span><span class="mark"
+              ><Caret side={caretSide(chat.input, chat.input.length)} /></span
+            ></span
+          ></span
+        >
+      </span>
+      <div class="send-col">
+        <span class="slot">
+          {#if chat.entries.length}
+            <Button
+              variant={clearArmed ? "danger" : "ghost"}
+              icon={clearArmed ? "confirm" : "clear"}
+              iconSize="1.25em"
+              morph
+              disabled={chat.busy}
+              aria-label="Clear the conversation"
+              title={clearArmed
+                ? "click again to clear"
+                : "Clear the conversation"}
+              onclick={onClear}
+            />
+          {/if}
+        </span>
+        <span class="slot">
+          {#if chat.busy}
+            <Button
+              variant="ghost"
+              icon="stop"
+              iconSize="1.25em"
+              aria-label="Stop"
+              title="Stop (/stop)"
+              onclick={stopClick}
+            />
+          {:else if chat.input.trim()}
+            <Button
+              variant="ghost"
+              icon="send"
+              iconSize="1.25em"
+              aria-label="Send"
+              title="Send"
+              onclick={sendClick}
+            />
+          {/if}
+        </span>
       </div>
     </div>
   </div>
-{/if}
+</div>
 
 <style>
   .chat {
