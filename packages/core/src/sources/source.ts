@@ -2,7 +2,11 @@ import type {
   ComposerForm,
   FlowOption,
   TicketValidation,
+  WorkItemLayout,
+  WorkItemPage,
   WorkItemPeek,
+  WorkItemQuery,
+  WorkItemReading,
   WorkItemTypeOption,
 } from "@tachy/contract";
 import type { TokenMap } from "../compliance/redaction";
@@ -185,6 +189,11 @@ export interface WorkItemComposer {
 export interface WorkItemBrowser {
   /** Ids the source does not have, or the token cannot read, are left out. */
   peek(ids: string[]): Promise<WorkItemPeek[]>;
+  list(project: string, query: WorkItemQuery): Promise<WorkItemPage>;
+  /** How the source's own form lays out an item of `type`, for reading one. */
+  layout(project: string, type: string): Promise<WorkItemLayout>;
+  /** One item whole: `raw` for its stored copy, `view` for the reader. */
+  read(id: string): Promise<{ raw: RawWorkItem; view: WorkItemReading }>;
 }
 
 export type SourceFactory = (connection: {

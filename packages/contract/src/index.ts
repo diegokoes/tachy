@@ -227,13 +227,26 @@ export {
 export type { LibraryAssetType } from "./assets";
 
 export { MAX_PAGE } from "./paging";
+export { WORK_ITEM_SCOPES, WORK_ITEM_SORTS } from "./work-items";
 export type {
+  LinkedCode,
+  LinkedWorkItem,
   StoredItem,
   StoredItemEntry,
   StoredItemEvent,
   StoredItemMessage,
   StoredItemPage,
   StoredItemRow,
+  WorkItemFieldInfo,
+  WorkItemLayout,
+  WorkItemPage,
+  WorkItemQuery,
+  WorkItemReading,
+  WorkItemRelations,
+  WorkItemRow,
+  WorkItemScope,
+  WorkItemSort,
+  WorkItemView,
 } from "./work-items";
 
 export { AUDIT_ACTIONS } from "./audit";

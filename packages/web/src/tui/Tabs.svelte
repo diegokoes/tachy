@@ -4,10 +4,17 @@
   import { vimState } from "../keys/vim.svelte";
   import { jellyPress } from "../motion/motion";
   import Icon from "./Icon.svelte";
+  import type { Component } from "svelte";
   import type { IconName } from "./icons";
   import { tip } from "./tip.svelte";
 
-  type Item = { key: string; label: string; icon?: IconName };
+  type Item = {
+    key: string;
+    label: string;
+    icon?: IconName;
+    /** A brand logo drawn in its own colours, in place of `icon`. */
+    mark?: Component<{ size?: string }>;
+  };
 
   let {
     items,
@@ -75,7 +82,8 @@
     {@const anchorHost =
       item.key === (activeMatches ? active : (stickyKey ?? items[0]?.key))}
     {@const icon = labels === "text" ? undefined : item.icon}
-    {@const bare = labels === "icons" && icon !== undefined}
+    {@const Mark = labels === "text" ? undefined : item.mark}
+    {@const bare = labels === "icons" && (icon !== undefined || !!Mark)}
     <button
       class="tab"
       class:on
@@ -93,7 +101,9 @@
       use:jellyPress
     >
       <span class="lbl"
-        ><span class="br" aria-hidden="true">[</span>{#if icon}<span class="ico"
+        ><span class="br" aria-hidden="true">[</span>{#if Mark}<span class="ico"
+            ><Mark size="1em" /></span
+          >{:else if icon}<span class="ico"
             ><Icon name={icon} weight={7} /></span
           >{/if}{#if !bare}<span class="txt">{item.label}</span>{/if}<span
           class="br"
