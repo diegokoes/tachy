@@ -1,7 +1,12 @@
 import { Hono } from "hono";
 import { validate } from "../validation";
 import { z } from "zod";
-import { MAX_PAGE, checkFile, fileFamily } from "@tachy/core";
+import {
+  MAX_PAGE,
+  checkFile,
+  fileFamily,
+  type WorkItemPeek,
+} from "@tachy/core";
 import { imageForModel } from "@tachy/core/files";
 import { resolveSource } from "@tachy/core/sources";
 import {
@@ -23,11 +28,25 @@ import {
   setWorkItemCustomer,
   setObservedVersion,
 } from "@tachy/core/catalog";
-import { badInput } from "@tachy/core/infra";
+import { AppError, badInput, unavailable } from "@tachy/core/infra";
 import { audit } from "../audit";
 import { requireAdmin } from "../auth";
-import { assertScopeEditor, callerScope } from "../authz";
+import { assertScopeEditor, callerScope, callerSourceProjects } from "../authz";
+import { callerSource } from "../sources";
 import { INERT_HEADERS, contentDisposition } from "../downloads";
+
+/** A source's status codes for a token it does not accept. */
+const TOKEN_REFUSED = /-> (401|403|203)\b/;
+
+/** An upstream failure, said so that the person knows what to do about it. */
+function lookupRefusal(reason: unknown): Error {
+  if (reason instanceof AppError) return reason;
+  if (reason instanceof Error && TOKEN_REFUSED.test(reason.message))
+    return badInput(
+      "The source refused your token. Check it under Settings › credentials.",
+    );
+  return unavailable("The source did not answer the lookup. Try again.");
+}
 
 /** The longest edge of a file's picture in a list of files. */
 const THUMBNAIL_EDGE_PX = 320;
@@ -129,6 +148,26 @@ export const workItems = new Hono()
       return c.json(cleanup);
     },
   )
+
+  // An id is looked up on each of the caller's connections of the type: ADO
+  // ids are unique per organisation, not across them.
+  .get("/peek/:sourceType/:id", async (c) => {
+    const { sourceType, id } = c.req.param();
+    const projects = await callerSourceProjects(c, sourceType);
+    const slugs = [...new Set(projects.map((p) => p.source_slug))];
+    const answers = await Promise.allSettled(
+      slugs.map(async (slug) => {
+        const { source } = await callerSource(c, slug);
+        return source.browser ? source.browser.peek([id]) : [];
+      }),
+    );
+    const peeks: WorkItemPeek[] = answers.flatMap((answer) =>
+      answer.status === "fulfilled" ? answer.value : [],
+    );
+    const refusal = answers.find((answer) => answer.status === "rejected");
+    if (!peeks.length && refusal) throw lookupRefusal(refusal.reason);
+    return c.json(peeks);
+  })
 
   .post("/:source/:id/fetch", async (c) => {
     const { source, id } = c.req.param();

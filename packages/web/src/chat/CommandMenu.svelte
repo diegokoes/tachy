@@ -71,6 +71,7 @@
 </script>
 
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import { Icon } from "../tui";
 
   let {
@@ -82,6 +83,7 @@
     crumb,
     running = false,
     debuggable = false,
+    preview,
     onpick,
   }: {
     mode?: CommandMode;
@@ -94,6 +96,8 @@
     running?: boolean;
     /** The caller is an app admin, who is offered `/debug`. */
     debuggable?: boolean;
+    /** Drawn instead of the empty note when an options menu has no rows. */
+    preview?: Snippet;
     onpick: (pick: CommandPick) => void;
   } = $props();
 
@@ -217,7 +221,9 @@
         </button>
       {/each}
     </div>
-    {#if !items.length}
+    {#if !items.length && preview}
+      {@render preview()}
+    {:else if !items.length}
       <div class="cmd-none">
         {mode === "options"
           ? (crumb?.empty ?? "nothing matches")
