@@ -10,6 +10,8 @@ export const BOARD_SOURCE = "azure-devops";
 export const boardListPath = (projectId: string) =>
   `/board/${BOARD_SOURCE}/${projectId}`;
 
+export const BOARD_NEW_PATH = `/board/${BOARD_SOURCE}/new`;
+
 export const boardItemPath = (projectId: string, itemId: string) =>
   `/board/${BOARD_SOURCE}/${projectId}/${itemId}`;
 

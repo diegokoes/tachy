@@ -1,5 +1,6 @@
 <script lang="ts">
   import type {
+    ComposerProject,
     WorkItemTypeOption,
     CreatedTicket,
     FieldSpec,
@@ -15,7 +16,7 @@
     closeComposer,
     composer,
     create,
-    discardDraft,
+    discardAndLeave,
     saveDraft,
     setProject,
     setType,
@@ -37,8 +38,13 @@
 
   let {
     oncreated,
-  }: { oncreated: (ticket: CreatedTicket, type: WorkItemTypeOption) => void } =
-    $props();
+  }: {
+    oncreated: (
+      ticket: CreatedTicket,
+      type: WorkItemTypeOption,
+      project: ComposerProject,
+    ) => void;
+  } = $props();
 
   $effect(() => {
     ensureProjects();
@@ -171,21 +177,28 @@
   }
 
   async function submit() {
-    const type = composer.type;
-    if (!form || !type || missing.length || composer.creating) return;
+    const { type, project } = composer;
+    if (!form || !type || !project || missing.length || composer.creating)
+      return;
     const made = await create();
-    if (made) oncreated(made, type);
+    if (made) oncreated(made, type, project);
   }
 
+  /** How long the discard button waits for its second click. */
+  const DISCARD_ARMED_MS = 4000;
   let discardArmed = $state(false);
+  let disarm: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => () => clearTimeout(disarm));
+
   function discard() {
+    clearTimeout(disarm);
     if (!discardArmed) {
       discardArmed = true;
-      setTimeout(() => (discardArmed = false), 4000);
+      disarm = setTimeout(() => (discardArmed = false), DISCARD_ARMED_MS);
       return;
     }
     discardArmed = false;
-    discardDraft();
+    discardAndLeave();
   }
 </script>
 
@@ -230,21 +243,6 @@
 <section class="view" aria-label="New Azure DevOps work item" bind:this={root}>
   <header class="bar">
     <div class="where">
-      <span class="crumb">/az new</span>
-      <Select
-        value={composer.project?.id ?? ""}
-        placeholder="project"
-        searchable
-        options={(az.projects ?? []).map((p) => ({
-          value: p.id,
-          label: p.name,
-        }))}
-        aria-label="Project"
-        onchange={(v) => {
-          const p = az.projects?.find((x) => x.id === v);
-          if (p && p.id !== composer.project?.id) setProject(p);
-        }}
-      />
       {#if composer.project}
         {#if composer.type}
           <span
@@ -531,10 +529,6 @@
     align-items: center;
     gap: var(--pad-2);
     min-width: 0;
-  }
-  .crumb {
-    color: var(--accent);
-    white-space: nowrap;
   }
   .rule {
     width: 1px;

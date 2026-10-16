@@ -15,6 +15,8 @@ import { ensureProjects, ensureTypes } from "./az.svelte";
 import { onUnauthorized } from "../access/session.svelte";
 import { isBody, isEmpty, TAGS, TITLE } from "./layout";
 import { toHtml } from "./ticketMarkdown";
+import { navigate } from "../shell/router.svelte";
+import { BOARD_NEW_PATH, boardListPath } from "./board";
 
 export interface PastedImage {
   key: string;
@@ -44,8 +46,9 @@ const blank = () => ({
 });
 
 export const composer = $state({
-  open: false,
   project: null as ComposerProject | null,
+  /** Where it was opened from: chat also gets a card for what is created. */
+  openedFrom: "board" as "board" | "chat",
   type: null as WorkItemTypeOption | null,
   form: null as ComposerForm | null,
   loading: false,
@@ -73,6 +76,10 @@ export const hasDraft = () =>
 
 function persist() {
   try {
+    if (!composer.project) {
+      localStorage.removeItem(STORE);
+      return;
+    }
     localStorage.setItem(
       STORE,
       JSON.stringify({
@@ -113,24 +120,33 @@ restore();
 /** Called by the view on every change; cheap enough not to debounce. */
 export const saveDraft = persist;
 
+/** Opens the board's composer, keeping the draft, with what it names picked. */
 export async function openComposer(
   project?: ComposerProject | null,
   type?: WorkItemTypeOption | null,
+  { from = "board" }: { from?: "board" | "chat" } = {},
 ) {
-  composer.open = true;
+  composer.openedFrom = from;
+  navigate(BOARD_NEW_PATH);
   if (project && project.id !== composer.project?.id) setProject(project);
   if (type && type.name !== composer.type?.name) await setType(type);
   else if (composer.type && !composer.form) await loadForm();
 }
 
+const backToList = (projectId: string | undefined) =>
+  navigate(projectId ? boardListPath(projectId) : "/board");
+
+/** Sets the draft aside; the chat offers it back. */
 export function closeComposer() {
-  composer.open = false;
   persist();
+  backToList(composer.project?.id);
 }
 
+/** Drops the draft, project and type included. */
 export function discardDraft() {
   for (const img of composer.images) URL.revokeObjectURL(img.url);
   Object.assign(composer, blank(), {
+    project: null,
     images: [],
     form: null,
     type: null,
@@ -145,6 +161,12 @@ export function discardDraft() {
   } catch {
     // nothing stored
   }
+}
+
+export function discardAndLeave() {
+  const projectId = composer.project?.id;
+  discardDraft();
+  backToList(projectId);
 }
 
 export function setProject(project: ComposerProject) {
@@ -292,7 +314,6 @@ export async function create(): Promise<CreatedTicket | null> {
     if (!response.ok) throw await readError(response);
     const created = (await response.json()) as CreatedTicket;
     discardDraft();
-    composer.open = false;
     return created;
   } catch (e) {
     composer.error = e instanceof Error ? e.message : String(e);
@@ -382,7 +403,8 @@ export async function adoptAgentDraft(
     composer.values["System.Description"] = str("description");
   if (Array.isArray(input.tags)) composer.values[TAGS] = input.tags.join("; ");
   if (str("work_item_id")) composer.raisedFrom = [str("work_item_id")!];
-  composer.open = true;
+  composer.openedFrom = "chat";
+  navigate(BOARD_NEW_PATH);
   if (type) await setType(type);
   return true;
 }
