@@ -63,10 +63,21 @@ describe("/az line", () => {
     expect(matchProject("Portal", projects)).toBeNull();
   });
 
+  it("asks explain for an item number", () => {
+    expect(parseAz("/az explain ", projects)).toEqual({
+      stage: "id",
+      query: "",
+    });
+    expect(parseAz("/az explain #45", projects)).toEqual({
+      stage: "id",
+      query: "#45",
+    });
+  });
+
   it("is not an /az line otherwise", () => {
     expect(parseAz("/az", projects)).toBeNull();
     expect(parseAz("/azure new", projects)).toBeNull();
-    expect(parseAz("/az explain 12", projects)).toBeNull();
+    expect(parseAz("/az explain 12 more", projects)).toBeNull();
     expect(isAzNew("/az new Portal Bug")).toBe(true);
     expect(isAzNew("/az newer")).toBe(false);
     expect(isAzNew("/az explain 12")).toBe(false);

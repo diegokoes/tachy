@@ -79,6 +79,7 @@ export type {
   FieldSpec,
   WorkItemSchema,
   WorkItemTypeOption,
+  WorkItemPeek,
   ComposerProject,
   PrefillOrigin,
   PathOption,

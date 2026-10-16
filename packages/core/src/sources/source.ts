@@ -2,6 +2,7 @@ import type {
   ComposerForm,
   FlowOption,
   TicketValidation,
+  WorkItemPeek,
   WorkItemTypeOption,
 } from "@tachy/contract";
 import type { TokenMap } from "../compliance/redaction";
@@ -92,6 +93,8 @@ export interface WorkItemSource {
   redactRaw?(raw: unknown, map: TokenMap, customerSlug: string | null): unknown;
   /** Present when people can create items in this source from tachy. */
   composer?: WorkItemComposer;
+  /** Present when people can look items up live, with their own token. */
+  browser?: WorkItemBrowser;
   /**
    * Named lists of the source's own values, for a flow's pickers: a
    * helpdesk's companies, its ticket fields and their choices. An unknown
@@ -176,6 +179,12 @@ export interface WorkItemComposer {
     ctx: CreateContext,
     projectConfig?: Record<string, unknown>,
   ): Promise<{ id: number | string; url: string }>;
+}
+
+/** Reads for a person browsing the source: nothing read here is stored. */
+export interface WorkItemBrowser {
+  /** Ids the source does not have, or the token cannot read, are left out. */
+  peek(ids: string[]): Promise<WorkItemPeek[]>;
 }
 
 export type SourceFactory = (connection: {

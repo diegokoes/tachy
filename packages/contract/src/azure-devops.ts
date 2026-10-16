@@ -51,6 +51,21 @@ export interface WorkItemTypeOption {
   icon: string | null;
 }
 
+/** A work item's title and type, read without storing the item. */
+export interface WorkItemPeek {
+  id: string;
+  title: string;
+  type: string;
+  state: string | null;
+  /** The ADO project name. */
+  project: string;
+  url: string;
+  /** Hex without the '#'. */
+  color: string | null;
+  icon: string | null;
+  source_slug: string;
+}
+
 /** A registered project the caller's team creates work items in. */
 export interface ComposerProject {
   /** source_projects.id */

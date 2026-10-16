@@ -4,7 +4,8 @@ import type { ComposerProject } from "@tachy/contract";
 export type AzStage =
   | { stage: "sub"; query: string }
   | { stage: "project"; query: string }
-  | { stage: "type"; project: ComposerProject; query: string };
+  | { stage: "type"; project: ComposerProject; query: string }
+  | { stage: "id"; query: string };
 
 const startsWithWord = (text: string, word: string) =>
   text.toLowerCase().startsWith(`${word.toLowerCase()} `);
@@ -41,6 +42,8 @@ export function parseAz(
   const rest = match[1];
   const sub = rest.match(/^([a-z-]*)$/);
   if (sub) return { stage: "sub", query: sub[1] };
+  const explain = rest.match(/^explain[ \t]+(\S*)$/);
+  if (explain) return { stage: "id", query: explain[1] };
   const after = rest.match(/^new[ \t]+(.*)$/);
   if (!after) return null;
   const hit = matchProject(after[1], projects);

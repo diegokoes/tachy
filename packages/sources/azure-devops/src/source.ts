@@ -19,6 +19,7 @@ import type {
   ListOptions,
   SourceFactory,
 } from "@tachy/core/sources";
+import { itemUrl, peekWorkItems } from "./browser";
 import { composerForm, creatableTypes, templateValues } from "./composer";
 import { createWorkItem, explainAdoError, validateWorkItem } from "./create";
 import { workItemDefaults } from "./fields";
@@ -203,7 +204,7 @@ export const createAzureDevopsSource: SourceFactory = (
       externalId: String(workItem.id),
       externalUrl:
         workItem._links?.html?.href ??
-        `${client.orgUrl}/${encodeURIComponent(fields["System.TeamProject"] ?? "")}/_workitems/edit/${workItem.id}`,
+        itemUrl(client.orgUrl, fields["System.TeamProject"] ?? "", workItem.id),
       kind: "work_item",
       title: fields["System.Title"],
       status: fields["System.State"],
@@ -453,6 +454,7 @@ export const createAzureDevopsSource: SourceFactory = (
     capabilities: { postNote: false, incrementalSync: true },
     redactRaw: redactAdoRaw,
     composer,
+    browser: { peek: (ids) => peekWorkItems(client, connection.slug, ids) },
 
     async verify() {
       // connectionData is a preview endpoint and only names the caller, so a
