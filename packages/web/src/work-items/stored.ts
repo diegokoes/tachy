@@ -29,11 +29,15 @@ const isSourceField = (field: string) => field.includes(".");
 
 /**
  * An event as one line: `status 2 → 4`, `resolved`, `link added: Related #10`.
+ * `fieldName` puts a source field's label in place of its id.
  * A source field with neither value was prose, left out when it was stored.
  */
-export function eventLine(event: StoredItemEvent): string {
+export function eventLine(
+  event: StoredItemEvent,
+  fieldName: (field: string) => string = (field) => field,
+): string {
   const { old_value: was, new_value: now } = event;
-  const field = event.field.replaceAll("_", " ");
+  const field = fieldName(event.field).replaceAll("_", " ");
   if (event.field === "link")
     return now == null ? `link removed: ${was}` : `link added: ${now}`;
   if (was == null && now == null)

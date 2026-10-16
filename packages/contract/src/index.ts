@@ -237,6 +237,7 @@ export type {
   StoredItemMessage,
   StoredItemPage,
   StoredItemRow,
+  WorkItemComment,
   WorkItemFieldInfo,
   WorkItemLayout,
   WorkItemPage,

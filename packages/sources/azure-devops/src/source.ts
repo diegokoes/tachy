@@ -33,6 +33,7 @@ import { workItemDefaults } from "./fields";
 import { updateEvents } from "./history";
 import {
   createAdoClient,
+  type AdoComment,
   type AdoRelation,
   type AdoWorkItem,
   type AdoWorkItemSummary,
@@ -352,7 +353,15 @@ export const createAzureDevopsSource: SourceFactory = (
    * each with the pictures pasted into it. Attached files belong to the item
    * and not to a message, so they ride on the first one.
    */
-  async function itemMessages(workItem: AdoWorkItem): Promise<RawMessage[]> {
+  async function itemComments(workItem: AdoWorkItem): Promise<AdoComment[]> {
+    const project = workItem.fields?.["System.TeamProject"];
+    return project ? client.getComments(project, String(workItem.id)) : [];
+  }
+
+  function itemMessages(
+    workItem: AdoWorkItem,
+    comments: AdoComment[],
+  ): RawMessage[] {
     const fields = workItem.fields ?? {};
     const opener = fields["System.CreatedBy"]?.displayName;
     const opened = fields["System.CreatedDate"];
@@ -401,37 +410,43 @@ export const createAzureDevopsSource: SourceFactory = (
     if (files.length)
       messages[0].attachments = [...(messages[0].attachments ?? []), ...files];
 
-    const project = fields["System.TeamProject"];
-    if (project)
-      for (const comment of await client.getComments(
-        project,
-        String(workItem.id),
-      ))
-        fromHtml(`comment-${comment.id}`, comment.text ?? "", {
+    for (const comment of comments)
+      fromHtml(
+        `comment-${comment.id}`,
+        comment.renderedText ?? comment.text ?? "",
+        {
           author: comment.createdBy?.displayName,
           createdAt: comment.createdDate,
-        });
+        },
+      );
     return messages.sort((a, b) =>
       (a.createdAt ?? "").localeCompare(b.createdAt ?? ""),
     );
   }
 
-  async function fetchItem(externalId: string): Promise<RawWorkItem> {
+  async function readWhole(
+    externalId: string,
+  ): Promise<{ item: RawWorkItem; comments: AdoComment[] }> {
     const workItem = await client.getWorkItem(externalId);
-    const messages = await itemMessages(workItem);
+    const comments = await itemComments(workItem);
+    const messages = itemMessages(workItem, comments);
     const project = workItem.fields?.["System.TeamProject"];
     const relations = await resolveRelations(workItem, project ?? "");
     // Best effort: the item reads without its history.
     const updates = await client
       .getUpdates(externalId, workItem.rev)
       .catch(() => null);
-    return {
+    const item = {
       ...toItem(workItem, messages, relations),
       ...(updates
         ? { events: updateEvents(updates), historyComplete: true as const }
         : {}),
     };
+    return { item, comments };
   }
+
+  const fetchItem = async (externalId: string): Promise<RawWorkItem> =>
+    (await readWhole(externalId)).item;
 
   const defaultsFor = (
     project: string,
@@ -485,8 +500,11 @@ export const createAzureDevopsSource: SourceFactory = (
       layout: (project, type) => viewLayout(client, project, type),
       changes: (followed) => followedChanges(client, followed),
       async read(id) {
-        const raw = await fetchItem(id);
-        return { raw, view: await itemReading(client, connection.slug, raw) };
+        const { item, comments } = await readWhole(id);
+        return {
+          raw: item,
+          view: await itemReading(client, connection.slug, item, comments),
+        };
       },
     },
 
@@ -509,7 +527,7 @@ export const createAzureDevopsSource: SourceFactory = (
 
     async openAttachment(externalId, attachmentId) {
       const workItem = await client.getWorkItem(externalId);
-      const file = (await itemMessages(workItem))
+      const file = itemMessages(workItem, await itemComments(workItem))
         .flatMap((message) => message.attachments ?? [])
         .find((listed) => listed.id === attachmentId.toLowerCase());
       if (!file)

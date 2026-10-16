@@ -13,6 +13,7 @@ import type {
 } from "@tachy/core";
 import type {
   AdoClient,
+  AdoComment,
   AdoFields,
   AdoUpdate,
   AdoWorkItem,
@@ -288,6 +289,7 @@ export async function itemReading(
   client: AdoClient,
   sourceSlug: string,
   raw: RawWorkItem,
+  comments: AdoComment[] = [],
 ): Promise<WorkItemReading> {
   const { fields = {}, relations } = (raw.raw ?? {}) as {
     fields?: AdoFields;
@@ -304,6 +306,12 @@ export async function itemReading(
     fields,
     layout,
     relations: relationsOf(relations),
+    comments: comments.map((comment) => ({
+      id: String(comment.id),
+      author: comment.createdBy?.displayName ?? null,
+      at: comment.createdDate ?? null,
+      html: comment.renderedText ?? comment.text ?? "",
+    })),
   };
 }
 

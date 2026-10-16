@@ -175,6 +175,14 @@ export interface WorkItemRelations {
   commits: LinkedCode[];
 }
 
+export interface WorkItemComment {
+  id: string;
+  author: string | null;
+  at: string | null;
+  /** As the source renders it; the board sanitizes it before drawing. */
+  html: string;
+}
+
 /** What the source says about one item read whole. */
 export interface WorkItemReading {
   item: WorkItemRow;
@@ -182,6 +190,8 @@ export interface WorkItemReading {
   fields: Record<string, unknown>;
   layout: WorkItemLayout;
   relations: WorkItemRelations;
+  /** The conversation, oldest first. */
+  comments: WorkItemComment[];
 }
 
 /** One item read whole, as the board shows it. */
@@ -189,5 +199,6 @@ export interface WorkItemView extends WorkItemReading {
   /** The stored copy the read refreshed. */
   stored_id: string;
   following: boolean;
-  timeline: StoredItemEntry[];
+  /** What changed on it and when, from the stored copy. */
+  history: StoredItemEvent[];
 }
