@@ -12,6 +12,7 @@ import {
 import { badInput } from "@tachy/core/infra";
 import {
   FIELD_SHOWS,
+  VIEW_SHOWS,
   type ComposeConfig,
   type ComposerProject,
   type CreatedTicket,
@@ -95,6 +96,22 @@ const configSchema = z
               .optional(),
             order: z.array(z.string()).max(500).optional(),
             guidance: z.string().max(4000).optional(),
+          })
+          .strict(),
+      )
+      .optional(),
+    views: z
+      .record(
+        z.string(),
+        z
+          .object({
+            fields: z
+              .record(
+                z.string(),
+                z.object({ show: z.enum(VIEW_SHOWS).optional() }).strict(),
+              )
+              .optional(),
+            order: z.array(z.string()).max(500).optional(),
           })
           .strict(),
       )
