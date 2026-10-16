@@ -243,6 +243,20 @@
 <section class="view" aria-label="New Azure DevOps work item" bind:this={root}>
   <header class="bar">
     <div class="where">
+      <Select
+        value={composer.project?.id ?? ""}
+        placeholder="project"
+        searchable
+        options={(az.projects ?? []).map((p) => ({
+          value: p.id,
+          label: p.name,
+        }))}
+        aria-label="Project"
+        onchange={(v) => {
+          const picked = az.projects?.find((x) => x.id === v);
+          if (picked && picked.id !== composer.project?.id) setProject(picked);
+        }}
+      />
       {#if composer.project}
         {#if composer.type}
           <span

@@ -8,6 +8,7 @@ import {
   fileFamily,
   WORK_ITEM_SCOPES,
   WORK_ITEM_SORTS,
+  type StoredItemEvent,
   type WorkItemPage,
   type WorkItemPeek,
   type WorkItemView,
@@ -294,7 +295,9 @@ export const workItems = new Hono()
         layout: applyViewConfig(view.layout, config, view.item.type),
         stored_id: stored.id,
         following,
-        timeline,
+        history: timeline.filter(
+          (entry): entry is StoredItemEvent => entry.kind === "event",
+        ),
       };
       return c.json(answer);
     },

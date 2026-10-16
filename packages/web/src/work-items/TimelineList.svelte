@@ -3,7 +3,14 @@
   import { Badge, Time, tip } from "../tui";
   import { eventLine, senderOf } from "./stored";
 
-  let { timeline }: { timeline: StoredItemEntry[] } = $props();
+  let {
+    timeline,
+    fieldName,
+  }: {
+    timeline: StoredItemEntry[];
+    /** A source field's label, for its id. */
+    fieldName?: (field: string) => string;
+  } = $props();
 </script>
 
 <ol class="timeline">
@@ -11,7 +18,7 @@
     {#if entry.kind === "event"}
       <li class="event">
         <span class="at"><Time at={entry.at} /></span>
-        <span class="what">{eventLine(entry)}</span>
+        <span class="what">{eventLine(entry, fieldName)}</span>
         {#if entry.actor}<span class="dim">{entry.actor}</span>{/if}
         {#if entry.origin === "observed"}
           <span
