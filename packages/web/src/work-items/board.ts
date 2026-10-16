@@ -88,56 +88,96 @@ const IN_HEADER = new Set([
 export interface ShownField {
   ref: string;
   label: string;
-  /** `date` holds an ISO time; `html` holds the field's raw HTML. */
-  kind: "text" | "date" | "html";
+  /** `date` holds an ISO time, `html` the field's raw HTML; `empty` holds nothing. */
+  kind: "text" | "date" | "html" | "empty";
   value: string;
 }
 
 export interface ShownSections {
+  /** Drawn in the item's header. */
+  pinned: ShownField[];
   body: ShownField[];
   groups: { label: string | null; fields: ShownField[] }[];
 }
 
+/** Listed refs first, in the list's order; the rest keep their place after. */
+export function inOrder(refs: string[], order: string[]): string[] {
+  const rank = (ref: string, i: number) => {
+    const listed = order.indexOf(ref);
+    return listed < 0 ? order.length + i : listed;
+  };
+  return refs
+    .map((ref, i) => ({ ref, at: rank(ref, i) }))
+    .sort((a, b) => a.at - b.at)
+    .map(({ ref }) => ref);
+}
+
 /**
- * The fields of an item that hold something, in the source form's places:
- * prose in the body, the rest in its groups. Without a layout every field
- * with a value is listed, prose apart.
+ * The fields of an item as the board draws them: in the source form's places,
+ * prose in the body and the rest in its groups, with what holds nothing left
+ * out. The team's view config pins, keeps or hides fields and orders them.
+ * Without a layout every field with a value is listed, prose apart.
  */
 export function shownSections(reading: WorkItemReading): ShownSections {
   const { fields, layout } = reading;
-  const shown = (ref: string): ShownField | null => {
-    if (IN_HEADER.has(ref)) return null;
+  const show = layout.display?.show ?? {};
+  const order = layout.display?.order ?? [];
+
+  const shownField = (ref: string): ShownField | null => {
+    if (IN_HEADER.has(ref) || show[ref] === "hidden") return null;
     const info = layout.fields[ref];
     const label = info?.name ?? ref;
     const raw = fields[ref];
-    if (info?.type === "html")
-      return typeof raw === "string" && raw.trim()
-        ? { ref, label, kind: "html", value: raw }
-        : null;
-    const text = fieldText(raw);
-    if (text == null) return null;
-    return {
-      ref,
-      label,
-      kind: info?.type === "dateTime" ? "date" : "text",
-      value: text,
-    };
+    const kept = show[ref] === "always" || show[ref] === "pin";
+    if (info?.type === "html" && typeof raw === "string" && raw.trim())
+      return { ref, label, kind: "html", value: raw };
+    const text = info?.type === "html" ? null : fieldText(raw);
+    if (text == null)
+      return kept ? { ref, label, kind: "empty", value: "" } : null;
+    const kind = info?.type === "dateTime" ? "date" : "text";
+    return { ref, label, kind, value: text };
   };
   const present = (refs: string[]) =>
-    refs.map(shown).filter((field): field is ShownField => field !== null);
+    inOrder(refs, order)
+      .filter((ref) => show[ref] !== "pin")
+      .map(shownField)
+      .filter((field): field is ShownField => field !== null);
 
-  if (layout.layout) {
+  const pinned = inOrder(
+    Object.keys(show).filter((ref) => show[ref] === "pin"),
+    order,
+  )
+    .map(shownField)
+    .filter((field): field is ShownField => field !== null);
+
+  if (!layout.layout) {
+    const every = present(Object.keys(fields));
+    const rest = every.filter((field) => field.kind !== "html");
     return {
-      body: present(layout.layout.body),
-      groups: layout.layout.groups
-        .map((group) => ({ label: group.label, fields: present(group.fields) }))
-        .filter((group) => group.fields.length),
+      pinned,
+      body: every.filter((field) => field.kind === "html"),
+      groups: rest.length ? [{ label: null, fields: rest }] : [],
     };
   }
-  const every = present(Object.keys(fields));
-  const rest = every.filter((field) => field.kind !== "html");
+  const placed = new Set([
+    ...layout.layout.body,
+    ...layout.layout.groups.flatMap((group) => group.fields),
+  ]);
+  const unplaced = present(
+    Object.keys(show).filter(
+      (ref) => show[ref] === "always" && !placed.has(ref),
+    ),
+  );
+  const groups = [
+    ...layout.layout.groups.map((group) => ({
+      label: group.label,
+      fields: present(group.fields),
+    })),
+    { label: "other fields", fields: unplaced },
+  ];
   return {
-    body: every.filter((field) => field.kind === "html"),
-    groups: rest.length ? [{ label: null, fields: rest }] : [],
+    pinned,
+    body: present(layout.layout.body),
+    groups: groups.filter((group) => group.fields.length),
   };
 }

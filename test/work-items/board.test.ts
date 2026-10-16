@@ -15,6 +15,7 @@ import {
   setTeamMember,
 } from "@tachy/core/access";
 import { clearTypeLists, listWiql } from "@tachy/source-azure-devops";
+import { setComposeConfig } from "@tachy/core/flows";
 import type { WorkItemPage, WorkItemView } from "@tachy/contract";
 import { createApp } from "../../packages/api/src/app";
 import { loginCookie } from "../http";
@@ -270,6 +271,42 @@ describe("/api/work-items/projects", () => {
     const [stored] =
       await sql`select id from work_items where external_id = '42'`;
     expect(view.stored_id).toBe(stored.id);
+  });
+
+  it("serves the type's form for the view editor, and the team's view with an item", async () => {
+    const layoutRoutes = {
+      "/ProjA/_apis/wit/workitemtypes/Bug/fields": {
+        value: [
+          { referenceName: "Custom.ApprovalDate", name: "Approval date" },
+        ],
+      },
+      "/ProjA/_apis/wit/workitemtypes": { value: [bugType] },
+      "/_apis/wit/fields": { value: [] },
+      "/_apis/projects/ProjA": new Error("no project read"),
+    };
+    mockAdo(layoutRoutes);
+    const response = await get(memberCookie, "/layout?type=Bug");
+    expect(await response.json()).toEqual({
+      layout: null,
+      fields: { "Custom.ApprovalDate": { name: "Approval date" } },
+    });
+
+    await setComposeConfig(projectId, {
+      views: { Bug: { fields: { "Custom.ApprovalDate": { show: "pin" } } } },
+    });
+    mockAdo({
+      ...layoutRoutes,
+      "/_apis/wit/workitems/43?": { ...workItem(43, "Pinned"), relations: [] },
+      "/ProjA/_apis/wit/workItems/43/comments": { comments: [] },
+      "/_apis/wit/workItems/43/updates": { value: [] },
+    });
+    const view = (await (
+      await get(memberCookie, "/items/43")
+    ).json()) as WorkItemView;
+    expect(view.layout.display).toEqual({
+      show: { "Custom.ApprovalDate": "pin" },
+      order: [],
+    });
   });
 
   it("says when the item is not there", async () => {

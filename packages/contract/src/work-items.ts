@@ -3,6 +3,7 @@ import type {
   ComposerLayout,
   WorkItemPeek,
 } from "./azure-devops";
+import type { ViewDisplay } from "./flows";
 
 /** A stored copy of a ticket or work item, as a list shows it. */
 export interface StoredItemRow {
@@ -136,6 +137,8 @@ export interface WorkItemFieldInfo {
 export interface WorkItemLayout {
   layout: ComposerLayout | null;
   fields: Record<string, WorkItemFieldInfo>;
+  /** The team's arrangement over the source's form, when it has one. */
+  display?: ViewDisplay;
 }
 
 export interface LinkedWorkItem {
