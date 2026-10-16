@@ -17,12 +17,11 @@
   import { pushScope } from "../keys/keys.svelte";
   import { navigate, segment } from "../shell/router.svelte";
   import { setSubnav } from "../shell/subnav.svelte";
-  import { AdoMark, EmptyState, Note, Select, Spinner } from "../tui";
+  import { AdoMark, EmptyState, Note, Spinner } from "../tui";
   import { az, ensureProjects } from "./az.svelte";
   import { BOARD_SOURCE, boardItemPath, boardListPath } from "./board";
   import { landingProject, rememberProject } from "./board.svelte";
-  import { composer, openComposer, setProject } from "./composer.svelte";
-  import ChangesMenu from "./ChangesMenu.svelte";
+  import { composer, openComposer } from "./composer.svelte";
   import ItemDetail from "./ItemDetail.svelte";
   import ItemList from "./ItemList.svelte";
   import TicketComposer from "./TicketComposer.svelte";
@@ -49,12 +48,6 @@
     if (project) rememberProject(project.id);
   });
 
-  function pickProject(id: string) {
-    const picked = az.projects?.find((p) => p.id === id);
-    if (composing && picked) setProject(picked);
-    else navigate(boardListPath(id));
-  }
-
   let typeMenu = $state<TypeMenu>();
 
   function startNew(type: WorkItemTypeOption) {
@@ -73,7 +66,7 @@
 
   $effect(() =>
     setSubnav({
-      items: [{ key: BOARD_SOURCE, label: "azure devops", mark: AdoMark }],
+      items: [{ key: BOARD_SOURCE, label: "azure", mark: AdoMark }],
       active: BOARD_SOURCE,
       onpick: () => navigate(project ? boardListPath(project.id) : "/board"),
       actions: topRow,
@@ -98,18 +91,6 @@
 
 {#snippet topRow()}
   <div class="top">
-    <Select
-      value={project?.id ?? ""}
-      options={(az.projects ?? []).map((p) => ({
-        value: p.id,
-        label: p.name,
-        hint: p.product_slug ?? p.team_slug,
-      }))}
-      placeholder="project"
-      aria-label="project"
-      onchange={(id) => pickProject(String(id))}
-    />
-    <ChangesMenu />
     {#if project}
       <TypeMenu bind:this={typeMenu} projectId={project.id} onpick={startNew} />
     {/if}

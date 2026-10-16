@@ -216,7 +216,9 @@ describe("/api/work-items/projects", () => {
         comments: [
           {
             id: 1,
-            text: "<p>Seen on prod</p>",
+            text: "Seen on **prod**",
+            renderedText: "<p>Seen on <strong>prod</strong></p>",
+            format: "markdown",
             createdBy: { displayName: "Ana" },
             createdDate: "2026-10-02T09:00:00Z",
           },
@@ -263,14 +265,24 @@ describe("/api/work-items/projects", () => {
     });
     expect(view.fields["Custom.ApprovalDate"]).toBe("2026-10-03T08:00:00Z");
     expect(view.relations.children).toEqual([]);
-    const said = view.timeline.filter((entry) => entry.kind === "message");
-    expect(said.map((entry) => entry.text)).toEqual([
-      "Blank page",
-      "Seen on prod",
+    expect(view.comments).toEqual([
+      {
+        id: "1",
+        author: "Ana",
+        at: "2026-10-02T09:00:00Z",
+        html: "<p>Seen on <strong>prod</strong></p>",
+      },
     ]);
-    const [stored] =
+    expect(view.history.every((entry) => entry.kind === "event")).toBe(true);
+    const [stored] = await sql`
+      select m.body_text from work_item_messages m
+      join work_items w on w.id = m.work_item_id
+      where w.external_id = '42' and m.external_id = 'comment-1'
+    `;
+    expect(stored.body_text).toBe("Seen on prod");
+    const [item] =
       await sql`select id from work_items where external_id = '42'`;
-    expect(view.stored_id).toBe(stored.id);
+    expect(view.stored_id).toBe(item.id);
   });
 
   it("serves the type's form for the view editor, and the team's view with an item", async () => {

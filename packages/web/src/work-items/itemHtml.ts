@@ -1,4 +1,5 @@
 import DOMPurify from "dompurify";
+import { toHtml } from "./ticketMarkdown";
 
 const ADO_ATTACHMENT =
   /\/_apis\/wit\/attachments\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})/i;
@@ -32,3 +33,12 @@ export function itemHtml(
   holder.append(fragment);
   return holder.innerHTML;
 }
+
+const HTML_TAG = /<\/?[a-z][^>]*>/i;
+
+/**
+ * A large text field as HTML. One saved as Markdown holds Markdown text, which
+ * has no tags (https://devblogs.microsoft.com/devops/markdown-support-arrives-for-work-items/).
+ */
+export const fieldHtml = (value: string): string =>
+  HTML_TAG.test(value) ? value : toHtml(value);

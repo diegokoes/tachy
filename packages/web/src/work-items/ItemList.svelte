@@ -19,11 +19,12 @@
     Time,
     type Column,
   } from "../tui";
-  import { ensureTypes, typesOf } from "./az.svelte";
+  import { az, ensureTypes, typesOf } from "./az.svelte";
   import { typeColor, typeIcon } from "./ado-icons";
   import {
     DEFAULT_FILTER,
     boardItemPath,
+    boardListPath,
     itemsPath,
     sortBy,
     type BoardFilter,
@@ -179,6 +180,17 @@
 {/snippet}
 
 <div class="bar">
+  <Select
+    value={project.id}
+    options={(az.projects ?? []).map((p) => ({
+      value: p.id,
+      label: p.name,
+      hint: p.product_slug ?? p.team_slug,
+    }))}
+    searchable
+    aria-label="project"
+    onchange={(id) => navigate(boardListPath(String(id)))}
+  />
   <FilterBar
     bind:value={filter.text}
     shown={items.length}

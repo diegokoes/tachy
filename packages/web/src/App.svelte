@@ -23,10 +23,10 @@
   import { loadDateFormat } from "./dates.svelte";
   import { openSection, section, startRouter } from "./shell/router.svelte";
   import {
-    itemChanges,
     refreshNotifications,
     startNotifications,
   } from "./notifications/notify.svelte";
+  import NotificationBell from "./notifications/NotificationBell.svelte";
   import { hints, pushScope, startKeys } from "./keys/keys.svelte";
   import { navKey, actionKey } from "./keys/bindings.svelte";
   import { loadVim, vimState, scrollBindings } from "./keys/vim.svelte";
@@ -44,13 +44,7 @@
     tip,
   } from "./tui";
 
-  const nav = $derived(
-    navItems().map((item) =>
-      item.key === "board"
-        ? { ...item, badge: itemChanges().filter((n) => !n.read_at).length }
-        : item,
-    ),
-  );
+  const nav = $derived(navItems());
 
   const view = $derived(section("chat"));
 
@@ -339,6 +333,7 @@
       <!-- Empty: balances the wordmark's track so the pill sits on the true
            centre. -->
       <div class="mark"></div>
+      <div class="bell"><NotificationBell /></div>
     </div>
 
     <!-- Out of flow, so nothing about it can shift the window: settings is
@@ -537,6 +532,16 @@
   }
   .topbar.hidden {
     display: none;
+  }
+  /* Out of the grid, so the narrow layout that drops the wordmark keeps it. */
+  .topbar {
+    position: relative;
+  }
+  .bell {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
   }
   .mark {
     display: flex;
@@ -837,7 +842,11 @@
   /* Native bar hidden: the drawn scrollbar beside it takes over. The block
      padding is clearance: a Panel's title and hint straddle its rule, so
      half of each sits outside the panel and `overflow: auto` would clip it. */
+  /* Positioned so absolutely placed content, such as an icon's hidden label,
+     is held inside the scroll area: otherwise it is placed against the page
+     and makes the page itself scroll. */
   main {
+    position: relative;
     flex: 1;
     min-width: 0;
     overflow: auto;
