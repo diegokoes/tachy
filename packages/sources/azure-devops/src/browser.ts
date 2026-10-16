@@ -1,5 +1,26 @@
-import type { WorkItemPeek } from "@tachy/core";
-import type { AdoClient, AdoWorkItem, AdoWorkItemType } from "./client";
+import type {
+  LinkedCode,
+  LinkedWorkItem,
+  WorkItemFieldInfo,
+  WorkItemLayout,
+  WorkItemPage,
+  WorkItemPeek,
+  WorkItemQuery,
+  WorkItemReading,
+  WorkItemRelations,
+  WorkItemRow,
+  WorkItemSort,
+} from "@tachy/core";
+import type {
+  AdoClient,
+  AdoFields,
+  AdoWorkItem,
+  AdoWorkItemSummary,
+  AdoWorkItemType,
+} from "./client";
+import type { RawWorkItem } from "@tachy/core/sources";
+import { projectLayout, readLayout } from "./composer";
+import { workItemSchema } from "./fields";
 
 const PEEK_FIELDS = [
   "System.Id",
@@ -9,47 +30,76 @@ const PEEK_FIELDS = [
   "System.TeamProject",
 ];
 
-const TYPE_LIST_TTL_MS = 10 * 60 * 1000;
+const LIST_FIELDS = [
+  ...PEEK_FIELDS,
+  "System.AssignedTo",
+  "System.CreatedBy",
+  "System.CreatedDate",
+  "System.ChangedDate",
+];
 
-const typeLists = new Map<
+const SORT_FIELDS: Record<WorkItemSort, string> = {
+  changed: "System.ChangedDate",
+  created: "System.CreatedDate",
+  id: "System.Id",
+  title: "System.Title",
+  state: "System.State",
+  type: "System.WorkItemType",
+  assigned: "System.AssignedTo",
+};
+
+/** Ids a list query reads at most; the page shown is a slice of them. */
+const MAX_LISTED = 1000;
+
+const PROCESS_TTL_MS = 10 * 60 * 1000;
+
+/** Lookups that follow the project's process, kept briefly per organisation. */
+const processLookups = new Map<
   string,
-  { expiresAt: number; types: Promise<AdoWorkItemType[]> }
+  { expiresAt: number; answer: Promise<unknown> }
 >();
 
-/** A project's types, kept briefly: a process change reaches the board within the TTL. */
-function projectTypes(
-  client: AdoClient,
-  project: string,
-): Promise<AdoWorkItemType[]> {
-  const key = `${client.orgUrl}|${project}`;
-  const kept = typeLists.get(key);
-  if (kept && kept.expiresAt > Date.now()) return kept.types;
-  const types = client.listWorkItemTypes(project).catch((e) => {
-    typeLists.delete(key);
+function keptFor<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const kept = processLookups.get(key);
+  if (kept && kept.expiresAt > Date.now()) return kept.answer as Promise<T>;
+  const answer = load().catch((e) => {
+    processLookups.delete(key);
     throw e;
   });
-  typeLists.set(key, { expiresAt: Date.now() + TYPE_LIST_TTL_MS, types });
-  return types;
+  processLookups.set(key, { expiresAt: Date.now() + PROCESS_TTL_MS, answer });
+  return answer;
 }
 
 export function clearTypeLists(): void {
-  typeLists.clear();
+  processLookups.clear();
 }
+
+const projectTypes = (
+  client: AdoClient,
+  project: string,
+): Promise<AdoWorkItemType[]> =>
+  keptFor(`${client.orgUrl}|types|${project}`, () =>
+    client.listWorkItemTypes(project),
+  );
 
 export const itemUrl = (orgUrl: string, project: string, id: number | string) =>
   `${orgUrl}/${encodeURIComponent(project)}/_workitems/edit/${id}`;
 
-/** Ids that are not numbers are left out, like ids ADO does not have. */
-export async function peekWorkItems(
+const personName = (identity: unknown): string | null => {
+  if (!identity || typeof identity !== "object") return null;
+  const { displayName, uniqueName } = identity as Record<string, unknown>;
+  if (typeof displayName === "string" && displayName) return displayName;
+  return typeof uniqueName === "string" ? uniqueName : null;
+};
+
+async function toRows(
   client: AdoClient,
   sourceSlug: string,
-  ids: string[],
-): Promise<WorkItemPeek[]> {
-  const numericIds = ids.filter((id) => /^\d+$/.test(id)).map(Number);
-  if (!numericIds.length) return [];
-  const found = (
-    await client.getWorkItemsBatch(numericIds, PEEK_FIELDS)
-  ).filter((workItem): workItem is AdoWorkItem => workItem != null);
+  workItems: (AdoWorkItem | null)[],
+): Promise<WorkItemRow[]> {
+  const found = workItems.filter(
+    (workItem): workItem is AdoWorkItem => workItem != null,
+  );
   return Promise.all(
     found.map(async (workItem) => {
       const fields = workItem.fields ?? {};
@@ -68,7 +118,185 @@ export async function peekWorkItems(
         color: type?.color || null,
         icon: type?.icon?.id || null,
         source_slug: sourceSlug,
+        assigned_to: personName(fields["System.AssignedTo"]),
+        created_by: personName(fields["System.CreatedBy"]),
+        created_at: fields["System.CreatedDate"] ?? null,
+        changed_at: fields["System.ChangedDate"] ?? null,
       };
     }),
   );
+}
+
+/** Ids that are not numbers are left out, like ids ADO does not have. */
+export async function peekWorkItems(
+  client: AdoClient,
+  sourceSlug: string,
+  ids: string[],
+): Promise<WorkItemPeek[]> {
+  const numericIds = ids.filter((id) => /^\d+$/.test(id)).map(Number);
+  if (!numericIds.length) return [];
+  const rows = await toRows(
+    client,
+    sourceSlug,
+    await client.getWorkItemsBatch(numericIds, PEEK_FIELDS),
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    type: row.type,
+    state: row.state,
+    project: row.project,
+    url: row.url,
+    color: row.color,
+    icon: row.icon,
+    source_slug: row.source_slug,
+  }));
+}
+
+/** WIQL takes a string literal in single quotes, a quote inside doubled. */
+const wiqlString = (value: string) => `'${value.replaceAll("'", "''")}'`;
+
+export function listWiql(query: WorkItemQuery): string {
+  const where = ["[System.TeamProject] = @project"];
+  if (query.scope === "assigned") where.push("[System.AssignedTo] = @Me");
+  if (query.scope === "created") where.push("[System.CreatedBy] = @Me");
+  if (query.type)
+    where.push(`[System.WorkItemType] = ${wiqlString(query.type)}`);
+  if (query.state) where.push(`[System.State] = ${wiqlString(query.state)}`);
+  const text = query.text?.trim();
+  if (text) {
+    const byTitle = `[System.Title] Contains ${wiqlString(text)}`;
+    where.push(
+      /^\d+$/.test(text) ? `([System.Id] = ${text} Or ${byTitle})` : byTitle,
+    );
+  }
+  const direction = query.direction === "asc" ? "Asc" : "Desc";
+  return `Select [System.Id] From WorkItems Where ${where.join(" And ")} Order By [${SORT_FIELDS[query.sort]}] ${direction}`;
+}
+
+export async function listWorkItems(
+  client: AdoClient,
+  sourceSlug: string,
+  project: string,
+  query: WorkItemQuery,
+): Promise<WorkItemPage> {
+  // One more than the cap tells a capped list from one that fits exactly.
+  const ids = await client.runWiql(project, listWiql(query), MAX_LISTED + 1);
+  const listed = ids.slice(0, MAX_LISTED);
+  const pageIds = listed.slice(query.offset, query.offset + query.limit);
+  const fetched = pageIds.length
+    ? await client.getWorkItemsBatch(pageIds, LIST_FIELDS)
+    : [];
+  const rows = await toRows(client, sourceSlug, fetched);
+  const position = new Map(pageIds.map((id, i) => [String(id), i]));
+  rows.sort((a, b) => (position.get(a.id) ?? 0) - (position.get(b.id) ?? 0));
+  return { items: rows, total: listed.length, capped: ids.length > MAX_LISTED };
+}
+
+/**
+ * The type's form as ADO draws it, read-only fields included, with each
+ * field's label and type. Without a readable layout, fields still carry names.
+ */
+export function viewLayout(
+  client: AdoClient,
+  project: string,
+  type: string,
+): Promise<WorkItemLayout> {
+  return keptFor(`${client.orgUrl}|layout|${project}|${type}`, async () => {
+    const info = await client.getProject(project).catch(() => null);
+    const [schema, layout] = await Promise.all([
+      workItemSchema(client, project, type),
+      readLayout(client, info?.id, project, type).catch(() => null),
+    ]);
+    const projected = layout
+      ? projectLayout(layout, schema.fields, { keepReadOnly: true })
+      : null;
+    const fields: Record<string, WorkItemFieldInfo> = {};
+    for (const field of schema.fields)
+      fields[field.reference_name] = {
+        name: projected?.labels[field.reference_name] ?? field.name,
+        ...(field.type ? { type: field.type } : {}),
+      };
+    return { layout: projected?.layout ?? null, fields };
+  });
+}
+
+/** `raw.relations` as `fetchItem` resolves them: one level, capped. */
+interface ResolvedRelations {
+  parent?: AdoWorkItemSummary;
+  children?: AdoWorkItemSummary[];
+  related?: AdoWorkItemSummary[];
+  pull_requests?: Record<string, unknown>[];
+  commits?: Record<string, unknown>[];
+}
+
+const text = (value: unknown): string | null =>
+  value == null || value === "" ? null : String(value);
+
+const linkedItem = (summary: AdoWorkItemSummary): LinkedWorkItem => ({
+  id: summary.id,
+  title: summary.title ?? null,
+  state: summary.state ?? null,
+  type: summary.type ?? null,
+  url: summary.url ?? "",
+});
+
+function linkedPullRequest(pull: Record<string, unknown>): LinkedCode {
+  return {
+    ref: text(pull.id) ?? text(pull.ref) ?? "",
+    title: text(pull.title),
+    status: text(pull.status),
+    author: null,
+    repository: text(pull.repository),
+    url: text(pull.url),
+    ...(pull.note ? { note: String(pull.note) } : {}),
+  };
+}
+
+function linkedCommit(commit: Record<string, unknown>): LinkedCode {
+  return {
+    ref: text(commit.sha) ?? text(commit.ref) ?? "",
+    title: text(commit.comment),
+    status: null,
+    author: text(commit.author),
+    repository: null,
+    url: text(commit.url),
+    ...(commit.note ? { note: String(commit.note) } : {}),
+  };
+}
+
+export function relationsOf(
+  relations: ResolvedRelations = {},
+): WorkItemRelations {
+  return {
+    parent: relations.parent ? linkedItem(relations.parent) : null,
+    children: (relations.children ?? []).map(linkedItem),
+    related: (relations.related ?? []).map(linkedItem),
+    pull_requests: (relations.pull_requests ?? []).map(linkedPullRequest),
+    commits: (relations.commits ?? []).map(linkedCommit),
+  };
+}
+
+/** What the board shows of an item `fetchItem` read. */
+export async function itemReading(
+  client: AdoClient,
+  sourceSlug: string,
+  raw: RawWorkItem,
+): Promise<WorkItemReading> {
+  const { fields = {}, relations } = (raw.raw ?? {}) as {
+    fields?: AdoFields;
+    relations?: ResolvedRelations;
+  };
+  const [[item], layout] = await Promise.all([
+    toRows(client, sourceSlug, [{ id: Number(raw.externalId), fields }]),
+    viewLayout(client, raw.groupKey ?? "", raw.itemType ?? "").catch(
+      (): WorkItemLayout => ({ layout: null, fields: {} }),
+    ),
+  ]);
+  return {
+    item: { ...item, url: raw.externalUrl ?? item.url },
+    fields,
+    layout,
+    relations: relationsOf(relations),
+  };
 }

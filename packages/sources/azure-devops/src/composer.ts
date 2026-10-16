@@ -148,6 +148,7 @@ const flag = (v: unknown) => v === true || v === "true" || v === "True";
 export function projectLayout(
   layout: AdoFormLayout,
   fields: readonly FieldSpec[],
+  { keepReadOnly = false }: { keepReadOnly?: boolean } = {},
 ): {
   layout: ComposerLayout;
   labels: Record<string, string>;
@@ -168,7 +169,8 @@ export function projectLayout(
         ? inputs.FieldName
         : (control.id ?? "");
     const spec = specs.get(ref);
-    if (!spec || spec.read_only || placed.has(ref)) return null;
+    if (!spec || placed.has(ref)) return null;
+    if (spec.read_only && !keepReadOnly) return null;
     placed.add(ref);
     const label = cleanLabel(control.label);
     if (label && label !== spec.name) labels[ref] = label;
@@ -232,7 +234,7 @@ function suggestionFields(
   return widgets;
 }
 
-async function readLayout(
+export async function readLayout(
   client: AdoClient,
   projectId: string | undefined,
   project: string,

@@ -19,7 +19,13 @@ import type {
   ListOptions,
   SourceFactory,
 } from "@tachy/core/sources";
-import { itemUrl, peekWorkItems } from "./browser";
+import {
+  itemReading,
+  itemUrl,
+  listWorkItems,
+  peekWorkItems,
+  viewLayout,
+} from "./browser";
 import { composerForm, creatableTypes, templateValues } from "./composer";
 import { createWorkItem, explainAdoError, validateWorkItem } from "./create";
 import { workItemDefaults } from "./fields";
@@ -409,6 +415,23 @@ export const createAzureDevopsSource: SourceFactory = (
     );
   }
 
+  async function fetchItem(externalId: string): Promise<RawWorkItem> {
+    const workItem = await client.getWorkItem(externalId);
+    const messages = await itemMessages(workItem);
+    const project = workItem.fields?.["System.TeamProject"];
+    const relations = await resolveRelations(workItem, project ?? "");
+    // Best effort: the item reads without its history.
+    const updates = await client
+      .getUpdates(externalId, workItem.rev)
+      .catch(() => null);
+    return {
+      ...toItem(workItem, messages, relations),
+      ...(updates
+        ? { events: updateEvents(updates), historyComplete: true as const }
+        : {}),
+    };
+  }
+
   const defaultsFor = (
     project: string,
     type: string,
@@ -454,7 +477,16 @@ export const createAzureDevopsSource: SourceFactory = (
     capabilities: { postNote: false, incrementalSync: true },
     redactRaw: redactAdoRaw,
     composer,
-    browser: { peek: (ids) => peekWorkItems(client, connection.slug, ids) },
+    browser: {
+      peek: (ids) => peekWorkItems(client, connection.slug, ids),
+      list: (project, query) =>
+        listWorkItems(client, connection.slug, project, query),
+      layout: (project, type) => viewLayout(client, project, type),
+      async read(id) {
+        const raw = await fetchItem(id);
+        return { raw, view: await itemReading(client, connection.slug, raw) };
+      },
+    },
 
     async verify() {
       // connectionData is a preview endpoint and only names the caller, so a
@@ -471,22 +503,7 @@ export const createAzureDevopsSource: SourceFactory = (
       };
     },
 
-    async fetchItem(externalId: string): Promise<RawWorkItem> {
-      const workItem = await client.getWorkItem(externalId);
-      const messages = await itemMessages(workItem);
-      const project = workItem.fields?.["System.TeamProject"];
-      const relations = await resolveRelations(workItem, project ?? "");
-      // Best effort: the item reads without its history.
-      const updates = await client
-        .getUpdates(externalId, workItem.rev)
-        .catch(() => null);
-      return {
-        ...toItem(workItem, messages, relations),
-        ...(updates
-          ? { events: updateEvents(updates), historyComplete: true as const }
-          : {}),
-      };
-    },
+    fetchItem,
 
     async openAttachment(externalId, attachmentId) {
       const workItem = await client.getWorkItem(externalId);

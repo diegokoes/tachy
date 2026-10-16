@@ -11,10 +11,12 @@
  */
 import {
   Archive,
+  ArrowDownWideNarrow,
   ArrowLeft,
   ArrowRight,
   ArrowRightToLine,
   ArrowUpFromLine,
+  ArrowUpNarrowWide,
   Asterisk,
   Ban,
   BookDashed,
@@ -167,6 +169,28 @@ const MarkdownMark: LucideIconData = {
   ],
 };
 
+/**
+ * Lucide's graph-star, copied from @lucide/icons 1.57.0 (ISC) until the
+ * dependency reaches that release.
+ */
+const GraphStar: LucideIconData = {
+  name: "graph-star",
+  size: 24,
+  node: [
+    ["path", { d: "m12.342 9.316 1.764-3.527", key: "a" }],
+    ["path", { d: "m12.59 14.545 2.35 3.759", key: "b" }],
+    ["path", { d: "m13.982 12.332 4.03.447", key: "c" }],
+    ["path", { d: "M5.414 17.586 8.88 14.12", key: "d" }],
+    ["path", { d: "M9.025 9.742 5.317 5.505", key: "e" }],
+    ["circle", { cx: "11", cy: "12", r: "3", key: "f" }],
+    ["circle", { cx: "15", cy: "4", r: "2", key: "g" }],
+    ["circle", { cx: "16", cy: "20", r: "2", key: "h" }],
+    ["circle", { cx: "20", cy: "13", r: "2", key: "i" }],
+    ["circle", { cx: "4", cy: "19", r: "2", key: "j" }],
+    ["circle", { cx: "4", cy: "4", r: "2", key: "k" }],
+  ],
+};
+
 export const ICONS = {
   // Leaving: grey, nothing is lost
   close: X,
@@ -206,6 +230,8 @@ export const ICONS = {
   enlarge: Maximize2,
   login: LogIn,
   logout: LogOut,
+  sortAscending: ArrowUpNarrowWide,
+  sortDescending: ArrowDownWideNarrow,
   moveUp: ChevronUp,
   moveDown: ChevronDown,
   /** Expand and collapse: drawn open, turned a quarter to read as shut. */
@@ -260,6 +286,7 @@ export const ICONS = {
 
   // Sections: the nav and subnav tabs
   chat: Bot,
+  board: GraphStar,
   library: BookOpen,
   wiki: Globe,
   admin: Shield,
