@@ -17,7 +17,7 @@ import {
   MESSAGE_STEPS,
   SYMPTOMS,
 } from "./corpus";
-import type { SeededProduct, SeededTeam } from "./org";
+import type { SeededProduct, SeededTeam, SeededUser } from "./org";
 import type { SeededComponent, SeededCustomer } from "./catalog";
 import type { Volumes } from "./scale";
 
@@ -467,6 +467,44 @@ async function seedLinks(
       "to_external_id",
       "kind",
     ],
+    rows,
+  );
+}
+
+/** People who follow on the board, and how many items each follows. */
+const FOLLOWERS = 5;
+const FOLLOWS_EACH = 3;
+
+/** A few people follow a few items each, some read up to a revision. */
+export async function seedFollows(
+  tx: Tx,
+  users: SeededUser[],
+  workItems: SeededWorkItem[],
+): Promise<void> {
+  if (!workItems.length) return;
+  const rows: Record<string, unknown>[] = [];
+  users.slice(0, FOLLOWERS).forEach((user, u) => {
+    for (let k = 0; k < FOLLOWS_EACH; k++) {
+      const item = workItems[(u * 37 + k * 11) % workItems.length];
+      if (
+        rows.some(
+          (row) =>
+            row.user_id === user.id && row.external_id === item.externalId,
+        )
+      )
+        continue;
+      rows.push({
+        user_id: user.id,
+        source_connection_id: item.connectionId,
+        external_id: item.externalId,
+        seen_rev: k === 0 ? null : k + u,
+      });
+    }
+  });
+  await insertRows(
+    tx,
+    "work_item_follows",
+    ["user_id", "source_connection_id", "external_id", "seen_rev"],
     rows,
   );
 }

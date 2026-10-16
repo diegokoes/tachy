@@ -7,7 +7,9 @@
   } from "@tachy/contract";
   import { api } from "../api";
   import { chat } from "../chat/chatState.svelte";
-  import { createResource } from "../resource.svelte";
+  import { createResource, errText } from "../resource.svelte";
+  import { pushScope } from "../keys/keys.svelte";
+  import { refreshNotifications } from "../notifications/notify.svelte";
   import { link, navigate } from "../shell/router.svelte";
   import { Badge, Button, Icon, Note, Spinner, Time } from "../tui";
   import { typeColor, typeIcon } from "./ado-icons";
@@ -45,6 +47,43 @@
   );
   const html = (value: string) =>
     itemHtml(value, { slug: project.source_slug, itemId });
+
+  let following = $state(false);
+  let followBusy = $state(false);
+  let followError = $state<string | null>(null);
+  $effect(() => {
+    if (view) following = view.following;
+  });
+  // The read marked this item's change notes read on the server.
+  $effect(() => {
+    if (view) void refreshNotifications();
+  });
+
+  async function toggleFollow() {
+    const path = `/work-items/projects/${project.id}/items/${encodeURIComponent(itemId)}/follow`;
+    followBusy = true;
+    followError = null;
+    try {
+      const answer = following
+        ? await api.delete<{ following: boolean }>(path)
+        : await api.put<{ following: boolean }>(path, {});
+      following = answer.following;
+    } catch (e) {
+      followError = errText(e);
+    } finally {
+      followBusy = false;
+    }
+  }
+
+  $effect(() =>
+    pushScope([
+      {
+        key: "f",
+        label: following ? "unfollow" : "follow",
+        run: () => void toggleFollow(),
+      },
+    ]),
+  );
 
   function explainInChat() {
     chat.input = `/az explain ${itemId}`;
@@ -125,10 +164,19 @@
         >
       {/each}
       <span class="grow"></span>
+      <Button
+        size="sm"
+        variant="ghost"
+        icon={following ? "unfollow" : "follow"}
+        busy={followBusy}
+        aria-pressed={following}
+        onclick={toggleFollow}>{following ? "following" : "follow"}</Button
+      >
       <Button size="sm" variant="ghost" icon="ai" onclick={explainInChat}
         >explain in chat</Button
       >
     </div>
+    {#if followError}<Note tone="danger">{followError}</Note>{/if}
   </header>
 
   <div class="columns">

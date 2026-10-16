@@ -20,6 +20,7 @@ import type {
   SourceFactory,
 } from "@tachy/core/sources";
 import {
+  followedChanges,
   itemReading,
   itemUrl,
   listWorkItems,
@@ -482,6 +483,7 @@ export const createAzureDevopsSource: SourceFactory = (
       list: (project, query) =>
         listWorkItems(client, connection.slug, project, query),
       layout: (project, type) => viewLayout(client, project, type),
+      changes: (followed) => followedChanges(client, followed),
       async read(id) {
         const raw = await fetchItem(id);
         return { raw, view: await itemReading(client, connection.slug, raw) };

@@ -39,6 +39,7 @@
     { value: "all", label: "everyone's" },
     { value: "assigned", label: "assigned to me" },
     { value: "created", label: "created by me" },
+    { value: "followed", label: "followed by me" },
   ];
 
   let filter = $state<BoardFilter>({ ...DEFAULT_FILTER });
@@ -68,9 +69,15 @@
     }
   }
 
+  let followedIds = $state(new Set<string>());
+
   onMount(() => {
     void ensureTypes(project.id);
     void load();
+    void api
+      .get<string[]>(`/work-items/projects/${project.id}/follows`)
+      .then((ids) => (followedIds = new Set(ids)))
+      .catch(() => {});
   });
 
   let typed = false;
@@ -155,6 +162,11 @@
       <Icon name={typeIcon(row.icon)} size="1em" label={row.type} />
     </span>
     <span class="title">{row.title}</span>
+    {#if followedIds.has(row.id)}
+      <span class="followed"
+        ><Icon name="followed" size="0.9em" label="followed" /></span
+      >
+    {/if}
   </span>
 {/snippet}
 
@@ -253,6 +265,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .followed {
+    flex: none;
+    display: inline-flex;
+    color: var(--muted);
   }
   .more {
     display: flex;
