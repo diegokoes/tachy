@@ -10,7 +10,11 @@ import {
   shownSections,
   sortBy,
 } from "../../packages/web/src/work-items/board";
-import { itemHtml } from "../../packages/web/src/work-items/itemHtml";
+import {
+  fieldHtml,
+  itemHtml,
+} from "../../packages/web/src/work-items/itemHtml";
+import { eventLine } from "../../packages/web/src/work-items/stored";
 
 describe("board list", () => {
   it("flips the direction on the same column, starts dates newest first", () => {
@@ -57,6 +61,7 @@ const reading = (
     pull_requests: [],
     commits: [],
   },
+  comments: [],
   layout: {
     layout,
     fields: {
@@ -242,5 +247,33 @@ describe("item HTML", () => {
     expect(html).not.toContain("script");
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener noreferrer"');
+  });
+});
+
+describe("item text", () => {
+  it("renders a field saved as Markdown, and leaves HTML as it is", () => {
+    expect(fieldHtml("Set it to **Critical**")).toContain(
+      "<strong>Critical</strong>",
+    );
+    expect(fieldHtml('```\n{ "type": "ISA" }\n```')).toContain("<pre>");
+    expect(fieldHtml("<div>create code request</div>")).toBe(
+      "<div>create code request</div>",
+    );
+  });
+
+  it("names a source field by its label in the history", () => {
+    const event = {
+      kind: "event" as const,
+      id: "e1",
+      at: "2026-10-16T13:20:00Z",
+      actor: "Vitali",
+      field: "Microsoft.VSTS.Build.IntegrationBuild",
+      old_value: null,
+      new_value: "FE 2.35.8",
+      origin: "source" as const,
+    };
+    expect(eventLine(event, () => "Integrated in Build")).toBe(
+      "Integrated in Build set to FE 2.35.8",
+    );
   });
 });

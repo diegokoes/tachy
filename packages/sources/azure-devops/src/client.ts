@@ -103,7 +103,11 @@ export interface AdoUpdate {
 
 export interface AdoComment {
   id: number;
+  /** HTML, or Markdown when `format` says so. */
   text?: string;
+  /** The comment as HTML whatever its format; asked for with `$expand=renderedText`. */
+  renderedText?: string;
+  format?: "html" | "markdown";
   createdBy?: AdoIdentity;
   createdDate?: string;
 }
@@ -545,6 +549,7 @@ export function createAdoClient(connection: AdoCfg): AdoClient {
         const params = new URLSearchParams({
           "api-version": API_COMMENTS,
           $top: "200",
+          $expand: "renderedText",
         });
         if (continuation) params.set("continuationToken", continuation);
         const response = await request<{

@@ -1,12 +1,9 @@
 <script lang="ts">
   import type { NotificationRow } from "@tachy/contract";
-  import {
-    itemChanges,
-    markNotificationsRead,
-  } from "../notifications/notify.svelte";
   import { navigate, router } from "../shell/router.svelte";
   import { Button, Time } from "../tui";
-  import { boardItemPath } from "./board";
+  import { boardItemPath } from "../work-items/board";
+  import { itemChanges, markNotificationsRead } from "./notify.svelte";
 
   let shown = $state(false);
   let hostEl = $state<HTMLElement>();
@@ -49,59 +46,60 @@
 
 <svelte:window onpointerdown={outside} />
 
-<div class="host" bind:this={hostEl}>
-  <Button
-    variant="ghost"
-    size="sm"
-    square
-    icon={unreadIds.length ? "changesUnread" : "changes"}
-    tone={unreadIds.length ? "accent" : undefined}
-    aria-label={unreadIds.length
-      ? `${unreadIds.length} changes on items you follow`
-      : "Changes on items you follow"}
-    title="changes on items you follow"
-    onclick={() => (shown = !shown)}
-  />
-  {#if shown}
-    <div
-      class="menu"
-      role="dialog"
-      aria-label="Changes on items you follow"
-      tabindex="-1"
-      {onkeydown}
-    >
-      {#each changes as change (change.id)}
-        <button
-          class="change"
-          class:unread={!change.read_at}
-          onclick={() => open(change)}
-        >
-          <span class="head">
-            <span class="title">{change.title}</span>
-            <span class="at"><Time at={change.created_at} /></span>
-          </span>
-          {#if change.body_text}<span class="lines">{change.body_text}</span
-            >{/if}
-        </button>
-      {:else}
-        <p class="note">
-          Nothing yet. Follow an item from its page; changes others make show
-          here.
-        </p>
-      {/each}
-      {#if unreadIds.length}
-        <div class="foot">
-          <Button
-            size="sm"
-            variant="ghost"
-            onclick={() => markNotificationsRead(unreadIds)}
-            >mark all read</Button
+{#if unreadIds.length || shown}
+  <div class="host" bind:this={hostEl}>
+    <Button
+      variant="ghost"
+      size="sm"
+      square
+      icon={unreadIds.length ? "changesUnread" : "changes"}
+      tone={unreadIds.length ? "accent" : undefined}
+      aria-label={unreadIds.length
+        ? `${unreadIds.length} changes on items you follow`
+        : "Changes on items you follow"}
+      title="changes on items you follow"
+      onclick={() => (shown = !shown)}
+    />
+    {#if shown}
+      <div
+        class="menu"
+        role="dialog"
+        aria-label="Changes on items you follow"
+        tabindex="-1"
+        {onkeydown}
+      >
+        {#each changes as change (change.id)}
+          <button
+            class="change"
+            class:unread={!change.read_at}
+            onclick={() => open(change)}
           >
-        </div>
-      {/if}
-    </div>
-  {/if}
-</div>
+            <span class="head">
+              <span class="title">{change.title}</span>
+              <span class="at"><Time at={change.created_at} /></span>
+            </span>
+            {#if change.body_text}<span class="lines">{change.body_text}</span
+              >{/if}
+          </button>
+        {:else}
+          <p class="note">
+            Nothing new. Changes others make to items you follow show here.
+          </p>
+        {/each}
+        {#if unreadIds.length}
+          <div class="foot">
+            <Button
+              size="sm"
+              variant="ghost"
+              onclick={() => markNotificationsRead(unreadIds)}
+              >mark all read</Button
+            >
+          </div>
+        {/if}
+      </div>
+    {/if}
+  </div>
+{/if}
 
 <style>
   .host {

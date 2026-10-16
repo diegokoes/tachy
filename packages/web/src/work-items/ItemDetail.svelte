@@ -14,7 +14,7 @@
   import { Badge, Button, Icon, Note, Spinner, Time } from "../tui";
   import { typeColor, typeIcon } from "./ado-icons";
   import { boardItemPath, shownSections, type ShownField } from "./board";
-  import { itemHtml } from "./itemHtml";
+  import { fieldHtml, itemHtml } from "./itemHtml";
   import TimelineList from "./TimelineList.svelte";
 
   let { project, itemId }: { project: ComposerProject; itemId: string } =
@@ -46,7 +46,11 @@
       : [],
   );
   const html = (value: string) =>
-    itemHtml(value, { slug: project.source_slug, itemId });
+    itemHtml(fieldHtml(value), { slug: project.source_slug, itemId });
+
+  let showHistory = $state(false);
+  const fieldName = (field: string) =>
+    view?.layout.fields[field]?.name ?? field;
 
   let following = $state(false);
   let followBusy = $state(false);
@@ -192,12 +196,36 @@
         </section>
       {/each}
       <section>
-        <h3>conversation and history</h3>
-        {#if view.timeline.length}
-          <TimelineList timeline={view.timeline} />
-        {:else}
-          <p class="dim">Nothing said or changed yet.</p>
+        <div class="heading">
+          <h3>conversation</h3>
+          {#if view.history.length}
+            <Button
+              size="sm"
+              variant="ghost"
+              icon="history"
+              aria-pressed={showHistory}
+              aria-label={showHistory ? "Hide the history" : "Show the history"}
+              onclick={() => (showHistory = !showHistory)}
+              >history · {view.history.length}</Button
+            >
+          {/if}
+        </div>
+        {#if showHistory}
+          <div class="history">
+            <TimelineList timeline={view.history} {fieldName} />
+          </div>
         {/if}
+        {#each view.comments as comment (comment.id)}
+          <article class="comment">
+            <header>
+              <span class="who">{comment.author ?? "someone"}</span>
+              <span class="dim"><Time at={comment.at} /></span>
+            </header>
+            <div class="prose">{@html html(comment.html)}</div>
+          </article>
+        {:else}
+          <p class="dim">No comments yet.</p>
+        {/each}
       </section>
     </div>
 
@@ -209,11 +237,7 @@
             {#each group.fields as field (field.ref)}
               <div>
                 <dt>{field.label}</dt>
-                <dd>
-                  {#if field.kind === "date"}<Time
-                      at={field.value}
-                    />{:else}{field.value}{/if}
-                </dd>
+                <dd>{@render value(field)}</dd>
               </div>
             {/each}
           </dl>
@@ -306,6 +330,53 @@
   .prose {
     overflow-wrap: anywhere;
   }
+  .prose :global(p),
+  .prose :global(div) {
+    margin: 0 0 0.5em;
+  }
+  .prose :global(ul),
+  .prose :global(ol) {
+    margin: 0.4em 0;
+    padding-left: 1.5em;
+  }
+  .prose :global(code) {
+    background: var(--accent-dim);
+    border-radius: 3px;
+    padding: 0.05em 0.35em;
+    font-size: 0.92em;
+  }
+  .prose :global(pre) {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.6em 0.8em;
+    margin: 0.5em 0;
+    overflow-x: auto;
+    white-space: pre;
+    overflow-wrap: normal;
+  }
+  .prose :global(pre code) {
+    background: none;
+    padding: 0;
+    font-size: 0.85em;
+  }
+  .prose :global(blockquote) {
+    margin: 0.5em 0;
+    padding-left: 0.8em;
+    border-left: 3px solid var(--border);
+    color: var(--muted);
+  }
+  .prose :global(table) {
+    border-collapse: collapse;
+    margin: 0.5em 0;
+    display: block;
+    overflow-x: auto;
+  }
+  .prose :global(th),
+  .prose :global(td) {
+    border: 1px solid var(--border);
+    padding: 0.25em 0.6em;
+  }
   .prose :global(img) {
     max-width: 100%;
     height: auto;
@@ -351,5 +422,32 @@
   }
   li.code > * {
     grid-column: 1;
+  }
+  .heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pad-2);
+    margin-bottom: var(--pad-2);
+  }
+  .heading h3 {
+    margin: 0;
+  }
+  .history {
+    margin-bottom: var(--pad-4);
+  }
+  .comment {
+    border-top: 1px solid var(--border);
+    padding: var(--pad-2) 0 var(--pad-3);
+  }
+  .comment header {
+    display: flex;
+    gap: var(--pad-3);
+    align-items: baseline;
+    margin-bottom: var(--pad-1);
+    font-size: var(--fs-sm);
+  }
+  .who {
+    font-weight: 600;
   }
 </style>
