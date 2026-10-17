@@ -32,7 +32,6 @@
   let options = $state<FlowOption[]>([]);
   let error = $state<string | null>(null);
   const missing = $derived(needs.filter((n) => !deps[n]));
-  const id = `opt-${Math.random().toString(36).slice(2, 9)}`;
 
   $effect(() => {
     const want = JSON.stringify([source, deps]);
@@ -54,36 +53,20 @@
       ? [{ value, label: value }, ...all]
       : all,
   );
+  const prompt = $derived.by(() => {
+    if (missing.length) return `pick ${missing.join(", ")} first`;
+    if (error) return "could not read the list";
+    return placeholder;
+  });
 </script>
 
-{#if free}
-  <input
-    list={id}
-    {value}
-    aria-label={label}
-    title={error ?? undefined}
-    placeholder={missing.length
-      ? `pick ${missing.join(", ")} first`
-      : placeholder}
-    oninput={(e) => onchange((e.target as HTMLInputElement).value)}
-  />
-  <datalist {id}>
-    {#each all as option (option.value)}<option value={option.value}
-        >{option.label}</option
-      >{/each}
-  </datalist>
-{:else}
-  <Select
-    {value}
-    options={shown}
-    searchable
-    disabled={missing.length > 0}
-    placeholder={missing.length
-      ? `pick ${missing.join(", ")} first`
-      : error
-        ? "could not read the list"
-        : placeholder}
-    aria-label={label}
-    onchange={(v) => onchange(String(v ?? ""))}
-  />
-{/if}
+<Select
+  {value}
+  options={free ? all : shown}
+  searchable
+  creatable={free}
+  disabled={missing.length > 0}
+  placeholder={prompt}
+  aria-label={label}
+  onchange={(v) => onchange(String(v ?? ""))}
+/>
