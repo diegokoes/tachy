@@ -14,12 +14,18 @@
     value,
     connection = "",
     fields = [],
+    valueSource = "item.values",
+    valuePrefixes = ["item."],
     onchange,
     onremove,
   }: {
     value: Condition;
     /** Whose items the field and value lists are read from. */
     connection?: string;
+    /** The option source a field's values are listed from. */
+    valueSource?: string;
+    /** Field prefixes `valueSource` lists values for. */
+    valuePrefixes?: string[];
     /** What earlier steps returned, offered ahead of the item's fields. */
     fields?: FlowOption[];
     onchange: (next: Condition) => void;
@@ -57,6 +63,9 @@
     setChildren(children.map((x, j) => (j === at ? next : x)));
   }
 
+  const listsValues = (field: string) =>
+    valuePrefixes.some((prefix) => field.startsWith(prefix));
+
   const listText = (v: unknown) => {
     if (Array.isArray(v)) return v.join(", ");
     return v == null ? "" : String(v);
@@ -87,6 +96,8 @@
         value={child}
         {connection}
         {fields}
+        {valueSource}
+        {valuePrefixes}
         onchange={(n) => setChild(i, n)}
         onremove={() => setChildren(children.filter((_, j) => j !== i))}
       />
@@ -116,6 +127,8 @@
       value={value.not}
       {connection}
       {fields}
+      {valueSource}
+      {valuePrefixes}
       onchange={(n) => onchange({ not: n })}
     />
   </div>
@@ -156,9 +169,9 @@
                   .filter(Boolean),
               })}
           />
-        {:else if connection && leaf.field.startsWith("item.")}
+        {:else if connection && listsValues(leaf.field)}
           <OptionSelect
-            source="item.values"
+            source={valueSource}
             deps={{ connection, field: leaf.field }}
             value={listText(leaf.value)}
             free
