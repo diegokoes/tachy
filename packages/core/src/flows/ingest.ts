@@ -5,6 +5,7 @@ import {
   evaluateCondition,
   readPath,
   type IngestConfig,
+  type IngestPreview,
 } from "@tachy/contract";
 import { getCustomerSlug } from "../catalog/customers";
 import {
@@ -15,7 +16,8 @@ import {
 import { sql, jsonb } from "../infra/db";
 import { notFound } from "../infra/errors";
 import { log } from "../infra/log";
-import type { ResolvedSource } from "../sources/registry";
+import { resolveSource, type ResolvedSource } from "../sources/registry";
+import type { ScopeContext } from "../config/scoped";
 import { isTachyNote } from "../work-items/compact";
 import { messageKey } from "../work-items/ingest";
 import type { RawMessage, RawWorkItem } from "../work-items/raw";
@@ -24,6 +26,7 @@ import { tagsOf } from "./subject";
 
 const CONFIG_KEY = "ingest";
 const GUIDANCE_MAX_CHARS = 4000;
+const EXCERPT_CHARS = 280;
 
 export const ingestRuleSchema = z
   .object({
@@ -242,5 +245,103 @@ export async function readForModel(
       await getCustomerSlug(opts.customerId),
     ),
     redacted: true,
+  };
+}
+
+/** A stored item of the connection, read back as its source handed it over. */
+async function storedRaw(
+  connectionSlug: string,
+  workItemId: string,
+): Promise<RawWorkItem> {
+  const [row] = await sql`
+    select wi.external_id, wi.kind, wi.title, wi.status,
+           wi.external_group_key, wi.requester, wi.raw
+    from work_items wi
+    join source_connections sc on sc.id = wi.source_connection_id
+    where wi.id = ${workItemId} and sc.slug = ${connectionSlug}
+  `;
+  if (!row)
+    throw notFound(`work item ${workItemId} not found on '${connectionSlug}'`);
+  const messages = await sql`
+    select external_id, author, author_label, automated, visibility,
+           direction, body_text, created_at
+    from work_item_messages where work_item_id = ${workItemId}
+    order by created_at nulls first, id
+  `;
+  return {
+    externalId: row.external_id,
+    kind: row.kind,
+    title: row.title ?? undefined,
+    status: row.status ?? undefined,
+    groupKey: row.external_group_key ?? undefined,
+    requester: row.requester ?? undefined,
+    raw: row.raw ?? {},
+    messages: messages.map((m): RawMessage => ({
+      externalId: m.external_id ?? undefined,
+      author: m.author ?? undefined,
+      authorLabel: m.author_label ?? undefined,
+      automated: m.automated,
+      visibility: m.visibility,
+      direction: m.direction,
+      bodyText: m.body_text ?? "",
+      createdAt: (m.created_at as Date | null)?.toISOString(),
+    })),
+  };
+}
+
+/**
+ * An adapter is built with a token, and a preview reads no source: without a
+ * token the count includes the paths the adapter would leave out.
+ */
+async function modelOmitsOf(
+  connectionSlug: string,
+  scope: ScopeContext,
+): Promise<readonly string[]> {
+  try {
+    return (await resolveSource(connectionSlug, scope)).source.modelOmits ?? [];
+  } catch {
+    return [];
+  }
+}
+
+const charsOf = (item: RawWorkItem) =>
+  item.messages.reduce((sum, m) => sum + m.bodyText.length, 0) +
+  JSON.stringify(item.raw ?? {}).length;
+
+/**
+ * An unsaved config tried on a stored item: no source is called. Redaction is
+ * left out, as it changes how text reads and not how much of it there is.
+ */
+export async function previewIngest(
+  connectionSlug: string,
+  workItemId: string,
+  config: IngestConfig,
+  scope: ScopeContext,
+): Promise<IngestPreview> {
+  const raw = await storedRaw(connectionSlug, workItemId);
+  const outcome = applyIngest(
+    raw,
+    config,
+    await modelOmitsOf(connectionSlug, scope),
+  );
+  const skippedBy = new Map(outcome.skipped.map((s) => [s.key, s.rule]));
+  return {
+    messages: raw.messages.map((m) => {
+      const key = messageKey(m);
+      return {
+        key,
+        at: m.createdAt ?? null,
+        author: m.author ?? null,
+        author_label: m.authorLabel ?? null,
+        visibility: m.visibility,
+        direction: m.direction,
+        automated: m.automated === true,
+        chars: m.bodyText.length,
+        excerpt: m.bodyText.slice(0, EXCERPT_CHARS),
+        skipped_by: skippedBy.get(key) ?? null,
+      };
+    }),
+    chars: { stored: charsOf(raw), read: charsOf(outcome.item) },
+    guidance: outcome.guidance ?? null,
   };
 }

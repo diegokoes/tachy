@@ -84,6 +84,29 @@ export interface IngestConfig {
   guidance?: Record<string, string>;
 }
 
+/** One stored message, as a preview of a connection's ingest rules shows it. */
+export interface IngestPreviewMessage {
+  key: string;
+  at: string | null;
+  author: string | null;
+  author_label: string | null;
+  visibility: string;
+  direction: string;
+  automated: boolean;
+  chars: number;
+  /** The start of its text. */
+  excerpt: string;
+  /** The id of the rule that leaves it out; null when a model reads it. */
+  skipped_by: string | null;
+}
+
+export interface IngestPreview {
+  messages: IngestPreviewMessage[];
+  /** Characters of messages and payload: all stored, and what a model reads. */
+  chars: { stored: number; read: number };
+  guidance: string | null;
+}
+
 export const INGEST_MESSAGE_FIELDS: FlowOption[] = [
   { value: "message.author", label: "author", hint: "the source's user id" },
   { value: "message.author_label", label: "author name or email" },
