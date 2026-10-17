@@ -39,7 +39,8 @@ const need = (request: OptionRequest, name: string) => {
 /**
  * `source.<name>` asks the connection's adapter, so each source offers its
  * own lists (a helpdesk's companies, its ticket fields) without core knowing
- * them. `source.groups` is the adapter's probe, which every source has.
+ * them. `source.groups` is the adapter's probe, which every source has, and
+ * the adapter's own list where the probe's token may not read groups.
  */
 async function fromSource(
   name: string,
@@ -50,13 +51,14 @@ async function fromSource(
     request.scope,
   );
   if (name === "groups") {
-    if (!source.verify) return [];
-    const probe = await source.verify();
-    return probe.groups.map((g) => ({
-      value: g.key,
-      label: g.name,
-      hint: g.key,
-    }));
+    const probe = source.verify ? await source.verify() : null;
+    if (probe?.groups.length)
+      return probe.groups.map((g) => ({
+        value: g.key,
+        label: g.name,
+        hint: g.key,
+      }));
+    return source.options ? source.options("groups", request.params) : [];
   }
   if (!source.options) return [];
   return source.options(name, request.params);
@@ -132,6 +134,27 @@ defineOptionSource("item.fields", async (request) =>
 defineOptionSource("item.values", async (request) =>
   subjectValues(need(request, "connection"), need(request, "field")),
 );
+
+/** Values a skip rule's message fields take, fixed where the shape fixes them. */
+const MESSAGE_VALUES: Record<string, FlowOption[]> = {
+  "message.visibility": ["public", "private", "internal"].map((v) => ({
+    value: v,
+    label: v,
+  })),
+  "message.direction": ["incoming", "outgoing"].map((v) => ({
+    value: v,
+    label: v,
+  })),
+  "message.automated": ["true", "false"].map((v) => ({ value: v, label: v })),
+};
+
+// A message's author is the source's own user id, so its people name them.
+defineOptionSource("ingest.values", async (request) => {
+  const field = need(request, "field");
+  if (field === "message.author") return fromSource("agents", request);
+  if (field.startsWith("message.")) return MESSAGE_VALUES[field] ?? [];
+  return subjectValues(need(request, "connection"), field);
+});
 
 defineOptionSource("item.tags", async (request) =>
   request.params.connection

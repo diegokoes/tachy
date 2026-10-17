@@ -344,6 +344,8 @@ export type {
   IngestRule,
   IngestFieldMode,
   IngestConfig,
+  IngestPreview,
+  IngestPreviewMessage,
   FlowTriggerKind,
   ConditionOp,
   Condition,

@@ -36,6 +36,7 @@ export {
   setIngestConfig,
   applyIngest,
   readForModel,
+  previewIngest,
   type IngestOutcome,
   type ModelRead,
 } from "./ingest";

@@ -680,6 +680,10 @@ export const createFreshdeskSource: SourceFactory = (
     },
 
     async options(name, params) {
+      if (name === "agents")
+        return [...(await loadAgentNames())]
+          .map(([id, name]) => ({ value: id, label: name, hint: id }))
+          .sort((a, b) => a.label.localeCompare(b.label));
       if (name === "companies") {
         const companies: FlowOption[] = [];
         for (let page = 1; page <= MAX_COMPANY_PAGES; page++) {
@@ -704,9 +708,18 @@ export const createFreshdeskSource: SourceFactory = (
           hint: f.default ? undefined : "custom",
         }));
       }
-      if (name === "ticket_fields" || name === "field_choices") {
+      if (
+        name === "ticket_fields" ||
+        name === "field_choices" ||
+        name === "groups"
+      ) {
         const fields = await get<FreshdeskTicketField[]>("/ticket_fields");
         const list = Array.isArray(fields) ? fields : [];
+        // An agent's key reads group names only as the group field's choices.
+        if (name === "groups") {
+          const field = list.find((f) => f.default && f.name === "group");
+          return field ? fieldChoices(field.choices) : [];
+        }
         if (name === "ticket_fields")
           return list.map((f) => ({
             value: ticketFieldPath(f),
