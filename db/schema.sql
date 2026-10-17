@@ -1456,7 +1456,7 @@ create index report_messages_report_idx on report_messages(report_id, created_at
 create table notifications (
     id          uuid primary key default gen_random_uuid(),
     user_id     uuid not null references users(id) on delete cascade,
-    kind        text not null check (kind in ('report_reply','work_item_changed')),
+    kind        text not null check (kind in ('report_reply','work_item_changed','flow_notice')),
     title       text,
     body_text   text,
     ref         jsonb not null default '{}'::jsonb,

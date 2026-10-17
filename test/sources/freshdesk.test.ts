@@ -783,6 +783,48 @@ describe("freshdesk companies and tags", () => {
     ]);
   });
 
+  it("sets fields typed as the update endpoint takes them", async () => {
+    mockFetch({
+      "/ticket_fields": [
+        { name: "status", label: "Status", default: true },
+        { name: "ticket_type", label: "Type", default: true },
+        { name: "cf_area", label: "Area", type: "custom_dropdown" },
+        { name: "cf_effort", label: "Effort", type: "custom_number" },
+        { name: "cf_billable", label: "Billable", type: "custom_checkbox" },
+      ],
+      "/tickets/7": {},
+    });
+    await source().setFields!("7", {
+      status: "4",
+      type: "Incident",
+      "custom_fields.cf_area": "export",
+      "custom_fields.cf_effort": "3",
+      "custom_fields.cf_billable": "true",
+    });
+    const put = requests.find((r) => r.init?.method === "PUT")!;
+    expect(put.path).toBe("/tickets/7");
+    expect(JSON.parse(String(put.init?.body))).toEqual({
+      status: 4,
+      type: "Incident",
+      custom_fields: { cf_area: "export", cf_effort: 3, cf_billable: true },
+    });
+  });
+
+  it("refuses a field the helpdesk lacks, or text where it wants a number", async () => {
+    mockFetch({
+      "/ticket_fields": [
+        { name: "priority", label: "Priority", default: true },
+      ],
+    });
+    await expect(source().setFields!("7", { cf_gone: "x" })).rejects.toThrow(
+      /no ticket field 'cf_gone'/,
+    );
+    await expect(
+      source().setFields!("7", { priority: "high" }),
+    ).rejects.toThrow(/'Priority' takes a number/);
+    expect(requests.some((r) => r.init?.method === "PUT")).toBe(false);
+  });
+
   it("writes the whole tag list back, since Freshdesk takes it whole", async () => {
     mockFetch({ "/tickets/7": { ...ticket, tags: ["bug", "Plant-3"] } });
     expect(
