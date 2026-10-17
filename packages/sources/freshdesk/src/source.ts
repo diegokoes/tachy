@@ -332,23 +332,23 @@ const NUMBER_KEYS = new Set([
   "requester_id",
 ]);
 
-/** A value as text, as the ticket field takes it. */
+/** Text to the type the ticket field takes; throws on a bad number. */
 export function typedValue(
   field: FreshdeskTicketField,
   value: string,
 ): string | number | boolean {
   const path = ticketFieldPath(field);
-  const numeric =
+  const isNumeric =
     NUMBER_KEYS.has(path) ||
     field.type === "custom_number" ||
     field.type === "custom_decimal";
-  if (numeric) {
-    const number = Number(value);
-    if (value.trim() === "" || Number.isNaN(number))
+  if (isNumeric) {
+    const parsed = Number(value);
+    if (value.trim() === "" || Number.isNaN(parsed))
       throw new Error(
         `'${field.label ?? field.name}' takes a number, not '${value}'`,
       );
-    return number;
+    return parsed;
   }
   if (field.type === "custom_checkbox")
     return value.trim().toLowerCase() === "true";
@@ -740,11 +740,11 @@ export const createFreshdeskSource: SourceFactory = (
 
     async setFields(externalId, fields) {
       const listed = await get<FreshdeskTicketField[]>("/ticket_fields");
-      const known = Array.isArray(listed) ? listed : [];
+      const ticketFields = Array.isArray(listed) ? listed : [];
       const body: Record<string, unknown> = {};
       const custom: Record<string, unknown> = {};
       for (const [path, value] of Object.entries(fields)) {
-        const field = known.find((f) => ticketFieldPath(f) === path);
+        const field = ticketFields.find((f) => ticketFieldPath(f) === path);
         if (!field) throw new Error(`Freshdesk has no ticket field '${path}'`);
         if (path.startsWith(CUSTOM_PREFIX))
           custom[path.slice(CUSTOM_PREFIX.length)] = typedValue(field, value);

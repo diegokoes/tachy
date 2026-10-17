@@ -340,7 +340,7 @@ const UNIT_MS: Record<string, number> = {
   d: 86_400_000,
 };
 
-/** `now`, `now+4h`, `now-2d`: epoch ms from when the condition is checked. */
+/** Epoch ms for `now`, `now+4h`, `now-2d`; null for any other value. */
 function relativeTime(value: unknown): number | null {
   const match =
     typeof value === "string" ? RELATIVE_TIME.exec(value.trim()) : null;
