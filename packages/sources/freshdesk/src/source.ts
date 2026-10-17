@@ -1,5 +1,6 @@
 import {
   changeTagList,
+  errorBody,
   fetchUntrustedUrl,
   sourceFetch,
 } from "@tachy/core/sources";
@@ -400,7 +401,7 @@ export const createFreshdeskSource: SourceFactory = (
     );
     if (!response.ok)
       throw new Error(
-        `Freshdesk GET ${path} -> ${response.status} ${await response.text()}`,
+        `Freshdesk GET ${path} -> ${response.status} ${await errorBody(response)}`,
       );
     return (await response.json()) as T;
   }
@@ -490,7 +491,7 @@ export const createFreshdeskSource: SourceFactory = (
     );
     if (!response.ok)
       throw new Error(
-        `Freshdesk ticket PUT -> ${response.status} ${await response.text()}`,
+        `Freshdesk ticket PUT -> ${response.status} ${await errorBody(response)}`,
       );
   }
 
@@ -734,7 +735,7 @@ export const createFreshdeskSource: SourceFactory = (
       // Already gone is the wanted end state.
       if (!response.ok && response.status !== 404)
         throw new Error(
-          `Freshdesk conversation DELETE -> ${response.status} ${await response.text()}`,
+          `Freshdesk conversation DELETE -> ${response.status} ${await errorBody(response)}`,
         );
     },
 
@@ -835,7 +836,7 @@ export const createFreshdeskSource: SourceFactory = (
       );
       if (!response.ok)
         throw new Error(
-          `Freshdesk note POST -> ${response.status} ${await response.text()}`,
+          `Freshdesk note POST -> ${response.status} ${await errorBody(response)}`,
         );
     },
   };
