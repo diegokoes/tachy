@@ -1,5 +1,3 @@
-import { parseCodeScope } from "@tachy/core";
-
 export interface Subcommand {
   name: string;
   args: string;
@@ -16,7 +14,7 @@ export interface BuiltinCommand {
   expand: (args: string) => string;
   /** A group command: the first argument picks one of these. */
   subcommands?: Subcommand[];
-  /** Sent by a control in the web app, so the command menu leaves it out. */
+  /** Sent by a control in the web app, never picked from the command menu. */
   hidden?: true;
 }
 
@@ -31,25 +29,6 @@ const argsLine = (args: string) =>
  * once, on the tools. Restating either here puts them out of step.
  */
 export const BUILTIN_COMMANDS: BuiltinCommand[] = [
-  {
-    name: "analyze",
-    args: "<source> <ticket-id>",
-    description: "Ingest a ticket and draft a knowledge entry for review",
-    expand: (args) =>
-      ["Run INGEST MODE as defined in your instructions.", argsLine(args)].join(
-        "\n",
-      ),
-  },
-  {
-    name: "consult",
-    args: "<source> <ticket-id>",
-    description: "Fetch a ticket and search prior knowledge for advice",
-    expand: (args) =>
-      [
-        "Run CONSULT MODE as defined in your instructions. Do not save anything.",
-        argsLine(args),
-      ].join("\n"),
-  },
   {
     name: "compact",
     args: "<source> <ticket-id> [--no-note]",
@@ -98,20 +77,6 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
     },
   ]),
   {
-    name: "code",
-    args: "[@repo|@project/ ...] <question>",
-    description: "Answer a question from the linked codebases",
-    expand: (args) => {
-      const scope = parseCodeScope(args);
-      return [
-        "Run CODE CONSULTATION MODE as defined in your instructions.",
-        ...scopeLine(scope),
-        CODE_ANSWER_SHAPE,
-        argsLine(scope.question),
-      ].join("\n");
-    },
-  },
-  {
     name: "walkthrough",
     args: "",
     description: "Show the last code answer as a stepped walkthrough",
@@ -125,20 +90,10 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
       ].join("\n"),
   },
   {
-    name: "bucket",
-    args: "<bucket> <question>",
-    description: "Answer a question from one bucket of pushed documents",
-    expand: (args) =>
-      [
-        "Answer the user's question from the named bucket only, with search_bucket and get_bucket_doc. Do not search the library, the wiki or the codebases for this, and save nothing.",
-        "Cite each document you rely on by title and url. If the bucket has nothing on it, say so. If no bucket is named, or the name matches none, call list_buckets and ask which one.",
-        argsLine(args),
-      ].join("\n"),
-  },
-  {
     name: "ingest-wiki",
     args: "<source> <project> [wiki] [page-path]",
     description: "Pull Azure DevOps wiki pages into reference docs",
+    hidden: true,
     expand: (args) =>
       [
         "Run the ADO WIKI flow of CONTEXT DUMP MODE as defined in your instructions.",
@@ -149,6 +104,7 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
     name: "wiki-draft",
     args: "<product> [component=<slug>] [article=<slug>]",
     description: "Write or refresh a wiki article from recorded knowledge",
+    hidden: true,
     expand: (args) =>
       [
         "Write one wiki article for this product from what the library has recorded, never from general knowledge; draft_wiki_page and save_wiki_article describe the steps.",
@@ -157,23 +113,6 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
       ].join("\n"),
   },
 ];
-
-const CODE_ANSWER_SHAPE = [
-  "Shape of the answer: when the question asks how something works, flows or is processed, show it. Read the code, call show_code_walkthrough with the stages as steps, then write at most six lines: the flow in one sentence, and anything the steps cannot carry. Do not write the stages out in prose as well.",
-  "For any other question, answer in the first sentence and stop when it is answered. Name an index only when it is stale, failing or partial for a repo in scope; leave out what you did not use.",
-].join("\n");
-
-/** Nothing when the line names no scope: the mode then finds the repo itself. */
-function scopeLine(scope: { repos: string[]; projects: string[] }): string[] {
-  const named = [
-    scope.repos.length ? `repos ${scope.repos.join(", ")}` : "",
-    scope.projects.length ? `project ${scope.projects.join(", ")}` : "",
-  ].filter(Boolean);
-  if (!named.length) return [];
-  return [
-    `Scope chosen by the user: ${named.join("; ")}. Pass it as \`repos\` / \`project\` to search_code and list_repos, and answer from inside it. If the answer lies outside, say so before looking further.`,
-  ];
-}
 
 /**
  * A command whose first argument picks a subcommand. A client-only one that

@@ -26,7 +26,7 @@ import { GRADE_NOTE, out, outScrubbed, searchOut } from "../results";
 import { resolveScopeIds } from "../context";
 
 const PROJECT_FIELD =
-  "A source project by key or name, as list_repos `project_key` gives it or as a /code scope names it: every repo linked under it.";
+  "A source project by key or name, as list_repos `project_key` gives it or as an @project mention names it: every repo linked under it.";
 
 /**
  * The repos that `repo`, `repos` and `project` name together, or undefined

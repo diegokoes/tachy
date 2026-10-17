@@ -102,6 +102,11 @@ export interface WorkItemSource {
   readonly modelOmits?: readonly string[];
   /** Present when people can create items in this source from tachy. */
   composer?: WorkItemComposer;
+  /**
+   * Titles at a glance, read live with the caller's token and never stored.
+   * Ids the source does not have are left out; a refusal may throw instead.
+   */
+  peek?(ids: string[]): Promise<WorkItemPeek[]>;
   /** Present when people can look items up live, with their own token. */
   browser?: WorkItemBrowser;
   /**
@@ -194,8 +199,6 @@ export interface WorkItemComposer {
 
 /** Reads for a person browsing the source: nothing read here is stored. */
 export interface WorkItemBrowser {
-  /** Ids the source does not have, or the token cannot read, are left out. */
-  peek(ids: string[]): Promise<WorkItemPeek[]>;
   list(project: string, query: WorkItemQuery): Promise<WorkItemPage>;
   /** How the source's own form lays out an item of `type`, for reading one. */
   layout(project: string, type: string): Promise<WorkItemLayout>;

@@ -63,8 +63,8 @@ export function capTurns<T extends { text: string }>(
 }
 
 /**
- * The compacted form of an item where `compactForLlm` produces one, so
- * /analyze and /consult do not pay for quoted chains and signatures. Takes the
+ * The compacted form of an item where `compactForLlm` produces one, so an
+ * ingest or a consult does not pay for quoted chains and signatures. Takes the
  * item after redaction, and writes nothing: only compact_work_item posts a
  * note.
  */

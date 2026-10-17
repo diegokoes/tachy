@@ -3,7 +3,16 @@
   import { typeColor, typeIcon } from "./ado-icons";
   import type { PeekState } from "./peek.svelte";
 
-  let { state, idle }: { state: PeekState; idle: string } = $props();
+  let {
+    state,
+    idle,
+    sourceLabel,
+  }: {
+    state: PeekState;
+    idle: string;
+    /** Names where the item was looked for: "Azure DevOps projects". */
+    sourceLabel: string;
+  } = $props();
 </script>
 
 <div class="peek" aria-live="polite">
@@ -14,9 +23,7 @@
   {:else if state.status === "failed"}
     <span class="note">{state.message}</span>
   {:else if !state.peeks.length}
-    <span class="note"
-      >no work item #{state.id} in your Azure DevOps projects</span
-    >
+    <span class="note">no item #{state.id} in your {sourceLabel}</span>
   {:else}
     {#each state.peeks as item (`${item.source_slug}:${item.id}`)}
       <div class="hit">
@@ -24,11 +31,13 @@
           <span class="id">#{item.id}</span>
           <span class="title">{item.title}</span>
         </a>
-        <span class="glyph" style:color={typeColor(item.color) ?? undefined}>
-          <Icon name={typeIcon(item.icon)} size="1em" />
-        </span>
+        {#if item.icon}
+          <span class="glyph" style:color={typeColor(item.color) ?? undefined}>
+            <Icon name={typeIcon(item.icon)} size="1em" />
+          </span>
+        {/if}
         <span class="meta">
-          {item.type}{item.state ? ` · ${item.state}` : ""} · {item.project}
+          {[item.type, item.state, item.project].filter(Boolean).join(" · ")}
         </span>
       </div>
     {/each}

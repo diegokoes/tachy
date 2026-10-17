@@ -64,5 +64,4 @@ export {
   releaseMinor,
   normalizeVersion,
   projectToken,
-  parseCodeScope,
 } from "@tachy/contract";

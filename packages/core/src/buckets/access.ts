@@ -5,6 +5,7 @@ import { isGlobalAdmin } from "../access/permissions";
 export interface ReadableBucket {
   id: string;
   slug: string;
+  name: string;
 }
 
 /**
@@ -16,9 +17,9 @@ export async function readableBuckets(
   userId: string | null | undefined,
 ): Promise<ReadableBucket[]> {
   if (!userId || (await isGlobalAdmin(userId)))
-    return (await sql`select id, slug from buckets order by slug`) as unknown as ReadableBucket[];
+    return (await sql`select id, slug, name from buckets order by slug`) as unknown as ReadableBucket[];
   return (await sql`
-    select distinct b.id, b.slug
+    select distinct b.id, b.slug, b.name
     from buckets b
     join bucket_teams bt on bt.bucket_id = b.id
     join team_members tm on tm.team_id = bt.team_id
