@@ -30,7 +30,12 @@
   import Launcher from "./Launcher.svelte";
   import { ArtifactMark, Button, Caret, caretSide, G, Icon, tip } from "../tui";
   import { pushScope } from "../keys/keys.svelte";
-  import { tuckTopbar, unveilTopbar, veilTopbar } from "../shell/topbar.svelte";
+  import {
+    topbar,
+    tuckTopbar,
+    unveilTopbar,
+    veilTopbar,
+  } from "../shell/topbar.svelte";
   import { CHAT_UPLOAD_ACCEPT, uploadRefusal } from "@tachy/contract";
   import type { AgentEffort, WorkItemFile } from "@tachy/contract";
   import {
@@ -108,6 +113,7 @@
   let transcriptEl = $state<HTMLDivElement>();
   let composerEl = $state<HTMLTextAreaElement>();
   let dockEl = $state<HTMLDivElement>();
+  let edgeEl = $state<HTMLElement>();
   let pinned = true;
 
   // Where the composer's text is scrolled to, and how much of its width a
@@ -130,13 +136,23 @@
 
   const empty = $derived(chat.entries.length === 0);
 
-  // A pre effect, so the dock is read where it still sits: centred before the
-  // first message, at the foot after it. Its landing shows a nav that a clear
-  // brought back veiled.
+  /** Starts slow and lands at full speed, with no wind-back before it goes. */
+  const DOCK_EASE = "power4.in";
+  /** Longer than reflow's default: the ease covers little ground in its first half. */
+  const DOCK_TRAVEL_S = 0.45;
+
+  // A pre effect, so the dock, the nav and the artifact tab are read where they
+  // still sit, and one Flip moves all three. Its landing shows a nav that a
+  // clear brought back veiled.
   $effect.pre(() => {
     void empty;
     const play = untrack(() =>
-      reflow([dockEl], { absolute: false, onComplete: unveilTopbar }),
+      reflow([topbar.el, dockEl, edgeEl], {
+        absolute: false,
+        duration: DOCK_TRAVEL_S,
+        ease: DOCK_EASE,
+        onComplete: unveilTopbar,
+      }),
     );
     void tick().then(play);
   });
@@ -1043,7 +1059,7 @@
         <Scrollbar target={transcriptEl} controls="chat-transcript" />
       </div>
     {/if}
-    <ArtifactPanel />
+    <ArtifactPanel bind:edge={edgeEl} />
   </div>
 
   <div class="dock" bind:this={dockEl}>
