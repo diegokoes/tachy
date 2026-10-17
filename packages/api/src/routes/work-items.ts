@@ -15,7 +15,12 @@ import {
 } from "@tachy/core";
 import { imageForModel } from "@tachy/core/files";
 import { getSourceProject, resolveSource } from "@tachy/core/sources";
-import { applyViewConfig, getComposeConfig } from "@tachy/core/flows";
+import {
+  applyIngest,
+  applyViewConfig,
+  getComposeConfig,
+  ingestConfig,
+} from "@tachy/core/flows";
 import {
   deleteStoredItems,
   filterForAudit,
@@ -348,6 +353,8 @@ export const workItems = new Hono()
     const item = await ingestWorkItem(conn.id, raw);
     await recordRun({ workItemId: item.id, mode: "ingest" });
     const customerName = await getCustomerName(item.customerId);
+    // The tray hands this thread to the review model.
+    const { kept } = applyIngest(raw, ingestConfig(conn.config));
     return c.json({
       work_item_id: item.id,
       product_id: item.productId,
@@ -355,7 +362,7 @@ export const workItems = new Hono()
       customer_id: item.customerId,
       customer_name: customerName,
       observed_version: item.observedVersion,
-      item: raw,
+      item: kept,
     });
   })
   // A file of a ticket, read from its source with the reader's own token on
