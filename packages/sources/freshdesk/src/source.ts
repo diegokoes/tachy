@@ -279,6 +279,8 @@ interface FreshdeskTicketField {
   name: string;
   label?: string;
   default?: boolean;
+  /** `custom_number`, `custom_checkbox`, `custom_dropdown`, ... */
+  type?: string;
   choices?: unknown;
 }
 
@@ -317,6 +319,43 @@ const TICKET_KEYS: Record<string, string> = {
   product: "product_id",
   requester: "requester_id",
 };
+
+/** Default ticket fields the update endpoint takes as numbers. */
+const NUMBER_KEYS = new Set([
+  "status",
+  "priority",
+  "source",
+  "group_id",
+  "responder_id",
+  "product_id",
+  "company_id",
+  "requester_id",
+]);
+
+/** Text to the type the ticket field takes; throws on a bad number. */
+export function typedValue(
+  field: FreshdeskTicketField,
+  value: string,
+): string | number | boolean {
+  const path = ticketFieldPath(field);
+  const isNumeric =
+    NUMBER_KEYS.has(path) ||
+    field.type === "custom_number" ||
+    field.type === "custom_decimal";
+  if (isNumeric) {
+    const parsed = Number(value);
+    if (value.trim() === "" || Number.isNaN(parsed))
+      throw new Error(
+        `'${field.label ?? field.name}' takes a number, not '${value}'`,
+      );
+    return parsed;
+  }
+  if (field.type === "custom_checkbox")
+    return value.trim().toLowerCase() === "true";
+  return value;
+}
+
+const CUSTOM_PREFIX = "custom_fields.";
 
 /** A ticket field's path on the ticket: custom ones live under custom_fields. */
 export const ticketFieldPath = (f: FreshdeskTicketField) =>
@@ -433,6 +472,26 @@ export const createFreshdeskSource: SourceFactory = (
       sizeBytes: declaredLength(response),
       body: response.body!,
     };
+  }
+
+  async function putTicket(
+    externalId: string,
+    body: Record<string, unknown>,
+  ): Promise<void> {
+    const response = await sourceFetch(
+      "Freshdesk ticket PUT",
+      `${api}/tickets/${encodeURIComponent(externalId)}`,
+      {
+        method: "PUT",
+        headers: { Authorization: auth, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      { connection: connection.slug },
+    );
+    if (!response.ok)
+      throw new Error(
+        `Freshdesk ticket PUT -> ${response.status} ${await response.text()}`,
+      );
   }
 
   let agentNames: Map<string, string> | null = null;
@@ -679,6 +738,22 @@ export const createFreshdeskSource: SourceFactory = (
         );
     },
 
+    async setFields(externalId, fields) {
+      const listed = await get<FreshdeskTicketField[]>("/ticket_fields");
+      const ticketFields = Array.isArray(listed) ? listed : [];
+      const body: Record<string, unknown> = {};
+      const custom: Record<string, unknown> = {};
+      for (const [path, value] of Object.entries(fields)) {
+        const field = ticketFields.find((f) => ticketFieldPath(f) === path);
+        if (!field) throw new Error(`Freshdesk has no ticket field '${path}'`);
+        if (path.startsWith(CUSTOM_PREFIX))
+          custom[path.slice(CUSTOM_PREFIX.length)] = typedValue(field, value);
+        else body[path] = typedValue(field, value);
+      }
+      if (Object.keys(custom).length) body.custom_fields = custom;
+      await putTicket(externalId, body);
+    },
+
     async options(name, params) {
       if (name === "agents")
         return [...(await loadAgentNames())]
@@ -740,20 +815,7 @@ export const createFreshdeskSource: SourceFactory = (
       const path = `/tickets/${encodeURIComponent(externalId)}`;
       const ticket = await get<{ tags?: string[] }>(path);
       const tags = changeTagList(ticket.tags ?? [], change);
-      const response = await sourceFetch(
-        "Freshdesk ticket PUT",
-        api + path,
-        {
-          method: "PUT",
-          headers: { Authorization: auth, "Content-Type": "application/json" },
-          body: JSON.stringify({ tags }),
-        },
-        { connection: connection.slug },
-      );
-      if (!response.ok)
-        throw new Error(
-          `Freshdesk ticket PUT -> ${response.status} ${await response.text()}`,
-        );
+      await putTicket(externalId, { tags });
       return tags;
     },
 

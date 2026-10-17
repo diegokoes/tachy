@@ -82,6 +82,7 @@ async function context(modelCallsPerDay?: number) {
   return {
     flowId: flow.id,
     flowRunId: flow.id,
+    stepId: "s",
     scope: {},
     userId: null,
     item: {
