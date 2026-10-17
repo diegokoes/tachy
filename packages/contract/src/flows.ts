@@ -333,8 +333,31 @@ function same(a: unknown, b: unknown): boolean {
   return lower(a) === lower(b);
 }
 
+const RELATIVE_TIME = /^now\s*(?:([+-])\s*(\d+)\s*([mhd]))?$/i;
+const UNIT_MS: Record<string, number> = {
+  m: 60_000,
+  h: 3_600_000,
+  d: 86_400_000,
+};
+
+/** `now`, `now+4h`, `now-2d`: epoch ms from when the condition is checked. */
+function relativeTime(value: unknown): number | null {
+  const match =
+    typeof value === "string" ? RELATIVE_TIME.exec(value.trim()) : null;
+  if (!match) return null;
+  const [, sign, amount, unit] = match;
+  if (!sign) return Date.now();
+  const offsetMs = Number(amount) * UNIT_MS[unit.toLowerCase()];
+  return Date.now() + (sign === "-" ? -offsetMs : offsetMs);
+}
+
 function compare(a: unknown, b: unknown): number | null {
   if (a == null || b == null || a === "" || b === "") return null;
+  const moment = relativeTime(b);
+  if (moment != null) {
+    const at = Date.parse(String(a));
+    return Number.isNaN(at) ? null : at - moment;
+  }
   const na = Number(a);
   const nb = Number(b);
   if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
@@ -347,7 +370,8 @@ function compare(a: unknown, b: unknown): number | null {
 /**
  * Whether a condition holds for a subject. Text compares without case, a list
  * field matches when any of its values does, and a condition that cannot be
- * judged (a bad pattern, a missing value to order) does not hold.
+ * judged (a bad pattern, a missing value to order) does not hold. `gt` and
+ * `lt` take `now`, `now+4h` or `now-2d` (m, h, d) against a time.
  */
 export function evaluateCondition(
   condition: Condition,

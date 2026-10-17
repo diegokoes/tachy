@@ -27,8 +27,14 @@
       : null;
   }
 
+  /** A flow's notice links to the item in its source, which is off the board. */
   function open(change: NotificationRow) {
     void markNotificationsRead([change.id]);
+    const { url } = change.ref as Record<string, unknown>;
+    if (change.kind === "flow_notice") {
+      if (typeof url === "string") window.open(url, "_blank", "noopener");
+      return;
+    }
     const path = itemPath(change);
     if (path) navigate(path);
   }
@@ -55,16 +61,16 @@
       icon={unreadIds.length ? "changesUnread" : "changes"}
       tone={unreadIds.length ? "accent" : undefined}
       aria-label={unreadIds.length
-        ? `${unreadIds.length} changes on items you follow`
-        : "Changes on items you follow"}
-      title="changes on items you follow"
+        ? `${unreadIds.length} changes and notices`
+        : "Changes and notices"}
+      title="changes on items you follow, notices from flows"
       onclick={() => (shown = !shown)}
     />
     {#if shown}
       <div
         class="menu"
         role="dialog"
-        aria-label="Changes on items you follow"
+        aria-label="Changes and notices"
         tabindex="-1"
         {onkeydown}
       >
@@ -83,7 +89,8 @@
           </button>
         {:else}
           <p class="note">
-            Nothing new. Changes others make to items you follow show here.
+            Nothing new. Changes others make to items you follow, and notices
+            from flows, show here.
           </p>
         {/each}
         {#if unreadIds.length}

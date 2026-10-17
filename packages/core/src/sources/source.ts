@@ -124,6 +124,11 @@ export interface WorkItemSource {
     externalId: string,
     change: { add: string[]; remove: string[] },
   ): Promise<string[]>;
+  /**
+   * Sets an item's fields, by the paths `options("ticket_fields")` gives, to
+   * values as text; the adapter types them as the source wants.
+   */
+  setFields?(externalId: string, fields: Record<string, string>): Promise<void>;
 }
 
 export interface PastedImage {

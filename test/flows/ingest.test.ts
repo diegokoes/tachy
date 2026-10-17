@@ -261,6 +261,7 @@ describe("the Read ticket step", () => {
       {
         flowId: "f",
         flowRunId: "r",
+        stepId: "s",
         scope: {},
         userId: null,
         item: {
