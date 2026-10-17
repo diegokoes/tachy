@@ -428,7 +428,13 @@
                 <ChatView />
               {/if}
             </main>
-            <Scrollbar target={mainEl} controls="main-content" />
+            <!-- A veiled bar means the view is moving its content, and the
+                 overflow a moving element makes is not the page's. -->
+            <Scrollbar
+              target={mainEl}
+              controls="main-content"
+              held={topbar.veiled}
+            />
           </div>
 
           <div class="hintrow">
