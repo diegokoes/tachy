@@ -27,7 +27,7 @@
       : null;
   }
 
-  /** A flow's notice links to the item in its source, which is off the board. */
+  /** A flow notice links to the item in its source, outside tachy. */
   function open(change: NotificationRow) {
     void markNotificationsRead([change.id]);
     const { url } = change.ref as Record<string, unknown>;

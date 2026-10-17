@@ -49,7 +49,6 @@ const hits = z.object({
 const lines = (rows: Record<string, unknown>[], pick: (row: any) => string) =>
   rows.map((r, i) => `${i + 1}. ${pick(r)}`).join("\n");
 
-/** The flow's owner, or everyone in the item's team. */
 async function recipientsOf(
   ctx: FlowActionContext,
   to: "owner" | "team",
@@ -59,8 +58,7 @@ async function recipientsOf(
   return (await listTeamMembers(ctx.item.team)).map((m) => m.user_id);
 }
 
-/** Whether this step of this flow has told the person about this item already. */
-async function notified(
+async function wasNotified(
   userId: string,
   ref: { flow_id: string; step_id: string; work_item_id: string | null },
 ): Promise<boolean> {
@@ -415,7 +413,7 @@ export function registerBuiltinFlowActions(): void {
       };
       let sent = 0;
       for (const userId of recipients) {
-        if (params.once_per_item && (await notified(userId, ref))) continue;
+        if (params.once_per_item && (await wasNotified(userId, ref))) continue;
         await notify({
           userId,
           kind: "flow_notice",

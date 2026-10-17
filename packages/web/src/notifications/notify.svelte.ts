@@ -37,7 +37,7 @@ export function dismissToast(id: number): void {
 export const unread = (): NotificationRow[] =>
   notifyState.items.filter((n) => !n.read_at);
 
-/** What changed on items the reader follows, and what flows told them, newest first. */
+/** Changes on items the reader follows, and flow notices, newest first. */
 export const itemChanges = (): NotificationRow[] =>
   notifyState.items.filter(
     (n) => n.kind === "work_item_changed" || n.kind === "flow_notice",
