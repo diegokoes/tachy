@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { validate } from "../validation";
 import { z } from "zod";
-import { badInput } from "@tachy/core/infra";
+import { badInput, forbidden } from "@tachy/core/infra";
 import { audit } from "../audit";
 import {
   createFlow,
@@ -11,9 +11,13 @@ import {
   flowScope,
   getFlow,
   getFlowRun,
+  getIngestConfig,
+  ingestConfigSchema,
   listFlowRuns,
   listFlows,
   listOptions,
+  previewIngest,
+  setIngestConfig,
   updateFlow,
 } from "@tachy/core/flows";
 import { enqueueRun } from "@tachy/core/jobs";
@@ -41,6 +45,11 @@ const runSchema = z.object({
   work_item_id: z.string().uuid().optional(),
   trigger_id: z.string().optional(),
   dry_run: z.boolean().default(true),
+});
+
+const previewSchema = z.object({
+  work_item_id: z.string().uuid(),
+  config: ingestConfigSchema,
 });
 
 async function input(c: Context, body: z.infer<typeof flowSchema>) {
@@ -82,6 +91,44 @@ export const flows = new Hono()
       }),
     );
   })
+
+  // A connection serves every team: team admins read and preview, app admins save.
+  .get("/ingest/:connection", async (c) => {
+    await assertAnyTeamAdminApi(c);
+    return c.json(await getIngestConfig(c.req.param("connection")));
+  })
+
+  .put(
+    "/ingest/:connection",
+    validate("json", ingestConfigSchema),
+    async (c) => {
+      if (!isAdminIdentity(c)) throw forbidden("app admin role required");
+      const connection = c.req.param("connection");
+      const saved = await setIngestConfig(connection, c.req.valid("json"));
+      await audit(c, "source_connection_save", connection, {
+        part: "ingest",
+        skip_rules: saved.skip?.length ?? 0,
+      });
+      return c.json(saved);
+    },
+  )
+
+  .post(
+    "/ingest/:connection/preview",
+    validate("json", previewSchema),
+    async (c) => {
+      await assertAnyTeamAdminApi(c);
+      const body = c.req.valid("json");
+      return c.json(
+        await previewIngest(
+          c.req.param("connection"),
+          body.work_item_id,
+          body.config,
+          await callerScope(c),
+        ),
+      );
+    },
+  )
 
   .get("/runs/:runId", async (c) => {
     const run = await getFlowRun(c.req.param("runId"));

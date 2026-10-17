@@ -753,6 +753,36 @@ describe("freshdesk companies and tags", () => {
     ]);
   });
 
+  it("lists agents by name, for a rule on who wrote a message", async () => {
+    mockFetch({
+      "/agents": [
+        { id: 900, contact: { name: "Zoe Manager" } },
+        { id: 901, contact: { name: "Ana Support" } },
+      ],
+    });
+    expect(await source().options!("agents", {})).toEqual([
+      { value: "901", label: "Ana Support", hint: "901" },
+      { value: "900", label: "Zoe Manager", hint: "900" },
+    ]);
+  });
+
+  it("lists groups as the group field's choices, which an agent's key reads", async () => {
+    mockFetch({
+      "/ticket_fields": [
+        {
+          name: "group",
+          label: "Group",
+          default: true,
+          choices: { "Second level": 12, Billing: 13 },
+        },
+      ],
+    });
+    expect(await source().options!("groups", {})).toEqual([
+      { value: "12", label: "Second level" },
+      { value: "13", label: "Billing" },
+    ]);
+  });
+
   it("writes the whole tag list back, since Freshdesk takes it whole", async () => {
     mockFetch({ "/tickets/7": { ...ticket, tags: ["bug", "Plant-3"] } });
     expect(

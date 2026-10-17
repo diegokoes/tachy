@@ -7,6 +7,7 @@
     ComposerProject,
     FieldFormConfig,
     FieldSpec,
+    FlowOption,
     TypeFormConfig,
     TypeViewConfig,
     ViewShow,
@@ -34,20 +35,33 @@
   import { openComposer } from "../work-items/composer.svelte";
   import FieldInput from "../work-items/FieldInput.svelte";
   import { arrange, editable, labelOf, TITLE } from "../work-items/layout";
+  import IngestFlow from "./IngestFlow.svelte";
+  import { fetchOptions } from "./options.svelte";
 
   let { lead }: { lead: Snippet } = $props();
 
   const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+  /** Picker value prefix for a helpdesk connection, whose rules cover all its groups. */
+  const INGEST = "ingest:";
+  const isHelpdesk = (id: string) => id.startsWith(INGEST);
+
   let projects = $state<ComposerProject[]>([]);
+  let helpdesks = $state<FlowOption[]>([]);
   let projectsError = $state<string | null>(null);
   $effect(() => {
-    api
-      .get<ComposerProject[]>("/compose/projects")
-      .then((loaded) => {
+    Promise.all([
+      api.get<ComposerProject[]>("/compose/projects?source_type=azure-devops"),
+      fetchOptions("connections", { source_type: "freshdesk" }),
+    ])
+      .then(([loaded, connections]) => {
         projects = loaded;
-        if (!loaded.some((x) => x.id === projectId))
-          projectId = loaded[0]?.id ?? "";
+        helpdesks = connections;
+        const ids = [
+          ...loaded.map((x) => x.id),
+          ...connections.map((c) => INGEST + c.value),
+        ];
+        if (!ids.includes(projectId)) projectId = ids[0] ?? "";
       })
       .catch((e) => (projectsError = errText(e)));
   });
@@ -55,13 +69,21 @@
   let projectId = $state(recall("admin.flows.project", ""));
   $effect(() => keep("admin.flows.project", projectId));
   const project = $derived(projects.find((p) => p.id === projectId) ?? null);
-  const projectOptions = $derived(
-    projects.map((p) => ({
+  const ingestConnection = $derived(
+    isHelpdesk(projectId) ? projectId.slice(INGEST.length) : "",
+  );
+  const projectOptions = $derived([
+    ...projects.map((p) => ({
       value: p.id,
       label: p.name,
       hint: p.product_slug ?? p.team_slug,
     })),
-  );
+    ...helpdesks.map((c) => ({
+      value: INGEST + c.value,
+      label: `${c.label} · all groups`,
+      hint: "freshdesk",
+    })),
+  ]);
 
   let types = $state<WorkItemTypeOption[]>([]);
   let config = $state<ComposeConfig>({});
@@ -71,9 +93,9 @@
 
   $effect(() => {
     const id = projectId;
-    if (!id) return;
     loadError = null;
     types = [];
+    if (!id || isHelpdesk(id)) return;
     Promise.all([
       api.get<WorkItemTypeOption[]>(`/compose/projects/${id}/types?all=1`),
       api.get<ComposeConfig>(`/compose/projects/${id}/config`),
@@ -95,7 +117,7 @@
     const forType = type;
     raw = null;
     formError = null;
-    if (!id || !forType) return;
+    if (!id || !forType || isHelpdesk(id)) return;
     api
       .get<ComposerForm>(
         `/compose/projects/${id}/form?type=${encodeURIComponent(forType)}&raw=1`,
@@ -345,8 +367,8 @@
     { value: "create", label: "create" },
     { value: "view", label: "read" },
   ];
-  let mode = $state<Mode>(recall("admin.flows.mode", "create") as Mode);
-  $effect(() => keep("admin.flows.mode", mode));
+  let mode = $state<Mode>(recall("admin.flows.project.mode", "create") as Mode);
+  $effect(() => keep("admin.flows.project.mode", mode));
 
   let readForm = $state<WorkItemLayout | null>(null);
   let readFormError = $state<string | null>(null);
@@ -355,7 +377,7 @@
     const forType = type;
     readForm = null;
     readFormError = null;
-    if (mode !== "view" || !id || !forType) return;
+    if (mode !== "view" || !id || !forType || isHelpdesk(id)) return;
     api
       .get<WorkItemLayout>(
         `/work-items/projects/${id}/layout?type=${encodeURIComponent(forType)}`,
@@ -475,7 +497,10 @@
     openComposer(project, typeOption);
   }
 
-  $effect(() => setPageActions(actions));
+  // IngestFlow sets its own page actions.
+  $effect(() => {
+    if (!ingestConnection) return setPageActions(actions);
+  });
 </script>
 
 {#snippet viewEditor()}
@@ -556,7 +581,7 @@
       onchange={(v) => (projectId = String(v ?? ""))}
     />
   </span>
-  {#if types.length}
+  {#if types.length && !ingestConnection}
     <span class="pick">
       <Select
         value={type}
@@ -579,7 +604,9 @@
   {#if saveError}<Note tone="danger">{saveError}</Note>{/if}
   {#if projectsError}
     <Note tone="danger">{projectsError}</Note>
-  {:else if !projects.length}
+  {:else if ingestConnection}
+    <IngestFlow connection={ingestConnection} />
+  {:else if !projectOptions.length}
     <Note>No registered projects your teams own.</Note>
   {:else if loadError}
     <Note tone="danger">{loadError}</Note>
