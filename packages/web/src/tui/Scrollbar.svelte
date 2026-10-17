@@ -4,7 +4,13 @@
   let {
     target,
     controls,
-  }: { target: HTMLElement | undefined; controls?: string } = $props();
+    held = false,
+  }: {
+    target: HTMLElement | undefined;
+    controls?: string;
+    /** True while the target's content is in motion: overflow then is not drawn. */
+    held?: boolean;
+  } = $props();
 
   // Must stay equal to the --row height in this file's styles: the row maths
   // and the painted cells have to agree at every font scale.
@@ -25,7 +31,7 @@
     const el = target;
     if (!el) return;
     ROW = rowPx();
-    visible = el.scrollHeight > el.clientHeight + 1;
+    visible = !held && el.scrollHeight > el.clientHeight + 1;
     if (!visible) return;
     rows = Math.max(3, Math.floor(el.clientHeight / ROW) - 2);
     thumbLen = Math.min(
