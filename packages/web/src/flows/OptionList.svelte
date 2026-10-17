@@ -23,8 +23,6 @@
 
   let options = $state<FlowOption[]>([]);
   let error = $state<string | null>(null);
-  let typed = $state("");
-  const id = `optlist-${Math.random().toString(36).slice(2, 9)}`;
 
   $effect(() => {
     const want = JSON.stringify([source, deps]);
@@ -43,10 +41,6 @@
     const added = raw.trim();
     if (added && !value.includes(added)) onchange([...value, added]);
   }
-  function commit() {
-    add(typed);
-    typed = "";
-  }
 </script>
 
 <div class="list">
@@ -59,34 +53,19 @@
       {/each}
     </span>
   {/if}
-  {#if free}
-    <input
-      list={id}
-      bind:value={typed}
-      aria-label={`Add to ${label}`}
-      onkeydown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          commit();
-        }
-      }}
-      onchange={commit}
-    />
-    <datalist {id}>
-      {#each left as option (option.value)}<option value={option.value}
-          >{option.label}</option
-        >{/each}
-    </datalist>
-  {:else}
-    <Select
-      value=""
-      options={left}
-      searchable
-      placeholder={error ? "could not read the list" : undefined}
-      aria-label={`Add to ${label}`}
-      onchange={(v) => add(String(v ?? ""))}
-    />
-  {/if}
+  <span class="add">
+    {#key value.length}
+      <Select
+        value=""
+        options={left}
+        searchable
+        creatable={free}
+        placeholder={error ? "could not read the list" : "add"}
+        aria-label={`Add to ${label}`}
+        onchange={(v) => add(String(v ?? ""))}
+      />
+    {/key}
+  </span>
   {#if error}<span class="error">{error}</span>{/if}
 </div>
 
@@ -103,8 +82,13 @@
     flex-wrap: wrap;
     gap: var(--pad-1);
   }
-  input {
-    width: 100%;
+  .add {
+    display: flex;
+    width: var(--control-w);
+    max-width: 100%;
+  }
+  .add > :global(*) {
+    flex: 1;
   }
   .error {
     color: var(--danger);
