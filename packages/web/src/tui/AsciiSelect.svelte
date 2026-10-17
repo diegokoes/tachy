@@ -16,6 +16,7 @@
     active = false,
     keepOpen = false,
     searchable = false,
+    creatable = false,
     placeholder,
     clearable,
     placement,
@@ -38,6 +39,8 @@
     /** Offer the filter box however short the list, for lists that grow with
      *  the catalog rather than staying a fixed vocabulary. */
     searchable?: boolean;
+    /** The filter text is offered as an option of its own: the list only suggests. */
+    creatable?: boolean;
     /**
      * What the trigger says while nothing is picked. A filter row wants the
      * unfiltered state named ("any") without spending a list row on an
@@ -80,24 +83,42 @@
   let scrollEl = $state<HTMLElement>();
   let queryEl = $state<HTMLInputElement>();
 
-  const filterable = $derived(searchable || opts.length > FILTERABLE);
+  const filterable = $derived(
+    searchable || creatable || opts.length > FILTERABLE,
+  );
+  const typedOption = $derived.by((): Opt | null => {
+    const text = query.trim();
+    if (!creatable || !text) return null;
+    const listed = opts.some(
+      (o) =>
+        String(o.value) === text ||
+        o.label.toLowerCase() === text.toLowerCase(),
+    );
+    return listed ? null : { value: text, label: text, hint: "as typed" };
+  });
   const shown = $derived.by(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return opts;
-    return opts.filter((o) =>
-      `${o.label} ${o.hint ?? ""}`.toLowerCase().includes(needle),
-    );
+    const matches = needle
+      ? opts.filter((o) =>
+          `${o.label} ${o.hint ?? ""}`.toLowerCase().includes(needle),
+        )
+      : opts;
+    return typedOption ? [typedOption, ...matches] : matches;
   });
 
   const canClear = $derived(clearable ?? opts.some((o) => o.value === ""));
   const selectedIndex = $derived(opts.findIndex((o) => o.value === value));
-  const label = $derived(
-    selectedIndex >= 0 ? opts[selectedIndex].label : (placeholder ?? ""),
-  );
+  const label = $derived.by(() => {
+    if (selectedIndex >= 0) return opts[selectedIndex].label;
+    if (creatable && value !== "" && value != null) return String(value);
+    return placeholder ?? "";
+  });
 
   function openPanel() {
     if (disabled) return;
-    query = "";
+    // A typed value opens as the filter text, to be edited rather than retyped.
+    const typedValue = creatable && selectedIndex < 0 && value != null;
+    query = typedValue ? String(value) : "";
     cursor = Math.max(
       0,
       shown.findIndex((o) => o.value === value),
