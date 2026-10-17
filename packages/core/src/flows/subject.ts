@@ -55,7 +55,7 @@ function iso(value: unknown): string | null {
 }
 
 /** A source's tags: a `tags` array, or ADO's `System.Tags`, split on `;`. */
-function tagsOf(raw: Record<string, unknown>): string[] {
+export function tagsOf(raw: Record<string, unknown>): string[] {
   if (Array.isArray(raw.tags)) return raw.tags.map(String);
   const adoTags = (raw.fields as Record<string, unknown> | undefined)?.[
     "System.Tags"
