@@ -184,6 +184,17 @@ defineOptionSource("work_items", async (request) => {
   }));
 });
 
+defineOptionSource("ado.connections", async () => {
+  const rows = await sql`
+    select slug from source_connections where source_type = 'azure-devops'
+    order by slug
+  `;
+  return rows.map((row) => ({
+    value: row.slug as string,
+    label: row.slug as string,
+  }));
+});
+
 defineOptionSource("ado.projects", async () =>
   (await listSourceProjects())
     .filter((p) => p.source_type === "azure-devops")

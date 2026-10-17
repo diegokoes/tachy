@@ -41,11 +41,14 @@
   } from "./graph";
   import OptionSelect from "./OptionSelect.svelte";
   import { fetchActions, fetchOptions } from "./options.svelte";
+  import { FLOW_TEMPLATES } from "./templates";
 
   let { lead }: { lead: Snippet } = $props();
 
   const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
   const NEW = "__new";
+  /** Picker value prefix: `TEMPLATE` + a template key. */
+  const TEMPLATE = "__template:";
 
   interface Draft {
     id: string | null;
@@ -71,7 +74,7 @@
       flows = await api.get<Flow[]>("/flows");
       listError = null;
       if (pick) flowId = pick;
-      else if (!flows.some((f) => f.id === flowId) && flowId !== NEW)
+      else if (!flows.some((f) => f.id === flowId) && !isNew(flowId))
         flowId = flows[0]?.id ?? NEW;
     } catch (e) {
       listError = errText(e);
@@ -102,6 +105,16 @@
     },
     modelCalls: String(FLOW_MODEL_CALLS_PER_DAY),
   });
+  const isNew = (id: string) => id === NEW || id.startsWith(TEMPLATE);
+  function fromTemplate(key: string): Draft {
+    const template = FLOW_TEMPLATES.find((t) => t.key === key);
+    if (!template) return blank();
+    return {
+      ...blank(),
+      name: template.name,
+      graph: structuredClone(template.graph),
+    };
+  }
   const draftOf = (flow: Flow): Draft => ({
     id: flow.id,
     name: flow.name,
@@ -116,9 +129,11 @@
     const stored = flows.find((x) => x.id === id);
     let next: Draft | null = null;
     if (id === NEW) next = blank();
+    else if (id.startsWith(TEMPLATE))
+      next = fromTemplate(id.slice(TEMPLATE.length));
     else if (stored) next = draftOf(stored);
     draft = next;
-    saved = id === NEW ? "" : JSON.stringify(next);
+    saved = isNew(id) ? "" : JSON.stringify(next);
     selection = null;
     run = null;
   });
@@ -130,6 +145,11 @@
       hint: `${f.team_slug ?? "global"}${f.enabled ? "" : " · paused"}`,
     })),
     { value: NEW, label: "+ new flow" },
+    ...FLOW_TEMPLATES.map((t) => ({
+      value: TEMPLATE + t.key,
+      label: `+ new: ${t.name}`,
+      hint: t.hint,
+    })),
   ]);
   const teamOptions = $derived([
     { value: "", label: "global", hint: "app admins only" },

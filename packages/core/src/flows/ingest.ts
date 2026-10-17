@@ -21,6 +21,7 @@ import type { ScopeContext } from "../config/scoped";
 import { isTachyNote } from "../work-items/compact";
 import { messageKey } from "../work-items/ingest";
 import type { RawMessage, RawWorkItem } from "../work-items/raw";
+import { readStoredRaw } from "../work-items/stored";
 import { conditionSchema, flowId } from "./schemas";
 import { tagsOf } from "./subject";
 
@@ -248,47 +249,6 @@ export async function readForModel(
   };
 }
 
-/** A stored item of the connection, read back as its source handed it over. */
-async function storedRaw(
-  connectionSlug: string,
-  workItemId: string,
-): Promise<RawWorkItem> {
-  const [row] = await sql`
-    select wi.external_id, wi.kind, wi.title, wi.status,
-           wi.external_group_key, wi.requester, wi.raw
-    from work_items wi
-    join source_connections sc on sc.id = wi.source_connection_id
-    where wi.id = ${workItemId} and sc.slug = ${connectionSlug}
-  `;
-  if (!row)
-    throw notFound(`work item ${workItemId} not found on '${connectionSlug}'`);
-  const messages = await sql`
-    select external_id, author, author_label, automated, visibility,
-           direction, body_text, created_at
-    from work_item_messages where work_item_id = ${workItemId}
-    order by created_at nulls first, id
-  `;
-  return {
-    externalId: row.external_id,
-    kind: row.kind,
-    title: row.title ?? undefined,
-    status: row.status ?? undefined,
-    groupKey: row.external_group_key ?? undefined,
-    requester: row.requester ?? undefined,
-    raw: row.raw ?? {},
-    messages: messages.map((message): RawMessage => ({
-      externalId: message.external_id ?? undefined,
-      author: message.author ?? undefined,
-      authorLabel: message.author_label ?? undefined,
-      automated: message.automated,
-      visibility: message.visibility,
-      direction: message.direction,
-      bodyText: message.body_text ?? "",
-      createdAt: (message.created_at as Date | null)?.toISOString(),
-    })),
-  };
-}
-
 /** Building the adapter needs a token; without one nothing is omitted. */
 async function modelOmitsOf(
   connectionSlug: string,
@@ -315,7 +275,7 @@ export async function previewIngest(
   config: IngestConfig,
   scope: ScopeContext,
 ): Promise<IngestPreview> {
-  const raw = await storedRaw(connectionSlug, workItemId);
+  const raw = await readStoredRaw(workItemId, connectionSlug);
   const outcome = applyIngest(
     raw,
     config,
