@@ -94,6 +94,7 @@ const TABLES = [
   "reference_docs",
   "knowledge_feedback",
   "knowledge_entries",
+  "work_item_follow_notes",
   "work_item_follows",
   "work_item_links",
   "work_item_events",

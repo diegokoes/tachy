@@ -475,7 +475,10 @@ async function seedLinks(
 const FOLLOWERS = 5;
 const FOLLOWS_EACH = 3;
 
-/** A few people follow a few items each, some read up to a revision. */
+/**
+ * A few people follow a few items each, some read up to a revision. Each
+ * person's first follow also writes back to another item, as a flow sets up.
+ */
 export async function seedFollows(
   tx: Tx,
   users: SeededUser[],
@@ -506,5 +509,19 @@ export async function seedFollows(
     "work_item_follows",
     ["user_id", "source_connection_id", "external_id", "seen_rev"],
     rows,
+  );
+  const notes = rows
+    .filter((row) => row.seen_rev === null)
+    .map((row, n) => ({
+      user_id: row.user_id,
+      source_connection_id: row.source_connection_id,
+      external_id: row.external_id,
+      work_item_id: workItems[(n * 13 + 5) % workItems.length].id,
+    }));
+  await insertRows(
+    tx,
+    "work_item_follow_notes",
+    ["user_id", "source_connection_id", "external_id", "work_item_id"],
+    notes,
   );
 }

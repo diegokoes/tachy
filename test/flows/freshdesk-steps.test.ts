@@ -1,6 +1,7 @@
 /**
- * The steps a helpdesk flow adds: setting a ticket's field and notifying
- * people, and the relative times an SLA watch's condition compares against.
+ * The steps a helpdesk flow adds: setting a ticket's field, notifying people
+ * and following its linked ADO items; the relative times an SLA watch's
+ * condition compares against, and the templates that put them together.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { evaluateCondition } from "@tachy/contract";
@@ -8,10 +9,15 @@ import { createUser, setTeamMember } from "@tachy/core/access";
 import {
   createFlow,
   flowAction,
+  listOptions,
+  validateGraph,
   type FlowActionContext,
   type FlowSubject,
 } from "@tachy/core/flows";
 import { addSourceConnection, registerSource } from "@tachy/core/sources";
+import { ingestWorkItem } from "@tachy/core/work-items";
+import { registerAgentFlowActions } from "../../packages/agent/src/flow-actions";
+import { FLOW_TEMPLATES } from "../../packages/web/src/flows/templates";
 import { resetData, sql } from "../database";
 
 afterAll(() => sql.end());
@@ -255,5 +261,130 @@ describe("notify", () => {
     expect(
       await step.run(await context(ticket), step.params.parse({ title: "t" })),
     ).toEqual({ sent: 0, skipped: 0 });
+  });
+});
+
+describe("item.follow_linked", () => {
+  let ownerId: string;
+  let ticketId: string;
+
+  beforeEach(async () => {
+    ownerId = (await createUser({ email: "owner@example.com" })).id;
+    const helpdesk = await addSourceConnection({
+      sourceType: "fake-fields",
+      slug: "fd-linked",
+      baseUrl: "https://example.invalid",
+      config: {
+        ingest: {
+          skip: [
+            {
+              id: "manager",
+              label: "Manager analysis",
+              enabled: true,
+              where: { field: "message.author", op: "eq", value: "900" },
+            },
+          ],
+        },
+      },
+    });
+    await addSourceConnection({
+      sourceType: "azure-devops",
+      slug: "ado-linked",
+      baseUrl: "https://dev.azure.com/linked",
+    });
+    ticketId = (
+      await ingestWorkItem(helpdesk.id, {
+        externalId: "77",
+        kind: "ticket",
+        title: "Export fails",
+        raw: { custom_fields: { cf_devops_work_item: "AB#42" } },
+        messages: [
+          {
+            externalId: "1",
+            direction: "outgoing",
+            visibility: "public",
+            bodyText: "Engineering tracks it in AB#43.",
+          },
+          {
+            externalId: "2",
+            author: "900",
+            direction: "outgoing",
+            visibility: "private",
+            bodyText: "AI analysis: may relate to AB#99.",
+          },
+        ],
+      })
+    ).id;
+  });
+
+  const linkedTicket = () => ({
+    id: ticketId,
+    external_id: "77",
+    connection: "fd-linked",
+    source_type: "fake-fields",
+  });
+
+  it("follows the ADO items the ticket names, writing back to it", async () => {
+    const step = flowAction("item.follow_linked");
+    const result = await step.run(
+      await context(linkedTicket(), ownerId),
+      step.params.parse({}),
+    );
+    expect((result as { followed: string[] }).followed.sort()).toEqual([
+      "42",
+      "43",
+    ]);
+    const follows = await sql`
+      select f.external_id, n.work_item_id
+      from work_item_follows f
+      join work_item_follow_notes n using (user_id, source_connection_id, external_id)
+      where f.user_id = ${ownerId} order by f.external_id
+    `;
+    expect(follows).toEqual([
+      { external_id: "42", work_item_id: ticketId },
+      { external_id: "43", work_item_id: ticketId },
+    ]);
+  });
+
+  it("follows without writing back when told so", async () => {
+    const step = flowAction("item.follow_linked");
+    await step.run(
+      await context(linkedTicket(), ownerId),
+      step.params.parse({ note_back: false, connection: "ado-linked" }),
+    );
+    const [{ n }] =
+      await sql`select count(*)::int as n from work_item_follow_notes`;
+    expect(n).toBe(0);
+  });
+
+  it("refuses a flow with no owner or an unknown ADO connection", async () => {
+    const step = flowAction("item.follow_linked");
+    await expect(
+      step.run(await context(linkedTicket()), step.params.parse({})),
+    ).rejects.toThrow(/no owner/);
+    await expect(
+      step.run(
+        await context(linkedTicket(), ownerId),
+        step.params.parse({ connection: "nope" }),
+      ),
+    ).rejects.toThrow(/no Azure DevOps connection/);
+  });
+
+  it("lists the ADO connections to follow on", async () => {
+    expect(
+      await listOptions("ado.connections", { scope: {}, params: {} }),
+    ).toEqual([{ value: "ado-linked", label: "ado-linked" }]);
+  });
+});
+
+describe("flow templates", () => {
+  it("each passes the server's checks once its connection is picked", () => {
+    registerAgentFlowActions();
+    for (const template of FLOW_TEMPLATES) {
+      const graph = structuredClone(template.graph);
+      for (const trigger of graph.triggers)
+        if ("connection" in trigger.params) trigger.params.connection = "fd";
+      expect(() => validateGraph(graph), template.key).not.toThrow();
+    }
   });
 });

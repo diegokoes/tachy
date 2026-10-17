@@ -7,6 +7,7 @@ import {
 } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { notFound } from "../infra/errors";
+import type { RawMessage, RawWorkItem } from "./raw";
 import {
   CHANGED_AT,
   reaches,
@@ -148,5 +149,49 @@ export async function readStoredItem(id: string): Promise<StoredItem> {
           fetched_at: (record.fetched_at as Date).toISOString(),
         }
       : null,
+  };
+}
+
+/**
+ * A stored item as its source handed it over, from the copy: no source is
+ * read. `connectionSlug` refuses an item of any other connection.
+ */
+export async function readStoredRaw(
+  workItemId: string,
+  connectionSlug?: string,
+): Promise<RawWorkItem> {
+  const [row] = await sql`
+    select wi.external_id, wi.kind, wi.title, wi.status,
+           wi.external_group_key, wi.requester, wi.raw
+    from work_items wi
+    join source_connections sc on sc.id = wi.source_connection_id
+    where wi.id = ${workItemId}
+      ${connectionSlug ? sql`and sc.slug = ${connectionSlug}` : sql``}
+  `;
+  if (!row) throw notFound(`work item ${workItemId} not found`);
+  const messages = await sql`
+    select external_id, author, author_label, automated, visibility,
+           direction, body_text, created_at
+    from work_item_messages where work_item_id = ${workItemId}
+    order by created_at nulls first, id
+  `;
+  return {
+    externalId: row.external_id,
+    kind: row.kind,
+    title: row.title ?? undefined,
+    status: row.status ?? undefined,
+    groupKey: row.external_group_key ?? undefined,
+    requester: row.requester ?? undefined,
+    raw: row.raw ?? {},
+    messages: messages.map((m): RawMessage => ({
+      externalId: m.external_id ?? undefined,
+      author: m.author ?? undefined,
+      authorLabel: m.author_label ?? undefined,
+      automated: m.automated,
+      visibility: m.visibility,
+      direction: m.direction,
+      bodyText: m.body_text ?? "",
+      createdAt: (m.created_at as Date | null)?.toISOString(),
+    })),
   };
 }
