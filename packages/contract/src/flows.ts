@@ -63,32 +63,27 @@ export interface ViewDisplay {
   order: string[];
 }
 
-/** A message a model is not given, while the stored copy keeps it. */
+/** Leaves matching messages out of what a model reads. */
 export interface IngestRule {
-  /** Stable within the connection; a preview names the rule by it. */
   id: string;
   label: string;
   enabled: boolean;
-  /** Tested against `{ message, item }`, the fields `INGEST_MESSAGE_FIELDS` names. */
+  /** Tested against `{ message, item }`. */
   where: Condition;
 }
 
 export const INGEST_FIELD_MODES = ["only", "except"] as const;
 export type IngestFieldMode = (typeof INGEST_FIELD_MODES)[number];
 
-/**
- * How a connection's items read to a model, kept in the connection's config
- * under `ingest`. It shapes only what a model reads: storage keeps everything.
- */
+/** `source_connections.config.ingest`. */
 export interface IngestConfig {
   skip?: IngestRule[];
-  /** Paths into the source's payload a model reads, or does not; absent, all. */
+  /** Payload paths a model reads (`only`) or not (`except`); absent: all. */
   fields?: { mode: IngestFieldMode; paths: string[] };
-  /** By the source's group key: what the agent reads with that group's items. */
+  /** Text the agent reads with a group's items, by group key. */
   guidance?: Record<string, string>;
 }
 
-/** What a skip rule tests on a message, beside the `item.*` fields. */
 export const INGEST_MESSAGE_FIELDS: FlowOption[] = [
   { value: "message.author", label: "author", hint: "the source's user id" },
   { value: "message.author_label", label: "author name or email" },

@@ -1,6 +1,6 @@
 /**
- * The parts of a flow's schema that ingest rules share. Kept apart from
- * graph.ts, which reaches the action catalog and through it every action.
+ * Flow schema parts ingest rules share. A leaf module: graph.ts imports the
+ * action catalog, which imports ingest.ts.
  */
 import { z } from "zod";
 import { CONDITION_OPS, type Condition } from "@tachy/contract";

@@ -1,9 +1,4 @@
-/**
- * How a connection's items read to a model: the messages its rules leave out,
- * the payload fields it sends, and its groups' guidance. Kept in the
- * connection's config under `ingest`. Only what a model reads is shaped: the
- * stored copy keeps every message and field.
- */
+/** What a model reads of a connection's items; the stored copy keeps all. */
 import { z } from "zod";
 import {
   INGEST_FIELD_MODES,
@@ -27,8 +22,7 @@ import type { RawMessage, RawWorkItem } from "../work-items/raw";
 import { conditionSchema, flowId } from "./schemas";
 import { tagsOf } from "./subject";
 
-/** Where a connection keeps its ingest config inside `config`. */
-const KEY = "ingest";
+const CONFIG_KEY = "ingest";
 const GUIDANCE_MAX_CHARS = 4000;
 
 export const ingestRuleSchema = z
@@ -57,14 +51,11 @@ export const ingestConfigSchema = z
   })
   .strict();
 
-/**
- * A connection's ingest config. A part that no longer parses is dropped on
- * its own, so a read never fails on a saved rule.
- */
+/** Lenient: a part that no longer parses is dropped and logged, never thrown. */
 export function ingestConfig(
-  connConfig: Record<string, unknown> | null | undefined,
+  connectionConfig: Record<string, unknown> | null | undefined,
 ): IngestConfig {
-  const saved = connConfig?.[KEY];
+  const saved = connectionConfig?.[CONFIG_KEY];
   if (saved == null || typeof saved !== "object") return {};
   const whole = ingestConfigSchema.safeParse(saved);
   if (whole.success) return whole.data;
@@ -97,22 +88,21 @@ export async function getIngestConfig(
   return ingestConfig(row.config);
 }
 
-/** Replaces the whole ingest config; the rest of the connection's config is kept. */
+/** Replaces `config.ingest` and leaves the connection's other keys alone. */
 export async function setIngestConfig(
   connectionSlug: string,
   config: IngestConfig,
 ): Promise<IngestConfig> {
   const [row] = await sql`
     update source_connections
-    set config = jsonb_set(coalesce(config, '{}'::jsonb), ${[KEY]}::text[], ${jsonb(config)})
+    set config = jsonb_set(coalesce(config, '{}'::jsonb), ${[CONFIG_KEY]}::text[], ${jsonb(config)})
     where slug = ${connectionSlug}
-    returning config -> ${KEY} as ingest
+    returning config -> ${CONFIG_KEY} as ingest
   `;
   if (!row) throw notFound(`Source connection '${connectionSlug}' not found`);
   return row.ingest as IngestConfig;
 }
 
-/** A message as a skip rule reads it, under `message`. */
 function messageSubject(message: RawMessage) {
   return {
     author: message.author ?? null,
@@ -125,7 +115,6 @@ function messageSubject(message: RawMessage) {
   };
 }
 
-/** The item as a skip rule reads it, under `item`: what the read itself carries. */
 function itemSubject(item: RawWorkItem) {
   const raw = (item.raw ?? {}) as Record<string, unknown>;
   return {
@@ -161,7 +150,6 @@ function deletePath(target: Record<string, unknown>, path: string) {
     delete (parent as Record<string, unknown>)[keys[keys.length - 1]];
 }
 
-/** `omits` goes in every case: the paths the messages already carry. */
 function shapePayload(
   payload: unknown,
   fields: IngestConfig["fields"],
@@ -186,19 +174,14 @@ function shapePayload(
 }
 
 export interface IngestOutcome {
-  /** What tachy reads facts and links from: a model's messages, the payload whole. */
+  /** Messages after the skip rules, payload whole; facts and links read from it. */
   kept: RawWorkItem;
-  /** What a model reads: `kept` with its payload shaped. */
+  /** `kept` with its payload shaped: what a model reads. */
   item: RawWorkItem;
-  /** Each left-out message's stored key, with the rule that left it out. */
   skipped: { key: string; rule: string }[];
   guidance?: string;
 }
 
-/**
- * Pure. A note tachy wrote is never left out: the next run finds it among
- * the messages to replace it.
- */
 export function applyIngest(
   raw: RawWorkItem,
   config: IngestConfig,
@@ -210,6 +193,7 @@ export function applyIngest(
   if (rules.length) {
     const item = itemSubject(raw);
     messages = raw.messages.filter((message) => {
+      // A later run finds tachy's own notes among the messages to replace them.
       if (isTachyNote(message.bodyText)) return true;
       const subject = { message: messageSubject(message), item };
       const rule = rules.find((r) => evaluateCondition(r.where, subject));
@@ -231,14 +215,12 @@ export function applyIngest(
 }
 
 export interface ModelRead extends IngestOutcome {
-  /** `item` went through redaction. */
   redacted: boolean;
 }
 
 /**
- * What a model reads of an item just fetched: the connection's ingest rules,
- * then its redaction. `policy` is for a process that reads the global switch
- * from the settings rather than its environment.
+ * The connection's ingest rules, then its redaction. `policy` replaces the
+ * connection's for a process that reads the global switch from settings.
  */
 export async function readForModel(
   resolved: ResolvedSource,

@@ -208,17 +208,16 @@ tool(
         boostCustomerId,
       }),
     ]);
-    const redact = view.redacted;
     const retrievalMap = new TokenMap();
     const { item: workItem, ...compaction } = withCompaction(view.item);
     const context = await resolveProjectContext({ workItemId: item.id });
     return out({
       work_item: workItem,
       ...compaction,
-      similar: redact
+      similar: view.redacted
         ? scrubDeep(forAgent(similar), retrievalMap)
         : forAgent(similar),
-      reference: redact
+      reference: view.redacted
         ? scrubDeep(forAgent(reference), retrievalMap)
         : forAgent(reference),
       ...(similar.length || reference.length
