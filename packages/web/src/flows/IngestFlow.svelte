@@ -14,7 +14,7 @@
   import Group from "../settings/Group.svelte";
   import Row from "../settings/Row.svelte";
   import Rows from "../settings/Rows.svelte";
-  import { Badge, Button, Checkbox, Icon, Note, tip } from "../tui";
+  import { Badge, Button, Checkbox, Icon, Note, Select, tip } from "../tui";
   import ConditionEditor from "./ConditionEditor.svelte";
   import OptionList from "./OptionList.svelte";
   import OptionSelect from "./OptionSelect.svelte";
@@ -33,6 +33,7 @@
   $effect(() => {
     const requested = path;
     loadError = null;
+    addedGroups = [];
     api
       .get<IngestConfig>(requested)
       .then((loaded) => {
@@ -91,13 +92,24 @@
         groupsError = errText(e);
       });
   });
-  /** Listed groups, then saved guidance keys the connection no longer lists. */
-  const groupRows = $derived([
-    ...groups,
-    ...Object.keys(config.guidance ?? {})
-      .filter((key) => !groups.some((g) => g.value === key))
-      .map((key) => ({ value: key, label: key, hint: "not listed" })),
+  /** Groups added here whose guidance is still empty, so not yet in `config`. */
+  let addedGroups = $state<string[]>([]);
+  const guidedGroups = $derived([
+    ...Object.keys(config.guidance ?? {}),
+    ...addedGroups.filter((key) => !config.guidance?.[key]),
   ]);
+  const groupLabel = (key: string) =>
+    groups.find((g) => g.value === key)?.label ?? key;
+  const unguidedGroups = $derived(
+    groups.filter((g) => !guidedGroups.includes(g.value)),
+  );
+  function addGroup(key: string) {
+    if (key && !guidedGroups.includes(key)) addedGroups = [...addedGroups, key];
+  }
+  function removeGroup(key: string) {
+    addedGroups = addedGroups.filter((added) => added !== key);
+    setGuidance(key, "");
+  }
   function setGuidance(group: string, text: string) {
     const guidance = { ...(config.guidance ?? {}) };
     if (text.trim()) guidance[group] = text;
@@ -246,23 +258,39 @@
 
   <Group label="guidance" icon="guidance">
     {#if groupsError}<Note tone="danger">{groupsError}</Note>{/if}
-    {#if groupRows.length}
-      <Rows>
-        {#each groupRows as group (group.value)}
-          <Row label={group.label} hint={group.hint}>
-            <textarea
-              class="guidance"
-              rows="2"
-              aria-label={`Guidance for ${group.label}`}
-              value={config.guidance?.[group.value] ?? ""}
-              oninput={(e) => setGuidance(group.value, e.currentTarget.value)}
-            ></textarea>
-          </Row>
-        {/each}
-      </Rows>
-    {:else if !groupsError}
-      <Note>{connection} lists no groups.</Note>
-    {/if}
+    {#each guidedGroups as key (key)}
+      <div class="guide">
+        <span class="head">
+          <span class="group-name">{groupLabel(key)}</span>
+          <button
+            class="tiny"
+            aria-label={`Remove the guidance for ${groupLabel(key)}`}
+            use:tip={"remove"}
+            onclick={() => removeGroup(key)}
+            ><Icon name="close" size="0.85em" /></button
+          >
+        </span>
+        <textarea
+          class="guidance"
+          rows="3"
+          aria-label={`Guidance for ${groupLabel(key)}`}
+          value={config.guidance?.[key] ?? ""}
+          oninput={(e) => setGuidance(key, e.currentTarget.value)}></textarea>
+      </div>
+    {/each}
+    <span class="pick">
+      {#key guidedGroups.length}
+        <Select
+          value=""
+          options={unguidedGroups}
+          searchable
+          creatable
+          placeholder="add a group"
+          aria-label="Add guidance for a group"
+          onchange={(v) => addGroup(String(v ?? ""))}
+        />
+      {/key}
+    </span>
   </Group>
 
   <Group label="try it" icon="run">
@@ -271,6 +299,7 @@
         source="work_items"
         deps={{ connection }}
         value={previewItem}
+        placeholder="pick a stored ticket"
         label="Ticket"
         onchange={(v) => (previewItem = v)}
       />
@@ -357,8 +386,20 @@
   .add:hover {
     color: var(--text);
   }
+  .guide {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pad-1);
+    margin-bottom: var(--pad-3);
+  }
+  .group-name {
+    font-size: var(--fs-xs);
+    letter-spacing: var(--label-spacing);
+    text-transform: uppercase;
+    color: var(--muted);
+  }
   .guidance {
-    width: var(--control-w);
+    width: 40rem;
     max-width: 100%;
     font: inherit;
   }

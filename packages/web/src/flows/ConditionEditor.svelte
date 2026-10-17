@@ -206,6 +206,7 @@
 
 <style>
   .group {
+    container-type: inline-size;
     display: flex;
     flex-direction: column;
     gap: var(--pad-2);
@@ -246,6 +247,13 @@
   }
   .leaf .x {
     grid-area: x;
+  }
+  @container (min-width: 40rem) {
+    .leaf {
+      grid-template-columns: 16rem 8rem minmax(0, 20rem) auto;
+      grid-template-areas: "field op value x";
+      justify-content: start;
+    }
   }
   .leaf > span > :global(*) {
     width: 100%;
