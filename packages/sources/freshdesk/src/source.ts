@@ -522,6 +522,55 @@ export const createFreshdeskSource: SourceFactory = (
     return names;
   }
 
+  let fieldLabels: {
+    statuses: Map<string, string>;
+    groups: Map<string, string>;
+  } | null = null;
+  /** Best-effort, like the agent names: without them a peek shows the raw ids. */
+  async function loadFieldLabels() {
+    if (fieldLabels) return fieldLabels;
+    const choicesOf = (fields: FreshdeskTicketField[], name: string) =>
+      new Map(
+        fieldChoices(
+          fields.find((f) => f.default && f.name === name)?.choices,
+        ).map((option) => [option.value, option.label]),
+      );
+    try {
+      const listed = await get<FreshdeskTicketField[]>("/ticket_fields");
+      const fields = Array.isArray(listed) ? listed : [];
+      fieldLabels = {
+        statuses: choicesOf(fields, "status"),
+        groups: choicesOf(fields, "group"),
+      };
+    } catch {
+      return {
+        statuses: new Map<string, string>(),
+        groups: new Map<string, string>(),
+      };
+    }
+    return fieldLabels;
+  }
+
+  /**
+   * Null when the ticket does not exist. A 403 is thrown, not hidden: it is
+   * how Freshdesk refuses a location as well as a ticket.
+   */
+  async function peekTicket(ticketId: string): Promise<FreshdeskTicket | null> {
+    const path = `/tickets/${ticketId}`;
+    const response = await sourceFetch(
+      `Freshdesk GET ${path}`,
+      api + path,
+      { headers: { Authorization: auth } },
+      { connection: connection.slug },
+    );
+    if (response.status === 404) return null;
+    if (!response.ok)
+      throw new Error(
+        `Freshdesk GET ${path} -> ${response.status} ${await errorBody(response)}`,
+      );
+    return (await response.json()) as FreshdeskTicket;
+  }
+
   function senderLabel(
     conversation: FreshdeskConversation,
     names: Map<string, string>,
@@ -633,6 +682,31 @@ export const createFreshdeskSource: SourceFactory = (
           groupsNote: errorText(e),
         };
       }
+    },
+
+    async peek(ids) {
+      const ticketIds = ids.filter((id) => /^\d+$/.test(id));
+      if (!ticketIds.length) return [];
+      const tickets = (await Promise.all(ticketIds.map(peekTicket))).filter(
+        (ticket): ticket is FreshdeskTicket => ticket !== null,
+      );
+      if (!tickets.length) return [];
+      const labels = await loadFieldLabels();
+      const labelOf = (
+        names: Map<string, string>,
+        id: number | null | undefined,
+      ) => (id == null ? null : (names.get(String(id)) ?? String(id)));
+      return tickets.map((ticket) => ({
+        id: String(ticket.id),
+        title: ticket.subject ?? "",
+        type: ticket.type ?? "Ticket",
+        state: labelOf(labels.statuses, ticket.status),
+        project: labelOf(labels.groups, ticket.group_id),
+        url: `${base}/a/tickets/${ticket.id}`,
+        color: null,
+        icon: null,
+        source_slug: connection.slug,
+      }));
     },
 
     async fetchItem(externalId: string): Promise<RawWorkItem> {

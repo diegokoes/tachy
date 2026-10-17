@@ -864,3 +864,66 @@ describe("freshdesk companies and tags", () => {
     });
   });
 });
+
+describe("freshdesk peek", () => {
+  const fields = [
+    {
+      name: "status",
+      default: true,
+      choices: { 2: ["Open", "Being processed"] },
+    },
+    { name: "group", default: true, choices: { Billing: 11 } },
+  ];
+
+  it("reads a ticket's title, status and group by their own names", async () => {
+    mockFetch({
+      "/tickets/7": { ...ticket, type: "Incident" },
+      "/ticket_fields": fields,
+    });
+    expect(await source().peek!(["7"])).toEqual([
+      {
+        id: "7",
+        title: "printer down",
+        type: "Incident",
+        state: "Open",
+        project: "Billing",
+        url: "https://x.freshdesk.com/a/tickets/7",
+        color: null,
+        icon: null,
+        source_slug: "fd",
+      },
+    ]);
+    expect(requests.some((r) => r.path.includes("conversations"))).toBe(false);
+  });
+
+  it("leaves out ids that are not numbers or not there, and says why it was refused", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const path = url.replace("https://x.freshdesk.com/api/v2", "");
+        if (path === "/tickets/404") return new Response("", { status: 404 });
+        if (path === "/tickets/403") return new Response("", { status: 403 });
+        if (path === "/tickets/500")
+          return new Response("boom", { status: 500 });
+        throw new Error(`unexpected fetch ${path}`);
+      }) as unknown as typeof fetch,
+    );
+    expect(await source().peek!(["404", "7x"])).toEqual([]);
+    await expect(source().peek!(["403"])).rejects.toThrow(/403/);
+    await expect(source().peek!(["500"])).rejects.toThrow(/500/);
+  });
+
+  it("shows the raw ids when the field labels cannot be read", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url.endsWith("/ticket_fields")
+          ? new Response("", { status: 403 })
+          : Response.json(ticket),
+      ) as unknown as typeof fetch,
+    );
+    expect(await source().peek!(["7"])).toMatchObject([
+      { state: "2", project: "11", type: "Ticket" },
+    ]);
+  });
+});

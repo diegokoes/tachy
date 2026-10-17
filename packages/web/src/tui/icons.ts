@@ -105,6 +105,7 @@ import {
   MonitorCog,
   OctagonAlert,
   Orbit,
+  Package,
   Palette,
   Pause,
   Pickaxe,
@@ -278,6 +279,10 @@ export const ICONS = {
   seed: Sprout,
   index: Database,
   repo: FolderGit2,
+  /** A team's collection of pushed documents. */
+  bucket: Package,
+  /** Code mode: answers come from the linked codebases. */
+  code: Code,
   /** A source project: what tickets and repos are filed under. */
   project: ChartNoAxesGantt,
   /** Where a repo comes from: its project, clone URL and scope. */

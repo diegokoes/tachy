@@ -220,7 +220,7 @@ export const workItems = new Hono()
     const answers = await Promise.allSettled(
       slugs.map(async (slug) => {
         const { source } = await callerSource(c, slug);
-        return source.browser ? source.browser.peek([id]) : [];
+        return source.peek ? source.peek([id]) : [];
       }),
     );
     const peeks: WorkItemPeek[] = answers.flatMap((answer) =>

@@ -4,26 +4,23 @@ import {
   findCommand,
   commandAutoApprove,
 } from "../../packages/api/src/commands";
+import { CHAT_MODE_LIST, findMode } from "../../packages/api/src/modes";
 import { buildPrompt, turnChoice } from "../../packages/api/src/turn-config";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 describe("slash command registry", () => {
-  it("exposes the built-in workflow commands", () => {
-    const names = BUILTIN_COMMANDS.map((c) => c.name);
-    expect(names).toEqual(
-      expect.arrayContaining([
-        "analyze",
-        "consult",
-        "compact",
-        "summary",
-        "az",
-        "code",
-        "ingest-wiki",
-        "wiki-draft",
-      ]),
-    );
+  it("keeps actions as commands and leaves modes and sources to their own", () => {
+    expect(BUILTIN_COMMANDS.map((c) => c.name)).toEqual([
+      "compact",
+      "summary",
+      "az",
+      "walkthrough",
+      "ingest-wiki",
+      "wiki-draft",
+    ]);
+    expect(CHAT_MODE_LIST.map((m) => m.name)).toEqual(["analyze", "code"]);
   });
 
   it("compact posts by default and keeps the transcript out of the chat", () => {
@@ -87,30 +84,28 @@ describe("slash command registry", () => {
         m[1].trim().toLowerCase(),
       ),
     );
-    const named = BUILTIN_COMMANDS.flatMap((c) =>
-      [...c.expand("").matchAll(/\b([A-Z][A-Z ]*[A-Z]) MODE\b/g)].map((m) =>
+    const expansions = [...BUILTIN_COMMANDS, ...CHAT_MODE_LIST].map((c) =>
+      c.expand(""),
+    );
+    const named = expansions.flatMap((text) =>
+      [...text.matchAll(/\b([A-Z][A-Z ]*[A-Z]) MODE\b/g)].map((m) =>
         m[1].toLowerCase(),
       ),
     );
-    expect(named.length).toBeGreaterThan(4);
+    expect(named.length).toBeGreaterThan(3);
     expect(named.filter((m) => !headings.has(m))).toEqual([]);
   });
 
-  it("/code passes the scope on and keeps it out of the question", () => {
-    const scoped = findCommand("code")!.expand(
-      "@portal-api @Portal-Mobile/ why does login loop?",
-    );
-    expect(scoped).toContain("repos portal-api; project Portal-Mobile");
-    expect(scoped).toContain("`repos` / `project`");
-    expect(scoped).toContain("User arguments: why does login loop?");
+  it("code mode shows a flow and keeps other answers short", () => {
+    const expanded = findMode("code")!.expand("");
+    expect(expanded).toContain("CODE CONSULTATION MODE");
+    expect(expanded).toContain("call show_code_walkthrough");
+    expect(expanded).toContain("at most six lines");
+  });
 
-    // A flow is shown in the panel, and the text beside it stays short.
-    expect(scoped).toContain("call show_code_walkthrough");
-    expect(scoped).toContain("at most six lines");
-
-    const open = findCommand("code")!.expand("why does login loop?");
-    expect(open).not.toContain("Scope chosen");
-    expect(open).toContain("CODE CONSULTATION MODE");
+  it("analyze mode names the ticket it was entered with, and none without", () => {
+    expect(findMode("analyze")!.expand("fd 123")).toContain("Ticket: fd 123");
+    expect(findMode("analyze")!.expand("")).not.toContain("Ticket");
   });
 
   // The button on a code answer sends it; nobody types it.
@@ -118,8 +113,15 @@ describe("slash command registry", () => {
     const walkthrough = findCommand("walkthrough")!;
     expect(walkthrough.hidden).toBe(true);
     expect(walkthrough.expand("")).toContain("show_code_walkthrough");
+  });
+
+  // Kept for the wiki to send; nobody picks them from the menu.
+  it("hides the wiki commands without dropping them", () => {
     expect(BUILTIN_COMMANDS.filter((c) => c.hidden).map((c) => c.name)).toEqual(
-      ["walkthrough"],
+      ["walkthrough", "ingest-wiki", "wiki-draft"],
+    );
+    expect(findCommand("ingest-wiki")!.expand("")).toContain(
+      "CONTEXT DUMP MODE",
     );
   });
 
@@ -152,20 +154,69 @@ describe("slash command registry", () => {
   });
 
   it("expands args into the command block", () => {
-    const cmd = findCommand("analyze")!;
+    const cmd = findCommand("compact")!;
     expect(cmd.expand("fd 123")).toContain("User arguments: fd 123");
     expect(cmd.expand("")).toContain("(none");
   });
 
   it("buildPrompt prepends an authoritative <command> block", () => {
     const prompt = buildPrompt({
-      message: "/analyze fd 123",
-      command: { name: "analyze", args: "fd 123" },
+      message: "/compact fd 123",
+      command: { name: "compact", args: "fd 123" },
     });
-    expect(prompt.startsWith('<command name="analyze">')).toBe(true);
-    expect(prompt).toContain("INGEST MODE");
+    expect(prompt.startsWith('<command name="compact">')).toBe(true);
+    expect(prompt).toContain("COMPACT MODE");
     expect(prompt).toContain("authoritative mode selector");
-    expect(prompt.endsWith("/analyze fd 123")).toBe(true);
+    expect(prompt.endsWith("/compact fd 123")).toBe(true);
+  });
+
+  it("buildPrompt carries the mode on every turn, ahead of a command", () => {
+    const prompt = buildPrompt({
+      message: "/summary fd 9",
+      mode: { name: "analyze", args: "" },
+      command: { name: "summary", args: "fd 9" },
+    });
+    expect(prompt.startsWith('<mode name="analyze">')).toBe(true);
+    expect(prompt).toContain("INGEST MODE");
+    expect(prompt).toContain("until they leave it");
+    expect(prompt.indexOf("<mode")).toBeLessThan(prompt.indexOf("<command"));
+  });
+
+  it("buildPrompt says when the user left a mode", () => {
+    const prompt = buildPrompt({ message: "hi", leftMode: "code" });
+    expect(prompt).toBe(
+      "The user left code mode. Route this message on what it asks.\n\nhi",
+    );
+  });
+
+  it("buildPrompt rejects an unknown mode", () => {
+    expect(() =>
+      buildPrompt({
+        message: "x",
+        mode: { name: "nope" as "code", args: "" },
+      }),
+    ).toThrow(/unknown mode/);
+  });
+
+  it("buildPrompt lists attached sources by kind, each with where it goes", () => {
+    const prompt = buildPrompt({
+      message: "why?",
+      mentions: [
+        { kind: "bucket", key: "onboarding" },
+        { kind: "repo", key: "billing-api" },
+        { kind: "repo", key: "ledger" },
+        { kind: "repo", key: "ledger" },
+        { kind: "project", key: "Payments" },
+      ],
+    });
+    expect(prompt).toContain(
+      "repos: billing-api, ledger - pass as `repos` to search_code",
+    );
+    expect(prompt).toContain("projects: Payments - pass as `project`");
+    expect(prompt).toContain("buckets: onboarding - search_bucket");
+    expect(prompt.indexOf("repos:")).toBeLessThan(prompt.indexOf("buckets:"));
+    expect(prompt.endsWith("why?")).toBe(true);
+    expect(buildPrompt({ message: "hi", mentions: [] })).toBe("hi");
   });
 
   it("buildPrompt rejects unknown commands", () => {
@@ -192,7 +243,7 @@ describe("slash command registry", () => {
   it("command block precedes artifact context", () => {
     const prompt = buildPrompt({
       message: "hello",
-      command: { name: "code", args: "printer" },
+      command: { name: "compact", args: "fd 1" },
       artifact: { title: "T", body: "B" },
     });
     expect(prompt.indexOf("<command")).toBeLessThan(
