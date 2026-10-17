@@ -152,6 +152,39 @@ describe("agent.summarize_item", () => {
     expect(advisory.meta).toMatchObject({ flow_id: expect.any(String) });
   });
 
+  it("summarises without the messages the connection's rules skip", async () => {
+    thread.push({
+      externalId: "analysis",
+      author: "900",
+      direction: "outgoing",
+      visibility: "private",
+      bodyText: "AI analysis of the scanner, at length.",
+    });
+    await addSourceConnection({
+      sourceType: "fake-summary",
+      slug: "summary-conn",
+      baseUrl: "https://example.invalid",
+      config: {
+        ingest: {
+          skip: [
+            {
+              id: "manager",
+              label: "Manager analysis",
+              enabled: true,
+              where: { field: "message.author", op: "eq", value: "900" },
+            },
+          ],
+        },
+      },
+    });
+    const step = flowAction("agent.summarize_item");
+    await step.run(await context(), step.params.parse({}));
+    const [advisory] = vi.mocked(runAdvisory).mock.calls[0];
+    const prompt = advisory.prompt((text) => text);
+    expect(prompt).toContain("offline since this morning");
+    expect(prompt).not.toContain("AI analysis");
+  });
+
   it("keeps the summary in the run when told not to post", async () => {
     const step = flowAction("agent.summarize_item");
     const result = await step.run(

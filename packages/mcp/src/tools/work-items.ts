@@ -22,16 +22,11 @@ import { resolveCurrentUserId } from "@tachy/core/access";
 import { recordRun } from "@tachy/core/analytics";
 import {
   getCustomerIdBySlug,
-  getCustomerSlug,
   setWorkItemCustomer,
   setObservedVersion,
 } from "@tachy/core/catalog";
-import {
-  resolveRedactionPolicy,
-  redactForLlm,
-  scrubDeep,
-  TokenMap,
-} from "@tachy/core/compliance";
+import { scrubDeep, TokenMap } from "@tachy/core/compliance";
+import { readForModel } from "@tachy/core/flows";
 import { searchReferenceDocs } from "@tachy/core/reference";
 import { embedQueryLiteral } from "@tachy/core/search";
 import { badInput } from "@tachy/core/infra";
@@ -43,6 +38,7 @@ import {
   capTurns,
   withCompaction,
   withFiles,
+  withGuidance,
   withLinkedAdoItems,
   workItemFacts,
 } from "../context";
@@ -61,7 +57,8 @@ tool(
     },
   },
   async ({ source, external_id }) => {
-    const { conn, source: src } = await resolveSource(source);
+    const resolved = await resolveSource(source);
+    const { conn, source: src } = resolved;
     const raw = await src.fetchItem(external_id);
     const item = await ingestWorkItem(conn.id, raw);
     await recordRun({
@@ -69,18 +66,19 @@ tool(
       userId: await resolveCurrentUserId(),
       mode: "ingest",
     });
-    const forLlm = resolveRedactionPolicy(conn.config).enabled
-      ? redactForLlm(raw, src.redactRaw, await getCustomerSlug(item.customerId))
-      : raw;
+    const view = await readForModel(resolved, raw, {
+      customerId: item.customerId,
+    });
     return out({
       work_item_id: item.id,
       source_project_id: item.sourceProjectId,
       product_id: item.productId,
       team_id: item.teamId,
-      ...(await workItemFacts(item, raw)),
-      ...withCompaction(forLlm),
-      ...withFiles(forLlm, conn.slug, src),
-      ...(await withLinkedAdoItems(raw, item.id)),
+      ...(await workItemFacts(item, view.kept)),
+      ...withGuidance(view),
+      ...withCompaction(view.item),
+      ...withFiles(view.item, conn.slug, src),
+      ...(await withLinkedAdoItems(view.kept, item.id)),
     });
   },
 );
@@ -107,11 +105,15 @@ tool(
     return_turns,
     keep_automated,
   }) => {
-    const { conn, source: src } = await resolveSource(source);
+    const resolved = await resolveSource(source);
+    const { conn, source: src } = resolved;
     const raw = await src.fetchItem(external_id);
     const item = await ingestWorkItem(conn.id, raw);
+    const view = await readForModel(resolved, raw, {
+      customerId: item.customerId,
+    });
     const opts = { keepAutomated: keep_automated === true };
-    const full = compactWorkItem(raw, opts);
+    const full = compactWorkItem(view.kept, opts);
 
     let posted: { notes: number; replaced_previous?: number } | undefined;
     let postFailed: string | undefined;
@@ -130,16 +132,13 @@ tool(
       }
     }
 
-    const redacted = resolveRedactionPolicy(conn.config).enabled
-      ? redactForLlm(raw, src.redactRaw, await getCustomerSlug(item.customerId))
-      : raw;
-    const forLlm = redacted === raw ? full : compactWorkItem(redacted, opts);
+    const forLlm = view.redacted ? compactWorkItem(view.item, opts) : full;
 
     const { turns, ...summary } = forLlm;
     return out({
       work_item_id: item.id,
       ...summary,
-      ...withFiles(redacted, conn.slug, src),
+      ...withFiles(view.item, conn.slug, src),
       ...(return_turns === true ? capTurns(turns) : {}),
       ...(posted
         ? {
@@ -164,7 +163,8 @@ tool(
     },
   },
   async ({ source, external_id, limit }) => {
-    const { conn, source: src } = await resolveSource(source);
+    const resolved = await resolveSource(source);
+    const { conn, source: src } = resolved;
     const raw = await src.fetchItem(external_id);
     const item = await ingestWorkItem(conn.id, raw);
     await recordRun({
@@ -172,11 +172,14 @@ tool(
       userId: await resolveCurrentUserId(),
       mode: "consult",
     });
+    const view = await readForModel(resolved, raw, {
+      customerId: item.customerId,
+    });
 
     // A whole first message overruns the embedding window, which drops the
     // tail. The lead carries the symptom.
     const firstIncoming = (
-      raw.messages.find((m) => m.direction === "incoming")?.bodyText ?? ""
+      view.kept.messages.find((m) => m.direction === "incoming")?.bodyText ?? ""
     ).slice(0, QUERY_LEAD_CHARS);
     const query = [raw.title, firstIncoming].filter(Boolean).join(" ");
     const productId = item.productId ?? undefined;
@@ -205,12 +208,9 @@ tool(
         boostCustomerId,
       }),
     ]);
-    const redact = resolveRedactionPolicy(conn.config).enabled;
-    const forLlm = redact
-      ? redactForLlm(raw, src.redactRaw, await getCustomerSlug(item.customerId))
-      : raw;
+    const redact = view.redacted;
     const retrievalMap = new TokenMap();
-    const { item: workItem, ...compaction } = withCompaction(forLlm);
+    const { item: workItem, ...compaction } = withCompaction(view.item);
     const context = await resolveProjectContext({ workItemId: item.id });
     return out({
       work_item: workItem,
@@ -224,10 +224,11 @@ tool(
       ...(similar.length || reference.length
         ? {}
         : { retrieval_note: NO_MATCHES }),
-      ...(await workItemFacts(item, raw)),
-      ...withFiles(forLlm, conn.slug, src),
+      ...(await workItemFacts(item, view.kept)),
+      ...withGuidance(view),
+      ...withFiles(view.item, conn.slug, src),
       ...(context.length ? { project_context: context } : {}),
-      ...(await withLinkedAdoItems(raw, item.id)),
+      ...(await withLinkedAdoItems(view.kept, item.id)),
     });
   },
 );

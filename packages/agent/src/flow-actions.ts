@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { assertModelCallAllowed, defineFlowAction } from "@tachy/core/flows";
+import {
+  applyIngest,
+  assertModelCallAllowed,
+  defineFlowAction,
+  ingestConfig,
+} from "@tachy/core/flows";
 import { badInput } from "@tachy/core/infra";
 import { resolveSource } from "@tachy/core/sources";
 import {
@@ -112,7 +117,12 @@ export function registerAgentFlowActions(): void {
         throw badInput(`${source_type} items cannot take notes`);
       const raw = await source.fetchItem(external_id);
       await ingestWorkItem(conn.id, raw);
-      const summary = await summarizeTicket(raw, ctx.scope, ctx.userId, {
+      const { item } = applyIngest(
+        raw,
+        ingestConfig(conn.config),
+        source.modelOmits,
+      );
+      const summary = await summarizeTicket(item, ctx.scope, ctx.userId, {
         mode: "flow",
         meta: { flow_id: ctx.flowId, flow_run_id: ctx.flowRunId },
       });

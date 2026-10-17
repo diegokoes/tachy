@@ -546,6 +546,8 @@ export const createFreshdeskSource: SourceFactory = (
   return {
     type: "freshdesk",
     capabilities: { postNote: true, incrementalSync: true },
+    // The first message is the description, read from the same ticket.
+    modelOmits: ["description", "description_text"],
     redactRaw: redactFreshdeskRaw,
 
     async verify() {

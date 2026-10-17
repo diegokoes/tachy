@@ -63,6 +63,42 @@ export interface ViewDisplay {
   order: string[];
 }
 
+/** A message a model is not given, while the stored copy keeps it. */
+export interface IngestRule {
+  /** Stable within the connection; a preview names the rule by it. */
+  id: string;
+  label: string;
+  enabled: boolean;
+  /** Tested against `{ message, item }`, the fields `INGEST_MESSAGE_FIELDS` names. */
+  where: Condition;
+}
+
+export const INGEST_FIELD_MODES = ["only", "except"] as const;
+export type IngestFieldMode = (typeof INGEST_FIELD_MODES)[number];
+
+/**
+ * How a connection's items read to a model, kept in the connection's config
+ * under `ingest`. It shapes only what a model reads: storage keeps everything.
+ */
+export interface IngestConfig {
+  skip?: IngestRule[];
+  /** Paths into the source's payload a model reads, or does not; absent, all. */
+  fields?: { mode: IngestFieldMode; paths: string[] };
+  /** By the source's group key: what the agent reads with that group's items. */
+  guidance?: Record<string, string>;
+}
+
+/** What a skip rule tests on a message, beside the `item.*` fields. */
+export const INGEST_MESSAGE_FIELDS: FlowOption[] = [
+  { value: "message.author", label: "author", hint: "the source's user id" },
+  { value: "message.author_label", label: "author name or email" },
+  { value: "message.visibility", label: "visibility" },
+  { value: "message.direction", label: "direction" },
+  { value: "message.automated", label: "automated" },
+  { value: "message.body", label: "text" },
+  { value: "message.chars", label: "length", hint: "characters" },
+];
+
 /**
  * A flow is triggers and a tree of steps. Each list of steps runs in order; an
  * `if` ends its list, so every path through a flow is a branch of one tree and

@@ -320,6 +320,8 @@ export type {
 export {
   FIELD_SHOWS,
   VIEW_SHOWS,
+  INGEST_FIELD_MODES,
+  INGEST_MESSAGE_FIELDS,
   FLOW_TRIGGER_KINDS,
   CONDITION_OPS,
   FLOW_ACTION_CATEGORIES,
@@ -339,6 +341,9 @@ export type {
   FieldDefault,
   FieldShow,
   FormDisplay,
+  IngestRule,
+  IngestFieldMode,
+  IngestConfig,
   FlowTriggerKind,
   ConditionOp,
   Condition,
