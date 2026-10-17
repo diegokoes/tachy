@@ -512,11 +512,11 @@ export async function seedFollows(
   );
   const notes = rows
     .filter((row) => row.seen_rev === null)
-    .map((row, n) => ({
+    .map((row, i) => ({
       user_id: row.user_id,
       source_connection_id: row.source_connection_id,
       external_id: row.external_id,
-      work_item_id: workItems[(n * 13 + 5) % workItems.length].id,
+      work_item_id: workItems[(i * 13 + 5) % workItems.length].id,
     }));
   await insertRows(
     tx,

@@ -189,9 +189,9 @@ defineOptionSource("ado.connections", async () => {
     select slug from source_connections where source_type = 'azure-devops'
     order by slug
   `;
-  return rows.map((r) => ({
-    value: r.slug as string,
-    label: r.slug as string,
+  return rows.map((row) => ({
+    value: row.slug as string,
+    label: row.slug as string,
   }));
 });
 

@@ -1,9 +1,6 @@
 import type { FlowGraph } from "@tachy/contract";
 
-/**
- * Starting points for a helpdesk's flows. Each is an ordinary graph the
- * person edits before saving; the connection is left for them to pick.
- */
+/** A starter graph; trigger connections are empty for the person to pick. */
 export interface FlowTemplate {
   key: string;
   name: string;

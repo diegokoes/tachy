@@ -153,8 +153,8 @@ export async function readStoredItem(id: string): Promise<StoredItem> {
 }
 
 /**
- * A stored item as its source handed it over, from the copy: no source is
- * read. `connectionSlug` refuses an item of any other connection.
+ * The stored copy as its source handed it over; no source call. With
+ * `connectionSlug`, an item of another connection is not found.
  */
 export async function readStoredRaw(
   workItemId: string,
@@ -183,15 +183,15 @@ export async function readStoredRaw(
     groupKey: row.external_group_key ?? undefined,
     requester: row.requester ?? undefined,
     raw: row.raw ?? {},
-    messages: messages.map((m): RawMessage => ({
-      externalId: m.external_id ?? undefined,
-      author: m.author ?? undefined,
-      authorLabel: m.author_label ?? undefined,
-      automated: m.automated,
-      visibility: m.visibility,
-      direction: m.direction,
-      bodyText: m.body_text ?? "",
-      createdAt: (m.created_at as Date | null)?.toISOString(),
+    messages: messages.map((message): RawMessage => ({
+      externalId: message.external_id ?? undefined,
+      author: message.author ?? undefined,
+      authorLabel: message.author_label ?? undefined,
+      automated: message.automated,
+      visibility: message.visibility,
+      direction: message.direction,
+      bodyText: message.body_text ?? "",
+      createdAt: (message.created_at as Date | null)?.toISOString(),
     })),
   };
 }
