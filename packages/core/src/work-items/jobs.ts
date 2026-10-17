@@ -18,6 +18,7 @@ export function defineWorkItemJobs() {
         `${count(Number(o.checked ?? 0), "item")} read`,
         o.changed ? `${count(Number(o.changed), "change")} noted` : "",
         o.skipped ? `${o.skipped} skipped` : "",
+        o.notes ? `${count(Number(o.notes), "note")} posted` : "",
       ]
         .filter(Boolean)
         .join(", "),

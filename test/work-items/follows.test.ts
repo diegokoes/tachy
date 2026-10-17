@@ -8,7 +8,11 @@ import {
   it,
   vi,
 } from "vitest";
-import { addSourceConnection, addSourceProject } from "@tachy/core/sources";
+import {
+  addSourceConnection,
+  addSourceProject,
+  registerSource,
+} from "@tachy/core/sources";
 import {
   clearPermissionCache,
   createUser,
@@ -19,6 +23,7 @@ import { describeJobKinds } from "@tachy/core/jobs";
 import {
   checkFollows,
   followWorkItem,
+  ingestWorkItem,
   listFollows,
   unfollowWorkItem,
 } from "@tachy/core/work-items";
@@ -34,6 +39,23 @@ import { enableVault } from "../vault";
 import { resetData, sql } from "../database";
 
 const ORG = "https://dev.azure.com/followorg";
+
+/** Private notes the fake helpdesk took, by ticket. */
+const helpdeskNotes: { id: string; body: string; private?: boolean }[] = [];
+
+registerSource("fake-helpdesk", () => ({
+  type: "fake-helpdesk",
+  capabilities: { postNote: true, incrementalSync: false },
+  async fetchItem() {
+    throw new Error("not used");
+  },
+  async listItems() {
+    return { items: [] };
+  },
+  async postNote(id: string, body: string, opts?: { private?: boolean }) {
+    helpdeskNotes.push({ id, body, private: opts?.private });
+  },
+}));
 const READER = "dev@example.com";
 
 /** Longest matching prefix answers; the answer may depend on the call. */
@@ -227,6 +249,64 @@ describe("following items", () => {
       source_project_id: projectId,
       connection: "ado-follow",
     });
+  });
+
+  it("writes a change back to the tickets the follow notes to", async () => {
+    await setCredential(
+      readerId,
+      "user",
+      readerId,
+      "fake-helpdesk_token:fd-notes",
+      "agent-key",
+    );
+    const keyed = await addSourceConnection({
+      sourceType: "fake-helpdesk",
+      slug: "fd-notes",
+      baseUrl: "https://example.invalid",
+    });
+    const keyless = await addSourceConnection({
+      sourceType: "fake-helpdesk",
+      slug: "fd-keyless",
+      baseUrl: "https://example.invalid",
+    });
+    const ticket = { kind: "ticket" as const, raw: {}, messages: [] };
+    const noted = await ingestWorkItem(keyed.id, {
+      ...ticket,
+      externalId: "7",
+    });
+    const unkeyed = await ingestWorkItem(keyless.id, {
+      ...ticket,
+      externalId: "8",
+    });
+    helpdeskNotes.length = 0;
+    for (const noteTo of [noted.id, unkeyed.id])
+      await followWorkItem({
+        userId: readerId,
+        connectionId,
+        externalId: "42",
+        seenRev: 3,
+        noteTo,
+      });
+
+    ado(4, [
+      update(4, "ana@x.io", {
+        "System.State": { oldValue: "New", newValue: "Active" },
+      }),
+    ]);
+    expect(await checkFollows()).toMatchObject({
+      changed: 1,
+      notes: 1,
+      notes_skipped: 1,
+    });
+    expect(helpdeskNotes).toEqual([
+      {
+        id: "7",
+        private: true,
+        body: expect.stringContaining(
+          "#42 Print preview is blank changed:\n- state New → Active",
+        ),
+      },
+    ]);
   });
 
   it("leaves out the follower's own changes", async () => {

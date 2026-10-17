@@ -15,10 +15,14 @@ import { searchKnowledge } from "../knowledge/knowledge";
 import { searchReferenceDocs } from "../reference/reference";
 import { getSourceProject } from "../sources/projects";
 import { resolveSource } from "../sources/registry";
+import { followWorkItem } from "../work-items/follows";
 import { ingestWorkItem } from "../work-items/ingest";
+import { extractAdoRefs } from "../work-items/linked-refs";
+import { recordAdoRefs } from "../work-items/links";
+import { readStoredRaw } from "../work-items/stored";
 import { defineFlowAction, type FlowActionContext } from "./actions";
 import { customerProperties } from "./customer";
-import { applyIngest, ingestConfig } from "./ingest";
+import { applyIngest, getIngestConfig, ingestConfig } from "./ingest";
 import { applyFormConfig, getComposeConfig, typeConfig } from "./forms";
 import type { FlowSubject } from "./subject";
 
@@ -356,7 +360,8 @@ export function registerBuiltinFlowActions(): void {
     writes: true,
     params: z.object({
       field: z.string().min(1).meta(options("source.ticket_fields")),
-      value: z
+      // A lone {{token}} keeps its type, and a model's JSON answer may hold a number.
+      value: z.coerce
         .string()
         .min(1)
         .meta(
@@ -424,6 +429,51 @@ export function registerBuiltinFlowActions(): void {
         sent++;
       }
       return { sent, skipped: recipients.length - sent };
+    },
+  });
+
+  defineFlowAction({
+    key: "item.follow_linked",
+    title: "Follow linked ADO items",
+    description:
+      "The flow's owner follows the Azure DevOps items the stored ticket names (Read ticket first to store its messages); with note back, each change on one is posted to the ticket as a private note.",
+    category: "update",
+    writes: true,
+    params: z.object({
+      connection: z
+        .string()
+        .default("")
+        .meta({ ...options("ado.connections"), title: "ADO connection" })
+        .describe("Empty: the first Azure DevOps connection."),
+      note_back: z.boolean().default(true),
+    }),
+    output: z.object({ followed: z.array(z.string()) }),
+    async run(ctx, params) {
+      const item = needItem(ctx);
+      if (!ctx.userId) throw badInput("the flow has no owner to follow as");
+      const [ado] = await sql<{ id: string }[]>`
+        select id from source_connections where source_type = 'azure-devops'
+          ${params.connection ? sql`and slug = ${params.connection}` : sql``}
+        order by slug limit 1
+      `;
+      if (!ado) throw badInput("no Azure DevOps connection to follow on");
+      const { kept } = applyIngest(
+        await readStoredRaw(item.id),
+        await getIngestConfig(item.connection),
+      );
+      const refs = extractAdoRefs(kept);
+      for (const externalId of refs)
+        await followWorkItem({
+          userId: ctx.userId,
+          connectionId: ado.id,
+          externalId,
+          ...(params.note_back ? { noteTo: item.id } : {}),
+        });
+      await recordAdoRefs(item.id, refs, {
+        sourceConnectionId: ado.id,
+        createdById: ctx.userId,
+      });
+      return { followed: refs };
     },
   });
 

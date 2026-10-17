@@ -436,6 +436,19 @@ create table work_item_follows (
     primary key (user_id, source_connection_id, external_id)
 );
 
+-- Tickets a follow writes back to: when the followed item changes, each gets
+-- a private note, posted with the follower's own token. A flow step sets them.
+create table work_item_follow_notes (
+    user_id              uuid not null,
+    source_connection_id uuid not null,
+    external_id          text not null,
+    work_item_id         uuid not null references work_items(id) on delete cascade,
+    created_at           timestamptz not null default now(),
+    primary key (user_id, source_connection_id, external_id, work_item_id),
+    foreign key (user_id, source_connection_id, external_id)
+        references work_item_follows on delete cascade
+);
+
 create table resolution_patterns (
     slug         text primary key,
     description  text not null,
