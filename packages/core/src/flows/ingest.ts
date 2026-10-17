@@ -276,23 +276,20 @@ async function storedRaw(
     groupKey: row.external_group_key ?? undefined,
     requester: row.requester ?? undefined,
     raw: row.raw ?? {},
-    messages: messages.map((m): RawMessage => ({
-      externalId: m.external_id ?? undefined,
-      author: m.author ?? undefined,
-      authorLabel: m.author_label ?? undefined,
-      automated: m.automated,
-      visibility: m.visibility,
-      direction: m.direction,
-      bodyText: m.body_text ?? "",
-      createdAt: (m.created_at as Date | null)?.toISOString(),
+    messages: messages.map((message): RawMessage => ({
+      externalId: message.external_id ?? undefined,
+      author: message.author ?? undefined,
+      authorLabel: message.author_label ?? undefined,
+      automated: message.automated,
+      visibility: message.visibility,
+      direction: message.direction,
+      bodyText: message.body_text ?? "",
+      createdAt: (message.created_at as Date | null)?.toISOString(),
     })),
   };
 }
 
-/**
- * An adapter is built with a token, and a preview reads no source: without a
- * token the count includes the paths the adapter would leave out.
- */
+/** Building the adapter needs a token; without one nothing is omitted. */
 async function modelOmitsOf(
   connectionSlug: string,
   scope: ScopeContext,
@@ -309,8 +306,8 @@ const charsOf = (item: RawWorkItem) =>
   JSON.stringify(item.raw ?? {}).length;
 
 /**
- * An unsaved config tried on a stored item: no source is called. Redaction is
- * left out, as it changes how text reads and not how much of it there is.
+ * Tries an unsaved config on the stored copy; no source call. Skips
+ * redaction, which changes the text and not which parts are read.
  */
 export async function previewIngest(
   connectionSlug: string,
@@ -326,18 +323,18 @@ export async function previewIngest(
   );
   const skippedBy = new Map(outcome.skipped.map((s) => [s.key, s.rule]));
   return {
-    messages: raw.messages.map((m) => {
-      const key = messageKey(m);
+    messages: raw.messages.map((message) => {
+      const key = messageKey(message);
       return {
         key,
-        at: m.createdAt ?? null,
-        author: m.author ?? null,
-        author_label: m.authorLabel ?? null,
-        visibility: m.visibility,
-        direction: m.direction,
-        automated: m.automated === true,
-        chars: m.bodyText.length,
-        excerpt: m.bodyText.slice(0, EXCERPT_CHARS),
+        at: message.createdAt ?? null,
+        author: message.author ?? null,
+        author_label: message.authorLabel ?? null,
+        visibility: message.visibility,
+        direction: message.direction,
+        automated: message.automated === true,
+        chars: message.bodyText.length,
+        excerpt: message.bodyText.slice(0, EXCERPT_CHARS),
         skipped_by: skippedBy.get(key) ?? null,
       };
     }),
