@@ -14,6 +14,8 @@
     value,
     connection = "",
     fields = [],
+    fieldSource = "item.fields",
+    defaultField = "item.status",
     valueSource = "item.values",
     valuePrefixes = ["item."],
     onchange,
@@ -22,6 +24,9 @@
     value: Condition;
     /** Whose items the field and value lists are read from. */
     connection?: string;
+    fieldSource?: string;
+    /** The field a new condition starts on. */
+    defaultField?: string;
     /** The option source a field's values are listed from. */
     valueSource?: string;
     /** Field prefixes `valueSource` lists values for. */
@@ -45,7 +50,7 @@
   };
   const ops = CONDITION_OPS.map((o) => ({ value: o, label: OP_LABELS[o] }));
   type Leaf = Extract<Condition, { field: string }>;
-  const leaf = (): Condition => ({ field: "item.status", op: "eq", value: "" });
+  const leaf = (): Condition => ({ field: defaultField, op: "eq", value: "" });
 
   const mode = $derived.by(() => {
     if ("all" in value) return "all";
@@ -96,6 +101,8 @@
         value={child}
         {connection}
         {fields}
+        {fieldSource}
+        {defaultField}
         {valueSource}
         {valuePrefixes}
         onchange={(n) => setChild(i, n)}
@@ -127,6 +134,8 @@
       value={value.not}
       {connection}
       {fields}
+      {fieldSource}
+      {defaultField}
       {valueSource}
       {valuePrefixes}
       onchange={(n) => onchange({ not: n })}
@@ -137,7 +146,7 @@
   <div class="leaf">
     <span class="field">
       <OptionSelect
-        source="item.fields"
+        source={fieldSource}
         deps={{ connection }}
         value={leaf.field}
         extra={fields}

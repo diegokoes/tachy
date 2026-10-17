@@ -30,9 +30,16 @@ registerSource("fake-ingest-api", () => ({
   async verify() {
     return { identity: "agent@example.invalid", groups: [] };
   },
-  async options(name: string) {
+  async options(name: string, params?: Record<string, string>) {
     if (name === "agents") return [{ value: "900", label: "A. Manager" }];
     if (name === "groups") return [{ value: "12", label: "Second level" }];
+    if (name === "ticket_fields")
+      return [
+        { value: "priority", label: "Priority" },
+        { value: "custom_fields.cf_area", label: "Area", hint: "custom" },
+      ];
+    if (name === "field_choices" && params?.field === "item.raw.priority")
+      return [{ value: "4", label: "Urgent" }];
     return [];
   },
 }));
@@ -251,6 +258,65 @@ describe("the rule editor's lists", () => {
       request({ field: "item.group" }),
     );
     expect(values.map((o) => o.value)).toContain("12");
+  });
+
+  it("lists a rule's item fields from the source's ticket fields", async () => {
+    expect(await listOptions("ingest.fields", request({}))).toEqual([
+      { value: "item.raw.priority", label: "Priority" },
+      {
+        value: "item.raw.custom_fields.cf_area",
+        label: "Area",
+        hint: "custom",
+      },
+      { value: "item.tags", label: "tags" },
+    ]);
+  });
+
+  it("lists a ticket field's values from its choices in the source", async () => {
+    expect(
+      await listOptions(
+        "ingest.values",
+        request({ field: "item.raw.priority" }),
+      ),
+    ).toEqual([{ value: "4", label: "Urgent" }]);
+  });
+
+  it("falls back to the stored payloads when the source cannot be read", async () => {
+    const values = (
+      await listOptions(
+        "ingest.fields",
+        request({ connection: "fd-tokenless" }),
+      )
+    ).map((o) => o.value);
+    expect(values).toContain("item.tags");
+    expect(values.every((v) => v.startsWith("item."))).toBe(true);
+  });
+
+  it("lists groups from the source when its probe fails", async () => {
+    registerSource("fake-probe-fails", () => ({
+      type: "fake-probe-fails",
+      capabilities: { postNote: false, incrementalSync: false },
+      async fetchItem() {
+        throw new Error("not used");
+      },
+      async listItems() {
+        return { items: [] };
+      },
+      async verify() {
+        throw new Error("Freshdesk GET /agents/me -> 403");
+      },
+      async options() {
+        return [{ value: "12", label: "Second level" }];
+      },
+    }));
+    await addSourceConnection({
+      sourceType: "fake-probe-fails",
+      slug: "fd-probe",
+      baseUrl: "https://example.invalid",
+    });
+    expect(
+      await listOptions("source.groups", request({ connection: "fd-probe" })),
+    ).toEqual([{ value: "12", label: "Second level" }]);
   });
 
   it("lists groups from the source when its probe reads none", async () => {

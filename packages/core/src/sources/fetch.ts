@@ -216,3 +216,12 @@ export async function fetchUntrustedUrl(
   }
   throw new Error(`${label}: more than ${MAX_REDIRECTS} redirects`);
 }
+
+const HTML_TITLE = /<title[^>]*>([^<]*)<\/title>/i;
+
+/** A failed response's body for an error message; an HTML page gives its title. */
+export async function errorBody(response: Response): Promise<string> {
+  const body = await response.text();
+  if (!body.trimStart().startsWith("<")) return body;
+  return HTML_TITLE.exec(body)?.[1]?.trim() || body;
+}

@@ -81,10 +81,15 @@
   }
 
   let groups = $state<FlowOption[]>([]);
+  let groupsError = $state<string | null>(null);
   $effect(() => {
+    groupsError = null;
     fetchOptions("source.groups", { connection })
       .then((loaded) => (groups = loaded))
-      .catch(() => (groups = []));
+      .catch((e) => {
+        groups = [];
+        groupsError = errText(e);
+      });
   });
   /** Listed groups, then saved guidance keys the connection no longer lists. */
   const groupRows = $derived([
@@ -174,11 +179,7 @@
     <Note>Only an app admin changes how this connection's tickets read.</Note>
   {/if}
 
-  <Group
-    label="skip messages"
-    icon="eyeClosed"
-    hint="Left out of what tachy reads, in every group unless a rule names some. The stored ticket keeps them."
-  >
+  <Group label="skip messages" icon="eyeClosed">
     <div class="rules">
       {#each rules as rule, i (rule.id)}
         <div class="rule" class:off={!rule.enabled}>
@@ -206,6 +207,8 @@
             value={rule.where}
             {connection}
             fields={INGEST_MESSAGE_FIELDS}
+            fieldSource="ingest.fields"
+            defaultField="message.author"
             valueSource="ingest.values"
             valuePrefixes={["item.", "message."]}
             onchange={(where) => setRule(i, { where })}
@@ -218,11 +221,7 @@
     </div>
   </Group>
 
-  <Group
-    label="ticket fields"
-    icon="fileTypes"
-    hint="Which of the ticket's own fields tachy reads. The description is never sent twice: the first message carries it."
-  >
+  <Group label="ticket fields" icon="fileTypes">
     <Rows>
       <Row label="sent">
         <Choice
@@ -245,11 +244,8 @@
     {/if}
   </Group>
 
-  <Group
-    label="guidance"
-    icon="guidance"
-    hint="Read by tachy with every ticket of the group."
-  >
+  <Group label="guidance" icon="guidance">
+    {#if groupsError}<Note tone="danger">{groupsError}</Note>{/if}
     {#if groupRows.length}
       <Rows>
         {#each groupRows as group (group.value)}
@@ -264,16 +260,12 @@
           </Row>
         {/each}
       </Rows>
-    {:else}
+    {:else if !groupsError}
       <Note>{connection} lists no groups.</Note>
     {/if}
   </Group>
 
-  <Group
-    label="try it"
-    icon="run"
-    hint="The rules as they stand, saved or not, on a ticket tachy has stored."
-  >
+  <Group label="try it" icon="run">
     <span class="pick">
       <OptionSelect
         source="work_items"
