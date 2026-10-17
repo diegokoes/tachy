@@ -23,18 +23,20 @@
   let { connection }: { connection: string } = $props();
 
   const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+  const PREVIEW_DEBOUNCE_MS = 300;
+  const CHARS_PER_TOKEN = 4;
   const path = $derived(`/flows/ingest/${encodeURIComponent(connection)}`);
 
   let config = $state<IngestConfig>({});
   let saved = $state("{}");
   let loadError = $state<string | null>(null);
   $effect(() => {
-    const from = path;
+    const requested = path;
     loadError = null;
     api
-      .get<IngestConfig>(from)
+      .get<IngestConfig>(requested)
       .then((loaded) => {
-        if (from !== path) return;
+        if (requested !== path) return;
         config = loaded ?? {};
         saved = JSON.stringify(config);
       })
@@ -84,7 +86,7 @@
       .then((loaded) => (groups = loaded))
       .catch(() => (groups = []));
   });
-  /** The connection's groups, then any a saved text names that it no longer lists. */
+  /** Listed groups, then saved guidance keys the connection no longer lists. */
   const groupRows = $derived([
     ...groups,
     ...Object.keys(config.guidance ?? {})
@@ -120,26 +122,25 @@
   let preview = $state<IngestPreview | null>(null);
   let previewError = $state<string | null>(null);
   $effect(() => {
-    const item = previewItem;
+    const itemId = previewItem;
     const draft = JSON.stringify(config);
-    const to = `${path}/preview`;
+    const previewPath = `${path}/preview`;
     previewError = null;
-    if (!item) {
+    if (!itemId) {
       preview = null;
       return;
     }
-    // Typing a rule's text changes the draft on every key.
     const timer = setTimeout(() => {
       api
-        .post<IngestPreview>(to, {
-          work_item_id: item,
+        .post<IngestPreview>(previewPath, {
+          work_item_id: itemId,
           config: JSON.parse(draft),
         })
         .then((shown) => {
-          if (item === previewItem) preview = shown;
+          if (itemId === previewItem) preview = shown;
         })
         .catch((e) => (previewError = errText(e)));
-    }, 300);
+    }, PREVIEW_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   });
   const readCount = $derived(
@@ -147,8 +148,8 @@
   );
   const ruleName = (id: string) =>
     rules.find((rule) => rule.id === id)?.label || "a rule";
-  /** About four characters to a token in English text. */
-  const tokens = (chars: number) => Math.round(chars / 4).toLocaleString();
+  const tokens = (chars: number) =>
+    Math.round(chars / CHARS_PER_TOKEN).toLocaleString();
 
   $effect(() => setPageActions(actions));
 </script>

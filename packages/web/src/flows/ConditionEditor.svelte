@@ -24,7 +24,7 @@
     connection?: string;
     /** The option source a field's values are listed from. */
     valueSource?: string;
-    /** The fields `valueSource` lists values for, by the start of their name. */
+    /** Field prefixes `valueSource` lists values for. */
     valuePrefixes?: string[];
     /** What earlier steps returned, offered ahead of the item's fields. */
     fields?: FlowOption[];

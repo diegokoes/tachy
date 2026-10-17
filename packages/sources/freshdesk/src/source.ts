@@ -682,7 +682,7 @@ export const createFreshdeskSource: SourceFactory = (
     async options(name, params) {
       if (name === "agents")
         return [...(await loadAgentNames())]
-          .map(([id, name]) => ({ value: id, label: name, hint: id }))
+          .map(([id, agentName]) => ({ value: id, label: agentName, hint: id }))
           .sort((a, b) => a.label.localeCompare(b.label));
       if (name === "companies") {
         const companies: FlowOption[] = [];

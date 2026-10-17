@@ -92,8 +92,7 @@ export const flows = new Hono()
     );
   })
 
-  // A connection serves every team, so only an app admin changes how its
-  // items read; team admins see the rules and try them.
+  // A connection serves every team: team admins read and preview, app admins save.
   .get("/ingest/:connection", async (c) => {
     await assertAnyTeamAdminApi(c);
     return c.json(await getIngestConfig(c.req.param("connection")));

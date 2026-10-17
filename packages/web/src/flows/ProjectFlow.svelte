@@ -42,11 +42,9 @@
 
   const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-  /**
-   * A helpdesk is picked whole, as a connection: its flow is how its tickets
-   * read, and that is set for all its groups at once.
-   */
+  /** Picker value prefix for a helpdesk connection, whose rules cover all its groups. */
   const INGEST = "ingest:";
+  const isHelpdesk = (id: string) => id.startsWith(INGEST);
 
   let projects = $state<ComposerProject[]>([]);
   let helpdesks = $state<FlowOption[]>([]);
@@ -72,7 +70,7 @@
   $effect(() => keep("admin.flows.project", projectId));
   const project = $derived(projects.find((p) => p.id === projectId) ?? null);
   const ingestConnection = $derived(
-    projectId.startsWith(INGEST) ? projectId.slice(INGEST.length) : "",
+    isHelpdesk(projectId) ? projectId.slice(INGEST.length) : "",
   );
   const projectOptions = $derived([
     ...projects.map((p) => ({
@@ -97,7 +95,7 @@
     const id = projectId;
     loadError = null;
     types = [];
-    if (!id || id.startsWith(INGEST)) return;
+    if (!id || isHelpdesk(id)) return;
     Promise.all([
       api.get<WorkItemTypeOption[]>(`/compose/projects/${id}/types?all=1`),
       api.get<ComposeConfig>(`/compose/projects/${id}/config`),
@@ -119,7 +117,7 @@
     const forType = type;
     raw = null;
     formError = null;
-    if (!id || !forType || id.startsWith(INGEST)) return;
+    if (!id || !forType || isHelpdesk(id)) return;
     api
       .get<ComposerForm>(
         `/compose/projects/${id}/form?type=${encodeURIComponent(forType)}&raw=1`,
@@ -379,7 +377,7 @@
     const forType = type;
     readForm = null;
     readFormError = null;
-    if (mode !== "view" || !id || !forType || id.startsWith(INGEST)) return;
+    if (mode !== "view" || !id || !forType || isHelpdesk(id)) return;
     api
       .get<WorkItemLayout>(
         `/work-items/projects/${id}/layout?type=${encodeURIComponent(forType)}`,
@@ -499,7 +497,7 @@
     openComposer(project, typeOption);
   }
 
-  // A helpdesk's editor sets its own.
+  // IngestFlow sets its own page actions.
   $effect(() => {
     if (!ingestConnection) return setPageActions(actions);
   });

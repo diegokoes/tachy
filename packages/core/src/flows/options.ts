@@ -135,20 +135,16 @@ defineOptionSource("item.values", async (request) =>
   subjectValues(need(request, "connection"), need(request, "field")),
 );
 
-/** Values a skip rule's message fields take, fixed where the shape fixes them. */
+const asOptions = (values: string[]): FlowOption[] =>
+  values.map((value) => ({ value, label: value }));
+
 const MESSAGE_VALUES: Record<string, FlowOption[]> = {
-  "message.visibility": ["public", "private", "internal"].map((v) => ({
-    value: v,
-    label: v,
-  })),
-  "message.direction": ["incoming", "outgoing"].map((v) => ({
-    value: v,
-    label: v,
-  })),
-  "message.automated": ["true", "false"].map((v) => ({ value: v, label: v })),
+  "message.visibility": asOptions(["public", "private", "internal"]),
+  "message.direction": asOptions(["incoming", "outgoing"]),
+  "message.automated": asOptions(["true", "false"]),
 };
 
-// A message's author is the source's own user id, so its people name them.
+// `message.author` is the source's user id; its agent list names them.
 defineOptionSource("ingest.values", async (request) => {
   const field = need(request, "field");
   if (field === "message.author") return fromSource("agents", request);
