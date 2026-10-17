@@ -61,6 +61,7 @@
     list={id}
     {value}
     aria-label={label}
+    title={error ?? undefined}
     placeholder={missing.length
       ? `pick ${missing.join(", ")} first`
       : placeholder}

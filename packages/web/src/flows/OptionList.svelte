@@ -87,6 +87,7 @@
       onchange={(v) => add(String(v ?? ""))}
     />
   {/if}
+  {#if error}<span class="error">{error}</span>{/if}
 </div>
 
 <style>
@@ -104,5 +105,9 @@
   }
   input {
     width: 100%;
+  }
+  .error {
+    color: var(--danger);
+    font-size: var(--fs-sm);
   }
 </style>

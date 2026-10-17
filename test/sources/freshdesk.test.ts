@@ -783,6 +783,33 @@ describe("freshdesk companies and tags", () => {
     ]);
   });
 
+  it("names a refusal that answers with a page by the page's title", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            "<!DOCTYPE html><html><head><title>Unauthorized location</title></head><body>long page</body></html>",
+            { status: 403 },
+          ),
+      ),
+    );
+    await expect(source().options!("ticket_fields", {})).rejects.toThrow(
+      "Freshdesk GET /ticket_fields -> 403 Unauthorized location",
+    );
+  });
+
+  it("keeps a JSON refusal's body as it is", async () => {
+    const body = '{"code":"access_denied"}';
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(body, { status: 403 })),
+    );
+    await expect(source().options!("ticket_fields", {})).rejects.toThrow(
+      `-> 403 ${body}`,
+    );
+  });
+
   it("sets fields typed as the update endpoint takes them", async () => {
     mockFetch({
       "/ticket_fields": [
