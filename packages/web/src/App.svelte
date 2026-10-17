@@ -70,7 +70,6 @@
     localStorage.setItem("tachy-skip-wizard", "1");
   }
 
-  let topbarEl = $state<HTMLElement>();
   let topbarH = $state(0);
   let mainEl = $state<HTMLElement>();
   let subEl = $state<HTMLElement>();
@@ -196,7 +195,7 @@
   // the tween starts once the DOM has caught up with the setting.
   $effect.pre(() => {
     void themeState.navHidden;
-    const play = untrack(() => reflow([topbarEl, windowEl]));
+    const play = untrack(() => reflow([topbar.el, windowEl]));
     void tick().then(play);
   });
 
@@ -314,7 +313,7 @@
       class:hidden={themeState.navHidden}
       class:tucked={topbar.tucked}
       class:veiled={topbar.veiled}
-      bind:this={topbarEl}
+      bind:this={topbar.el}
       bind:offsetHeight={topbarH}
       style:--topbar-h="{topbarH}px"
     >
@@ -413,7 +412,11 @@
       <Panel grow>
         <div class="shell">
           <div class="content">
-            <main id="main-content" bind:this={mainEl}>
+            <main
+              id="main-content"
+              bind:this={mainEl}
+              class:unclipped={topbar.veiled}
+            >
               {#if view === "board"}
                 <BoardView />
               {:else if view === "library"}
@@ -555,19 +558,19 @@
     min-width: 0;
   }
 
-  /* A view may tuck the bar away (shell/topbar): pulled up by its own height,
-     so the window takes the row, on the timing `reflow` gives the chat's dock.
+  /* A view may tuck the bar away (shell/topbar) and moves it in its own
+     `reflow`, which has to read a settled layout: no margin transition.
      Always above the window, which moves under a bar the pointer is holding. */
   .topbar {
     --tuck: calc(var(--topbar-h, 0px) + var(--pad-2));
     position: relative;
     z-index: 10;
-    transition:
-      margin-top 0.35s cubic-bezier(0.65, 0, 0.35, 1),
-      translate 0.35s cubic-bezier(0.65, 0, 0.35, 1);
   }
+  /* The translate eases only while tucked: untucking drops it with the
+     margin, so a bar the pointer holds stays where it is drawn. */
   .topbar.tucked {
     margin-top: calc(-1 * var(--tuck));
+    transition: translate 0.35s cubic-bezier(0.65, 0, 0.35, 1);
   }
   /* Faded on the bar's parts: `reflow` tweens the bar's own opacity when the
      nav setting hides it, and a transition there would chase the tween. Not
@@ -615,7 +618,7 @@
     height: calc(var(--pad-3) * 2);
   }
   @media (prefers-reduced-motion: reduce) {
-    .topbar,
+    .topbar.tucked,
     .mark,
     .navbar {
       transition: none;
@@ -864,6 +867,12 @@
   }
   main::-webkit-scrollbar {
     display: none;
+  }
+  /* A veiled bar means the view is moving its content, and a part on its way
+     may pass the edge. The row `.content` lays out sets the height, so it
+     holds without the scroll container. */
+  main.unclipped {
+    overflow: visible;
   }
 
   :global(.panel.grow:has(.bleed)) {

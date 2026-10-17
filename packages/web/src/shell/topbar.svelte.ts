@@ -8,6 +8,8 @@ export const topbar = $state({
   tucked: false,
   /** Back in its row but unseen, until the view that let it go shows it. */
   veiled: false,
+  /** The bar itself, for a view that moves it along with its own parts. */
+  el: undefined as HTMLElement | undefined,
 });
 
 /** Call from a view's `$effect` and return the result, as with `setSubnav`. */
