@@ -84,7 +84,7 @@ export function withCompaction(item: RawWorkItem): Record<string, unknown> {
   };
 }
 
-/** What the item's group asks the agent to keep in mind, set in admin › flows. */
+/** The guidance admin › flows sets for the item's group. */
 export function withGuidance(view: ModelRead): Record<string, unknown> {
   return view.guidance ? { group_guidance: view.guidance } : {};
 }
