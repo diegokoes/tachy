@@ -11,6 +11,8 @@ import type { FlowSubject } from "./subject";
 export interface FlowActionContext {
   flowId: string;
   flowRunId: string;
+  /** The step being run, by its id in the graph. */
+  stepId: string;
   /** Whose credentials the step acts with: the flow's owner. */
   scope: ScopeContext;
   userId: string | null;

@@ -107,6 +107,7 @@ export async function runFlow(opts: RunFlowOptions): Promise<{
   const ctx: FlowActionContext = {
     flowId: opts.flow.id,
     flowRunId,
+    stepId: "",
     scope: await ownerScope(opts.flow.run_as_user_id),
     userId: opts.flow.run_as_user_id,
     item: null,
@@ -163,6 +164,7 @@ export async function runFlow(opts: RunFlowOptions): Promise<{
       return;
     }
     try {
+      ctx.stepId = step.id;
       const output = await action.run(ctx, parsed.data);
       context.steps[step.id] = output;
       await done({
