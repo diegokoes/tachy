@@ -1,5 +1,5 @@
 /** Names a `--star-ink-<tint>` pair in tokens.css. */
-export type SkyTint = "red";
+export type SkyTint = "red" | "amber" | "green";
 
 const claims = $state<{ id: symbol; tint: SkyTint }[]>([]);
 

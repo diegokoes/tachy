@@ -24,10 +24,14 @@ export const workItemNumber = (text: string): string | null => {
   return match ? match[1] : null;
 };
 
-/** Looks the item up once typing pauses; the returned function cancels it. */
-export function peekLater(id: string): () => void {
+/**
+ * Looks the item up on the caller's connections of `sourceType` once typing
+ * pauses; the returned function cancels it.
+ */
+export function peekLater(sourceType: string, id: string): () => void {
   const mine = ++asked;
-  const known = peeksById.get(id);
+  const cacheKey = `${sourceType}:${id}`;
+  const known = peeksById.get(cacheKey);
   if (known) {
     peek.current = { status: "found", id, peeks: known };
     return () => {};
@@ -36,10 +40,10 @@ export function peekLater(id: string): () => void {
   const pause = setTimeout(async () => {
     try {
       const peeks = await api.get<WorkItemPeek[]>(
-        `/work-items/peek/azure-devops/${id}`,
+        `/work-items/peek/${sourceType}/${id}`,
       );
       // A miss is not kept: the item may be created a moment later.
-      if (peeks.length) peeksById.set(id, peeks);
+      if (peeks.length) peeksById.set(cacheKey, peeks);
       if (mine === asked) peek.current = { status: "found", id, peeks };
     } catch (e) {
       if (mine === asked)
@@ -47,6 +51,13 @@ export function peekLater(id: string): () => void {
     }
   }, TYPING_PAUSE_MS);
   return () => clearTimeout(pause);
+}
+
+/** The connection the item `id` was found on, when exactly one has it. */
+export function peekedSource(id: string): string | null {
+  const current = peek.current;
+  if (current.status !== "found" || current.id !== id) return null;
+  return current.peeks.length === 1 ? current.peeks[0].source_slug : null;
 }
 
 export function clearPeek(): void {

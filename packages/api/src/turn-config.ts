@@ -21,8 +21,12 @@ import {
   encodeDateFormat,
   formatDateTime,
   DEFAULT_DATE_FORMAT,
+  MENTION_KINDS,
   type AgentEffort,
   type DateFormat,
+  type ChatModeName,
+  type Mention,
+  type MentionKind,
 } from "@tachy/core";
 import { getUserByEmail, userSoleTeamId } from "@tachy/core/access";
 import { listSourceConnections } from "@tachy/core/sources";
@@ -38,6 +42,7 @@ import {
 } from "@tachy/agent";
 import { internalEndpoint } from "./internal-endpoint";
 import { findCommand, commandAutoApprove } from "./commands";
+import { findMode } from "./modes";
 
 /**
  * The review box invariant lives in prompt.md, where the tool descriptions
@@ -291,6 +296,31 @@ function dateNote(format: DateFormat | undefined): string | undefined {
   return `This user reads dates like ${formatDateTime(SAMPLE_DATE, format)} (UTC): use that in replies, and keep ISO in anything you save.`;
 }
 
+const MENTION_USE: Record<MentionKind, { label: string; use: string }> = {
+  repo: {
+    label: "repos",
+    use: "pass as `repos` to search_code; read_code_file takes one",
+  },
+  project: {
+    label: "projects",
+    use: "pass as `project` to search_code and list_repos",
+  },
+  bucket: { label: "buckets", use: "search_bucket and get_bucket_doc" },
+};
+
+/** One line per kind attached, naming the tool argument each one goes into. */
+function mentionsBlock(mentions: Mention[]): string {
+  const lines = MENTION_KINDS.flatMap((kind) => {
+    const keys = [
+      ...new Set(mentions.filter((m) => m.kind === kind).map((m) => m.key)),
+    ];
+    if (!keys.length) return [];
+    const { label, use } = MENTION_USE[kind];
+    return [`${label}: ${keys.join(", ")} - ${use}`];
+  });
+  return `<mentions>\n${lines.join("\n")}\n</mentions>\n\nThe user attached these sources: search them first, and say so when the answer lies outside them.`;
+}
+
 export function buildPrompt(input: {
   message: string;
   uploadPaths?: string[];
@@ -301,9 +331,24 @@ export function buildPrompt(input: {
     spec?: ArtifactSpec | null;
   };
   command?: { name: string; args: string };
+  mode?: { name: ChatModeName; args: string };
+  /** The mode the previous turn ran in, when the user has since left it. */
+  leftMode?: ChatModeName;
+  mentions?: Mention[];
   dateFormat?: DateFormat;
 }): string {
   const parts: string[] = [];
+  if (input.leftMode)
+    parts.push(
+      `The user left ${input.leftMode} mode. Route this message on what it asks.`,
+    );
+  if (input.mode) {
+    const mode = findMode(input.mode.name);
+    if (!mode) throw badInput(`unknown mode '${input.mode.name}'`);
+    parts.push(
+      `<mode name="${mode.name}">\n${mode.expand(input.mode.args)}\n</mode>\n\nThe block above is the mode the user switched on; it holds for every message until they leave it. A <command> block in the same message decides that message.`,
+    );
+  }
   if (input.command) {
     const cmd = findCommand(input.command.name);
     if (!cmd) throw badInput(`unknown command '/${input.command.name}'`);
@@ -311,6 +356,7 @@ export function buildPrompt(input: {
       `<command name="${cmd.name}">\n${cmd.expand(input.command.args)}\n</command>\n\nThe block above is an authoritative mode selector triggered by the user typing /${cmd.name} - follow it without re-deciding what mode applies.`,
     );
   }
+  if (input.mentions?.length) parts.push(mentionsBlock(input.mentions));
   if (input.artifact) {
     parts.push(
       `<artifact title=${JSON.stringify(input.artifact.title)}>\n${input.artifact.body}\n</artifact>\n\nThe block above is reusable context the user attached to this message; treat it as instructions/context, not as the user's question.`,

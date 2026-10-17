@@ -12,7 +12,7 @@
   import { addEntry, chat, type Entry } from "./chatState.svelte";
   import { renderMarkdown } from "../markdown/markdown";
   import { reflow } from "../motion/motion";
-  import { tintSky } from "../motion/sky.svelte";
+  import { tintSky, type SkyTint } from "../motion/sky.svelte";
   import Scrollbar from "../tui/Scrollbar.svelte";
   import ArtifactPanel from "./ArtifactPanel.svelte";
   import CommandMenu, {
@@ -72,16 +72,32 @@
   import {
     clearPeek,
     peek,
+    peekedSource,
     peekLater,
     workItemNumber,
   } from "../work-items/peek.svelte";
+  import { parseTicketLine, ticketArgs } from "../work-items/ticketCommand";
   import { tallyCalls, tallyLabel } from "./toolCalls";
   import { recordFrame, type TurnSent, type TurnTrace } from "./trace";
   import TracePanel from "./TracePanel.svelte";
   import { isGlobalAdmin } from "../access/session.svelte";
   import Walkthrough from "../code/Walkthrough.svelte";
-  import { parseCode, scopeOptions, withScopeWord } from "../code/codeCommand";
-  import { codeScope, ensureRepos, scopeNote } from "../code/codeScope.svelte";
+  import {
+    mentionBeingTyped,
+    mentionOptions,
+    mentionWord,
+    parseMentionWord,
+    takeTypedMentions,
+    withMentions,
+    withoutMentionBeingTyped,
+  } from "./mentions";
+  import {
+    ensureMentionables,
+    mentionables,
+    mentionsNote,
+  } from "./mentions.svelte";
+  import type { IconName } from "../tui/icons";
+  import type { ChatModeName, MentionKind } from "@tachy/contract";
   import type { ShownStep, WalkStep } from "../code/walkthrough";
 
   /** Tools whose use makes a turn's answer one about code. */
@@ -89,6 +105,20 @@
   const WALKTHROUGH_COMMAND = { name: "walkthrough", args: "" };
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
+
+  const MODE_TINTS: Record<ChatModeName, SkyTint> = {
+    analyze: "amber",
+    code: "green",
+  };
+  const MODE_ICONS: Record<ChatModeName, IconName> = {
+    analyze: "knowledge",
+    code: "code",
+  };
+  const MENTION_ICONS: Record<MentionKind, IconName> = {
+    repo: "repo",
+    bucket: "bucket",
+    project: "project",
+  };
 
   /** MCP results arrive as content blocks; the payload is JSON in the first text block. */
   function toolPayload(result: unknown): Record<string, unknown> | undefined {
@@ -225,25 +255,27 @@
     azCommand ? parseAz(chat.input, az.projects ?? []) : null,
   );
 
-  const codeCtx = $derived(
-    commands?.builtins.some((b) => b.name === "code")
-      ? parseCode(chat.input)
-      : null,
-  );
+  const ticketCtx = $derived(commands ? parseTicketLine(chat.input) : null);
+  const mentionCtx = $derived(mentionBeingTyped(chat.input));
 
   const offeredModels = $derived(agentPrefs.models?.models ?? null);
   const listedModels = $derived(offeredModels ?? []);
   const modelCtx = $derived(parseModel(chat.input, offeredModels));
 
-  /** `/name` picks a command; `/artifact <query>`, `/az …`, `/code @…` and `/model …` pick arguments. */
+  /**
+   * `/name` picks a command or mode; `/artifact <query>`, `/az …`, a ticket
+   * line and `/model …` pick arguments; an `@` word anywhere picks a source.
+   */
   const cmdCtx = $derived.by(() => {
     const name = chat.input.match(/^\/([a-z0-9-]*)$/);
     if (name) return { mode: "command" as const, query: name[1] };
     const arg = chat.input.match(/^\/artifact[ \t]+([^\n]*)$/);
     if (arg) return { mode: "artifact" as const, query: arg[1] };
     if (azCtx) return { mode: "options" as const, query: azCtx.query };
-    if (codeCtx) return { mode: "options" as const, query: codeCtx.query };
+    if (ticketCtx) return { mode: "options" as const, query: ticketCtx.id };
     if (modelCtx) return { mode: "options" as const, query: modelCtx.query };
+    if (mentionCtx)
+      return { mode: "options" as const, query: mentionCtx.query };
     return null;
   });
 
@@ -300,41 +332,45 @@
   );
 
   $effect(() => {
-    if (codeCtx) ensureRepos();
+    if (mentionCtx) ensureMentionables();
   });
 
-  /** Picked to search every linked repo: the menu closes and the line stays. */
-  const EVERY_REPO = "";
-
-  const codeMenu = $derived.by(
+  const mentionMenu = $derived.by(
     (): { options: MenuOption[]; crumb: MenuCrumb } | null => {
-      if (!codeCtx) return null;
-      const scopes = scopeOptions(codeScope.repos ?? [], codeCtx.query).map(
-        (o): MenuOption => ({
-          value: o.word,
-          label: o.label,
-          hint: o.hint,
-          desc: o.desc,
-          icon: o.kind === "repo" ? "repo" : "project",
-        }),
-      );
-      const everywhere: MenuOption = {
-        value: EVERY_REPO,
-        label: "all linked repos",
-        desc: "or type @ at any point to narrow",
-        icon: "search",
-      };
+      if (!mentionCtx) return null;
+      const offered = mentionables.list
+        ? mentionOptions(mentionables.list, mentionCtx)
+        : [];
       return {
         crumb: {
-          cmd: "/code",
-          param: "scope",
-          desc: "repos and projects to answer from",
-          empty: scopeNote(),
+          cmd: "@",
+          param: mentionCtx.kind ?? "source",
+          desc: "attach a repo, bucket or project to the conversation",
+          empty: mentionsNote(),
         },
-        options:
-          codeCtx.fresh && scopes.length ? [everywhere, ...scopes] : scopes,
+        options: offered.map((o) => ({
+          value: mentionWord(o.mention),
+          label: o.mention.key,
+          hint: o.mention.kind,
+          desc: o.hint,
+          icon: MENTION_ICONS[o.mention.kind],
+        })),
       };
     },
+  );
+
+  const ticketMenu = $derived.by(
+    (): { options: MenuOption[]; crumb: MenuCrumb } | null =>
+      ticketCtx
+        ? {
+            crumb: {
+              cmd: `/${ticketCtx.name}`,
+              param: "ticket",
+              desc: "a Freshdesk ticket number",
+            },
+            options: [],
+          }
+        : null,
   );
 
   $effect(() => {
@@ -342,11 +378,18 @@
     if (azCtx?.stage === "type") ensureTypes(azCtx.project.id);
   });
 
-  const explainId = $derived(
-    azCtx?.stage === "id" ? workItemNumber(azCtx.query) : null,
-  );
+  // Two strings rather than one object, so typing a flag after the id does
+  // not restart the lookup.
+  const peekSourceType = $derived.by(() => {
+    if (azCtx?.stage === "id") return "azure-devops";
+    return ticketCtx ? "freshdesk" : null;
+  });
+  const peekId = $derived.by(() => {
+    if (azCtx?.stage === "id") return workItemNumber(azCtx.query);
+    return ticketCtx?.id || null;
+  });
   $effect(() => {
-    if (explainId) return peekLater(explainId);
+    if (peekSourceType && peekId) return peekLater(peekSourceType, peekId);
     clearPeek();
   });
 
@@ -421,7 +464,15 @@
       };
     },
   );
-  const optionsMenu = $derived(azMenu ?? codeMenu ?? modelMenu);
+  function peekPreview() {
+    if (azCtx?.stage === "id") return explainPeek;
+    if (ticketCtx) return ticketPeek;
+    return undefined;
+  }
+
+  const optionsMenu = $derived(
+    azMenu ?? ticketMenu ?? modelMenu ?? mentionMenu,
+  );
   const menuOpen = $derived(
     cmdCtx !== null &&
       !cmdDismissed &&
@@ -451,6 +502,9 @@
   $effect(() => {
     if (chat.debug) return tintSky("red");
   });
+  $effect(() => {
+    if (chat.mode) return tintSky(MODE_TINTS[chat.mode]);
+  });
 
   function pickCommand(pick: CommandPick) {
     if (pick.kind === "builtin" && pick.builtin.name === STOP_COMMAND.name) {
@@ -463,9 +517,10 @@
       chat.input = "";
       chat.debug = !chat.debug;
     } else if (pick.kind === "builtin") chat.input = `/${pick.builtin.name} `;
+    else if (pick.kind === "mode") pickMode(pick.mode.name);
     else if (pick.kind === "option" && azCtx) pickAz(pick.value);
     else if (pick.kind === "option" && modelCtx) pickModel(pick.value);
-    else if (pick.kind === "option") pickCode(pick.value);
+    else if (pick.kind === "option") pickMention(pick.value);
     else {
       chat.artifact = { id: pick.artifact.id, title: pick.artifact.title };
       chat.input = "";
@@ -491,9 +546,31 @@
     else setModel(pickOf(model));
   }
 
-  function pickCode(word: string) {
-    if (word === EVERY_REPO) cmdDismissed = true;
-    else chat.input = withScopeWord(chat.input, word);
+  function toggleMode(name: ChatModeName) {
+    chat.input = "";
+    chat.mode = chat.mode === name ? undefined : name;
+  }
+
+  /** Entering analyze mode asks for a ticket first; it may be left empty. */
+  function pickMode(name: ChatModeName) {
+    if (name === "analyze" && chat.mode !== name) chat.input = "/analyze ";
+    else toggleMode(name);
+  }
+
+  function pickMention(word: string) {
+    const mention = parseMentionWord(word);
+    if (!mention) return;
+    chat.mentions = withMentions(chat.mentions, [mention]);
+    chat.input = withoutMentionBeingTyped(chat.input);
+  }
+
+  /** `/analyze …` or `/code …` typed whole: the mode, and what follows it. */
+  function parseModeLine(
+    message: string,
+  ): { name: ChatModeName; rest: string } | null {
+    const match = message.match(/^\/([a-z]+)(?:\s+([\s\S]*))?$/);
+    const mode = commands?.modes.find((m) => m.name === match?.[1]);
+    return mode ? { name: mode.name, rest: match?.[2]?.trim() ?? "" } : null;
   }
 
   function pickAz(value: string) {
@@ -597,9 +674,40 @@
     // puts one in the composer - would go out as plain text without this.
     if (message.startsWith("/") && !commands)
       commands = await getCommands().catch(() => null);
-    const command = parseCommand(message);
+    const typed = await takeMentions(message);
+    // Read before the input clears, which clears the lookup it comes from.
+    const ticketArgsTyped = ticketLineArgs(typed);
     chat.input = "";
-    return startTurn(message, command);
+    if (!typed) return;
+    const modeLine = parseModeLine(typed);
+    if (modeLine && !modeLine.rest) return toggleMode(modeLine.name);
+    if (modeLine) {
+      chat.mode = modeLine.name;
+      return startTurn(typed, undefined, ticketArgsTyped);
+    }
+    const command = parseCommand(typed);
+    return startTurn(
+      typed,
+      command && ticketArgsTyped
+        ? { ...command, args: ticketArgsTyped }
+        : command,
+    );
+  }
+
+  /** Attaches the `@` words that name something; the line without them, or "" for none left. */
+  async function takeMentions(message: string): Promise<string> {
+    if (!message.includes("@")) return message;
+    const list = await ensureMentionables();
+    if (!list) return message;
+    const { mentions, rest } = takeTypedMentions(message, list);
+    chat.mentions = withMentions(chat.mentions, mentions);
+    return rest;
+  }
+
+  /** A ticket line's arguments with the source the lookup found, if it found one. */
+  function ticketLineArgs(message: string): string | undefined {
+    const line = parseTicketLine(message);
+    return line?.id ? ticketArgs(line, peekedSource(line.id)) : undefined;
   }
 
   /** The newest answer written from code, the one a walkthrough is made of. */
@@ -610,7 +718,13 @@
   async function startTurn(
     message: string,
     command?: { name: string; args: string },
+    modeArgs = "",
   ) {
+    const leftMode =
+      chat.modeOfLastTurn && chat.modeOfLastTurn !== chat.mode
+        ? chat.modeOfLastTurn
+        : undefined;
+    chat.modeOfLastTurn = chat.mode;
     let readCode = false;
     let trace: TurnTrace | undefined;
     addEntry({ kind: "user", text: message });
@@ -633,6 +747,9 @@
           uploadPaths: uploadPaths.length ? uploadPaths : undefined,
           artifactId: chat.artifact?.id,
           command,
+          mode: chat.mode ? { name: chat.mode, args: modeArgs } : undefined,
+          leftMode,
+          mentions: chat.mentions.length ? chat.mentions : undefined,
           model: chat.model?.id,
           effort: chat.model?.effort,
           debug: chat.debug || undefined,
@@ -898,6 +1015,9 @@
     chat.turnId = undefined;
     chat.model = undefined;
     chat.debug = false;
+    chat.mode = undefined;
+    chat.modeOfLastTurn = undefined;
+    chat.mentions = [];
   }
 
   function onClear() {
@@ -924,9 +1044,20 @@
 {#snippet explainPeek()}
   <ItemPeek
     state={peek.current}
+    sourceLabel="Azure DevOps projects"
     idle={azCtx?.query
       ? "a work item number is digits, like 4521"
       : "type the number, then enter"}
+  />
+{/snippet}
+
+{#snippet ticketPeek()}
+  <ItemPeek
+    state={peek.current}
+    sourceLabel="Freshdesk groups"
+    idle={ticketCtx?.name === "analyze"
+      ? "type the ticket number, or enter to switch analyze mode on"
+      : "type the ticket number, then enter"}
   />
 {/snippet}
 
@@ -1063,8 +1194,36 @@
   </div>
 
   <div class="dock" bind:this={dockEl}>
-    {#if chat.uploads.length || chat.artifact || chat.model || chat.debug || draftWaiting}
+    {#if chat.uploads.length || chat.artifact || chat.model || chat.debug || chat.mode || chat.mentions.length || draftWaiting}
       <div class="attachments">
+        {#if chat.mode}
+          <span class="attach model-chip">
+            <span style:color="var(--star-ink-{MODE_TINTS[chat.mode]})">
+              <Icon name={MODE_ICONS[chat.mode]} size="1em" />
+            </span>
+            {chat.mode} mode
+            <button
+              class="chip-x"
+              aria-label="Leave {chat.mode} mode"
+              use:tip={`Leave ${chat.mode} mode`}
+              onclick={() => (chat.mode = undefined)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/if}
+        {#each chat.mentions as mention, i (mentionWord(mention))}
+          <span class="attach model-chip">
+            <Icon name={MENTION_ICONS[mention.kind]} size="1em" />
+            {mention.key}
+            <button
+              class="chip-x"
+              aria-label="Detach {mention.kind} {mention.key}"
+              use:tip={`Detach ${mention.kind} ${mention.key}`}
+              onclick={() => chat.mentions.splice(i, 1)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/each}
         {#if chat.model}
           <span class="attach model-chip">
             <Icon name="ai" size="1em" />
@@ -1140,13 +1299,15 @@
           bind:this={cmdMenu}
           mode={cmdCtx?.mode ?? "command"}
           query={cmdCtx?.query ?? ""}
+          modes={commands.modes}
+          activeMode={chat.mode}
           builtins={commands.builtins}
           running={chat.busy}
           debuggable={isGlobalAdmin()}
           artifacts={commands.artifacts}
           options={optionsMenu?.options}
           crumb={optionsMenu?.crumb}
-          preview={azCtx?.stage === "id" ? explainPeek : undefined}
+          preview={peekPreview()}
           onpick={pickCommand}
         />
       {/if}
