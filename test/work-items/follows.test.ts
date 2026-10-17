@@ -279,13 +279,13 @@ describe("following items", () => {
       externalId: "8",
     });
     helpdeskNotes.length = 0;
-    for (const noteTo of [noted.id, unkeyed.id])
+    for (const noteOnItemId of [noted.id, unkeyed.id])
       await followWorkItem({
         userId: readerId,
         connectionId,
         externalId: "42",
         seenRev: 3,
-        noteTo,
+        noteOnItemId,
       });
 
     ado(4, [
@@ -295,7 +295,7 @@ describe("following items", () => {
     ]);
     expect(await checkFollows()).toMatchObject({
       changed: 1,
-      notes: 1,
+      notes_posted: 1,
       notes_skipped: 1,
     });
     expect(helpdeskNotes).toEqual([

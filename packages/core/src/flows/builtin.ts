@@ -360,7 +360,7 @@ export function registerBuiltinFlowActions(): void {
     writes: true,
     params: z.object({
       field: z.string().min(1).meta(options("source.ticket_fields")),
-      // A lone {{token}} keeps its type, and a model's JSON answer may hold a number.
+      // A lone {{token}} keeps its type, so a model's JSON number arrives as a number.
       value: z.coerce
         .string()
         .min(1)
@@ -451,12 +451,13 @@ export function registerBuiltinFlowActions(): void {
     async run(ctx, params) {
       const item = needItem(ctx);
       if (!ctx.userId) throw badInput("the flow has no owner to follow as");
-      const [ado] = await sql<{ id: string }[]>`
+      const [adoConnection] = await sql<{ id: string }[]>`
         select id from source_connections where source_type = 'azure-devops'
           ${params.connection ? sql`and slug = ${params.connection}` : sql``}
         order by slug limit 1
       `;
-      if (!ado) throw badInput("no Azure DevOps connection to follow on");
+      if (!adoConnection)
+        throw badInput("no Azure DevOps connection to follow on");
       const { kept } = applyIngest(
         await readStoredRaw(item.id),
         await getIngestConfig(item.connection),
@@ -465,12 +466,12 @@ export function registerBuiltinFlowActions(): void {
       for (const externalId of refs)
         await followWorkItem({
           userId: ctx.userId,
-          connectionId: ado.id,
+          connectionId: adoConnection.id,
           externalId,
-          ...(params.note_back ? { noteTo: item.id } : {}),
+          ...(params.note_back ? { noteOnItemId: item.id } : {}),
         });
       await recordAdoRefs(item.id, refs, {
-        sourceConnectionId: ado.id,
+        sourceConnectionId: adoConnection.id,
         createdById: ctx.userId,
       });
       return { followed: refs };

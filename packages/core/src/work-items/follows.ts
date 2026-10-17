@@ -28,8 +28,8 @@ export interface FollowInput {
   sourceProjectId?: string | null;
   /** The revision the follower has seen; null lets the next check set it. */
   seenRev?: number | null;
-  /** A ticket that gets a private note each time the item changes. */
-  noteTo?: string;
+  /** A work item that gets a private note on each change. */
+  noteOnItemId?: string;
 }
 
 export async function followWorkItem(input: FollowInput): Promise<void> {
@@ -42,11 +42,11 @@ export async function followWorkItem(input: FollowInput): Promise<void> {
       set source_project_id = coalesce(excluded.source_project_id,
                                        work_item_follows.source_project_id)
   `;
-  if (!input.noteTo) return;
+  if (!input.noteOnItemId) return;
   await sql`
     insert into work_item_follow_notes
       (user_id, source_connection_id, external_id, work_item_id)
-    values (${input.userId}, ${input.connectionId}, ${input.externalId}, ${input.noteTo})
+    values (${input.userId}, ${input.connectionId}, ${input.externalId}, ${input.noteOnItemId})
     on conflict do nothing
   `;
 }
@@ -161,8 +161,8 @@ export interface FollowCheck {
   changed: number;
   /** Follows not read: no token of the follower's own, or the source refused. */
   skipped: number;
-  /** Private notes posted on tickets that follow wrote back to. */
-  notes: number;
+  /** Private notes posted on the tickets follows write back to. */
+  notes_posted: number;
   /** Notes not posted: no token of the follower's own, or the source refused. */
   notes_skipped: number;
 }
@@ -196,7 +196,7 @@ export async function checkFollows(): Promise<FollowCheck> {
     checked: 0,
     changed: 0,
     skipped: 0,
-    notes: 0,
+    notes_posted: 0,
     notes_skipped: 0,
   };
   for (const follows of groups.values()) {
@@ -246,13 +246,17 @@ export async function checkFollows(): Promise<FollowCheck> {
         },
         change,
       );
-      await noteBack(first.user_id, first.connection_id, change, outcome);
+      await postChangeNotes(
+        first.user_id,
+        first.connection_id,
+        change,
+        outcome,
+      );
     }
   }
   return outcome;
 }
 
-/** The note a ticket gets when an item it follows changes. */
 function changeNote(change: FollowedChange): string {
   return [
     `#${change.id} ${change.title} changed:`,
@@ -261,11 +265,8 @@ function changeNote(change: FollowedChange): string {
   ].join("\n");
 }
 
-/**
- * Each ticket the follow writes back to gets the change as a private note,
- * posted with the follower's own token on the ticket's connection.
- */
-async function noteBack(
+/** Posts on each ticket the follow writes back to, with the follower's own token. */
+async function postChangeNotes(
   userId: string,
   connectionId: string,
   change: FollowedChange,
@@ -289,7 +290,7 @@ async function noteBack(
       await resolved.source.postNote(ticket.external_id, changeNote(change), {
         private: true,
       });
-      outcome.notes++;
+      outcome.notes_posted++;
     } catch (e) {
       log("warn", "follow_note_failed", {
         connection: ticket.connection,

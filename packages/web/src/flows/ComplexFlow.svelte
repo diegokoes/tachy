@@ -47,7 +47,7 @@
 
   const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
   const NEW = "__new";
-  /** A new flow that starts from a template: `TEMPLATE` + its key. */
+  /** Picker value prefix: `TEMPLATE` + a template key. */
   const TEMPLATE = "__template:";
 
   interface Draft {
