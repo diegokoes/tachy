@@ -95,6 +95,11 @@ export interface WorkItemSource {
    * name where known. Import scrubText/TokenMap from @tachy/core.
    */
   redactRaw?(raw: unknown, map: TokenMap, customerSlug: string | null): unknown;
+  /**
+   * Paths into `raw` that its messages already carry, such as a ticket's
+   * description, left out of what a model reads so it is not sent twice.
+   */
+  readonly modelOmits?: readonly string[];
   /** Present when people can create items in this source from tachy. */
   composer?: WorkItemComposer;
   /** Present when people can look items up live, with their own token. */

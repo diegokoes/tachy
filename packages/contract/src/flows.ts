@@ -63,6 +63,37 @@ export interface ViewDisplay {
   order: string[];
 }
 
+/** Leaves matching messages out of what a model reads. */
+export interface IngestRule {
+  id: string;
+  label: string;
+  enabled: boolean;
+  /** Tested against `{ message, item }`. */
+  where: Condition;
+}
+
+export const INGEST_FIELD_MODES = ["only", "except"] as const;
+export type IngestFieldMode = (typeof INGEST_FIELD_MODES)[number];
+
+/** `source_connections.config.ingest`. */
+export interface IngestConfig {
+  skip?: IngestRule[];
+  /** Payload paths a model reads (`only`) or not (`except`); absent: all. */
+  fields?: { mode: IngestFieldMode; paths: string[] };
+  /** Text the agent reads with a group's items, by group key. */
+  guidance?: Record<string, string>;
+}
+
+export const INGEST_MESSAGE_FIELDS: FlowOption[] = [
+  { value: "message.author", label: "author", hint: "the source's user id" },
+  { value: "message.author_label", label: "author name or email" },
+  { value: "message.visibility", label: "visibility" },
+  { value: "message.direction", label: "direction" },
+  { value: "message.automated", label: "automated" },
+  { value: "message.body", label: "text" },
+  { value: "message.chars", label: "length", hint: "characters" },
+];
+
 /**
  * A flow is triggers and a tree of steps. Each list of steps runs in order; an
  * `if` ends its list, so every path through a flow is a branch of one tree and

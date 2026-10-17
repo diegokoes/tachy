@@ -1,39 +1,19 @@
 import { Cron } from "croner";
 import { z } from "zod";
 import {
-  CONDITION_OPS,
   FLOW_TRIGGER_KINDS,
-  type Condition,
   type FlowGraph,
   type FlowStep,
 } from "@tachy/contract";
 import { badInput } from "../infra/errors";
 import { flowAction, hasAction } from "./catalog";
-
-const id = z
-  .string()
-  .regex(/^[\w-]{1,40}$/, "ids are letters, digits, _ and -");
-
-const condition: z.ZodType<Condition> = z.lazy(() =>
-  z.union([
-    z.object({ all: z.array(condition).max(50) }).strict(),
-    z.object({ any: z.array(condition).max(50) }).strict(),
-    z.object({ not: condition }).strict(),
-    z
-      .object({
-        field: z.string().min(1),
-        op: z.enum(CONDITION_OPS),
-        value: z.unknown().optional(),
-      })
-      .strict(),
-  ]),
-);
+import { conditionSchema, flowId } from "./schemas";
 
 const step: z.ZodType<FlowStep> = z.lazy(() =>
   z.discriminatedUnion("kind", [
     z
       .object({
-        id,
+        id: flowId,
         kind: z.literal("action"),
         action: z.string().min(1),
         params: z.record(z.string(), z.unknown()).default({}),
@@ -42,9 +22,9 @@ const step: z.ZodType<FlowStep> = z.lazy(() =>
       .strict(),
     z
       .object({
-        id,
+        id: flowId,
         kind: z.literal("if"),
-        when: condition,
+        when: conditionSchema,
         then: z.array(step).max(100).default([]),
         else: z.array(step).max(100).default([]),
         label: z.string().max(80).optional(),
@@ -52,9 +32,9 @@ const step: z.ZodType<FlowStep> = z.lazy(() =>
       .strict(),
     z
       .object({
-        id,
+        id: flowId,
         kind: z.literal("filter"),
-        when: condition,
+        when: conditionSchema,
         label: z.string().max(80).optional(),
       })
       .strict(),
@@ -67,10 +47,10 @@ export const flowGraphSchema = z
       .array(
         z
           .object({
-            id,
+            id: flowId,
             kind: z.enum(FLOW_TRIGGER_KINDS),
             params: z.record(z.string(), z.unknown()).default({}),
-            where: condition.optional(),
+            where: conditionSchema.optional(),
           })
           .strict(),
       )

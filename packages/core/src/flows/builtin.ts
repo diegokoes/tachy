@@ -15,6 +15,7 @@ import { resolveSource } from "../sources/registry";
 import { ingestWorkItem } from "../work-items/ingest";
 import { defineFlowAction, type FlowActionContext } from "./actions";
 import { customerProperties } from "./customer";
+import { applyIngest, ingestConfig } from "./ingest";
 import { applyFormConfig, getComposeConfig, typeConfig } from "./forms";
 import type { FlowSubject } from "./subject";
 
@@ -56,7 +57,7 @@ export function registerBuiltinFlowActions(): void {
     key: "item.fetch",
     title: "Read ticket",
     description:
-      "Fetches the item fresh from its source, with every message, and stores it.",
+      "Fetches the item fresh from its source and stores it. Messages the connection's ingest rules skip are left out.",
     category: "read",
     writes: false,
     params: z.object({}),
@@ -73,13 +74,19 @@ export function registerBuiltinFlowActions(): void {
         }),
       ),
       text: z.string(),
+      guidance: z.string().nullable(),
     }),
     async run(ctx) {
       const item = needItem(ctx);
       const { conn, source } = await resolveSource(item.connection, ctx.scope);
       const raw = await source.fetchItem(item.external_id);
       await ingestWorkItem(conn.id, raw);
-      const messages = raw.messages.map((m) => ({
+      const { kept, guidance } = applyIngest(
+        raw,
+        ingestConfig(conn.config),
+        source.modelOmits,
+      );
+      const messages = kept.messages.map((m) => ({
         direction: m.direction,
         visibility: m.visibility,
         author: m.authorLabel ?? m.author ?? null,
@@ -93,6 +100,7 @@ export function registerBuiltinFlowActions(): void {
         text: messages
           .map((m) => `[${m.direction} ${m.author ?? ""}] ${m.text}`.trim())
           .join("\n\n"),
+        guidance: guidance ?? null,
       };
     },
   });

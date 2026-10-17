@@ -1,12 +1,9 @@
-/**
- * `POST /:source/:id/fetch` is not covered: it calls the third-party API, the
- * same line load/README.md draws for the k6 scenarios. The rest of the file is
- * reachable without one.
- */
+/** The work-item routes, each against a fake adapter, so none calls a source. */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { addCustomer, addCustomerUnit } from "@tachy/core/catalog";
 import { ingestWorkItem } from "@tachy/core/work-items";
 import {
+  addSourceConnection,
   registerSource,
   type RawWorkItem,
   type SourceFactory,
@@ -60,6 +57,37 @@ registerSource("fake-files-api", () => ({
     const file = held.get(attachmentId);
     if (!file) throw new Error(`42 lists no file '${attachmentId}'`);
     return { name: file.name, body: new Response(file.bytes).body! };
+  },
+}));
+
+registerSource("fake-fetch-api", () => ({
+  type: "fake-fetch-api",
+  capabilities: { postNote: false, incrementalSync: false },
+  async fetchItem() {
+    return {
+      externalId: "7",
+      kind: "ticket" as const,
+      title: "Scanner offline",
+      raw: {},
+      messages: [
+        {
+          externalId: "1",
+          direction: "incoming" as const,
+          visibility: "public" as const,
+          bodyText: "The scanner is offline.",
+        },
+        {
+          externalId: "2",
+          author: "900",
+          direction: "outgoing" as const,
+          visibility: "private" as const,
+          bodyText: "AI analysis, at length.",
+        },
+      ],
+    };
+  },
+  async listItems() {
+    return { items: [] };
   },
 }));
 
@@ -339,5 +367,42 @@ describe("PATCH /api/work-items/:id/observed-version", () => {
       },
     );
     expect(response.status).toBe(400);
+  });
+});
+
+describe("POST /api/work-items/:source/:id/fetch", () => {
+  it("returns the thread without the messages the connection's rules skip", async () => {
+    await addSourceConnection({
+      sourceType: "fake-fetch-api",
+      slug: "fetch-conn",
+      baseUrl: "https://example.invalid",
+      config: {
+        ingest: {
+          skip: [
+            {
+              id: "manager",
+              label: "Manager analysis",
+              enabled: true,
+              where: { field: "message.author", op: "eq", value: "900" },
+            },
+          ],
+        },
+      },
+    });
+    const response = await app.request(
+      "/api/work-items/fetch-conn/7/fetch",
+      json({}),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(
+      body.item.messages.map((m: { bodyText: string }) => m.bodyText),
+    ).toEqual(["The scanner is offline."]);
+    const [stored] = await sql`
+      select count(*)::int as n from work_item_messages m
+      join work_items w on w.id = m.work_item_id
+      where w.external_id = '7'
+    `;
+    expect(stored.n).toBe(2);
   });
 });
