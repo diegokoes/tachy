@@ -493,8 +493,8 @@ export const createAzureDevopsSource: SourceFactory = (
     capabilities: { postNote: false, incrementalSync: true },
     redactRaw: redactAdoRaw,
     composer,
+    peek: (ids) => peekWorkItems(client, connection.slug, ids),
     browser: {
-      peek: (ids) => peekWorkItems(client, connection.slug, ids),
       list: (project, query) =>
         listWorkItems(client, connection.slug, project, query),
       layout: (project, type) => viewLayout(client, project, type),

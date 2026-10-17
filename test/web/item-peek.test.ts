@@ -10,7 +10,7 @@ vi.mock("../../packages/web/src/api", () => ({
   ApiError: class extends Error {},
 }));
 
-const { clearPeek, peek, peekLater, workItemNumber } =
+const { clearPeek, peek, peekedSource, peekLater, workItemNumber } =
   await import("../../packages/web/src/work-items/peek.svelte");
 
 const bug = (id: string): WorkItemPeek => ({
@@ -42,9 +42,9 @@ describe("work item peek", () => {
 
   it("asks once typing pauses, not on every keystroke", async () => {
     answer.mockResolvedValue([bug("4521")]);
-    const cancel = peekLater("45");
+    const cancel = peekLater("azure-devops", "45");
     cancel();
-    peekLater("4521");
+    peekLater("azure-devops", "4521");
     expect(peek.current).toEqual({ status: "looking", id: "4521" });
     await vi.runAllTimersAsync();
     expect(answer).toHaveBeenCalledTimes(1);
@@ -54,16 +54,16 @@ describe("work item peek", () => {
 
   it("keeps a found item and asks again for a miss", async () => {
     answer.mockResolvedValue([bug("700")]);
-    peekLater("700");
+    peekLater("azure-devops", "700");
     await vi.runAllTimersAsync();
-    peekLater("700");
+    peekLater("azure-devops", "700");
     expect(peek.current).toMatchObject({ status: "found" });
     expect(answer).toHaveBeenCalledTimes(1);
 
     answer.mockResolvedValue([]);
-    peekLater("701");
+    peekLater("azure-devops", "701");
     await vi.runAllTimersAsync();
-    peekLater("701");
+    peekLater("azure-devops", "701");
     await vi.runAllTimersAsync();
     expect(answer).toHaveBeenCalledTimes(3);
   });
@@ -71,7 +71,7 @@ describe("work item peek", () => {
   it("drops an answer that arrives after a newer number", async () => {
     let finish: (peeks: WorkItemPeek[]) => void = () => {};
     answer.mockReturnValueOnce(new Promise((done) => (finish = done)));
-    peekLater("12");
+    peekLater("azure-devops", "12");
     await vi.advanceTimersByTimeAsync(400);
     clearPeek();
     finish([bug("12")]);
@@ -79,9 +79,36 @@ describe("work item peek", () => {
     expect(peek.current).toEqual({ status: "idle" });
   });
 
+  it("asks the source type it is given, and keeps each type's answers apart", async () => {
+    answer.mockResolvedValue([{ ...bug("88"), source_slug: "fd" }]);
+    peekLater("freshdesk", "88");
+    await vi.runAllTimersAsync();
+    expect(answer).toHaveBeenCalledWith("/work-items/peek/freshdesk/88");
+    peekLater("azure-devops", "88");
+    await vi.runAllTimersAsync();
+    expect(answer).toHaveBeenCalledTimes(2);
+  });
+
+  it("names the source only when exactly one connection has the item", async () => {
+    answer.mockResolvedValue([{ ...bug("5"), source_slug: "fd" }]);
+    peekLater("freshdesk", "5");
+    expect(peekedSource("5")).toBeNull();
+    await vi.runAllTimersAsync();
+    expect(peekedSource("5")).toBe("fd");
+    expect(peekedSource("6")).toBeNull();
+
+    answer.mockResolvedValue([
+      { ...bug("7"), source_slug: "fd" },
+      { ...bug("7"), source_slug: "fd-eu" },
+    ]);
+    peekLater("freshdesk", "7");
+    await vi.runAllTimersAsync();
+    expect(peekedSource("7")).toBeNull();
+  });
+
   it("says why the lookup failed", async () => {
     answer.mockRejectedValue(new Error("No token for 'ado'."));
-    peekLater("9");
+    peekLater("azure-devops", "9");
     await vi.runAllTimersAsync();
     expect(peek.current).toEqual({
       status: "failed",

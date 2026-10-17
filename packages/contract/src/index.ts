@@ -104,10 +104,8 @@ export {
   releaseMinor,
   normalizeVersion,
   projectToken,
-  parseCodeScope,
 } from "./code";
 export type {
-  CodeScope,
   RepoIndexStatus,
   RepoRow,
   RepoLineRow,
@@ -227,6 +225,8 @@ export {
 export type { LibraryAssetType } from "./assets";
 
 export { MAX_PAGE } from "./paging";
+export { CHAT_MODES, MENTION_KINDS } from "./chat";
+export type { ChatModeName, MentionKind, Mention, Mentionables } from "./chat";
 export { WORK_ITEM_SCOPES, WORK_ITEM_SORTS } from "./work-items";
 export type {
   LinkedCode,

@@ -398,15 +398,17 @@ describe("over HTTP", () => {
     () => sql`delete from users where email = 'code-reader@example.com'`,
   );
 
-  it("lists /code with its scope and leaves the walkthrough out", async () => {
+  it("offers code as a mode and keeps the walkthrough out of the menu", async () => {
     const response = await app.request("/api/agent/commands", {
       headers: { Cookie: cookie },
     });
-    const { builtins } = (await response.json()) as {
-      builtins: { name: string; args: string }[];
+    const { modes, builtins } = (await response.json()) as {
+      modes: { name: string }[];
+      builtins: { name: string; hidden?: boolean }[];
     };
-    expect(builtins.find((b) => b.name === "code")?.args).toContain("@repo");
-    expect(builtins.map((b) => b.name)).not.toContain("walkthrough");
+    expect(modes.map((m) => m.name)).toContain("code");
+    expect(builtins.map((b) => b.name)).not.toContain("code");
+    expect(builtins.find((b) => b.name === "walkthrough")?.hidden).toBe(true);
   });
 
   it("returns the numbered lines of a range", async () => {

@@ -1,6 +1,11 @@
 import type { CompactStats } from "./CompactPanel.svelte";
 import type { OutputFile } from "./OutputCard.svelte";
-import type { CreatedTicket, WorkItemFile } from "@tachy/contract";
+import type {
+  ChatModeName,
+  CreatedTicket,
+  Mention,
+  WorkItemFile,
+} from "@tachy/contract";
 import type { ShownStep, WalkStep } from "../code/walkthrough";
 import type { ModelPick } from "./modelCommand";
 import type { TurnTrace } from "./trace";
@@ -77,4 +82,10 @@ export const chat = $state({
   model: undefined as ModelPick | undefined,
   /** Switched with `/debug`: each turn shows what it sent to the agent. */
   debug: false,
+  /** Switched with `/analyze` or `/code`; holds for every turn until left. */
+  mode: undefined as ChatModeName | undefined,
+  /** The mode the last turn ran in, so the next one can say it was left. */
+  modeOfLastTurn: undefined as ChatModeName | undefined,
+  /** Repos, buckets and projects attached with `@`, kept until removed. */
+  mentions: [] as Mention[],
 });

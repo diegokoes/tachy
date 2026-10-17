@@ -57,8 +57,8 @@ export interface WorkItemPeek {
   title: string;
   type: string;
   state: string | null;
-  /** The ADO project name. */
-  project: string;
+  /** The ADO project name; null where the source has no projects. */
+  project: string | null;
   url: string;
   /** Hex without the '#'. */
   color: string | null;
