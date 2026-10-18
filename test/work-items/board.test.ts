@@ -270,7 +270,7 @@ describe("/api/work-items/projects", () => {
         id: "1",
         author: "Ana",
         at: "2026-10-02T09:00:00Z",
-        html: "<p>Seen on <strong>prod</strong></p>",
+        html: "Seen on **prod**",
       },
     ]);
     expect(view.history.every((entry) => entry.kind === "event")).toBe(true);

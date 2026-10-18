@@ -105,7 +105,10 @@ export interface AdoComment {
   id: number;
   /** HTML, or Markdown when `format` says so. */
   text?: string;
-  /** The comment as HTML whatever its format; asked for with `$expand=renderedText`. */
+  /**
+   * The comment as HTML whatever its format; asked for with `$expand=renderedText`.
+   * Its pictures point at a relative path holding only the attachment id.
+   */
   renderedText?: string;
   format?: "html" | "markdown";
   createdBy?: AdoIdentity;
