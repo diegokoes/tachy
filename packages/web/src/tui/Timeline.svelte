@@ -164,7 +164,7 @@
     position: absolute;
     inset: 0 auto 0 0;
     width: 1px;
-    background: color-mix(in srgb, var(--muted) 22%, transparent);
+    background: color-mix(in srgb, var(--rule) 22%, transparent);
   }
   /* Little rule marks along the rail, wider than the rail by one step so the
      slide never shows an edge; they are what moves, and they say time passes. */
@@ -174,7 +174,7 @@
     width: calc(100% + 32px);
     background: repeating-linear-gradient(
       to right,
-      color-mix(in srgb, var(--muted) 40%, transparent) 0 2px,
+      color-mix(in srgb, var(--rule) 40%, transparent) 0 2px,
       transparent 2px 32px
     );
     pointer-events: none;

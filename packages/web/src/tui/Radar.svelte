@@ -147,7 +147,7 @@ the grid.
   .ring,
   .spoke {
     fill: none;
-    stroke: var(--muted);
+    stroke: var(--rule);
     stroke-width: 1;
     opacity: 0.25;
   }

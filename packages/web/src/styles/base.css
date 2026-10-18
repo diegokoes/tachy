@@ -16,7 +16,7 @@ body {
    The main column and the chat transcript hide theirs and use AsciiScrollbar. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted) 50%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--rule) 50%, transparent) transparent;
 }
 
 /* Anything on a character grid keeps the mono face regardless of where it

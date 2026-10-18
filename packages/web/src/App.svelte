@@ -695,7 +695,7 @@
   }
   .notch path {
     fill: none;
-    stroke: var(--muted);
+    stroke: var(--rule);
     stroke-width: var(--panel-line-w);
   }
 

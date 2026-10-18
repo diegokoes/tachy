@@ -24,7 +24,7 @@
 
 <style>
   .guide {
-    stroke: var(--muted);
+    stroke: var(--rule);
     stroke-width: 1;
     stroke-dasharray: 4 4;
     opacity: 0.5;

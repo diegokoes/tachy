@@ -265,7 +265,7 @@
   .form input,
   .form textarea {
     background: var(--panel-solid);
-    border-color: var(--muted);
+    border-color: var(--rule);
   }
   .form input:focus-visible,
   .form textarea:focus-visible {

@@ -31,7 +31,11 @@
   --panel-bg: var(--panel-solid);
   --border: rgba(255, 255, 255, 0.09);
   --text: #e2e2e2;
-  --muted: #6d6d6d;
+  /* Secondary text: at least 4.5:1 on --bg and on a panel. */
+  --muted: #8a8a8a;
+  /* Rules, tracks and neutral marks. Darker than --muted: a line needs 3:1
+     at most, and a brighter frame competes with the text inside it. */
+  --rule: #6d6d6d;
   --accent: #6ea8fe;
   /* What an accent-filled surface paints with: the accent, or the two-colour
      gradient a user picked. Ink and rules stay on --accent, which a gradient
@@ -96,6 +100,7 @@
   --border: rgba(30, 28, 20, 0.17);
   --text: #21201c;
   --muted: #635e53;
+  --rule: #635e53;
   /* Higher than the dark theme's: a dark glyph on a light ground has less
      perceptual contrast at this size than a light one on dark, so equal
      alpha leaves the light theme's sky nearly blank. */
@@ -165,15 +170,15 @@
   --view-pad-y: calc(var(--pad-4) * 1.25);
 }
 
-/* Panel border. A CSS border, mixed off --muted because --border is too
+/* Panel border. A CSS border in --rule because --border is too
    faint to read as a drawn line. The width is its own token because whatever
    meets this rule end-on, like the subnav notch, needs its thickness. */
 :root {
   --panel-line-w: 2px;
-  --panel-line: var(--panel-line-w) solid var(--muted);
+  --panel-line: var(--panel-line-w) solid var(--rule);
   /* The edge of a control that sits straight on the wallpaper with no panel
      around it, where --border is too faint to mark it out at rest. */
-  --border-bare: color-mix(in srgb, var(--muted) 55%, transparent);
+  --border-bare: color-mix(in srgb, var(--rule) 55%, transparent);
 }
 
 /* Type scale. Four reading sizes; anything smaller than --fs-xs is

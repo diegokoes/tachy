@@ -186,7 +186,7 @@
   .finding {
     padding: var(--pad-2);
     border: 1px solid var(--border);
-    border-left: 2px solid var(--muted);
+    border-left: 2px solid var(--rule);
     border-radius: var(--radius);
   }
   .finding.gap {

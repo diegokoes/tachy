@@ -123,7 +123,7 @@ const SERIES: Record<Tone, string> = {
   ok: "--series-ok",
   warn: "--series-warn",
   danger: "--series-danger",
-  muted: "--muted",
+  muted: "--rule",
 };
 
 /** The chart ink for a tone: the series tokens, never the raw accent or status colours. */

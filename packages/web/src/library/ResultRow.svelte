@@ -130,7 +130,7 @@
     flex: none;
     min-height: 1.4rem;
     width: 5px;
-    background: color-mix(in srgb, var(--muted) 26%, transparent);
+    background: color-mix(in srgb, var(--rule) 26%, transparent);
     border-radius: 2px;
     overflow: hidden;
   }
@@ -157,7 +157,7 @@
     bottom: 0;
     height: 0;
     border-radius: 2px;
-    background: var(--muted);
+    background: var(--rule);
   }
   .gauge.good .fill {
     background: var(--accent-fill);

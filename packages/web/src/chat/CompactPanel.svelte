@@ -203,7 +203,7 @@
     padding: 0.75rem 1.15rem 0.85rem;
     background: var(--panel-solid);
     /* double rule + seated corners = the text-mode box the modals use */
-    border: 3px double var(--muted);
+    border: 3px double var(--rule);
     font-family: var(--font-mono);
     background-image: repeating-linear-gradient(
       var(--bg) 0 1px,

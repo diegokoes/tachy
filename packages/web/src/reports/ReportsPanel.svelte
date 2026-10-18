@@ -299,7 +299,7 @@
     color: var(--text);
   }
   .row:hover {
-    background: color-mix(in srgb, var(--muted) 10%, transparent);
+    background: color-mix(in srgb, var(--rule) 10%, transparent);
   }
   .row.on {
     border-color: var(--accent);
@@ -352,7 +352,7 @@
   .msg {
     border-radius: var(--radius);
     padding: var(--pad-2) var(--pad-3);
-    background: color-mix(in srgb, var(--muted) 8%, transparent);
+    background: color-mix(in srgb, var(--rule) 8%, transparent);
   }
   .msg.admin {
     border-left: 3px solid var(--accent);

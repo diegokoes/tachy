@@ -138,8 +138,8 @@
     --tone-color: var(--series-danger);
   }
   .muted {
-    --tone-color: var(--muted);
-    --track: color-mix(in srgb, var(--muted) 26%, transparent);
+    --tone-color: var(--rule);
+    --track: color-mix(in srgb, var(--rule) 26%, transparent);
   }
   .info {
     --tone-color: var(--series-2);
