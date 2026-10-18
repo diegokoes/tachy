@@ -17,8 +17,8 @@
   import { pushScope } from "../keys/keys.svelte";
   import { navigate, segment } from "../shell/router.svelte";
   import { setSubnav } from "../shell/subnav.svelte";
-  import { AdoMark, EmptyState, Note, Spinner } from "../tui";
-  import { az, ensureProjects } from "./az.svelte";
+  import { AdoMark, Button, EmptyState, Note, Spinner } from "../tui";
+  import { az, refreshProjects } from "./az.svelte";
   import { BOARD_SOURCE, boardItemPath, boardListPath } from "./board";
   import { landingProject, rememberProject } from "./board.svelte";
   import { composer, openComposer } from "./composer.svelte";
@@ -35,7 +35,7 @@
   );
 
   onMount(() => {
-    void ensureProjects();
+    void refreshProjects();
   });
 
   $effect(() => {
@@ -73,15 +73,23 @@
     }),
   );
 
+  const backToList = () => navigate(boardListPath(projectId));
+
   $effect(() =>
     pushScope([
-      { key: "n", label: "new item", run: () => typeMenu?.open() },
+      {
+        key: "n",
+        label: "new item",
+        hidden: true,
+        run: () => typeMenu?.open(),
+      },
       ...(itemId
         ? [
             {
               key: "escape",
               label: "back to the list",
-              run: () => navigate(boardListPath(projectId)),
+              hidden: true,
+              run: backToList,
             },
           ]
         : []),
@@ -91,6 +99,11 @@
 
 {#snippet topRow()}
   <div class="top">
+    {#if project && itemId}
+      <Button size="sm" variant="ghost" icon="back" onclick={backToList}
+        >back</Button
+      >
+    {/if}
     {#if project}
       <TypeMenu bind:this={typeMenu} projectId={project.id} onpick={startNew} />
     {/if}
