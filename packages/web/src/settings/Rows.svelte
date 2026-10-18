@@ -10,7 +10,7 @@
   .rows {
     display: flex;
     flex-direction: column;
-    gap: var(--pad-1);
+    gap: var(--rows-gap, var(--pad-1));
     min-width: 0;
     container-type: inline-size;
   }
