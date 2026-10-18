@@ -85,7 +85,6 @@
     grid-auto-flow: column;
     grid-auto-columns: minmax(4.5rem, auto);
     align-self: center;
-    padding: 3px;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
   }
@@ -98,12 +97,13 @@
     justify-content: center;
     padding: 0 var(--pad-2);
   }
+  /* Flush with the frame, so the picked option fills its whole cell. */
   .fill {
     position: absolute;
-    top: 3px;
-    bottom: 3px;
+    top: 0;
+    bottom: 0;
     left: 0;
-    border-radius: calc(var(--radius-control) - 3px);
+    border-radius: calc(var(--radius-control) - 1px);
     background: var(--accent-dim);
     box-shadow: inset 0 0 0 1px
       color-mix(in srgb, var(--accent) 35%, transparent);
@@ -111,14 +111,14 @@
   }
   button {
     position: relative;
-    min-height: calc(var(--row-h) - 6px);
+    min-height: calc(var(--row-h) - 2px);
     padding: 0 var(--pad-3);
     font: inherit;
     font-size: var(--fs-sm);
     color: var(--muted);
     background: none;
     border: none;
-    border-radius: calc(var(--radius-control) - 3px);
+    border-radius: calc(var(--radius-control) - 1px);
     cursor: pointer;
     white-space: nowrap;
     transition: color 0.25s ease;
