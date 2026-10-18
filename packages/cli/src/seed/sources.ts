@@ -477,7 +477,8 @@ const FOLLOWS_EACH = 3;
 
 /**
  * A few people follow a few items each, some read up to a revision. Each
- * person's first follow also writes back to another item, as a flow sets up.
+ * person's first follow also gets a work_item_follow_notes row, a table the
+ * schema still holds.
  */
 export async function seedFollows(
   tx: Tx,
