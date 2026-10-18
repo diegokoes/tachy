@@ -213,12 +213,12 @@
     );
   });
 
-  // Settings is not a tab, so navItems() assigns it no digit. It registers
-  // its own hidden binding, as do feedback and the palette.
+  // ctrl+, is fixed beside the settings tab's digit: rebinding it would share
+  // the tab's stored key. Feedback and the palette are not tabs.
   $effect(() =>
     pushScope([
       {
-        key: actionKey("settings"),
+        key: "ctrl+,",
         label: "",
         hidden: true,
         inFields: true,
@@ -332,48 +332,22 @@
       <!-- Empty: balances the wordmark's track so the pill sits on the true
            centre. -->
       <div class="mark"></div>
-      <div class="bell"><NotificationBell /></div>
+      <div class="bell">
+        <NotificationBell />
+        <button
+          class="feedback"
+          aria-label="feedback"
+          use:tip={"feedback"}
+          onclick={(e) => {
+            openFeedback();
+            if (e.detail !== 0) e.currentTarget.blur();
+          }}
+          use:jellyPress
+        >
+          <Icon name="flag" weight={7} />
+        </button>
+      </div>
     </div>
-
-    <!-- Out of flow, so nothing about it can shift the window: settings is
-         not a place work happens, so it takes no slot in the bar. -->
-    <button
-      class="settings-btn"
-      class:on={view === "settings"}
-      aria-current={view === "settings" ? "page" : undefined}
-      aria-label="settings"
-      use:tip={"settings"}
-      onclick={(e) => {
-        openSection("settings");
-        if (e.detail !== 0) e.currentTarget.blur();
-      }}
-      use:jellyPress
-    >
-      <span class="lbl"
-        ><span class="br" aria-hidden="true">[</span><span class="ico"
-          ><Icon name="settings" weight={7} /></span
-        ><span class="br" aria-hidden="true">]</span></span
-      >
-    </button>
-
-    <button
-      class="settings-btn feedback-btn"
-      class:on={view === "feedback"}
-      aria-current={view === "feedback" ? "page" : undefined}
-      aria-label="feedback"
-      use:tip={"feedback"}
-      onclick={(e) => {
-        openFeedback();
-        if (e.detail !== 0) e.currentTarget.blur();
-      }}
-      use:jellyPress
-    >
-      <span class="lbl"
-        ><span class="br" aria-hidden="true">[</span><span class="ico"
-          ><Icon name="flag" weight={7} /></span
-        ><span class="br" aria-hidden="true">]</span></span
-      >
-    </button>
 
     <div
       class="window"
@@ -517,8 +491,7 @@
     border-color: transparent;
   }
 
-  /* A conversation under way runs to the window's outer bottom edge, the line
-     the settings mark stands on, so the composer's foot meets the mark's. The
+  /* A conversation under way runs to the window's outer bottom edge. The
      three rules give back the Panel's padding, its rule and `main`'s air. */
   .window:has(main > :global(.chat.bare:not(.empty))) > :global(section) {
     padding-bottom: 0;
@@ -551,6 +524,9 @@
     top: 50%;
     right: 0;
     transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
   }
   .mark {
     display: flex;
@@ -625,17 +601,10 @@
     }
   }
 
-  /* A lone tab, styled like one of Tabs.svelte's own, without the indicator
-     that only makes sense among siblings. Pinned to the viewport's
-     lower-left corner with its line box on the window's bottom edge. */
-  .settings-btn {
-    position: absolute;
-    left: var(--pad-2);
-    bottom: var(--pad-4);
-    z-index: 2;
+  /* A lone mark beside the bell, coloured like an inactive tab. */
+  .feedback {
     display: inline-flex;
-    align-items: baseline;
-    gap: 0.1em;
+    align-items: center;
     font: inherit;
     cursor: pointer;
     background: transparent;
@@ -643,32 +612,14 @@
     color: var(--muted);
     padding: 0 var(--pad-1);
     line-height: 1;
-    white-space: nowrap;
+    user-select: none;
   }
-  /* Sits one line above settings, sharing its lone-control styling. */
-  .feedback-btn {
-    bottom: calc(var(--pad-4) + var(--row-h));
-  }
-  .settings-btn:hover {
+  .feedback:hover {
     color: var(--text);
   }
-  .settings-btn.on {
-    color: var(--accent);
-  }
-  .settings-btn:focus-visible {
+  .feedback:focus-visible {
     outline: none;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-  .settings-btn .br {
-    visibility: hidden;
-  }
-  .settings-btn.on .br {
-    visibility: visible;
-  }
-  .settings-btn .ico {
-    display: inline-block;
-    vertical-align: middle;
+    color: var(--accent);
   }
 
   /* Hugs its content rather than the frame, so it reads as a separate object

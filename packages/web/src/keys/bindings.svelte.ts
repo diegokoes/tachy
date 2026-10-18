@@ -43,7 +43,6 @@ export const defaultSubnavKey = (i: number) => `shift+${i + 1}`;
  * under whoever bound it the moment admin appeared or went.
  */
 export const ACTIONS = {
-  settings: { label: "settings", key: "ctrl+," },
   feedback: { label: "feedback", key: "ctrl+." },
   artifacts: { label: "artifacts panel", key: "a" },
   // Firefox keeps ctrl+shift+p for a private window and never hands it to the
@@ -130,6 +129,7 @@ export function keyLabel(chord: string): string {
  */
 export const RESERVED: Record<string, string> = {
   "ctrl+k": "focus search / composer",
+  "ctrl+,": "settings",
   "⏎": "open",
   esc: "back / dismiss",
   backspace: "back",
