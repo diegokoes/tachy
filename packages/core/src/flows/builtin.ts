@@ -436,7 +436,7 @@ export function registerBuiltinFlowActions(): void {
     key: "item.follow_linked",
     title: "Follow linked ADO items",
     description:
-      "The flow's owner follows the Azure DevOps items the stored ticket names (Read ticket first to store its messages); with note back, each change on one is posted to the ticket as a private note.",
+      "The flow's owner follows the Azure DevOps items the stored ticket names (Read ticket first to store its messages), and is notified in tachy when someone else changes one.",
     category: "update",
     writes: true,
     params: z.object({
@@ -445,7 +445,6 @@ export function registerBuiltinFlowActions(): void {
         .default("")
         .meta({ ...options("ado.connections"), title: "ADO connection" })
         .describe("Empty: the first Azure DevOps connection."),
-      note_back: z.boolean().default(true),
     }),
     output: z.object({ followed: z.array(z.string()) }),
     async run(ctx, params) {
@@ -468,7 +467,6 @@ export function registerBuiltinFlowActions(): void {
           userId: ctx.userId,
           connectionId: adoConnection.id,
           externalId,
-          ...(params.note_back ? { noteOnItemId: item.id } : {}),
         });
       await recordAdoRefs(item.id, refs, {
         sourceConnectionId: adoConnection.id,

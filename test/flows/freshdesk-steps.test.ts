@@ -324,7 +324,7 @@ describe("item.follow_linked", () => {
     source_type: "fake-fields",
   });
 
-  it("follows the ADO items the ticket names, writing back to it", async () => {
+  it("follows the ADO items the ticket names", async () => {
     const step = flowAction("item.follow_linked");
     const result = await step.run(
       await context(linkedTicket(), ownerId),
@@ -335,26 +335,10 @@ describe("item.follow_linked", () => {
       "43",
     ]);
     const follows = await sql`
-      select f.external_id, n.work_item_id
-      from work_item_follows f
-      join work_item_follow_notes n using (user_id, source_connection_id, external_id)
-      where f.user_id = ${ownerId} order by f.external_id
+      select external_id from work_item_follows
+      where user_id = ${ownerId} order by external_id
     `;
-    expect(follows).toEqual([
-      { external_id: "42", work_item_id: ticketId },
-      { external_id: "43", work_item_id: ticketId },
-    ]);
-  });
-
-  it("follows without writing back when told so", async () => {
-    const step = flowAction("item.follow_linked");
-    await step.run(
-      await context(linkedTicket(), ownerId),
-      step.params.parse({ note_back: false, connection: "ado-linked" }),
-    );
-    const [{ n }] =
-      await sql`select count(*)::int as n from work_item_follow_notes`;
-    expect(n).toBe(0);
+    expect(follows).toEqual([{ external_id: "42" }, { external_id: "43" }]);
   });
 
   it("refuses a flow with no owner or an unknown ADO connection", async () => {

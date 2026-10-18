@@ -129,7 +129,7 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
   {
     key: "follow-linked",
     name: "follow linked ADO items",
-    hint: "dev item changes come back as private notes",
+    hint: "you are notified in tachy when a dev item changes",
     graph: {
       triggers: [
         {
@@ -144,7 +144,7 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
           id: "follow",
           kind: "action",
           action: "item.follow_linked",
-          params: { note_back: true },
+          params: {},
         },
       ],
     },
