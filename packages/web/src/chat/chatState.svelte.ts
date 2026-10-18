@@ -89,3 +89,57 @@ export const chat = $state({
   /** Repos, buckets and projects attached with `@`, kept until removed. */
   mentions: [] as Mention[],
 });
+
+/** What a clear takes away. */
+type Cleared = Pick<
+  typeof chat,
+  | "entries"
+  | "sessionId"
+  | "turnId"
+  | "model"
+  | "debug"
+  | "mode"
+  | "modeOfLastTurn"
+  | "mentions"
+>;
+
+/** The last clear, kept until the next turn so it can be undone. */
+let cleared = $state.raw<Cleared | null>(null);
+
+/** Empties the conversation and keeps what it held for `restoreChat`. */
+export function clearChat() {
+  const { entries, sessionId, turnId, model, debug, mode, modeOfLastTurn } =
+    chat;
+  cleared = {
+    entries,
+    sessionId,
+    turnId,
+    model,
+    debug,
+    mode,
+    modeOfLastTurn,
+    mentions: chat.mentions,
+  };
+  chat.entries = [];
+  chat.sessionId = undefined;
+  chat.turnId = undefined;
+  chat.model = undefined;
+  chat.debug = false;
+  chat.mode = undefined;
+  chat.modeOfLastTurn = undefined;
+  chat.mentions = [];
+}
+
+export const canRestore = () => cleared !== null;
+
+/** Brings back the conversation the last clear took, once. */
+export function restoreChat() {
+  if (!cleared) return;
+  Object.assign(chat, cleared);
+  cleared = null;
+}
+
+/** A new turn starts a new conversation: the cleared one is gone for good. */
+export function forgetCleared() {
+  cleared = null;
+}
