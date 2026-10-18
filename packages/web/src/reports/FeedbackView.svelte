@@ -51,8 +51,6 @@
     pushScope([
       {
         key: "esc",
-        label: "",
-        hidden: true,
         inFields: true,
         run: () => {
           const el = document.activeElement;

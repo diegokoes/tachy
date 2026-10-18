@@ -13,7 +13,7 @@
   import Palette from "./palette/Palette.svelte";
   import { openFeedback } from "./reports/feedback";
   import { session, initSession } from "./access/session.svelte";
-  import { navItems, tabOf } from "./shell/nav";
+  import { isSection, navItems, tabOf } from "./shell/nav";
   import { jellyPress } from "./motion/motion";
   import StarField from "./motion/StarField.svelte";
   import Wordmark from "./motion/Wordmark.svelte";
@@ -21,28 +21,24 @@
   import { applyOrgDefaults } from "./theme/defaults";
   import { loadFonts } from "./theme/fonts.svelte";
   import { loadDateFormat } from "./dates.svelte";
-  import { openSection, section, startRouter } from "./shell/router.svelte";
+  import {
+    navigate,
+    openSection,
+    section,
+    startRouter,
+  } from "./shell/router.svelte";
   import {
     refreshNotifications,
     startNotifications,
   } from "./notifications/notify.svelte";
   import NotificationBell from "./notifications/NotificationBell.svelte";
-  import { hints, pushScope, startKeys } from "./keys/keys.svelte";
+  import { pushScope, startKeys } from "./keys/keys.svelte";
   import { navKey, actionKey } from "./keys/bindings.svelte";
   import { loadVim, vimState, scrollBindings } from "./keys/vim.svelte";
   import { subnav, topActions } from "./shell/subnav.svelte";
   import { setScrollport } from "./shell/scrollport.svelte";
   import { topbar } from "./shell/topbar.svelte";
-  import {
-    CaretHost,
-    HintRule,
-    Icon,
-    Panel,
-    Scrollbar,
-    Tabs,
-    TipHost,
-    tip,
-  } from "./tui";
+  import { CaretHost, Icon, Panel, Scrollbar, Tabs, TipHost, tip } from "./tui";
 
   const nav = $derived(navItems());
 
@@ -191,15 +187,16 @@
 
   $effect(() => setScrollport(mainEl ?? null));
 
-  // Hidden: four more entries would crowd the hint rule. Settings › keybinds
-  // lists them.
+  // An address no section owns would render chat under it with no tab lit.
+  $effect(() => {
+    if (!isSection(view)) navigate("/chat", { replace: true });
+  });
+
   $effect(() => {
     const items = nav;
     return pushScope(
       items.map((n, i) => ({
         key: navKey(n.key, i),
-        label: n.label,
-        hidden: true,
         run: () => openSection(n.key),
       })),
     );
@@ -211,22 +208,16 @@
     pushScope([
       {
         key: "ctrl+,",
-        label: "",
-        hidden: true,
         inFields: true,
         run: () => openSection("settings"),
       },
       {
         key: actionKey("feedback"),
-        label: "",
-        hidden: true,
         inFields: true,
         run: openFeedback,
       },
       {
         key: actionKey("palette"),
-        label: "",
-        hidden: true,
         inFields: true,
         repeats: false,
         run: () => (paletteOpen = paletteAllowed && !paletteOpen),
@@ -238,14 +229,16 @@
   $effect(() => {
     if (!vimState.enabled) return;
     const items = nav;
-    const at = items.findIndex((n) => n.key === view);
+    const tab = tabOf(view);
+    const at = items.findIndex((n) => n.key === tab);
     const go = (delta: number) => () => {
+      if (at < 0) return;
       const next = items[Math.min(items.length - 1, Math.max(0, at + delta))];
-      if (next && next.key !== view) openSection(next.key);
+      if (next && next.key !== tab) openSection(next.key);
     };
     return pushScope([
-      { key: "h", label: "", hidden: true, run: go(-1) },
-      { key: "l", label: "", hidden: true, run: go(1) },
+      { key: "h", run: go(-1) },
+      { key: "l", run: go(1) },
       ...scrollBindings(() => mainEl),
     ]);
   });
@@ -346,9 +339,8 @@
       class:carved={sub}
       style="--sub-h-raw: {subH}px; --sub-mouth: {carveW}px; --sub-mask: {carveMask}"
     >
-      <!-- Rendered before the window so its hotkey scope is pushed first and
-           the view's scope stays innermost - otherwise this bar's (all hidden)
-           bindings would sit on top and blank the hint rule. -->
+      <!-- Rendered before the window so its hotkey scope is pushed first: the
+           view's scope stays innermost and wins a key both bind. -->
       {#if sub}
         <svg
           class="notch"
@@ -403,10 +395,6 @@
               controls="main-content"
               held={topbar.veiled}
             />
-          </div>
-
-          <div class="hintrow">
-            <HintRule hints={hints()} />
           </div>
         </div>
       </Panel>
@@ -832,18 +820,5 @@
   main > :global(.chat) {
     flex: 1 1 auto;
     min-height: 0;
-  }
-
-  /* Its own top spacing, not a gap on .shell, so a row with nothing to print
-     takes no room. Most scopes mark their bindings hidden, and Settings ›
-     keybinds is where they are found. */
-  .hintrow {
-    flex: none;
-    min-height: 1.2rem;
-    padding-top: var(--pad-2);
-  }
-  .hintrow:not(:has(*)) {
-    min-height: 0;
-    padding-top: 0;
   }
 </style>

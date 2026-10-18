@@ -126,8 +126,6 @@
     return pushScope([
       {
         key: hotkey,
-        label: "artifacts",
-        hidden: true,
         run: () => {
           if (!editorOpen) toggle();
         },

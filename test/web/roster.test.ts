@@ -11,7 +11,7 @@ import {
 } from "../../packages/web/src/access/roster.svelte";
 import type { UserRow } from "../../packages/web/src/access/rows";
 import { session } from "../../packages/web/src/access/session.svelte";
-import { navItems, tabOf } from "../../packages/web/src/shell/nav";
+import { isSection, navItems, tabOf } from "../../packages/web/src/shell/nav";
 
 const user = (p: Partial<UserRow> = {}): UserRow => ({
   id: "u1",
@@ -69,6 +69,13 @@ describe("the tab bar", () => {
   it("lights the library while the wiki is open", () => {
     expect(tabOf("wiki")).toBe("library");
     expect(tabOf("board")).toBe("board");
+  });
+
+  it("knows the sections an address can open, tab or not", () => {
+    for (const key of ["chat", "wiki", "feedback", "console"])
+      expect(isSection(key)).toBe(true);
+    expect(isSection("admin")).toBe(false);
+    expect(isSection("library-old")).toBe(false);
   });
 });
 
