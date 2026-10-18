@@ -38,7 +38,7 @@
   import Launcher from "./Launcher.svelte";
   import { ArtifactMark, Button, Caret, caretSide, G, Icon, tip } from "../tui";
   import { pushScope } from "../keys/keys.svelte";
-  import { toast } from "../notifications/notify.svelte";
+  import { dismissToast, toast } from "../notifications/notify.svelte";
   import PointerText from "../settings/PointerText.svelte";
   import {
     topbar,
@@ -1007,12 +1007,23 @@
    * turn. The nav takes its row back veiled, so the window settles while the
    * dock travels to the centre, and the dock's landing shows it.
    */
+  let clearedToast: number | undefined;
+
   function onClear() {
     if (chat.busy || !chat.entries.length) return;
     veilTopbar();
     clearChat();
-    toast("conversation cleared · ctrl+z brings it back", "accent", 6000);
+    clearedToast = toast(
+      "conversation cleared · ctrl+z brings it back",
+      "accent",
+      6000,
+    );
     composerEl?.focus();
+  }
+
+  function onRestore() {
+    restoreChat();
+    if (clearedToast !== undefined) dismissToast(clearedToast);
   }
 
   // Bound only while the composer is empty, so text in it keeps the field's
@@ -1025,7 +1036,7 @@
         label: "",
         hidden: true,
         inFields: true,
-        run: restoreChat,
+        run: onRestore,
       },
     ]);
   });
