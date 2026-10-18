@@ -179,7 +179,10 @@ export interface WorkItemComment {
   id: string;
   author: string | null;
   at: string | null;
-  /** As the source renders it; the board sanitizes it before drawing. */
+  /**
+   * As the source holds it: HTML, or Markdown for a comment written in it. The
+   * board renders and sanitizes it before drawing.
+   */
   html: string;
 }
 

@@ -101,6 +101,7 @@ import {
   Megaphone,
   MessageSquare,
   MessageSquareQuote,
+  MessagesSquare,
   Minus,
   MonitorCog,
   OctagonAlert,
@@ -245,6 +246,7 @@ export const ICONS = {
   /** What changed on followed items, with and without unread ones. */
   changes: Bell,
   changesUnread: BellDot,
+  conversation: MessagesSquare,
   sortAscending: ArrowUpNarrowWide,
   sortDescending: ArrowDownWideNarrow,
   moveUp: ChevronUp,

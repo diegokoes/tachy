@@ -239,6 +239,23 @@ describe("item HTML", () => {
     expect(html).toContain("pixel");
   });
 
+  it("drops the colours a field sets, keeping the rest of its style", () => {
+    const html = itemHtml(
+      '<table bgcolor="#fff"><tr><td style="background-color: #fef9e7; color: #ccc; padding: 4px">Comment from Freshdesk</td></tr></table>',
+      source,
+    );
+    expect(html).not.toMatch(/bgcolor|#fef9e7|#ccc|color/);
+    expect(html).toContain('style="padding: 4px;"');
+  });
+
+  it("shows a mention as the name, not a link", () => {
+    const html = itemHtml(
+      '<a href="#" data-vss-mention="version:2.0,abc">@Ana</a> look',
+      source,
+    );
+    expect(html).toBe('<span class="mention">@Ana</span> look');
+  });
+
   it("strips script and opens links in a new tab", () => {
     const html = itemHtml(
       '<a href="https://x.io">x</a><script>alert(1)</script>',
@@ -259,6 +276,14 @@ describe("item text", () => {
     expect(fieldHtml("<div>create code request</div>")).toBe(
       "<div>create code request</div>",
     );
+  });
+
+  it("reads links in a Markdown field whose quotes arrive as entities", () => {
+    const html = fieldHtml(
+      "URL [token](https://x.io/t?a=1&amp;b=2 &quot;https://x.io/t&quot;)",
+    );
+    expect(html).toContain('<a href="https://x.io/t?a=1&amp;b=2"');
+    expect(html).toContain('title="https://x.io/t"');
   });
 
   it("names a source field by its label in the history", () => {
