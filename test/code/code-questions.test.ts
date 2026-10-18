@@ -12,7 +12,11 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { sql } from "@tachy/core/infra";
 import { createUser } from "@tachy/core/access";
-import { addSourceProject } from "@tachy/core/sources";
+import {
+  addSourceConnection,
+  addSourceProject,
+  registerSource,
+} from "@tachy/core/sources";
 import {
   codeDiff,
   codeReleasesContaining,
@@ -59,6 +63,23 @@ const LOGIN = [
   "}",
   "",
 ].join("\n");
+
+/** Private notes the fake helpdesk took. */
+const helpdeskNotes: string[] = [];
+
+registerSource("fake-code-notes", () => ({
+  type: "fake-code-notes",
+  capabilities: { postNote: true, incrementalSync: false },
+  async fetchItem() {
+    throw new Error("not used");
+  },
+  async listItems() {
+    return { items: [] };
+  },
+  async postNote(_id: string, body: string) {
+    helpdeskNotes.push(body);
+  },
+}));
 
 const GENERATED_FILES = 45;
 /** In the history for the diff to be wide, and kept out of the index. */
@@ -375,6 +396,56 @@ describe("the tools", () => {
       steps: [{ ...step, start_line: 400, end_line: 410 }],
     });
     expect(pastTheEnd.isError).toBe(true);
+  });
+
+  it("post_private_note quotes the code it cites and names it where it cannot link", async () => {
+    await addSourceConnection({
+      sourceType: "fake-code-notes",
+      slug: "code-notes",
+      baseUrl: "https://example.invalid",
+    });
+    const cite = {
+      repo: "qrepo",
+      path: "src/login.ts",
+      start_line: 1,
+      end_line: 3,
+      highlight: [2, 2],
+    };
+    const posted = await call("post_private_note", {
+      source: "code-notes",
+      external_id: "c-1",
+      title: "Login loop",
+      body: "A missing session [[1]] goes back to the login page.",
+      code: [cite],
+    });
+    expect(posted.isError).toBe(false);
+    const [note] = helpdeskNotes;
+    expect(note).toContain("<code>src/login.ts line 2 @ ");
+    expect(note).toContain("if (!session) return '/login';");
+    expect(note).not.toContain("loginRedirectTarget");
+    expect(posted.json).toMatchObject({
+      cited: [{ path: "src/login.ts", lines: "2-2", linked: false }],
+    });
+
+    const outside = await call("post_private_note", {
+      source: "code-notes",
+      external_id: "c-1",
+      title: "t",
+      body: "b [[1]]",
+      code: [{ ...cite, highlight: [5, 6] }],
+    });
+    expect(outside.isError).toBe(true);
+    expect(outside.text).toContain("highlight must sit inside");
+    const pastTheEnd = await call("post_private_note", {
+      source: "code-notes",
+      external_id: "c-1",
+      title: "t",
+      body: "b [[1]]",
+      code: [{ ...cite, start_line: 400, end_line: 410, highlight: undefined }],
+    });
+    expect(pastTheEnd.isError).toBe(true);
+    expect(helpdeskNotes).toHaveLength(1);
+    await sql`delete from source_connections where slug = 'code-notes'`;
   });
 });
 

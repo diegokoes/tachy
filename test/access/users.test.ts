@@ -14,6 +14,7 @@ import {
   setUserPassword,
   setUserRole,
   upsertUser,
+  userDisplayName,
   userSoleTeamId,
   userTeams,
   verifyPassword,
@@ -24,6 +25,30 @@ import { resetData, sql } from "../database";
 afterAll(() => sql.end());
 
 beforeEach(resetData);
+
+describe("userDisplayName", () => {
+  it("names a person by display name, else by email", async () => {
+    const named = await upsertUser("ana@example.com", "Ana Ruiz");
+    const unnamed = await upsertUser("eng@example.com");
+    expect(await userDisplayName(named)).toBe("Ana Ruiz");
+    expect(await userDisplayName(unnamed)).toBe("eng@example.com");
+    expect(
+      await userDisplayName("00000000-0000-0000-0000-000000000000"),
+    ).toBeNull();
+  });
+});
+
+describe("userDisplayName", () => {
+  it("names a person by display name, else by email", async () => {
+    const named = await upsertUser("ana@example.com", "Ana Ruiz");
+    const unnamed = await upsertUser("eng@example.com");
+    expect(await userDisplayName(named)).toBe("Ana Ruiz");
+    expect(await userDisplayName(unnamed)).toBe("eng@example.com");
+    expect(
+      await userDisplayName("00000000-0000-0000-0000-000000000000"),
+    ).toBeNull();
+  });
+});
 
 describe("upsertUser", () => {
   it("upserts by email and updates display name", async () => {

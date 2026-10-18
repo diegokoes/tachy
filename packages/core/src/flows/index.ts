@@ -17,6 +17,7 @@ export { validateGraph } from "./graph";
 export {
   listFlows,
   getFlow,
+  flowName,
   flowScope,
   createFlow,
   updateFlow,

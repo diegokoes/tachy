@@ -3,6 +3,7 @@ import {
   SUMMARY_MARKER,
   asNoteHtml,
   packBlocks,
+  richTextToHtml,
   priorSummaryIds,
   renderSummaryHtml,
   renderSummaryText,
@@ -22,7 +23,11 @@ const summary: TicketSummary = {
   ],
   tried: [{ action: "Restarted the spooler", outcome: "No change." }],
   files: [],
+  open_questions: [],
 };
+
+/** How a section's heading ends in the markup. */
+const heading = (label: string) => `>${label}</p>`;
 
 const note = (over: Partial<RawMessage>): RawMessage => ({
   visibility: "private",
@@ -35,15 +40,12 @@ describe("renderSummaryHtml", () => {
   const html = renderSummaryHtml({ external_id: "42", title: "T&T" }, summary);
 
   it("lays the summary out in its sections and stamps the marker", () => {
-    expect(html).toContain("<strong>Summary</strong> - T&amp;T");
-    for (const heading of [
-      "Problem",
-      "Current status",
-      "Timeline",
-      "Tried / ruled out",
-    ])
-      expect(html).toContain(`<strong>${heading}</strong>`);
-    expect(html).toContain("<strong>Ana</strong>: Reported the stoppage.");
+    expect(html).toContain(">Summary</span><strong>T&amp;T</strong>");
+    expect(html).toContain("#42</span>");
+    for (const label of ["Problem", "Where it stands", "Timeline", "Tried"])
+      expect(html).toContain(heading(label));
+    expect(html).toContain("<strong>Ana</strong></td>");
+    expect(html).toContain("Reported the stoppage.");
     expect(html).toContain(SUMMARY_MARKER);
   });
 
@@ -57,8 +59,72 @@ describe("renderSummaryHtml", () => {
       { external_id: "42" },
       { ...summary, timeline: [], tried: [] },
     );
-    expect(bare).not.toContain("Timeline");
-    expect(bare).not.toContain("Tried / ruled out");
+    expect(bare).not.toContain(heading("Timeline"));
+    expect(bare).not.toContain(heading("Tried"));
+  });
+
+  it("puts the state, the customer and the transcript in the strip under the banner", () => {
+    const full = renderSummaryHtml(
+      { external_id: "42", title: "T&T" },
+      { ...summary, state: "waiting_us" },
+      {
+        customer: "Northwind",
+        requestedBy: "Ana Ruiz in chat",
+        transcript: { parts: 2, postedAt: "2026-06-17T10:00:00Z" },
+      },
+    );
+    expect(full).toContain(">Waiting on us</span>");
+    expect(full).toContain(">Northwind</div>");
+    expect(full).toContain(
+      'Compacted transcript <span style="color:#777">2 parts, 2026-06-17</span>',
+    );
+    expect(full).toContain(">Ana Ruiz in chat</td>");
+    expect(html).not.toContain("Waiting on us");
+    expect(html).not.toContain("Full thread");
+  });
+
+  it("boxes the next step and the open questions before the sections", () => {
+    const one = renderSummaryHtml(
+      { external_id: "42" },
+      {
+        ...summary,
+        next_step: "Ask Ana for the spooler log.",
+        open_questions: ["Is line 4 affected?"],
+      },
+    );
+    expect(one).toContain(
+      "<strong>Next step:</strong> Ask Ana for the spooler log.",
+    );
+    expect(one).toContain(
+      "<strong>Open question:</strong> Is line 4 affected?",
+    );
+    expect(one.indexOf("Next step")).toBeLessThan(
+      one.indexOf(heading("Problem")),
+    );
+    const two = renderSummaryHtml(
+      { external_id: "42" },
+      { ...summary, open_questions: ["Is line 4 affected?", "Since when?"] },
+    );
+    expect(two).toContain("<li>Is line 4 affected?</li><li>Since when?</li>");
+  });
+
+  it("marks each try with its result", () => {
+    const tried = renderSummaryHtml(
+      { external_id: "42" },
+      {
+        ...summary,
+        tried: [
+          {
+            action: "Restarted",
+            result: "workaround",
+            outcome: "Holds a day.",
+          },
+          { action: "Checked the firewall", outcome: "Nothing blocked." },
+        ],
+      },
+    );
+    expect(tried).toContain(">Workaround</span>");
+    expect(tried.match(/border-radius:10px/g)).toHaveLength(1);
   });
 });
 
@@ -79,7 +145,7 @@ describe("the files of a summary", () => {
 
   it("get a section of their own in the note, each with who sent it and what it shows", () => {
     const html = renderSummaryHtml({ external_id: "42" }, withFiles);
-    expect(html).toContain("<strong>Files</strong>");
+    expect(html).toContain(heading("Files"));
     expect(html).toContain(
       `<strong>screen&lt;1&gt;.png</strong> <span style="color:#777">Ana, 2026-06-16</span><br>The spooler's error dialog, code E-209.`,
     );
@@ -87,9 +153,10 @@ describe("the files of a summary", () => {
       "<strong>app.log</strong><br>Timeouts start at 10:02.",
     );
     expect(html).toContain("<strong>export.csv</strong></li>");
-    expect(html.indexOf("Files")).toBeGreaterThan(
-      html.indexOf("Tried / ruled out"),
+    expect(html.indexOf(heading("Files"))).toBeGreaterThan(
+      html.indexOf(heading("Tried")),
     );
+    expect(html).toContain(">Files</div>");
   });
 
   it("link a file's name to where it opens, given its path and a place to open it", () => {
@@ -110,7 +177,7 @@ describe("the files of a summary", () => {
       path.startsWith("attachment:fd/42/")
         ? `https://tachy.test/open?a=1&f=${path.slice(17)}`
         : null;
-    const html = renderSummaryHtml({ external_id: "42" }, linked, linkOf);
+    const html = renderSummaryHtml({ external_id: "42" }, linked, { linkOf });
     expect(html).toContain(
       `<strong><a href="https://tachy.test/open?a=1&amp;f=inline-7" target="_blank" rel="noopener noreferrer">image.png</a></strong><br>The error.`,
     );
@@ -161,6 +228,27 @@ describe("renderSummaryText", () => {
     expect(
       renderSummaryText({ ...summary, timeline: [], tried: [] }).split("\n"),
     ).toHaveLength(2);
+  });
+
+  it("carries the state, the next step, the open questions and each try's result", () => {
+    const lines = renderSummaryText({
+      ...summary,
+      state: "blocked",
+      next_step: "Wait for the vendor.",
+      open_questions: ["Which firmware?"],
+      tried: [
+        { action: "Restarted", result: "failed", outcome: "Same error." },
+      ],
+    }).split("\n");
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        "State: Blocked",
+        "Next step: Wait for the vendor.",
+        "Open questions:",
+        "- Which firmware?",
+        "- Restarted -> Same error. (Failed)",
+      ]),
+    );
   });
 });
 
@@ -255,6 +343,23 @@ describe("asNoteHtml", () => {
     expect(asNoteHtml("a\n\n- b")).toBe(
       '<div><p style="margin:0 0 8px 0">a</p><ul style="margin:0 0 8px 0;padding-left:22px"><li>b</li></ul></div>',
     );
+  });
+
+  it("keeps the paragraphs of text that holds an inline tag", () => {
+    expect(asNoteHtml("The <b>token</b> is lost.\n\nNext: restart.")).toBe(
+      '<div><p style="margin:0 0 8px 0">The <b>token</b> is lost.</p><p style="margin:0 0 8px 0">Next: restart.</p></div>',
+    );
+  });
+});
+
+describe("richTextToHtml", () => {
+  it("keeps bold, italic and code, and shows any other markup as text", () => {
+    const html = richTextToHtml(
+      "<em>a</em> <code>b</code> <script>c</script> <a href=x>d</a>",
+    );
+    expect(html).toContain("<em>a</em> <code>b</code>");
+    expect(html).toContain("&lt;script&gt;c&lt;/script&gt;");
+    expect(html).toContain("&lt;a href=x&gt;");
   });
 });
 

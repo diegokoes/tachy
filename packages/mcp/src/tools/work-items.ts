@@ -9,23 +9,38 @@ import {
   ingestWorkItem,
   compactWorkItem,
   fileLinker,
+  renderAnalysisNote,
   renderCompactNotes,
   renderSummaryHtml,
   priorSummaryIds,
   replaceNotes,
   ticketSummarySchema,
+  transcriptOnTicket,
   externalWorkItemScope,
   workItemScope,
+  type CitedCode,
 } from "@tachy/core/work-items";
 import { searchKnowledge } from "@tachy/core/knowledge";
-import { resolveCurrentUserId } from "@tachy/core/access";
+import { resolveCurrentUserId, userDisplayName } from "@tachy/core/access";
 import { recordRun } from "@tachy/core/analytics";
 import {
   getCustomerIdBySlug,
+  getCustomerName,
   setWorkItemCustomer,
   setObservedVersion,
 } from "@tachy/core/catalog";
-import { scrubDeep, TokenMap } from "@tachy/core/compliance";
+import {
+  getRepoBySlug,
+  readCodeFile,
+  repoFileUrl,
+  repoToken,
+} from "@tachy/core/code";
+import {
+  globalRedactionEnabled,
+  scrubDeep,
+  scrubText,
+  TokenMap,
+} from "@tachy/core/compliance";
 import { readForModel } from "@tachy/core/flows";
 import { searchReferenceDocs } from "@tachy/core/reference";
 import { embedQueryLiteral } from "@tachy/core/search";
@@ -33,7 +48,7 @@ import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
 import { NO_MATCHES, forAgent, out } from "../results";
 import { requireCanEdit } from "../permissions";
-import { limitField, sourceSlug } from "../fields";
+import { limitField, MAX_CODE_RANGE_LINES, sourceSlug } from "../fields";
 import {
   capTurns,
   withCompaction,
@@ -45,6 +60,17 @@ import {
 
 /** How much of the first incoming message goes into the search query. */
 const QUERY_LEAD_CHARS = 1000;
+
+const MAX_CITED_CODE = 5;
+
+/** The person this chat runs for, as a note names them. */
+async function requesterName(): Promise<string | null> {
+  const userId = await resolveCurrentUserId();
+  return userId ? userDisplayName(userId) : null;
+}
+
+const askedInChat = (name: string | null) =>
+  name ? `${name} in chat` : undefined;
 
 tool(
   "fetch_work_item",
@@ -126,7 +152,9 @@ tool(
         posted = await replaceNotes(
           src,
           external_id,
-          renderCompactNotes(full),
+          renderCompactNotes(full, {
+            requestedBy: askedInChat(await requesterName()),
+          }),
           replace_previous !== false ? full.prior_transcript_ids : [],
         );
       }
@@ -236,7 +264,7 @@ tool(
   "post_work_item_summary",
   {
     description:
-      "Post a summary of a ticket onto it as a private note, replacing the summary an earlier call posted. Read the whole thread first (fetch_work_item), and open the files that bear on the problem (read_file), then pass the content only, with each file's path so the note can link to it: the note's layout and markup are produced here, so write plain sentences with no markdown or HTML. Summarise what the thread and the files you opened say; where they do not say, leave it out.",
+      "Post a summary of a ticket onto it as a private note, replacing the summary an earlier call posted. Read the whole thread first (fetch_work_item), and open the files that bear on the problem (read_file), then pass the content only, with each file's path so the note can link to it: the note's layout and markup are produced here, so write plain sentences with no markdown or HTML. Summarise what the thread and the files you opened say; where they do not say, leave it out. The note's header, the customer and a pointer to the compacted transcript are added here from the ticket; leave them out of the text.",
     inputSchema: {
       source: sourceSlug,
       external_id: z.string(),
@@ -249,15 +277,22 @@ tool(
       throw badInput(`Source '${source}' does not support notes`);
     await requireCanEdit(await externalWorkItemScope(conn.id, external_id));
     const raw = await src.fetchItem(external_id);
+    const { customerId } = await ingestWorkItem(conn.id, raw);
     const linkOf = fileLinker(raw, {
       source,
       // Only a source that opens files has something for the link to open.
       origin: src.openAttachment ? process.env.TACHY_PUBLIC_ORIGIN : undefined,
     });
+    const note = renderSummaryHtml({ external_id, title: raw.title }, summary, {
+      linkOf,
+      customer: await getCustomerName(customerId),
+      requestedBy: askedInChat(await requesterName()),
+      transcript: transcriptOnTicket(raw.messages),
+    });
     const posted = await replaceNotes(
       src,
       external_id,
-      [renderSummaryHtml({ external_id, title: raw.title }, summary, linkOf)],
+      [note],
       priorSummaryIds(raw.messages),
     );
     return out({
@@ -268,28 +303,142 @@ tool(
   },
 );
 
+const codeRefSchema = z.object({
+  repo: z.string().describe("Repo slug from list_repos."),
+  path: z.string().describe("The file's path as read_code_file returned it."),
+  start_line: z.number().int().positive(),
+  end_line: z
+    .number()
+    .int()
+    .positive()
+    .describe(
+      `With start_line, the range you read with read_code_file, at most ${MAX_CODE_RANGE_LINES} lines.`,
+    ),
+  version: z
+    .string()
+    .optional()
+    .describe("As read_code_file: the release the range was read at."),
+  ref: z
+    .string()
+    .optional()
+    .describe("As read_code_file: the line the range was read on."),
+  highlight: z
+    .tuple([z.number().int().positive(), z.number().int().positive()])
+    .optional()
+    .describe(
+      "[first, last]: the lines inside the range that decide the outcome, a few at most. The link opens with them selected and the note quotes them. Leave it out to cite the whole range.",
+    ),
+});
+
+type CodeRef = z.infer<typeof codeRefSchema>;
+
+/** Reads a cited range again at its source, so the link and quote are real. */
+async function citedCode(
+  ref: CodeRef,
+  userId: string | null,
+): Promise<CitedCode> {
+  if (ref.end_line - ref.start_line >= MAX_CODE_RANGE_LINES)
+    throw badInput(
+      `${ref.path} spans more than ${MAX_CODE_RANGE_LINES} lines; narrow it`,
+    );
+  const [startLine, endLine] = ref.highlight ?? [ref.start_line, ref.end_line];
+  if (
+    startLine > endLine ||
+    startLine < ref.start_line ||
+    endLine > ref.end_line
+  )
+    throw badInput(
+      `${ref.path}: highlight must sit inside start_line-end_line`,
+    );
+  const read = await readCodeFile(ref.repo, ref.path, {
+    startLine,
+    endLine,
+    version: ref.version,
+    ref: ref.ref,
+    token: await repoToken(ref.repo, userId),
+  });
+  if (read.end_line < read.start_line)
+    throw badInput(`${ref.path} has ${read.total_lines} lines`);
+  const numbered = read.content.replace(/^(\d+)\t/gm, "$1  ");
+  const repo = await getRepoBySlug(ref.repo);
+  return {
+    repo: ref.repo,
+    path: read.path,
+    commit: read.commit,
+    startLine: read.start_line,
+    endLine: read.end_line,
+    url: repoFileUrl(repo.url, {
+      path: read.path,
+      commit: read.commit,
+      startLine: read.start_line,
+      endLine: read.end_line,
+    }),
+    excerpt: globalRedactionEnabled()
+      ? scrubText(numbered, new TokenMap())
+      : numbered,
+  };
+}
+
 tool(
   "post_private_note",
   {
     description:
-      "Write a private note back to the source work item (e.g. a Freshdesk private note) with the learned analysis.",
+      "Post a private note on a ticket: an analysis, a finding, or something the user asked to record there. For a summary of the whole ticket use post_work_item_summary, which replaces the previous one. The note's heading, byline and footer are added here; pass a title and the text, and any code the note rests on in code, cited in the text as [[1]], [[2]] and so on, never as paths or links.",
     inputSchema: {
       source: sourceSlug,
       external_id: z.string(),
+      title: z
+        .string()
+        .min(1)
+        .max(100)
+        .describe(
+          'The note\'s heading: what it says, in under ten words, e.g. "Why sync drops after a reconnect".',
+        ),
       body: z
         .string()
         .describe(
-          "Private note text, rendered as HTML: plain text keeps its paragraphs, '-' lists and links, and markup you pass is posted as is. Never markdown. It lands on the customer's own ticket in their helpdesk - private to your organisation, not to you, and visible to every agent who opens it. Write it as something a colleague will read six months from now.",
+          "Plain text. A blank line starts a paragraph, lines starting '- ' or '1. ' become a list, URLs become links, and <b>, <i> and <code> are kept; any other markup shows as text. Never markdown. Where the note rests on code, explain it for a support colleague who may not read code: what it does in the product's terms and how that produces what the customer sees, naming the function or setting so a developer can find it, and say when the code you read is a different version from the customer's. It lands on the customer's own ticket in their helpdesk - private to your organisation, not to you, and visible to every agent who opens it. Write it as something a colleague will read six months from now.",
+        ),
+      code: z
+        .array(codeRefSchema)
+        .max(MAX_CITED_CODE)
+        .default([])
+        .describe(
+          `Code the note rests on: only ranges you read with read_code_file in this conversation, at most ${MAX_CITED_CODE}. Cite each one in body as [[n]], n counting from 1, where the text talks about it. The note turns each citation into a link to the file in its repo at the commit you read, with the cited lines selected, and quotes those lines after that paragraph. Empty when no code was read.`,
         ),
     },
   },
-  async ({ source, external_id, body }) => {
+  async ({ source, external_id, title, body, code }) => {
     const { conn, source: src } = await resolveSource(source);
     if (!src.postNote)
       throw badInput(`Source '${source}' does not support notes`);
     await requireCanEdit(await externalWorkItemScope(conn.id, external_id));
-    await src.postNote(external_id, body, { private: true });
-    return out({ posted: true, private: true, external_id, body });
+    const userId = await resolveCurrentUserId();
+    const cited: CitedCode[] = [];
+    for (const ref of code) cited.push(await citedCode(ref, userId));
+    const name = await requesterName();
+    const note = renderAnalysisNote({
+      externalId: external_id,
+      title,
+      body,
+      code: cited,
+      requestedBy: askedInChat(name),
+      caveat: name
+        ? `Written by a model in a chat with ${name}.`
+        : "Written by a model in a chat.",
+    });
+    await src.postNote(external_id, note, { private: true });
+    return out({
+      posted: true,
+      private: true,
+      external_id,
+      cited: cited.map(({ path, startLine, endLine, url }) => ({
+        path,
+        lines: `${startLine}-${endLine}`,
+        linked: url !== null,
+      })),
+      next: "The note is on the ticket. Say so in one line; do not restate it.",
+    });
   },
 );
 
