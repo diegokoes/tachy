@@ -107,6 +107,10 @@
   .tile.content {
     flex: none;
   }
+  /* Mid-resize the box is smaller than the content it is growing towards. */
+  .tile:global([data-morphing]) {
+    overflow: hidden;
+  }
   /* A size container has no intrinsic height, so a tile that sizes to its
      content must contain its width only. */
   .tile.content .body {

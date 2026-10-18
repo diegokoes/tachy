@@ -24,7 +24,7 @@ import {
   openTile,
   tilePath,
 } from "../../packages/web/src/admin/expand.svelte";
-import { gsap } from "../../packages/web/src/motion/gsap";
+import { Flip, gsap } from "../../packages/web/src/motion/gsap";
 import {
   breathe,
   focusLane,
@@ -32,23 +32,6 @@ import {
   driftMarks,
 } from "../../packages/web/src/motion/motion";
 import { navigate, router } from "../../packages/web/src/shell/router.svelte";
-import { deferred } from "./deferred";
-
-const root = document.documentElement;
-const doc = document as { startViewTransition?: unknown };
-
-function fakeTransition() {
-  const phases = {
-    updated: Promise.resolve() as Promise<unknown>,
-    ready: deferred(),
-    finished: deferred(),
-  };
-  doc.startViewTransition = vi.fn((update: () => Promise<void>) => {
-    phases.updated = update();
-    return { ready: phases.ready.promise, finished: phases.finished.promise };
-  });
-  return phases;
-}
 
 const tile = () => {
   const el = document.createElement("section");
@@ -62,8 +45,7 @@ beforeEach(() => {
   navigate("/console/workers");
 });
 afterEach(() => {
-  delete doc.startViewTransition;
-  delete root.dataset.tileMorph;
+  vi.restoreAllMocks();
   document.body.replaceChildren();
   gsap.globalTimeline.clear();
 });
@@ -90,58 +72,46 @@ describe("the expanded tile's route", () => {
 });
 
 describe("morphTile", () => {
-  it("changes the layout at once where there are no view transitions", () => {
+  it("resizes the live tile from its old box, with no crossfade", async () => {
+    const from = vi.spyOn(Flip, "from");
+    const el = tile();
     const swap = vi.fn();
-    morphTile(tile(), swap);
+    await morphTile(el, swap);
     expect(swap).toHaveBeenCalledOnce();
+    expect(from).toHaveBeenCalledOnce();
+    const vars = from.mock.calls[0][1] as Record<string, unknown>;
+    expect(vars).toMatchObject({ absolute: true });
+    expect(vars.scale).toBeUndefined();
+    expect(el.dataset.morphing).toBe("");
+
+    (vars.onComplete as () => void)();
+    expect(el.dataset.morphing).toBeUndefined();
   });
 
-  it("changes it at once under reduced motion", () => {
-    fakeTransition();
+  it("changes the layout at once under reduced motion", async () => {
     media.reduced = true;
-    const swap = vi.fn();
-    morphTile(tile(), swap);
-    expect(swap).toHaveBeenCalledOnce();
-    expect(doc.startViewTransition).not.toHaveBeenCalled();
-  });
-
-  it("names the tile for the length of the transition only", async () => {
-    const phases = fakeTransition();
+    const from = vi.spyOn(Flip, "from");
     const el = tile();
     const swap = vi.fn();
-    morphTile(el, swap);
-    expect(el.style.viewTransitionName).toBe("tile");
-    expect(root.dataset.tileMorph).toBeDefined();
-    await phases.updated;
+    await morphTile(el, swap);
     expect(swap).toHaveBeenCalledOnce();
-
-    phases.finished.resolve();
-    await new Promise((r) => setTimeout(r, 0));
-    expect(el.style.viewTransitionName).toBe("");
-    expect(root.dataset.tileMorph).toBeUndefined();
+    expect(from).not.toHaveBeenCalled();
+    expect(el.dataset.morphing).toBeUndefined();
   });
 
-  it("clears the name when the transition is skipped", async () => {
-    const phases = fakeTransition();
-    const el = tile();
-    morphTile(el, () => {});
-    phases.ready.reject(new Error("skipped"));
-    phases.finished.reject(new Error("skipped"));
-    await new Promise((r) => setTimeout(r, 0));
-    expect(el.style.viewTransitionName).toBe("");
+  it("still swaps with no tile to move", async () => {
+    const swap = vi.fn();
+    await morphTile(null, swap);
+    expect(swap).toHaveBeenCalledOnce();
   });
 });
 
 describe("opening and closing a tile", () => {
   it("goes to the chart's route and back to the overview", async () => {
-    const phases = fakeTransition();
-    openTile("workers", "runs", tile());
-    await phases.updated;
+    await openTile("workers", "runs", tile());
     expect(router.path).toBe("/console/workers/chart/runs");
 
-    const back = fakeTransition();
-    closeTile("workers");
-    await back.updated;
+    await closeTile("workers");
     expect(router.path).toBe("/console/workers");
   });
 });

@@ -695,32 +695,26 @@ export function reflow(
 }
 
 /**
- * Takes `tile` to the size of the window, or back: the browser morphs the
- * tile's box between the two layouts as a view transition. `swap` changes the
- * layout and returns when the DOM shows it. The name is on the tile only for
- * the transition: two elements with one name abort it, and a name left behind
- * snapshots a node nobody animates.
+ * Takes `tile` to the size of the window, or back: the live node resizes
+ * between its two boxes, so its chart redraws at each size on the way instead
+ * of crossfading two pictures. `swap` changes the layout and returns when the
+ * DOM shows it. `data-morphing` is on the tile while it moves, so it can clip
+ * what does not fit yet.
  */
-export function morphTile(
+export async function morphTile(
   tile: HTMLElement | null | undefined,
   swap: () => void | Promise<void>,
 ) {
-  const root = document.documentElement;
-  if (!tile || reducedMotion() || !document.startViewTransition) {
-    void swap();
-    return;
-  }
-  root.dataset.tileMorph = "";
-  tile.style.viewTransitionName = "tile";
-  const transition = document.startViewTransition(async () => {
-    await swap();
+  if (tile) tile.dataset.morphing = "";
+  const play = reflow([tile], {
+    duration: 0.5,
+    ease: "expo.out",
+    onComplete: () => {
+      if (tile) delete tile.dataset.morphing;
+    },
   });
-  const done = () => {
-    tile.style.viewTransitionName = "";
-    delete root.dataset.tileMorph;
-  };
-  transition.ready.catch(() => {});
-  transition.finished.then(done, done);
+  await swap();
+  play();
 }
 
 /**
