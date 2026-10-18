@@ -1,9 +1,26 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { validate } from "../validation";
 import { z } from "zod";
-import { MAX_PAGE, checkFile, fileFamily } from "@tachy/core";
+import {
+  MAX_PAGE,
+  checkFile,
+  fileFamily,
+  WORK_ITEM_SCOPES,
+  WORK_ITEM_SORTS,
+  type StoredItemEvent,
+  type WorkItemPage,
+  type WorkItemPeek,
+  type WorkItemView,
+} from "@tachy/core";
 import { imageForModel } from "@tachy/core/files";
-import { resolveSource } from "@tachy/core/sources";
+import { getSourceProject, resolveSource } from "@tachy/core/sources";
+import {
+  applyIngest,
+  applyViewConfig,
+  getComposeConfig,
+  ingestConfig,
+} from "@tachy/core/flows";
 import {
   deleteStoredItems,
   filterForAudit,
@@ -14,6 +31,11 @@ import {
   readStoredItem,
   workItemScope,
   externalWorkItemScope,
+  followWorkItem,
+  isFollowing,
+  listFollows,
+  markItemNotesRead,
+  unfollowWorkItem,
   type StoredItemFilter,
 } from "@tachy/core/work-items";
 import { recordRun } from "@tachy/core/analytics";
@@ -23,11 +45,70 @@ import {
   setWorkItemCustomer,
   setObservedVersion,
 } from "@tachy/core/catalog";
-import { badInput } from "@tachy/core/infra";
+import { AppError, badInput, notFound, unavailable } from "@tachy/core/infra";
 import { audit } from "../audit";
 import { requireAdmin } from "../auth";
-import { assertScopeEditor, callerScope } from "../authz";
+import {
+  assertProjectMember,
+  assertScopeEditor,
+  callerScope,
+  callerSourceProjects,
+  callerUserId,
+  requireCaller,
+} from "../authz";
+import { callerSource } from "../sources";
 import { INERT_HEADERS, contentDisposition } from "../downloads";
+
+/** A source's status codes for a token it does not accept. */
+const TOKEN_REFUSED = /-> (401|403|203)\b/;
+const ITEM_MISSING = /-> 404\b/;
+
+/** An upstream failure, said so that the person knows what to do about it. */
+function sourceRefusal(reason: unknown): Error {
+  if (reason instanceof AppError) return reason;
+  const message = reason instanceof Error ? reason.message : "";
+  if (TOKEN_REFUSED.test(message))
+    return badInput(
+      "The source refused your token. Check it under Settings › agent.",
+    );
+  if (ITEM_MISSING.test(message))
+    return notFound("No such item, or your token cannot read it.");
+  return unavailable("The source did not answer. Try again.");
+}
+
+async function askSource<T>(ask: Promise<T>): Promise<T> {
+  try {
+    return await ask;
+  } catch (e) {
+    throw sourceRefusal(e);
+  }
+}
+
+/** A registered project of the caller's team, and its source's live reads. */
+async function browseIn(c: Context, projectId: string) {
+  const project = await getSourceProject(projectId);
+  await assertProjectMember(c, project);
+  const { conn, source } = await callerSource(c, project.source_slug);
+  if (!source.browser)
+    throw badInput(`${project.source_type} items cannot be browsed yet`);
+  return { project, conn, browser: source.browser };
+}
+
+const listSchema = z.object({
+  sort: z.enum(WORK_ITEM_SORTS).default("changed"),
+  direction: z.enum(["asc", "desc"]).default("desc"),
+  scope: z.enum(WORK_ITEM_SCOPES).default("all"),
+  type: z.string().max(200).optional(),
+  state: z.string().max(200).optional(),
+  q: z.string().max(200).optional(),
+  offset: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE).default(50),
+});
+const browseParam = z.object({ id: z.string().uuid() });
+const itemParam = z.object({
+  id: z.string().uuid(),
+  itemId: z.string().regex(/^\d+$/),
+});
 
 /** The longest edge of a file's picture in a list of files. */
 const THUMBNAIL_EDGE_PX = 320;
@@ -130,6 +211,138 @@ export const workItems = new Hono()
     },
   )
 
+  // An id is looked up on each of the caller's connections of the type: ADO
+  // ids are unique per organisation, not across them.
+  .get("/peek/:sourceType/:id", async (c) => {
+    const { sourceType, id } = c.req.param();
+    const projects = await callerSourceProjects(c, sourceType);
+    const slugs = [...new Set(projects.map((p) => p.source_slug))];
+    const answers = await Promise.allSettled(
+      slugs.map(async (slug) => {
+        const { source } = await callerSource(c, slug);
+        return source.peek ? source.peek([id]) : [];
+      }),
+    );
+    const peeks: WorkItemPeek[] = answers.flatMap((answer) =>
+      answer.status === "fulfilled" ? answer.value : [],
+    );
+    const refusal = answers.find((answer) => answer.status === "rejected");
+    if (!peeks.length && refusal) throw sourceRefusal(refusal.reason);
+    return c.json(peeks);
+  })
+
+  .get(
+    "/projects/:id/items",
+    validate("param", browseParam),
+    validate("query", listSchema),
+    async (c) => {
+      const { project, conn, browser } = await browseIn(
+        c,
+        c.req.valid("param").id,
+      );
+      const { q, ...query } = c.req.valid("query");
+      const ids =
+        query.scope === "followed"
+          ? (await listFollows(await requireCaller(c), conn.id)).map(
+              (follow) => follow.external_id,
+            )
+          : undefined;
+      if (ids && !ids.length) {
+        const nothing: WorkItemPage = { items: [], total: 0, capped: false };
+        return c.json(nothing);
+      }
+      return c.json(
+        await askSource(
+          browser.list(project.external_key, { ...query, text: q, ids }),
+        ),
+      );
+    },
+  )
+  .get("/projects/:id/follows", validate("param", browseParam), async (c) => {
+    const userId = await requireCaller(c);
+    const project = await getSourceProject(c.req.valid("param").id);
+    await assertProjectMember(c, project);
+    const follows = await listFollows(userId, project.source_connection_id);
+    return c.json(follows.map((follow) => follow.external_id));
+  })
+  // The source's form for a type, read-only fields included, for the view editor.
+  .get(
+    "/projects/:id/layout",
+    validate("param", browseParam),
+    validate("query", z.object({ type: z.string().min(1).max(200) })),
+    async (c) => {
+      const { project, browser } = await browseIn(c, c.req.valid("param").id);
+      return c.json(
+        await askSource(
+          browser.layout(project.external_key, c.req.valid("query").type),
+        ),
+      );
+    },
+  )
+  // Reading an item whole refreshes its stored copy, as a fetch in chat does.
+  .get(
+    "/projects/:id/items/:itemId",
+    validate("param", itemParam),
+    async (c) => {
+      const { id, itemId } = c.req.valid("param");
+      const { project, conn, browser } = await browseIn(c, id);
+      const { raw, view } = await askSource(browser.read(itemId));
+      const stored = await ingestWorkItem(conn.id, raw);
+      const userId = await callerUserId(c);
+      if (userId) await markItemNotesRead(userId, conn.id, itemId);
+      const [{ timeline }, config, following] = await Promise.all([
+        readStoredItem(stored.id),
+        getComposeConfig(project.id),
+        userId ? isFollowing(userId, conn.id, itemId) : false,
+      ]);
+      const answer: WorkItemView = {
+        ...view,
+        layout: applyViewConfig(view.layout, config, view.item.type),
+        stored_id: stored.id,
+        following,
+        history: timeline.filter(
+          (entry): entry is StoredItemEvent => entry.kind === "event",
+        ),
+      };
+      return c.json(answer);
+    },
+  )
+  // Following starts at the revision the reader sees now, so it notes only
+  // what changes after.
+  .put(
+    "/projects/:id/items/:itemId/follow",
+    validate("param", itemParam),
+    async (c) => {
+      const { id, itemId } = c.req.valid("param");
+      const userId = await requireCaller(c);
+      const { project, conn, browser } = await browseIn(c, id);
+      const [current] = await askSource(
+        browser.changes([{ id: itemId, seenRev: null }]),
+      );
+      if (!current)
+        throw notFound("No such item, or your token cannot read it.");
+      await followWorkItem({
+        userId,
+        connectionId: conn.id,
+        externalId: itemId,
+        sourceProjectId: project.id,
+        seenRev: current.rev,
+      });
+      return c.json({ following: true });
+    },
+  )
+  .delete(
+    "/projects/:id/items/:itemId/follow",
+    validate("param", itemParam),
+    async (c) => {
+      const { id, itemId } = c.req.valid("param");
+      const userId = await requireCaller(c);
+      const { conn } = await browseIn(c, id);
+      await unfollowWorkItem(userId, conn.id, itemId);
+      return c.json({ following: false });
+    },
+  )
+
   .post("/:source/:id/fetch", async (c) => {
     const { source, id } = c.req.param();
     const { conn, source: src } = await resolveSource(
@@ -140,6 +353,8 @@ export const workItems = new Hono()
     const item = await ingestWorkItem(conn.id, raw);
     await recordRun({ workItemId: item.id, mode: "ingest" });
     const customerName = await getCustomerName(item.customerId);
+    // The tray hands this thread to the review model.
+    const { kept } = applyIngest(raw, ingestConfig(conn.config));
     return c.json({
       work_item_id: item.id,
       product_id: item.productId,
@@ -147,7 +362,7 @@ export const workItems = new Hono()
       customer_id: item.customerId,
       customer_name: customerName,
       observed_version: item.observedVersion,
-      item: raw,
+      item: kept,
     });
   })
   // A file of a ticket, read from its source with the reader's own token on

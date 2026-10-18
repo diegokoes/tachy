@@ -1,5 +1,9 @@
 <script module lang="ts">
-  import type { BuiltinCommandMeta, CommandArtifactMeta } from "./agent";
+  import type {
+    BuiltinCommandMeta,
+    ChatModeMeta,
+    CommandArtifactMeta,
+  } from "./agent";
   import type { IconName } from "../tui/icons";
 
   export type CommandMode = "command" | "artifact" | "options";
@@ -28,6 +32,7 @@
 
   export type CommandPick =
     | { kind: "builtin"; builtin: BuiltinCommandMeta }
+    | { kind: "mode"; mode: ChatModeMeta }
     | { kind: "artifact"; artifact: CommandArtifactMeta }
     | { kind: "option"; value: string };
 
@@ -71,21 +76,39 @@
 </script>
 
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import { Icon } from "../tui";
+  import type { ChatModeName } from "@tachy/contract";
+
+  /** Each mode's own star tint, so its row reads as the sky it switches on. */
+  const MODE_INK: Record<ChatModeName, string> = {
+    analyze: "var(--star-ink-amber)",
+    code: "var(--star-ink-green)",
+  };
+  const MODE_ICONS: Record<ChatModeName, IconName> = {
+    analyze: "knowledge",
+    code: "code",
+  };
 
   let {
     mode = "command",
     query,
+    modes = [],
+    activeMode,
     builtins,
     artifacts,
     options = [],
     crumb,
     running = false,
     debuggable = false,
+    preview,
     onpick,
   }: {
     mode?: CommandMode;
     query: string;
+    modes?: ChatModeMeta[];
+    /** The mode switched on: its row offers to leave it. */
+    activeMode?: ChatModeName;
     builtins: BuiltinCommandMeta[];
     artifacts: CommandArtifactMeta[];
     options?: MenuOption[];
@@ -94,6 +117,8 @@
     running?: boolean;
     /** The caller is an app admin, who is offered `/debug`. */
     debuggable?: boolean;
+    /** Drawn instead of the empty note when an options menu has no rows. */
+    preview?: Snippet;
     onpick: (pick: CommandPick) => void;
   } = $props();
 
@@ -126,23 +151,41 @@
         desc: a.description ?? "",
         pick: { kind: "artifact", artifact: a } as CommandPick,
       }));
+    const typed = query.toLowerCase();
+    const modeRows: Item[] = running
+      ? []
+      : modes
+          .filter((m) => m.name.startsWith(typed))
+          .map((m) => ({
+            key: `m:${m.name}`,
+            label: `/${m.name}`,
+            hint: m.name === activeMode ? "on" : m.args,
+            desc:
+              m.name === activeMode ? `leave ${m.name} mode` : m.description,
+            icon: MODE_ICONS[m.name],
+            color: MODE_INK[m.name],
+            pick: { kind: "mode", mode: m } as CommandPick,
+          }));
     const offered = running
       ? [STOP_COMMAND]
       : [
-          ...builtins,
+          ...builtins.filter((b) => !b.hidden),
           ARTIFACT_COMMAND,
           MODEL_COMMAND,
           ...(debuggable ? [DEBUG_COMMAND] : []),
         ];
-    return offered
-      .filter((b) => b.name.startsWith(query.toLowerCase()))
-      .map((b) => ({
-        key: `b:${b.name}`,
-        label: `/${b.name}`,
-        hint: b.args,
-        desc: b.description,
-        pick: { kind: "builtin", builtin: b } as CommandPick,
-      }));
+    return [
+      ...modeRows,
+      ...offered
+        .filter((b) => b.name.startsWith(typed))
+        .map((b) => ({
+          key: `b:${b.name}`,
+          label: `/${b.name}`,
+          hint: b.args,
+          desc: b.description,
+          pick: { kind: "builtin", builtin: b } as CommandPick,
+        })),
+    ];
   });
 
   const GRID_COLUMNS = 3;
@@ -217,7 +260,9 @@
         </button>
       {/each}
     </div>
-    {#if !items.length}
+    {#if !items.length && preview}
+      {@render preview()}
+    {:else if !items.length}
       <div class="cmd-none">
         {mode === "options"
           ? (crumb?.empty ?? "nothing matches")

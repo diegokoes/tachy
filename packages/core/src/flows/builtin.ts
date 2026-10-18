@@ -7,14 +7,24 @@ import {
 import { readableBucket } from "../buckets/access";
 import { searchBucket } from "../buckets/search";
 import { searchCode } from "../code/search";
+import { listTeamMembers } from "../access/users";
+import { sql } from "../infra/db";
 import { badInput } from "../infra/errors";
+import { notify } from "../notifications/notifications";
 import { searchKnowledge } from "../knowledge/knowledge";
 import { searchReferenceDocs } from "../reference/reference";
 import { getSourceProject } from "../sources/projects";
 import { resolveSource } from "../sources/registry";
+import { followWorkItem } from "../work-items/follows";
+import { asNoteHtml, renderNote } from "../work-items/note-html";
 import { ingestWorkItem } from "../work-items/ingest";
+import { extractAdoRefs } from "../work-items/linked-refs";
+import { recordAdoRefs } from "../work-items/links";
+import { readStoredRaw } from "../work-items/stored";
 import { defineFlowAction, type FlowActionContext } from "./actions";
+import { flowName } from "./definitions";
 import { customerProperties } from "./customer";
+import { applyIngest, getIngestConfig, ingestConfig } from "./ingest";
 import { applyFormConfig, getComposeConfig, typeConfig } from "./forms";
 import type { FlowSubject } from "./subject";
 
@@ -45,6 +55,30 @@ const hits = z.object({
 const lines = (rows: Record<string, unknown>[], pick: (row: any) => string) =>
   rows.map((r, i) => `${i + 1}. ${pick(r)}`).join("\n");
 
+async function recipientsOf(
+  ctx: FlowActionContext,
+  to: "owner" | "team",
+): Promise<string[]> {
+  if (to === "owner") return ctx.userId ? [ctx.userId] : [];
+  if (!ctx.item?.team) return [];
+  return (await listTeamMembers(ctx.item.team)).map((m) => m.user_id);
+}
+
+async function wasNotified(
+  userId: string,
+  ref: { flow_id: string; step_id: string; work_item_id: string | null },
+): Promise<boolean> {
+  const [hit] = await sql`
+    select 1 from notifications
+    where user_id = ${userId} and kind = 'flow_notice'
+      and ref->>'flow_id' = ${ref.flow_id}
+      and ref->>'step_id' = ${ref.step_id}
+      and ref->>'work_item_id' is not distinct from ${ref.work_item_id}
+    limit 1
+  `;
+  return !!hit;
+}
+
 let registered = false;
 
 /** Idempotent: every caller that needs the library asks for it first. */
@@ -56,7 +90,7 @@ export function registerBuiltinFlowActions(): void {
     key: "item.fetch",
     title: "Read ticket",
     description:
-      "Fetches the item fresh from its source, with every message, and stores it.",
+      "Fetches the item fresh from its source and stores it. Messages the connection's ingest rules skip are left out.",
     category: "read",
     writes: false,
     params: z.object({}),
@@ -73,13 +107,19 @@ export function registerBuiltinFlowActions(): void {
         }),
       ),
       text: z.string(),
+      guidance: z.string().nullable(),
     }),
     async run(ctx) {
       const item = needItem(ctx);
       const { conn, source } = await resolveSource(item.connection, ctx.scope);
       const raw = await source.fetchItem(item.external_id);
       await ingestWorkItem(conn.id, raw);
-      const messages = raw.messages.map((m) => ({
+      const { kept, guidance } = applyIngest(
+        raw,
+        ingestConfig(conn.config),
+        source.modelOmits,
+      );
+      const messages = kept.messages.map((m) => ({
         direction: m.direction,
         visibility: m.visibility,
         author: m.authorLabel ?? m.author ?? null,
@@ -93,6 +133,7 @@ export function registerBuiltinFlowActions(): void {
         text: messages
           .map((m) => `[${m.direction} ${m.author ?? ""}] ${m.text}`.trim())
           .join("\n\n"),
+        guidance: guidance ?? null,
       };
     },
   });
@@ -312,6 +353,132 @@ export function registerBuiltinFlowActions(): void {
   });
 
   defineFlowAction({
+    key: "item.set_field",
+    title: "Set field",
+    description:
+      "Sets one of the ticket's fields in its source: status, priority, type, group, agent or a custom field.",
+    category: "update",
+    source: "freshdesk",
+    writes: true,
+    params: z.object({
+      field: z.string().min(1).meta(options("source.ticket_fields")),
+      // A lone {{token}} keeps its type, so a model's JSON number arrives as a number.
+      value: z.coerce
+        .string()
+        .min(1)
+        .meta(
+          options("source.field_choices", {
+            "x-depends-on": ["field"],
+            "x-free": true,
+          }),
+        )
+        .describe("A choice, or text such as {{steps.<id>.json.priority}}."),
+    }),
+    output: z.object({ field: z.string(), value: z.string() }),
+    async run(ctx, params) {
+      const item = needItem(ctx);
+      const { source } = await resolveSource(item.connection, ctx.scope);
+      if (!source.setFields)
+        throw badInput(`${item.source_type} items cannot have fields set`);
+      await source.setFields(item.external_id, {
+        [params.field]: params.value,
+      });
+      return { field: params.field, value: params.value };
+    },
+  });
+
+  defineFlowAction({
+    key: "notify",
+    title: "Notify",
+    description:
+      "A notice in tachy's changes menu, for the flow's owner or the item's team.",
+    category: "create",
+    writes: true,
+    params: z.object({
+      to: z
+        .enum(["owner", "team"])
+        .default("owner")
+        .describe("owner is whoever saved the flow last."),
+      title: z.string().min(1).default("{{item.title}}"),
+      body: z.string().default("").describe("Takes {{steps.<id>.text}}."),
+      once_per_item: z
+        .boolean()
+        .default(true)
+        .describe("Off notifies again on every run."),
+    }),
+    output: z.object({ sent: z.number(), skipped: z.number() }),
+    async run(ctx, params) {
+      const item = ctx.item;
+      const recipients = await recipientsOf(ctx, params.to);
+      const ref = {
+        flow_id: ctx.flowId,
+        step_id: ctx.stepId,
+        work_item_id: item?.id ?? null,
+        connection: item?.connection ?? null,
+        external_id: item?.external_id ?? null,
+        url: item?.url ?? null,
+      };
+      let sent = 0;
+      for (const userId of recipients) {
+        if (params.once_per_item && (await wasNotified(userId, ref))) continue;
+        await notify({
+          userId,
+          kind: "flow_notice",
+          title: params.title,
+          body: params.body || null,
+          ref,
+        });
+        sent++;
+      }
+      return { sent, skipped: recipients.length - sent };
+    },
+  });
+
+  defineFlowAction({
+    key: "item.follow_linked",
+    title: "Follow linked ADO items",
+    description:
+      "The flow's owner follows the Azure DevOps items the stored ticket names (Read ticket first to store its messages), and is notified in tachy when someone else changes one.",
+    category: "update",
+    writes: true,
+    params: z.object({
+      connection: z
+        .string()
+        .default("")
+        .meta({ ...options("ado.connections"), title: "ADO connection" })
+        .describe("Empty: the first Azure DevOps connection."),
+    }),
+    output: z.object({ followed: z.array(z.string()) }),
+    async run(ctx, params) {
+      const item = needItem(ctx);
+      if (!ctx.userId) throw badInput("the flow has no owner to follow as");
+      const [adoConnection] = await sql<{ id: string }[]>`
+        select id from source_connections where source_type = 'azure-devops'
+          ${params.connection ? sql`and slug = ${params.connection}` : sql``}
+        order by slug limit 1
+      `;
+      if (!adoConnection)
+        throw badInput("no Azure DevOps connection to follow on");
+      const { kept } = applyIngest(
+        await readStoredRaw(item.id),
+        await getIngestConfig(item.connection),
+      );
+      const refs = extractAdoRefs(kept);
+      for (const externalId of refs)
+        await followWorkItem({
+          userId: ctx.userId,
+          connectionId: adoConnection.id,
+          externalId,
+        });
+      await recordAdoRefs(item.id, refs, {
+        sourceConnectionId: adoConnection.id,
+        createdById: ctx.userId,
+      });
+      return { followed: refs };
+    },
+  });
+
+  defineFlowAction({
     key: "item.post_note",
     title: "Post note",
     description: "A note on the item in its source, private unless said.",
@@ -319,6 +486,10 @@ export function registerBuiltinFlowActions(): void {
     source: "freshdesk",
     writes: true,
     params: z.object({
+      title: z
+        .string()
+        .default("")
+        .describe("The note's heading. Empty: the flow's name."),
       body: z.string().min(1).describe("The note. Takes {{steps.<id>.text}}."),
       private: z.boolean().default(true),
     }),
@@ -328,7 +499,16 @@ export function registerBuiltinFlowActions(): void {
       const { source } = await resolveSource(item.connection, ctx.scope);
       if (!source.postNote)
         throw badInput(`${item.source_type} items cannot take notes`);
-      await source.postNote(item.external_id, params.body, {
+      const flow = await flowName(ctx.flowId);
+      const note = renderNote({
+        kind: "analysis",
+        externalId: item.external_id,
+        title: params.title || flow || undefined,
+        requestedBy: flow ? `Flow: ${flow}` : undefined,
+        sections: [{ html: asNoteHtml(params.body) }],
+        caveat: "Posted by a tachy flow.",
+      });
+      await source.postNote(item.external_id, note, {
         private: params.private,
       });
       return { posted: true };

@@ -1,19 +1,8 @@
 <script lang="ts">
   import { slide } from "svelte/transition";
-  import { vimState, setVim } from "../keys/vim.svelte";
+  import { VIM_KEYS, vimState, setVim } from "../keys/vim.svelte";
   import { tip, VimMark } from "../tui";
   import RefList from "./RefList.svelte";
-
-  // Real chords, not pre-formatted display strings: they go through the same
-  // speller as a rebindable key, so the two lists cannot drift apart.
-  const VIM: { keys: string[]; what: string }[] = [
-    { keys: ["g g", "shift+g"], what: "first / last row" },
-    { keys: ["/"], what: "focus the search box" },
-    { keys: ["n", "shift+n"], what: "next / previous match" },
-    { keys: ["h", "l"], what: "previous / next section" },
-    { keys: ["shift+h", "shift+l"], what: "previous / next sub tab" },
-    { keys: ["ctrl+d", "ctrl+u"], what: "scroll half a page" },
-  ];
 
   const on = $derived(vimState.enabled);
 </script>
@@ -31,7 +20,7 @@
 
 {#if on}
   <div class="keys" transition:slide={{ duration: 180 }}>
-    <RefList rows={VIM} />
+    <RefList rows={VIM_KEYS} />
   </div>
 {/if}
 

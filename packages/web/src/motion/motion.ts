@@ -333,8 +333,10 @@ export function ripple(
 
 /**
  * A burst of confetti fired upward from the bottom of `container`, arcing out
- * and falling under gravity (Physics2DPlugin). The pieces mount into the
- * container and remove themselves once spent, so the caller owns nothing.
+ * and falling under gravity (Physics2DPlugin). The pieces fly in a fixed layer
+ * on the body over the container's box, not inside it: a piece in a scrolling
+ * box would grow its scroll height as it falls. The layer goes with the last
+ * piece, so the caller owns nothing.
  */
 export function confetti(container: HTMLElement, count = 36) {
   if (reducedMotion()) return;
@@ -347,12 +349,16 @@ export function confetti(container: HTMLElement, count = 36) {
     "#6366f1",
     "#d946ef",
   ];
-  const { width, height } = container.getBoundingClientRect();
+  const { left, top, width, height } = container.getBoundingClientRect();
+  const layer = document.createElement("div");
+  layer.style.cssText = `position:fixed;left:${left}px;top:${top}px;width:${width}px;height:${height}px;pointer-events:none;z-index:var(--z-overlay);`;
+  document.body.appendChild(layer);
+  let flying = count;
   for (let i = 0; i < count; i++) {
     const piece = document.createElement("span");
     const size = gsap.utils.random(6, 12);
-    piece.style.cssText = `position:absolute;top:${height}px;left:${width / 2}px;width:${size}px;height:${size * gsap.utils.random(0.4, 1)}px;background:${colors[i % colors.length]};border-radius:1px;pointer-events:none;will-change:transform;`;
-    container.appendChild(piece);
+    piece.style.cssText = `position:absolute;top:${height}px;left:${width / 2}px;width:${size}px;height:${size * gsap.utils.random(0.4, 1)}px;background:${colors[i % colors.length]};border-radius:1px;will-change:transform;`;
+    layer.appendChild(piece);
     gsap.to(piece, {
       duration: gsap.utils.random(1.4, 2.4),
       physics2D: {
@@ -363,7 +369,9 @@ export function confetti(container: HTMLElement, count = 36) {
       rotation: gsap.utils.random(-540, 540),
       opacity: 0,
       ease: "none",
-      onComplete: () => piece.remove(),
+      onComplete: () => {
+        if (--flying === 0) layer.remove();
+      },
     });
   }
 }
@@ -371,11 +379,11 @@ export function confetti(container: HTMLElement, count = 36) {
 let wipeRun = 0;
 
 /**
- * Swaps the theme behind a wavy edge that crosses the screen, two bands of
- * accent ahead of it. `swap` makes the change. Both pages are snapshots of a
- * view transition, the only way to paint two themes at once; the new one is
- * clipped to a path GSAP rewrites each frame through `--theme-wipe`. Each edge
- * is ten points leaving at shared offsets, so the edges ripple and never cross.
+ * Swaps the theme behind one wave that crosses the screen. `swap` makes the
+ * change. Both pages are snapshots of a view transition, the only way to paint
+ * two themes at once; the new one is clipped to a path GSAP rewrites each frame
+ * through `--theme-wipe`. The wave rolls sideways as it travels, and its rest
+ * line starts and ends one amplitude off screen so no crest shows at either end.
  */
 export function themeWipe(
   swap: () => void | Promise<void>,
@@ -386,73 +394,52 @@ export function themeWipe(
     void swap();
     return;
   }
-  const POINTS = 10;
-  const EDGES = 3;
+  const POINTS = 25;
+  const CYCLES = 1.25;
   const run = ++wipeRun;
   const w = window.innerWidth;
   const h = window.innerHeight;
   const start = from === "bottom" ? h : 0;
+  const heading = from === "bottom" ? -1 : 1;
+  const amplitude = Math.min(48, h * 0.06);
+  const restFrom = start - heading * amplitude;
+  const restTo = h - start + heading * amplitude;
   const step = w / (POINTS - 1);
-  const edges = Array.from({ length: EDGES }, () =>
-    Array<number>(POINTS).fill(start),
-  );
-  const last = edges[EDGES - 1];
+  const wave = { progress: 0 };
 
-  const SVG_NS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(SVG_NS, "svg");
-  svg.classList.add("theme-wipe");
-  const bands = edges.slice(1).map(() => {
-    const path = document.createElementNS(SVG_NS, "path");
-    svg.append(path);
-    return path;
-  });
-
-  const along = (ys: number[], back = false) => {
-    let d = "";
-    for (let n = 0; n < POINTS - 1; n++) {
-      const j = back ? POINTS - 1 - n : n;
-      const k = back ? j - 1 : j + 1;
-      const control = ((j + k) / 2) * step;
-      d += ` C ${control} ${ys[j]} ${control} ${ys[k]} ${k * step} ${ys[k]}`;
-    }
-    return d;
+  const edge = () => {
+    const rest = restFrom + (restTo - restFrom) * wave.progress;
+    return Array.from(
+      { length: POINTS },
+      (_, j) =>
+        rest +
+        amplitude *
+          Math.sin(2 * Math.PI * (CYCLES * (j / (POINTS - 1)) + wave.progress)),
+    );
   };
   const draw = () => {
-    root.style.setProperty(
-      "--theme-wipe",
-      `path("M 0 ${last[0]}${along(last)} V ${start} H 0 Z")`,
-    );
-    bands.forEach((path, i) => {
-      const lead = edges[i];
-      const trail = edges[i + 1];
-      path.setAttribute(
-        "d",
-        `M 0 ${lead[0]}${along(lead)} V ${trail[POINTS - 1]}${along(trail, true)} Z`,
-      );
-    });
+    const ys = edge();
+    let d = `M 0 ${ys[0]}`;
+    for (let j = 0; j < POINTS - 1; j++) {
+      const control = (j + 0.5) * step;
+      d += ` C ${control} ${ys[j]} ${control} ${ys[j + 1]} ${(j + 1) * step} ${ys[j + 1]}`;
+    }
+    root.style.setProperty("--theme-wipe", `path("${d} V ${start} H 0 Z")`);
   };
 
-  const tl = gsap.timeline({
+  const tween = gsap.to(wave, {
+    progress: 1,
+    duration: 0.9,
+    ease: "power2.inOut",
     paused: true,
     onUpdate: draw,
-    defaults: { ease: "power2.inOut", duration: 0.6 },
   });
-  const offsets = last.map(() => Math.random() * 0.2);
-  edges.forEach((ys, i) =>
-    offsets.forEach((delay, j) =>
-      tl.to(ys, { [j]: h - start }, delay + i * 0.12),
-    ),
-  );
 
   root.dataset.themeWipe = "";
   draw();
-  const transition = document.startViewTransition(async () => {
-    await swap();
-    document.body.append(svg);
-  });
+  const transition = document.startViewTransition(() => swap());
   const done = () => {
-    tl.kill();
-    svg.remove();
+    tween.kill();
     if (run !== wipeRun) return;
     delete root.dataset.themeWipe;
     root.style.removeProperty("--theme-wipe");
@@ -460,15 +447,15 @@ export function themeWipe(
   transition.ready.then(() => {
     // A view transition ends when its pseudo-elements stop animating, and the
     // wipe is not an animation the browser can see. This one changes nothing
-    // and keeps the snapshots up for as long as the timeline runs.
+    // and keeps the snapshots up for as long as the tween runs.
     root.animate(
       { opacity: [1, 1] },
       {
-        duration: tl.duration() * 1000 + 50,
+        duration: tween.duration() * 1000 + 50,
         pseudoElement: "::view-transition-old(root)",
       },
     );
-    tl.play();
+    tween.play();
   }, done);
   transition.finished.then(done, done);
 }
@@ -716,32 +703,26 @@ export function reflow(
 }
 
 /**
- * Takes `tile` to the size of the window, or back: the browser morphs the
- * tile's box between the two layouts as a view transition. `swap` changes the
- * layout and returns when the DOM shows it. The name is on the tile only for
- * the transition: two elements with one name abort it, and a name left behind
- * snapshots a node nobody animates.
+ * Takes `tile` to the size of the window, or back: the live node resizes
+ * between its two boxes, so its chart redraws at each size on the way instead
+ * of crossfading two pictures. `swap` changes the layout and returns when the
+ * DOM shows it. `data-morphing` is on the tile while it moves, so it can clip
+ * what does not fit yet.
  */
-export function morphTile(
+export async function morphTile(
   tile: HTMLElement | null | undefined,
   swap: () => void | Promise<void>,
 ) {
-  const root = document.documentElement;
-  if (!tile || reducedMotion() || !document.startViewTransition) {
-    void swap();
-    return;
-  }
-  root.dataset.tileMorph = "";
-  tile.style.viewTransitionName = "tile";
-  const transition = document.startViewTransition(async () => {
-    await swap();
+  if (tile) tile.dataset.morphing = "";
+  const play = reflow([tile], {
+    duration: 0.5,
+    ease: "expo.out",
+    onComplete: () => {
+      if (tile) delete tile.dataset.morphing;
+    },
   });
-  const done = () => {
-    tile.style.viewTransitionName = "";
-    delete root.dataset.tileMorph;
-  };
-  transition.ready.catch(() => {});
-  transition.finished.then(done, done);
+  await swap();
+  play();
 }
 
 /**

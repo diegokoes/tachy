@@ -1,6 +1,11 @@
 import type { CompactStats } from "./CompactPanel.svelte";
 import type { OutputFile } from "./OutputCard.svelte";
-import type { CreatedTicket, WorkItemFile } from "@tachy/contract";
+import type {
+  ChatModeName,
+  CreatedTicket,
+  Mention,
+  WorkItemFile,
+} from "@tachy/contract";
 import type { ShownStep, WalkStep } from "../code/walkthrough";
 import type { ModelPick } from "./modelCommand";
 import type { TurnTrace } from "./trace";
@@ -77,4 +82,64 @@ export const chat = $state({
   model: undefined as ModelPick | undefined,
   /** Switched with `/debug`: each turn shows what it sent to the agent. */
   debug: false,
+  /** Switched with `/analyze` or `/code`; holds for every turn until left. */
+  mode: undefined as ChatModeName | undefined,
+  /** The mode the last turn ran in, so the next one can say it was left. */
+  modeOfLastTurn: undefined as ChatModeName | undefined,
+  /** Repos, buckets and projects attached with `@`, kept until removed. */
+  mentions: [] as Mention[],
 });
+
+/** What a clear takes away. */
+type Cleared = Pick<
+  typeof chat,
+  | "entries"
+  | "sessionId"
+  | "turnId"
+  | "model"
+  | "debug"
+  | "mode"
+  | "modeOfLastTurn"
+  | "mentions"
+>;
+
+/** The last clear, kept until the next turn so it can be undone. */
+let cleared = $state.raw<Cleared | null>(null);
+
+/** Empties the conversation and keeps what it held for `restoreChat`. */
+export function clearChat() {
+  const { entries, sessionId, turnId, model, debug, mode, modeOfLastTurn } =
+    chat;
+  cleared = {
+    entries,
+    sessionId,
+    turnId,
+    model,
+    debug,
+    mode,
+    modeOfLastTurn,
+    mentions: chat.mentions,
+  };
+  chat.entries = [];
+  chat.sessionId = undefined;
+  chat.turnId = undefined;
+  chat.model = undefined;
+  chat.debug = false;
+  chat.mode = undefined;
+  chat.modeOfLastTurn = undefined;
+  chat.mentions = [];
+}
+
+export const canRestore = () => cleared !== null;
+
+/** Brings back the conversation the last clear took, once. */
+export function restoreChat() {
+  if (!cleared) return;
+  Object.assign(chat, cleared);
+  cleared = null;
+}
+
+/** A new turn starts a new conversation: the cleared one is gone for good. */
+export function forgetCleared() {
+  cleared = null;
+}

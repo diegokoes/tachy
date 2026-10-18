@@ -4,10 +4,17 @@
   import { vimState } from "../keys/vim.svelte";
   import { jellyPress } from "../motion/motion";
   import Icon from "./Icon.svelte";
+  import type { Component } from "svelte";
   import type { IconName } from "./icons";
   import { tip } from "./tip.svelte";
 
-  type Item = { key: string; label: string; icon?: IconName };
+  type Item = {
+    key: string;
+    label: string;
+    icon?: IconName;
+    /** A brand logo drawn in its own colours, in place of `icon`. */
+    mark?: Component<{ size?: string }>;
+  };
 
   let {
     items,
@@ -48,21 +55,18 @@
     if (activeMatches) stickyKey = active;
   });
 
-  // Hidden: no digit is rendered on the tab. Settings › keybinds lists these.
+  // No digit is drawn on the tab; Settings › keybinds lists these.
   $effect(() => {
     if (hotkeys !== "shift") return;
     const pick = onpick;
     return pushScope([
-      ...items.slice(0, 9).map((item, i) => ({
-        key: subnavKey(i),
-        label: item.label,
-        hidden: true,
-        run: () => pick(item.key),
-      })),
+      ...items
+        .slice(0, 9)
+        .map((item, i) => ({ key: subnavKey(i), run: () => pick(item.key) })),
       ...(vimState.enabled
         ? [
-            { key: "shift+h", label: "", hidden: true, run: () => step(-1) },
-            { key: "shift+l", label: "", hidden: true, run: () => step(1) },
+            { key: "shift+h", run: () => step(-1) },
+            { key: "shift+l", run: () => step(1) },
           ]
         : []),
     ]);
@@ -75,7 +79,8 @@
     {@const anchorHost =
       item.key === (activeMatches ? active : (stickyKey ?? items[0]?.key))}
     {@const icon = labels === "text" ? undefined : item.icon}
-    {@const bare = labels === "icons" && icon !== undefined}
+    {@const Mark = labels === "text" ? undefined : item.mark}
+    {@const bare = labels === "icons" && (icon !== undefined || !!Mark)}
     <button
       class="tab"
       class:on
@@ -93,7 +98,9 @@
       use:jellyPress
     >
       <span class="lbl"
-        ><span class="br" aria-hidden="true">[</span>{#if icon}<span class="ico"
+        ><span class="br" aria-hidden="true">[</span>{#if Mark}<span class="ico"
+            ><Mark size="1em" /></span
+          >{:else if icon}<span class="ico"
             ><Icon name={icon} weight={7} /></span
           >{/if}{#if !bare}<span class="txt">{item.label}</span>{/if}<span
           class="br"
@@ -117,6 +124,8 @@
     /* Lets the indicator sit at z-index -1: behind the labels, in front of the
        surface under the bar. */
     isolation: isolate;
+    /* A bar is pressed, not read: a drag across it must not select labels. */
+    user-select: none;
 
     /* A damped spring cut where it first crosses back through 1 and re-timed
        to end there: the tail past that point reads as a second bounce. */

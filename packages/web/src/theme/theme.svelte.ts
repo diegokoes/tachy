@@ -11,6 +11,20 @@ import { orgAppearance } from "./org.svelte";
 export { NAV_LABELS, TEXT_SIZES, isHexColor };
 export type { NavLabels, Theme };
 
+/** A theme, or whichever one the OS asks for. Personal: org defaults name a theme. */
+export const THEME_MODES = [...THEMES, "system"] as const;
+export type ThemeMode = (typeof THEME_MODES)[number];
+
+/** Reduced adds to what the OS asks for; it cannot undo an OS reduce. */
+export const MOTIONS = ["system", "reduced"] as const;
+export type Motion = (typeof MOTIONS)[number];
+
+/** Red-green swaps the status colours for ones that differ in lightness too. */
+export const VISIONS = ["standard", "red-green"] as const;
+export type Vision = (typeof VISIONS)[number];
+
+const LIGHT_SCHEME = "(prefers-color-scheme: light)";
+
 const ACCENT_DEFAULTS: Record<Theme, string> = {
   dark: "#6ea8fe",
   light: "#31589e",
@@ -29,6 +43,8 @@ const OPPOSITE_ACCENTS: Record<string, string> = {
 const DEFAULT_SCALE = 1;
 
 export const themeState = $state({
+  mode: "dark" as ThemeMode,
+  /** The mode resolved: what is painted. */
   theme: "dark" as Theme,
   accentColor: ACCENT_DEFAULTS.dark,
   /** The far end of the gradient, when the accent is one. */
@@ -36,7 +52,8 @@ export const themeState = $state({
   accentCustomized: false,
   fontScale: DEFAULT_SCALE as number,
   navLabels: "text" as NavLabels,
-  navHidden: false,
+  motion: "system" as Motion,
+  vision: "standard" as Vision,
 });
 
 function applyAccent(
@@ -91,10 +108,37 @@ function applyTheme(theme: Theme) {
   document.documentElement.dataset.theme = theme;
 }
 
-export function setTheme(theme: Theme) {
+function systemTheme(): Theme {
+  return window.matchMedia(LIGHT_SCHEME).matches ? "light" : "dark";
+}
+
+export const resolveMode = (mode: ThemeMode): Theme =>
+  mode === "system" ? systemTheme() : mode;
+
+let unfollow: (() => void) | undefined;
+
+/** While the mode is system, the app switches when the OS does. */
+function followSystem(mode: ThemeMode) {
+  unfollow?.();
+  unfollow = undefined;
+  if (mode !== "system") return;
+  const query = window.matchMedia(LIGHT_SCHEME);
+  const onChange = () => switchTheme(systemTheme());
+  query.addEventListener("change", onChange);
+  unfollow = () => query.removeEventListener("change", onChange);
+}
+
+export function setTheme(mode: ThemeMode) {
+  themeState.mode = mode;
+  localStorage.setItem("tachy-theme", mode);
+  followSystem(mode);
+  switchTheme(resolveMode(mode));
+}
+
+/** Paints `theme` and carries the accent across: a grey that would vanish flips. */
+function switchTheme(theme: Theme) {
   const changed = themeState.theme !== theme;
   applyTheme(theme);
-  localStorage.setItem("tachy-theme", theme);
   if (!themeState.accentCustomized) applyDefaultAccent();
   else if (changed) {
     const opposite = OPPOSITE_ACCENTS[themeState.accentColor.toLowerCase()];
@@ -123,15 +167,36 @@ export function setNavLabels(value: NavLabels) {
   localStorage.setItem("tachy-nav-labels", value);
 }
 
-/** Takes the top bar away. Its shortcuts stay bound. */
-export function setNavHidden(value: boolean) {
-  themeState.navHidden = value;
-  localStorage.setItem("tachy-nav-hidden", value ? "1" : "0");
+function applyMotion(motion: Motion) {
+  themeState.motion = motion;
+  const root = document.documentElement.dataset;
+  if (motion === "reduced") root.motion = motion;
+  else delete root.motion;
 }
 
-function savedTheme(): Theme | undefined {
-  const saved = localStorage.getItem("tachy-theme");
-  return THEMES.find((theme) => theme === saved);
+export function setMotion(motion: Motion) {
+  applyMotion(motion);
+  localStorage.setItem("tachy-motion", motion);
+}
+
+function applyVision(vision: Vision) {
+  themeState.vision = vision;
+  const root = document.documentElement.dataset;
+  if (vision === "standard") delete root.vision;
+  else root.vision = vision;
+}
+
+export function setVision(vision: Vision) {
+  applyVision(vision);
+  localStorage.setItem("tachy-vision", vision);
+}
+
+function saved<T extends string>(
+  key: string,
+  values: readonly T[],
+): T | undefined {
+  const value = localStorage.getItem(key);
+  return values.find((v) => v === value);
 }
 
 /** A stored scale may come from a finer-grained control: it snaps to a step. */
@@ -141,17 +206,6 @@ function savedFontScale(): number | undefined {
   return TEXT_SIZES.reduce((a, b) =>
     Math.abs(b.scale - saved) < Math.abs(a.scale - saved) ? b : a,
   ).scale;
-}
-
-function savedNavLabels(): NavLabels | undefined {
-  const saved = localStorage.getItem("tachy-nav-labels");
-  return NAV_LABELS.find((labels) => labels === saved);
-}
-
-function savedNavHidden(): boolean | undefined {
-  const saved = localStorage.getItem("tachy-nav-hidden");
-  if (saved === null) return undefined;
-  return saved === "1";
 }
 
 function loadAccent() {
@@ -172,10 +226,15 @@ function loadAccent() {
  */
 export function loadTheme() {
   const org = orgAppearance.value;
-  applyTheme(savedTheme() ?? org.theme ?? "dark");
+  const mode = saved("tachy-theme", THEME_MODES) ?? org.theme ?? "dark";
+  themeState.mode = mode;
+  followSystem(mode);
+  applyTheme(resolveMode(mode));
   loadAccent();
   const orgScale = TEXT_SIZES.find((t) => t.key === org.text_size)?.scale;
   applyFontScale(savedFontScale() ?? orgScale ?? DEFAULT_SCALE);
-  themeState.navLabels = savedNavLabels() ?? org.nav_labels ?? "text";
-  themeState.navHidden = savedNavHidden() ?? org.nav_hidden ?? false;
+  themeState.navLabels =
+    saved("tachy-nav-labels", NAV_LABELS) ?? org.nav_labels ?? "text";
+  applyMotion(saved("tachy-motion", MOTIONS) ?? "system");
+  applyVision(saved("tachy-vision", VISIONS) ?? "standard");
 }

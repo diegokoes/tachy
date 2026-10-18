@@ -9,31 +9,32 @@ import {
   setComposeConfig,
   typeConfig,
 } from "@tachy/core/flows";
-import { badInput, forbidden } from "@tachy/core/infra";
+import { badInput } from "@tachy/core/infra";
 import {
   FIELD_SHOWS,
+  VIEW_SHOWS,
   type ComposeConfig,
   type ComposerProject,
   type CreatedTicket,
 } from "@tachy/core";
 import {
   getSourceProject,
-  listSourceProjects,
-  resolveSource,
   sourceProjectScope,
   type NewWorkItem,
   type PastedImage,
   type SourceProjectRow,
 } from "@tachy/core/sources";
-import { userTeams } from "@tachy/core/access";
 import {
+  assertProjectMember,
   assertScopeEditor,
   callerScope,
+  callerSourceProjects,
   callerUserId,
-  isAdminIdentity,
   requireCaller,
 } from "../authz";
 import { reviewTicket } from "@tachy/agent";
+import { callerSource } from "../sources";
+import { followWorkItem } from "@tachy/core/work-items";
 import { requestLimitBytes, tooLarge } from "../upload-limit";
 
 const draftSchema = z.object({
@@ -100,23 +101,24 @@ const configSchema = z
           .strict(),
       )
       .optional(),
+    views: z
+      .record(
+        z.string(),
+        z
+          .object({
+            fields: z
+              .record(
+                z.string(),
+                z.object({ show: z.enum(VIEW_SHOWS).optional() }).strict(),
+              )
+              .optional(),
+            order: z.array(z.string()).max(500).optional(),
+          })
+          .strict(),
+      )
+      .optional(),
   })
   .strict();
-
-/** The caller's teams, or null for an app admin, who sees every project. */
-async function callerTeamIds(c: Context): Promise<Set<string> | null> {
-  if (isAdminIdentity(c)) return null;
-  const userId = await callerUserId(c);
-  if (!userId)
-    throw forbidden("no user account is associated with this session");
-  return new Set((await userTeams(userId)).map((t) => t.team_id));
-}
-
-async function assertMember(c: Context, project: SourceProjectRow) {
-  const teams = await callerTeamIds(c);
-  if (teams && !teams.has(project.team_id))
-    throw forbidden(`'${project.name}' belongs to a team you are not in`);
-}
 
 /**
  * A registered project the caller's team owns, and its source's composer with
@@ -125,21 +127,8 @@ async function assertMember(c: Context, project: SourceProjectRow) {
  */
 async function composeIn(c: Context, id: string) {
   const project = await getSourceProject(id);
-  await assertMember(c, project);
-  let source;
-  try {
-    ({ source } = await resolveSource(
-      project.source_slug,
-      await callerScope(c),
-    ));
-  } catch (e) {
-    // An adapter's env fallback names server variables the person cannot set.
-    if (e instanceof Error && e.message.startsWith("Missing"))
-      throw badInput(
-        `No token for '${project.source_slug}'. Add yours under Settings › credentials, or ask an admin to set the connection's.`,
-      );
-    throw e;
-  }
+  await assertProjectMember(c, project);
+  const { source } = await callerSource(c, project.source_slug);
   if (!source.composer)
     throw badInput(
       `${project.source_type} projects cannot have items created from tachy yet`,
@@ -181,7 +170,7 @@ export const compose = new Hono()
     const { project_id, ...draft } = c.req.valid("json");
     let guidance: string | undefined;
     if (project_id) {
-      await assertMember(c, await getSourceProject(project_id));
+      await assertProjectMember(c, await getSourceProject(project_id));
       guidance = typeConfig(
         await getComposeConfig(project_id),
         draft.type,
@@ -194,12 +183,7 @@ export const compose = new Hono()
 
   // `source_type` narrows to one source's projects, for its command group.
   .get("/projects", async (c) => {
-    const teams = await callerTeamIds(c);
-    const type = c.req.query("source_type");
-    const rows = (await listSourceProjects()).filter(
-      (p) =>
-        (!type || p.source_type === type) && (!teams || teams.has(p.team_id)),
-    );
+    const rows = await callerSourceProjects(c, c.req.query("source_type"));
     return c.json(rows.map(asComposerProject));
   })
 
@@ -281,16 +265,25 @@ export const compose = new Hono()
       });
     }
 
+    const userId = await callerUserId(c);
     const created = await composer.create(
       toNewItem(project, draft, images),
       {
         sourceSlug: project.source_slug,
-        userId: await callerUserId(c),
+        userId,
         sourceProjectId: project.id,
         workItemIds: draft.work_item_ids,
       },
       project.config,
     );
+    // Whoever raises an item follows it; the next check reads its revision.
+    if (userId)
+      await followWorkItem({
+        userId,
+        connectionId: project.source_connection_id,
+        externalId: String(created.id),
+        sourceProjectId: project.id,
+      });
     return c.json({
       id: created.id,
       url: created.url,

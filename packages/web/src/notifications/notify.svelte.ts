@@ -20,14 +20,16 @@ export const notifyState = $state<{
 
 let toastSeq = 0;
 
+/** Shows a toast for `ms`, or until dismissed when `ms` is 0. Returns its id. */
 export function toast(
   text: string,
   tone: Toast["tone"] = "ok",
   ms = 4000,
-): void {
+): number {
   const id = ++toastSeq;
   notifyState.toasts.push({ id, tone, text });
   if (ms > 0) setTimeout(() => dismissToast(id), ms);
+  return id;
 }
 
 export function dismissToast(id: number): void {
@@ -36,6 +38,12 @@ export function dismissToast(id: number): void {
 
 export const unread = (): NotificationRow[] =>
   notifyState.items.filter((n) => !n.read_at);
+
+/** Changes on items the reader follows, and flow notices, newest first. */
+export const itemChanges = (): NotificationRow[] =>
+  notifyState.items.filter(
+    (n) => n.kind === "work_item_changed" || n.kind === "flow_notice",
+  );
 
 export async function refreshNotifications(): Promise<void> {
   if (!session.me) return;

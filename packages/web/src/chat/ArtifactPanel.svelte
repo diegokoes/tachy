@@ -34,6 +34,13 @@
   import { actionKey, keyLabel } from "../keys/bindings.svelte";
   import { pushScope } from "../keys/keys.svelte";
 
+  let {
+    edge = $bindable(),
+  }: {
+    /** The slot the tab stands in, for the host view to move with its own parts. */
+    edge?: HTMLElement;
+  } = $props();
+
   let tabBtn = $state<HTMLButtonElement>();
   let tabIcon = $state<HTMLSpanElement>();
   let tabFrame = $state<SVGSVGElement>();
@@ -119,8 +126,6 @@
     return pushScope([
       {
         key: hotkey,
-        label: "artifacts",
-        hidden: true,
         run: () => {
           if (!editorOpen) toggle();
         },
@@ -480,7 +485,7 @@
      thread has retracted, and a tab dropped under it at once would blink
      out mid-travel. openT is 0 once the hexagon has shut. -->
 <div class="edge-home">
-  <div class="edge-slot" class:lifted use:raise={lifted}>
+  <div class="edge-slot" class:lifted use:raise={lifted} bind:this={edge}>
     <button
       bind:this={tabBtn}
       use:hoverRise={open}

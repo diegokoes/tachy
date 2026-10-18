@@ -10,6 +10,15 @@ export type { FieldSpec, WorkItemSchema, AdoFieldType } from "./fields";
 export type { AdoClient, AdoCfg, AdoUpdate, JsonPatchOp } from "./client";
 export { updateEvents } from "./history";
 export {
+  changeLines,
+  clearTypeLists,
+  followedChanges,
+  listWiql,
+  listWorkItems,
+  peekWorkItems,
+  viewLayout,
+} from "./browser";
+export {
   creatableTypes,
   composerForm,
   templateValues,

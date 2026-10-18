@@ -21,11 +21,19 @@ import { getUserByEmail, userSoleTeamId } from "@tachy/core/access";
 import { getArtifact, listVisibleArtifacts } from "@tachy/core/exports";
 import {
   AGENT_EFFORTS,
+  CHAT_MODES,
+  MENTION_KINDS,
   fileFamily,
   uploadLimitBytes,
   uploadRef,
 } from "@tachy/core";
-import { readUpload, saveUpload, uploadLimits } from "@tachy/core/chat";
+import {
+  checkMentions,
+  listMentionables,
+  readUpload,
+  saveUpload,
+  uploadLimits,
+} from "@tachy/core/chat";
 import { imageForModel, inspectFile, isImageFile } from "@tachy/core/files";
 import {
   effectiveModel,
@@ -40,6 +48,7 @@ import { problem } from "../problems";
 import { requestIdOf } from "../logging";
 import { AdmissionCancelled, QueueFull } from "../admission";
 import { BUILTIN_COMMANDS } from "../commands";
+import { CHAT_MODE_LIST } from "../modes";
 import { INERT_HEADERS } from "../downloads";
 import { requestLimitBytes, tooLarge } from "../upload-limit";
 import {
@@ -61,6 +70,8 @@ import {
 const ABANDONED_MS = 30_000;
 const KEEPALIVE_MS = 20_000;
 
+const MAX_MENTIONS = 20;
+
 const chatSchema = z.object({
   message: z.string().min(1),
   sessionId: z.string().optional(),
@@ -68,6 +79,19 @@ const chatSchema = z.object({
   artifactId: z.string().optional(),
   command: z
     .object({ name: z.string(), args: z.string().default("") })
+    .optional(),
+  mode: z
+    .object({ name: z.enum(CHAT_MODES), args: z.string().default("") })
+    .optional(),
+  leftMode: z.enum(CHAT_MODES).optional(),
+  mentions: z
+    .array(
+      z.object({
+        kind: z.enum(MENTION_KINDS),
+        key: z.string().min(1).max(200),
+      }),
+    )
+    .max(MAX_MENTIONS)
     .optional(),
   // The conversation's own pick, in place of the caller's preference.
   model: z.string().min(1).max(200).optional(),
@@ -105,11 +129,19 @@ export const agent = new Hono()
       : {};
     return c.json({
       uploadLimits: uploadLimits(),
-      builtins: BUILTIN_COMMANDS.filter((b) => !b.hidden).map(
-        ({ name, args, description, subcommands }) => ({
+      modes: CHAT_MODE_LIST.map(({ name, args, description }) => ({
+        name,
+        args,
+        description,
+      })),
+      // Hidden ones are listed too, flagged, so a line a control writes into
+      // the composer still goes out as its command.
+      builtins: BUILTIN_COMMANDS.map(
+        ({ name, args, description, subcommands, hidden }) => ({
           name,
           args,
           description,
+          ...(hidden ? { hidden } : {}),
           ...(subcommands
             ? {
                 subcommands: subcommands.map((s) => ({
@@ -124,6 +156,12 @@ export const agent = new Hono()
       ),
       artifacts: await listVisibleArtifacts(ctx),
     });
+  })
+
+  .get("/mentions", async (c) => {
+    const userEmail = getIdentity(c)?.email ?? env.userEmail;
+    const user = userEmail ? await getUserByEmail(userEmail) : null;
+    return c.json(await listMentionables(user?.id ?? null));
   })
 
   .post("/chat", validate("json", chatSchema), async (c) => {
@@ -143,6 +181,9 @@ export const agent = new Hono()
       uploadPaths,
       artifactId,
       command,
+      mode,
+      leftMode,
+      mentions,
       model,
       effort,
       debug,
@@ -164,11 +205,15 @@ export const agent = new Hono()
     const artifact = artifactId
       ? await getArtifact(artifactId, ctx)
       : undefined;
+    if (mentions?.length) await checkMentions(user?.id ?? null, mentions);
     const prompt = buildPrompt({
       message,
       uploadPaths,
       artifact,
       command,
+      mode,
+      leftMode,
+      mentions,
       dateFormat: user ? await dateFormatOf(ctx) : undefined,
     });
 

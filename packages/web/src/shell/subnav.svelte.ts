@@ -3,10 +3,15 @@
  * top edge. A view cannot place it there: views render inside the scrolling
  * column, and a tab bar positioned from one would scroll away with the content.
  */
-import type { Snippet } from "svelte";
+import type { Component, Snippet } from "svelte";
 import type { IconName } from "../tui/icons";
 
-export type SubnavItem = { key: string; label: string; icon?: IconName };
+export type SubnavItem = {
+  key: string;
+  label: string;
+  icon?: IconName;
+  mark?: Component<{ size?: string }>;
+};
 
 export type Subnav = {
   /** Empty for a section with no places of its own; the recess is still drawn. */

@@ -49,7 +49,7 @@ describe("parseSummary", () => {
       parseSummary(
         `Here it is:\n\`\`\`json\n${JSON.stringify(answer)}\n\`\`\``,
       ),
-    ).toEqual({ ...answer, files: [] });
+    ).toEqual({ ...answer, files: [], open_questions: [] });
   });
 
   it("keeps the files a summary names, with what the thread says of them", () => {

@@ -106,6 +106,14 @@ export async function getUserByEmail(email: string): Promise<{
   return (row as never) ?? null;
 }
 
+/** How a note names the person who asked for it: display name, else email. */
+export async function userDisplayName(id: string): Promise<string | null> {
+  const [row] = await sql`
+    select coalesce(display_name, email) as name from users where id = ${id}
+  `;
+  return (row?.name as string | undefined) ?? null;
+}
+
 /** For naming an account in a record that outlives a rename of nothing but its id. */
 export async function userEmailOf(id: string): Promise<string | null> {
   const [row] = await sql`select email from users where id = ${id}`;

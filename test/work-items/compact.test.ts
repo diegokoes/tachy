@@ -15,6 +15,7 @@ import {
   COMPACT_MIN_CHARS,
   TRANSCRIPT_MARKER,
   SUMMARY_MARKER,
+  transcriptOnTicket,
 } from "@tachy/core/work-items";
 import { type RawMessage, type RawWorkItem } from "@tachy/core/sources";
 
@@ -814,15 +815,19 @@ describe("renderers", () => {
     expect(html).toContain("nothing was summarised or reworded");
   });
 
-  it("gives each turn its own card, under a header with the figures", () => {
-    const [html] = renderCompactNotes(compacted);
-    expect(html).toContain(
-      "<strong>Compacted transcript</strong> - Report T&amp;T",
-    );
-    expect(html).toContain(">messages</span>");
+  it("gives each turn its own card, under a banner with the figures", () => {
+    const [html] = renderCompactNotes(compacted, {
+      requestedBy: "Ana Ruiz in chat",
+    });
+    expect(html).toContain(">Transcript</span><strong>Report T&amp;T</strong>");
+    expect(html).toContain(">Ana Ruiz in chat</td>");
+    expect(html).toContain(">Messages</div>");
+    expect(html).toContain(">Who wrote</p>");
+    expect(html).toContain("Alejandro Plaza (1) · javier@t.com (1)");
     expect(html.match(/border-left:3px solid/g)).toHaveLength(
       compacted.turns.length,
     );
+    expect(html).toContain(`>1 of ${compacted.turns.length}</td>`);
     expect(html).toContain("Earlier mail, recovered from quoted replies");
     expect(html).toContain("The ticket thread");
     expect(html).toContain(TRANSCRIPT_MARKER);
@@ -885,11 +890,13 @@ describe("renderers", () => {
 
   it("posts one note when the transcript fits, and cuts between cards when not", () => {
     expect(renderCompactNotes(compacted)).toHaveLength(1);
-    const parts = renderCompactNotes(compacted, 900);
+    const parts = renderCompactNotes(compacted, { maxChars: 900 });
     expect(parts.length).toBeGreaterThan(1);
     expect(parts[0]).toContain("part 1/");
+    expect(parts[0]).toContain(">Messages</div>");
+    expect(parts[1]).not.toContain(">Messages</div>");
     for (const part of parts) {
-      expect(part.startsWith("<div>")).toBe(true);
+      expect(part.startsWith("<div")).toBe(true);
       expect(part.endsWith("</div>")).toBe(true);
       expect(part.match(/<div/g)).toHaveLength(part.match(/<\/div>/g)!.length);
     }
@@ -911,7 +918,7 @@ describe("a split transcript identifies itself", () => {
   );
 
   it("cuts one very long turn into continued cards that fit a note", () => {
-    const parts = renderCompactNotes(long, 20000);
+    const parts = renderCompactNotes(long, { maxChars: 20000 });
     expect(parts.length).toBeGreaterThan(2);
     for (const part of parts) {
       expect(part).toContain(TRANSCRIPT_MARKER);
@@ -922,7 +929,7 @@ describe("a split transcript identifies itself", () => {
   });
 
   it("recognises every part it posted back on the next fetch", () => {
-    const parts = renderCompactNotes(long, 20000);
+    const parts = renderCompactNotes(long, { maxChars: 20000 });
 
     // Each part comes back as its own private note. All of them must be
     // recognised, or the next run compacts its own output and replace_previous
@@ -979,5 +986,29 @@ describe("a summary note on the ticket", () => {
     expect(compacted.turns).toHaveLength(1);
     expect(compacted.compaction.dropped.prior_summary).toBe(1);
     expect(compacted.prior_transcript_ids).toEqual([]);
+  });
+});
+
+describe("transcriptOnTicket", () => {
+  it("counts the parts an earlier run left and names when the newest was posted", () => {
+    const part = (externalId: string, createdAt?: string) =>
+      message({
+        externalId,
+        visibility: "private",
+        bodyText: `turns ... ${TRANSCRIPT_MARKER}`,
+        createdAt,
+      });
+    expect(
+      transcriptOnTicket([
+        message({ externalId: "1", bodyText: "the real issue" }),
+        part("2", "2026-06-17T09:00:00Z"),
+        part("3", "2026-06-18T09:00:00Z"),
+        part("4"),
+      ]),
+    ).toEqual({ parts: 3, postedAt: "2026-06-18T09:00:00Z" });
+    expect(transcriptOnTicket([part("5")])).toEqual({ parts: 1 });
+    expect(
+      transcriptOnTicket([message({ externalId: "1", bodyText: "hi" })]),
+    ).toBeNull();
   });
 });

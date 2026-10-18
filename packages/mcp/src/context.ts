@@ -23,11 +23,10 @@ import {
   getProductIdBySlug,
   getCustomerName,
   getCustomerProfile,
-  getCustomerSlug,
   getTeamIdBySlug,
   listCustomerUnits,
 } from "@tachy/core/catalog";
-import { resolveRedactionPolicy, redactForLlm } from "@tachy/core/compliance";
+import { readForModel, type ModelRead } from "@tachy/core/flows";
 import type { IngestedItem } from "@tachy/core/work-items";
 import type { RawWorkItem, WorkItemSource } from "@tachy/core/sources";
 import {
@@ -64,8 +63,8 @@ export function capTurns<T extends { text: string }>(
 }
 
 /**
- * The compacted form of an item where `compactForLlm` produces one, so
- * /analyze and /consult do not pay for quoted chains and signatures. Takes the
+ * The compacted form of an item where `compactForLlm` produces one, so an
+ * ingest or a consult does not pay for quoted chains and signatures. Takes the
  * item after redaction, and writes nothing: only compact_work_item posts a
  * note.
  */
@@ -83,6 +82,11 @@ export function withCompaction(item: RawWorkItem): Record<string, unknown> {
     compaction: { ...compaction, ...summarizeCompaction(compacted) },
     next: "messages were replaced by transcript: a de-duplicated, attributed turn list with quoted chains, signatures, banners, automated mail and repeats removed. The wording is verbatim - never re-summarise or re-order it. Each turn has speaker, at, kind (reply / internal_note / quoted) and optional attachments; '[image]' marks an inline image, and a turn with empty text but attachments carried only a file. Turns with kind 'quoted' were recovered from quoted history and may predate the ticket - that is mail existing nowhere else in the system, worth reading first. This is a read-path transform and writes nothing to the ticket.",
   };
+}
+
+/** The guidance admin › flows sets for the item's group. */
+export function withGuidance(view: ModelRead): Record<string, unknown> {
+  return view.guidance ? { group_guidance: view.guidance } : {};
 }
 
 /**
@@ -253,21 +257,17 @@ export async function withLinkedAdoItems(
     };
 
   const wanted = refs.slice(0, MAX_LINKED_ITEMS);
-  const { conn, source: src } = await resolveSource(ado.slug as string);
-  const redact = resolveRedactionPolicy(conn.config).enabled;
+  const resolved = await resolveSource(ado.slug as string);
+  const { conn, source: src } = resolved;
   const linkedItems: Record<string, unknown>[] = [];
 
   for (const externalId of wanted) {
     try {
       const linkedRaw = await src.fetchItem(externalId);
       const stored = await ingestWorkItem(conn.id, linkedRaw);
-      const forLlm = redact
-        ? redactForLlm(
-            linkedRaw,
-            src.redactRaw,
-            await getCustomerSlug(stored.customerId),
-          )
-        : linkedRaw;
+      const { item: forLlm } = await readForModel(resolved, linkedRaw, {
+        customerId: stored.customerId,
+      });
       const fields = (forLlm.raw as { fields?: Record<string, unknown> })
         ?.fields;
       linkedItems.push({

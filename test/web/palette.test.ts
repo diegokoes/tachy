@@ -9,6 +9,12 @@ import {
 } from "../../packages/web/src/admin/pages";
 import { claimSectionAction } from "../../packages/web/src/admin/sectionAction.svelte";
 import {
+  addEntry,
+  canRestore,
+  chat,
+  forgetCleared,
+} from "../../packages/web/src/chat/chatState.svelte";
+import {
   resetKeys,
   setNavKey,
 } from "../../packages/web/src/keys/bindings.svelte";
@@ -20,9 +26,13 @@ import {
 } from "../../packages/web/src/palette/fuzzy";
 import { places } from "../../packages/web/src/palette/places";
 import { countPick, picks } from "../../packages/web/src/palette/usage";
+import { setVim, vimState } from "../../packages/web/src/keys/vim.svelte";
 import { FEEDBACK_FROM } from "../../packages/web/src/reports/feedback";
 import { router } from "../../packages/web/src/shell/router.svelte";
+import { setTheme } from "../../packages/web/src/theme/theme.svelte";
 import { wikis } from "../../packages/web/src/wiki/wikis.svelte";
+import { az } from "../../packages/web/src/work-items/az.svelte";
+import { boardAsk } from "../../packages/web/src/work-items/board.svelte";
 
 const item = (
   id: string,
@@ -184,6 +194,11 @@ describe("places", () => {
     session.unreachable = false;
     wikis.rows = [];
     wikis.loaded = false;
+    az.projects = null;
+    boardAsk.newItem = false;
+    forgetCleared();
+    chat.entries = [];
+    chat.busy = false;
     history.replaceState({}, "", "/");
     router.path = "/";
   });
@@ -194,7 +209,7 @@ describe("places", () => {
 
   it("lists every section with the key that opens it", () => {
     expect(byId("section:chat")).toMatchObject({ kind: "go", hotkey: "1" });
-    expect(byId("section:settings")?.hotkey).toBe("ctrl+,");
+    expect(byId("section:settings")?.hotkey).toBe("5");
     expect(byId("section:feedback")?.hotkey).toBe("ctrl+.");
     setNavKey("chat", "c");
     expect(byId("section:chat")?.hotkey).toBe("c");
@@ -213,12 +228,23 @@ describe("places", () => {
   });
 
   it("goes to a console page's overview and to each section", () => {
+    expect(byId("console:integrations")?.label).toBe("integrations overview");
     byId("console:integrations")!.run();
     expect(router.path).toBe("/console/integrations");
     const repos = byId("console:integrations/repos")!;
     expect(repos.trail).toEqual(["console", "integrations"]);
     repos.run();
     expect(router.path).toBe("/console/integrations/repos");
+  });
+
+  it("leaves out a page that only opens its first section", () => {
+    expect(byId("console:flows")).toBeUndefined();
+    expect(byId("console:flows/forms")?.trail).toEqual(["console", "flows"]);
+  });
+
+  it("tells the team catalog from the team rosters", () => {
+    expect(byId("console:structure/teams")?.label).toBe("teams");
+    expect(byId("console:access/teams")?.label).toBe("team members");
   });
 
   it("finds bulk linking by the words people use for it", () => {
@@ -260,6 +286,14 @@ describe("places", () => {
     expect(router.path).toBe("/library/new/doc");
   });
 
+  it("opens the wiki, which has no tab, before the wikis load", () => {
+    expect(byId("section:wiki")).toMatchObject({
+      kind: "go",
+      trail: ["library"],
+    });
+    expect(byId("section:wiki")?.hotkey).toBeUndefined();
+  });
+
   it("lists each wiki once they have loaded, and the landing one's pages", () => {
     expect(ids().some((id) => id.startsWith("wiki"))).toBe(false);
     wikis.rows = [
@@ -285,9 +319,76 @@ describe("places", () => {
     expect(router.path).toBe("/wiki/billing/new");
   });
 
+  const projects = [
+    { id: "p1", name: "Fabric" },
+    { id: "p2", name: "Ledger" },
+  ] as unknown as NonNullable<typeof az.projects>;
+
+  it("lists the board's projects, and starts an item on the landing one", () => {
+    expect(ids().some((id) => id.startsWith("board:"))).toBe(false);
+    az.projects = projects;
+    byId("board:p2")!.run();
+    expect(router.path).toBe("/board/azure-devops/p2");
+
+    const add = byId("new:work-item")!;
+    expect(add).toMatchObject({ kind: "create", trail: ["board", "Fabric"] });
+    add.run();
+    expect(router.path).toBe("/board/azure-devops/p1");
+    expect(boardAsk.newItem).toBe(true);
+  });
+
+  it("switches vim and the theme, naming the way each would go", () => {
+    expect(byId("do:vim")).toMatchObject({
+      kind: "do",
+      label: "vim motions on",
+    });
+    byId("do:vim")!.run();
+    expect(vimState.enabled).toBe(true);
+    expect(byId("do:vim")?.label).toBe("vim motions off");
+    setVim(false);
+
+    setTheme("dark");
+    expect(byId("do:theme")?.label).toBe("light theme");
+    byId("do:theme")!.run();
+    expect(byId("do:theme")?.label).toBe("dark theme");
+    setTheme("dark");
+  });
+
+  it("signs out only someone signed in", () => {
+    expect(ids()).toContain("do:sign-out");
+    session.me = null;
+    expect(ids()).not.toContain("do:sign-out");
+  });
+
+  it("starts a new chat only over a finished conversation", () => {
+    expect(ids()).not.toContain("do:new-chat");
+    addEntry({ kind: "user", text: "why is the export empty?" });
+    chat.busy = true;
+    expect(ids()).not.toContain("do:new-chat");
+    chat.busy = false;
+
+    router.path = "/library";
+    byId("do:new-chat")!.run();
+    expect(chat.entries).toEqual([]);
+    expect(canRestore()).toBe(true);
+    expect(router.path).toBe("/chat");
+  });
+
   it("gives every place a distinct id, for its pick count", () => {
     wikis.loaded = true;
     const all = ids();
     expect(new Set(all).size).toBe(all.length);
+  });
+
+  it("names every place once, so a row says where it goes", () => {
+    wikis.rows = [
+      { product_slug: "billing", product_name: "Billing", articles: 9 },
+    ] as unknown as typeof wikis.rows;
+    wikis.loaded = true;
+    az.projects = projects;
+    addEntry({ kind: "user", text: "why is the export empty?" });
+    const names = places().map((p) => p.label);
+    const twice = names.filter((name, i) => names.indexOf(name) !== i);
+    expect(twice).toEqual([]);
   });
 });

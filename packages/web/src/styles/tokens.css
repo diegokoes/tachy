@@ -1,9 +1,9 @@
 /* Design tokens. Everything downstream derives from these - no component may
    hard-code a color, a radius, or a spacing step.
 
-   data-theme on <html> is the one attribute axis. --accent, --font-scale and
-   the three --font-* stacks are set inline on <html> by theme.svelte.ts and
-   fonts.ts. */
+   data-theme on <html> is the main attribute axis; data-vision swaps the
+   status colors. --accent, --font-scale and the three --font-* stacks are set
+   inline on <html> by theme.svelte.ts and fonts.ts. */
 
 :root {
   /* Without this the browser paints form controls and any remaining native
@@ -12,7 +12,7 @@
   font-size: calc(clamp(14.5px, 0.35vw + 12.5px, 18px) * var(--font-scale, 1));
   font-family: var(--font-ui);
 
-  /* Three semantic faces, pickable in Settings › ui: chrome, running text,
+  /* Three semantic faces, pickable in Settings › theme: chrome, running text,
      and the character grid. Each stack ends in DejaVu Mono, which has the
      block, box-drawing and geometric glyphs neither Plex face has. */
   --font-ui:
@@ -31,7 +31,11 @@
   --panel-bg: var(--panel-solid);
   --border: rgba(255, 255, 255, 0.09);
   --text: #e2e2e2;
-  --muted: #6d6d6d;
+  /* Secondary text: at least 4.5:1 on --bg and on a panel. */
+  --muted: #8a8a8a;
+  /* Rules, tracks and neutral marks. Darker than --muted: a line needs 3:1
+     at most, and a brighter frame competes with the text inside it. */
+  --rule: #6d6d6d;
   --accent: #6ea8fe;
   /* What an accent-filled surface paints with: the accent, or the two-colour
      gradient a user picked. Ink and rules stay on --accent, which a gradient
@@ -39,6 +43,9 @@
   --accent-fill: var(--accent);
   --accent-dim: color-mix(in srgb, var(--accent) 14%, transparent);
   --star-ink: rgba(255, 255, 255, 0.3);
+  --star-ink-red: rgba(248, 81, 73, 0.5);
+  --star-ink-amber: rgba(210, 153, 34, 0.5);
+  --star-ink-green: rgba(63, 185, 80, 0.5);
   /* Fainter than the starfield: the wordmark sits in the top row next to the
      nav, so it has live UI beside it and has to stay behind it. */
   --wordmark-ink: rgba(255, 255, 255, 0.115);
@@ -61,8 +68,11 @@
   /* Chart ink. Fixed rather than derived from --accent, so a user's accent
      choice never recolours data, and quieter than the status tokens because a
      chart is a field of colour where a badge is a spot of it. */
-  --series: #8ea4ba;
-  --series-2: #b39d7c;
+  /* Blue, ochre, rose: one lightness band, apart in hue for every kind of
+     colour vision, and quiet enough to fill an area. */
+  --series: #5894d0;
+  --series-2: #b9883c;
+  --series-3: #b4608a;
   --series-ok: color-mix(in srgb, var(--ok) 70%, var(--panel-solid));
   --series-warn: color-mix(in srgb, var(--warn) 70%, var(--panel-solid));
   --series-danger: color-mix(in srgb, var(--danger) 70%, var(--panel-solid));
@@ -93,10 +103,14 @@
   --border: rgba(30, 28, 20, 0.17);
   --text: #21201c;
   --muted: #635e53;
+  --rule: #635e53;
   /* Higher than the dark theme's: a dark glyph on a light ground has less
      perceptual contrast at this size than a light one on dark, so equal
      alpha leaves the light theme's sky nearly blank. */
   --star-ink: rgba(30, 28, 20, 0.42);
+  --star-ink-red: rgba(207, 34, 46, 0.5);
+  --star-ink-amber: rgba(154, 103, 0, 0.5);
+  --star-ink-green: rgba(26, 127, 55, 0.5);
   --wordmark-ink: rgba(30, 28, 20, 0.16);
   --ok: #1a7f37;
   --warn: #9a6700;
@@ -106,8 +120,9 @@
   --doc: #8a6520;
   --article: #7a4f86;
   --gauge-tick: #f3f0e8;
-  --series: #4b6580;
-  --series-2: #8a6a3a;
+  --series: #316ca5;
+  --series-2: #a07020;
+  --series-3: #9a4873;
   --series-ok: color-mix(in srgb, var(--ok) 85%, var(--panel-solid));
   --series-warn: color-mix(in srgb, var(--warn) 85%, var(--panel-solid));
   --series-danger: color-mix(in srgb, var(--danger) 85%, var(--panel-solid));
@@ -118,6 +133,26 @@
 
   --scrim-ink: color-mix(in srgb, #000 13%, transparent);
   --scrim-blur: 4px;
+}
+
+/* Green, amber and red share one hue under red-green color blindness; these
+   differ on the blue-yellow axis and in lightness. Light mode's danger is
+   magenta: a dark vermillion would read as its amber. */
+:root[data-vision="red-green"] {
+  --ok: #2fb593;
+  --warn: #f0e442;
+  --danger: #ea5d2a;
+  --star-ink-red: rgba(234, 93, 42, 0.5);
+  --star-ink-amber: rgba(240, 228, 66, 0.5);
+  --star-ink-green: rgba(47, 181, 147, 0.5);
+}
+:root[data-theme="light"][data-vision="red-green"] {
+  --ok: #007a5e;
+  --warn: #8a6d00;
+  --danger: #9e2a8c;
+  --star-ink-red: rgba(158, 42, 140, 0.5);
+  --star-ink-amber: rgba(138, 109, 0, 0.5);
+  --star-ink-green: rgba(0, 122, 94, 0.5);
 }
 
 /* Radius. Two steps: rounded corners are the web's signal for "this is
@@ -159,15 +194,15 @@
   --view-pad-y: calc(var(--pad-4) * 1.25);
 }
 
-/* Panel border. A CSS border, mixed off --muted because --border is too
+/* Panel border. A CSS border in --rule because --border is too
    faint to read as a drawn line. The width is its own token because whatever
    meets this rule end-on, like the subnav notch, needs its thickness. */
 :root {
   --panel-line-w: 2px;
-  --panel-line: var(--panel-line-w) solid var(--muted);
+  --panel-line: var(--panel-line-w) solid var(--rule);
   /* The edge of a control that sits straight on the wallpaper with no panel
      around it, where --border is too faint to mark it out at rest. */
-  --border-bare: color-mix(in srgb, var(--muted) 55%, transparent);
+  --border-bare: color-mix(in srgb, var(--rule) 55%, transparent);
 }
 
 /* Type scale. Four reading sizes; anything smaller than --fs-xs is

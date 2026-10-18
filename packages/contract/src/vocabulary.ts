@@ -47,7 +47,11 @@ export const REPORT_STATUSES = [
  * `test/infra/schema-drift.test.ts` holds the list against the
  * `notifications.kind` CHECK.
  */
-export const NOTIFICATION_KINDS = ["report_reply"] as const;
+export const NOTIFICATION_KINDS = [
+  "report_reply",
+  "work_item_changed",
+  "flow_notice",
+] as const;
 /** Who a report_messages row came from: the admin working it or the reporter. */
 export const REPORT_DIRECTIONS = ["admin", "reporter"] as const;
 /**

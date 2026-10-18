@@ -103,11 +103,8 @@
       />
     </Row>
   {/each}
-  <Row
-    label="new token"
-    hint="Acts as you, with your rights, until it expires or is revoked."
-  >
-    <div class="field">
+  <Row label="new token">
+    <div class="mint">
       <input
         aria-label="token name"
         placeholder="what it is for"
@@ -133,7 +130,7 @@
 </Rows>
 
 <style>
-  .field {
+  .mint {
     display: flex;
     align-items: center;
     gap: var(--pad-2);

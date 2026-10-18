@@ -44,18 +44,26 @@ import { userConfigDir } from "../turn-config";
 const valueSchema = z.object({ value: z.string().min(1) });
 const prefSchema = z.object({ value: z.unknown() });
 
-/** Agent credentials, one per source connection, one per personal MCP server the person reaches. */
-async function knownCredentialNames(userId: string): Promise<string[]> {
+/** Agent credentials, one per source connection. */
+async function knownCredentialNames(): Promise<string[]> {
   const connections = await listSourceConnections();
-  const personalServers = (await serversFor(userId)).filter(
-    (server) => server.credential_mode === "personal",
-  );
   return [
     ANTHROPIC_API_KEY_CREDENTIAL,
     ANTHROPIC_OAUTH_CREDENTIAL,
     ...connections.map((s) => sourceCredentialName(s.source_type, s.slug)),
-    ...personalServers.map((server) => mcpServerCredentialName(server.slug)),
   ];
+}
+
+/** The personal-token servers the person reaches, with the credential each saves under. */
+async function personalServers(userId: string) {
+  const servers = await serversFor(userId);
+  return servers
+    .filter((server) => server.credential_mode === "personal")
+    .map((server) => ({
+      slug: server.slug,
+      name: server.name,
+      credential: mcpServerCredentialName(server.slug),
+    }));
 }
 
 export const me = new Hono()
@@ -63,7 +71,7 @@ export const me = new Hono()
   .get("/credentials", async (c) => {
     const userId = await requireCaller(c);
     const teamId = (await userSoleTeamId(userId)) ?? undefined;
-    const names = await knownCredentialNames(userId);
+    const names = await knownCredentialNames();
     const effective: Record<string, string | null> = {};
     for (const name of names)
       effective[name] =
@@ -83,6 +91,7 @@ export const me = new Hono()
       vault_enabled: secretsEnabled(),
       mine: secretsEnabled() ? await listCredentials("user", userId) : [],
       effective,
+      mcp_servers: await personalServers(userId),
       agent: {
         in_use: inUse ?? null,
         source: auth?.source ?? null,

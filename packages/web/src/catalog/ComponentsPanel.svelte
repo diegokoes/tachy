@@ -250,7 +250,6 @@
     pushScope([
       {
         key: "ctrl+k",
-        label: "find",
         inFields: true,
         run: () => (finding = true),
       },

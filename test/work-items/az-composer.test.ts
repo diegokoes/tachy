@@ -16,6 +16,7 @@ import {
   setTeamMember,
 } from "@tachy/core/access";
 import {
+  clearTypeLists,
   composerForm,
   creatableTypes,
   createAdoClient,
@@ -700,6 +701,91 @@ describe("/api/compose", () => {
       fields: ["Severity"],
     });
     expect(calls[0].path).toContain("validateOnly=true");
+  });
+
+  const peek = (cookie: string, id: string) =>
+    app.request(`/api/work-items/peek/azure-devops/${id}`, {
+      headers: { cookie },
+    });
+
+  it("peeks at an item's title and type glyph without storing it", async () => {
+    clearTypeLists();
+    const calls = mockFetch({
+      "/_apis/wit/workitems?": {
+        value: [
+          {
+            id: 42,
+            fields: {
+              "System.Title": "Print preview is blank",
+              "System.WorkItemType": "Bug",
+              "System.State": "New",
+              "System.TeamProject": "ProjA",
+            },
+          },
+          null,
+        ],
+      },
+      "/ProjA/_apis/wit/workitemtypes": {
+        value: [{ name: "Bug", color: "CC293D", icon: { id: "icon_insect" } }],
+      },
+    });
+    expect(await (await peek(memberCookie, "42")).json()).toEqual([
+      {
+        id: "42",
+        title: "Print preview is blank",
+        type: "Bug",
+        state: "New",
+        project: "ProjA",
+        url: `${ORG}/ProjA/_workitems/edit/42`,
+        color: "CC293D",
+        icon: "icon_insect",
+        source_slug: "ado-az",
+      },
+    ]);
+    expect(calls.map((call) => call.method)).toEqual(["GET", "GET"]);
+    const [stored] =
+      await sql`select count(*)::int as n from work_items where external_id = '42'`;
+    expect(stored.n).toBe(0);
+  });
+
+  it("asks nothing for a number that is not one, or with no project", async () => {
+    const calls = mockFetch({});
+    expect(await (await peek(memberCookie, "4x")).json()).toEqual([]);
+    await createUser({
+      email: "lone@example.com",
+      role: "member",
+      password: "lone-password",
+    });
+    const loneCookie = await loginCookie(
+      app,
+      "lone@example.com",
+      "lone-password",
+    );
+    expect(await (await peek(loneCookie, "42")).json()).toEqual([]);
+    expect(calls).toEqual([]);
+  });
+
+  it("says the source did not answer when no connection does", async () => {
+    mockFetch({
+      "/_apis/wit/workitems?": new Error("TF400813: not authorized"),
+    });
+    const response = await peek(memberCookie, "42");
+    expect(response.status).toBe(503);
+  });
+
+  it("points at the token when the source refuses it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          ({ ok: false, status: 401, text: async () => "" }) as Response,
+      ),
+    );
+    const response = await peek(memberCookie, "42");
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      detail: expect.stringContaining("Settings › agent"),
+    });
   });
 });
 

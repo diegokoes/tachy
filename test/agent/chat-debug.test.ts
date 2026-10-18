@@ -94,7 +94,8 @@ describe("chat debug", () => {
       debug: true,
       model: "claude-haiku-5-5",
       effort: "medium",
-      command: { name: "consult", args: "why is it slow" },
+      mode: { name: "code", args: "" },
+      command: { name: "az", args: "explain why is it slow" },
     });
     expect(frames.map((f) => f.event)).toEqual([
       "start",
@@ -121,7 +122,8 @@ describe("chat debug", () => {
       redactionForced: false,
       systemPrompt: configs[0].systemPrompt,
     });
-    expect(sent.prompt).toContain('<command name="consult">');
+    expect(sent.prompt).toContain('<mode name="code">');
+    expect(sent.prompt).toContain('<command name="az">');
     expect(sent.prompt).toContain("why is it slow");
     expect(frames[2].data).toMatchObject({ model: "claude-haiku-5-5" });
   });

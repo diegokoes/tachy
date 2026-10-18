@@ -11,6 +11,7 @@ import { addSourceConnection, addSourceProject } from "@tachy/core/sources";
 import { addTeam } from "@tachy/core/catalog";
 import {
   applyFormConfig,
+  applyViewConfig,
   getComposeConfig,
   offeredTypes,
   setComposeConfig,
@@ -103,6 +104,45 @@ describe("applyFormConfig", () => {
   it("changes nothing without a config for the type", () => {
     const applied = form();
     expect(applyFormConfig(applied, undefined)).toBe(applied);
+  });
+});
+
+describe("applyViewConfig", () => {
+  const layout = {
+    layout: {
+      body: [],
+      groups: [{ label: null, fields: ["Custom.Approval"] }],
+    },
+    fields: {
+      "Custom.Approval": { name: "Approval date" },
+      "Custom.Approver": { name: "Approver" },
+    },
+  };
+
+  it("carries the type's choices, dropping fields the type no longer has", () => {
+    const applied = applyViewConfig(
+      layout,
+      {
+        views: {
+          Bug: {
+            fields: {
+              "Custom.Approval": { show: "always" },
+              "Custom.Gone": { show: "pin" },
+            },
+            order: ["Custom.Gone", "Custom.Approver"],
+          },
+        },
+      },
+      "Bug",
+    );
+    expect(applied.display).toEqual({
+      show: { "Custom.Approval": "always" },
+      order: ["Custom.Approver"],
+    });
+  });
+
+  it("changes nothing without a view for the type", () => {
+    expect(applyViewConfig(layout, { views: {} }, "Bug")).toBe(layout);
   });
 });
 
@@ -225,6 +265,24 @@ describe("flows config", () => {
     );
   });
 
+  it("keeps how an item reads apart from how it is created", async () => {
+    const response = await request(
+      leadCookie,
+      `/projects/${projectId}/config`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          forms: { Bug: { fields: { "Custom.Approval": { show: "hidden" } } } },
+          views: { Bug: { fields: { "Custom.Approval": { show: "pin" } } } },
+        }),
+      },
+    );
+    expect(response.status).toBe(200);
+    const stored = await getComposeConfig(projectId);
+    expect(stored.forms?.Bug.fields?.["Custom.Approval"].show).toBe("hidden");
+    expect(stored.views?.Bug.fields?.["Custom.Approval"].show).toBe("pin");
+  });
+
   it("refuses a config it would not know how to apply", async () => {
     const response = await request(
       leadCookie,
@@ -237,6 +295,13 @@ describe("flows config", () => {
       },
     );
     expect(response.status).toBe(400);
+    const badView = await request(leadCookie, `/projects/${projectId}/config`, {
+      method: "PUT",
+      body: JSON.stringify({
+        views: { Bug: { fields: { X: { show: "fold" } } } },
+      }),
+    });
+    expect(badView.status).toBe(400);
   });
 
   it("serves the form with the team's defaults, and raw without them", async () => {

@@ -1,13 +1,22 @@
 import { z } from "zod";
-import { assertModelCallAllowed, defineFlowAction } from "@tachy/core/flows";
+import { getCustomerName } from "@tachy/core/catalog";
+import {
+  applyIngest,
+  assertModelCallAllowed,
+  defineFlowAction,
+  flowName,
+  ingestConfig,
+} from "@tachy/core/flows";
 import { badInput } from "@tachy/core/infra";
 import { resolveSource } from "@tachy/core/sources";
 import {
+  fileLinker,
   ingestWorkItem,
   priorSummaryIds,
   renderSummaryHtml,
   renderSummaryText,
   replaceNotes,
+  transcriptOnTicket,
 } from "@tachy/core/work-items";
 import { firstJsonObject, runAdvisory } from "./advisory";
 import { summarizeTicket } from "./ticket-summary";
@@ -111,17 +120,40 @@ export function registerAgentFlowActions(): void {
       if (params.post && !source.postNote)
         throw badInput(`${source_type} items cannot take notes`);
       const raw = await source.fetchItem(external_id);
-      await ingestWorkItem(conn.id, raw);
-      const summary = await summarizeTicket(raw, ctx.scope, ctx.userId, {
+      const { customerId } = await ingestWorkItem(conn.id, raw);
+      const { item, guidance } = applyIngest(
+        raw,
+        ingestConfig(conn.config),
+        source.modelOmits,
+      );
+      const summary = await summarizeTicket(item, ctx.scope, ctx.userId, {
         mode: "flow",
+        guidance,
         meta: { flow_id: ctx.flowId, flow_run_id: ctx.flowRunId },
       });
       const text = renderSummaryText(summary);
       if (!params.post) return { text, posted: false, replaced: 0 };
+      const flow = await flowName(ctx.flowId);
+      const note = renderSummaryHtml(
+        { external_id, title: raw.title },
+        summary,
+        {
+          linkOf: fileLinker(raw, {
+            source: connection,
+            // Only a source that opens files has something for the link to open.
+            origin: source.openAttachment
+              ? process.env.TACHY_PUBLIC_ORIGIN
+              : undefined,
+          }),
+          customer: await getCustomerName(customerId),
+          requestedBy: flow ? `Flow: ${flow}` : undefined,
+          transcript: transcriptOnTicket(raw.messages),
+        },
+      );
       const posted = await replaceNotes(
         source,
         external_id,
-        [renderSummaryHtml({ external_id, title: raw.title }, summary)],
+        [note],
         priorSummaryIds(raw.messages),
       );
       return { text, posted: true, replaced: posted.replaced_previous ?? 0 };

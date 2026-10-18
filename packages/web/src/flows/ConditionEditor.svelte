@@ -14,12 +14,23 @@
     value,
     connection = "",
     fields = [],
+    fieldSource = "item.fields",
+    defaultField = "item.status",
+    valueSource = "item.values",
+    valuePrefixes = ["item."],
     onchange,
     onremove,
   }: {
     value: Condition;
     /** Whose items the field and value lists are read from. */
     connection?: string;
+    fieldSource?: string;
+    /** The field a new condition starts on. */
+    defaultField?: string;
+    /** The option source a field's values are listed from. */
+    valueSource?: string;
+    /** Field prefixes `valueSource` lists values for. */
+    valuePrefixes?: string[];
     /** What earlier steps returned, offered ahead of the item's fields. */
     fields?: FlowOption[];
     onchange: (next: Condition) => void;
@@ -39,7 +50,7 @@
   };
   const ops = CONDITION_OPS.map((o) => ({ value: o, label: OP_LABELS[o] }));
   type Leaf = Extract<Condition, { field: string }>;
-  const leaf = (): Condition => ({ field: "item.status", op: "eq", value: "" });
+  const leaf = (): Condition => ({ field: defaultField, op: "eq", value: "" });
 
   const mode = $derived.by(() => {
     if ("all" in value) return "all";
@@ -56,6 +67,9 @@
   function setChild(at: number, next: Condition) {
     setChildren(children.map((x, j) => (j === at ? next : x)));
   }
+
+  const listsValues = (field: string) =>
+    valuePrefixes.some((prefix) => field.startsWith(prefix));
 
   const listText = (v: unknown) => {
     if (Array.isArray(v)) return v.join(", ");
@@ -87,6 +101,10 @@
         value={child}
         {connection}
         {fields}
+        {fieldSource}
+        {defaultField}
+        {valueSource}
+        {valuePrefixes}
         onchange={(n) => setChild(i, n)}
         onremove={() => setChildren(children.filter((_, j) => j !== i))}
       />
@@ -116,6 +134,10 @@
       value={value.not}
       {connection}
       {fields}
+      {fieldSource}
+      {defaultField}
+      {valueSource}
+      {valuePrefixes}
       onchange={(n) => onchange({ not: n })}
     />
   </div>
@@ -124,7 +146,7 @@
   <div class="leaf">
     <span class="field">
       <OptionSelect
-        source="item.fields"
+        source={fieldSource}
         deps={{ connection }}
         value={leaf.field}
         extra={fields}
@@ -156,9 +178,9 @@
                   .filter(Boolean),
               })}
           />
-        {:else if connection && leaf.field.startsWith("item.")}
+        {:else if connection && listsValues(leaf.field)}
           <OptionSelect
-            source="item.values"
+            source={valueSource}
             deps={{ connection, field: leaf.field }}
             value={listText(leaf.value)}
             free
@@ -184,6 +206,7 @@
 
 <style>
   .group {
+    container-type: inline-size;
     display: flex;
     flex-direction: column;
     gap: var(--pad-2);
@@ -224,6 +247,13 @@
   }
   .leaf .x {
     grid-area: x;
+  }
+  @container (min-width: 40rem) {
+    .leaf {
+      grid-template-columns: 16rem 8rem minmax(0, 20rem) auto;
+      grid-template-areas: "field op value x";
+      justify-content: start;
+    }
   }
   .leaf > span > :global(*) {
     width: 100%;

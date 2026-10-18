@@ -27,10 +27,25 @@ export interface TypeFormConfig {
   guidance?: string;
 }
 
+/**
+ * How a field shows when an item is read. "pin" puts it in the item's header;
+ * "always" shows it even when it holds nothing; "hidden" leaves it out. With
+ * no entry it shows in its form place when it holds something.
+ */
+export type ViewShow = "pin" | "always" | "hidden";
+
+export interface TypeViewConfig {
+  fields?: Record<string, { show?: ViewShow }>;
+  /** Field ids in the order they are drawn; ones not listed keep their place after. */
+  order?: string[];
+}
+
 export interface ComposeConfig {
   /** The types offered, in order. Absent: every type the source can create. */
   types?: string[];
   forms?: Record<string, TypeFormConfig>;
+  /** How an item of each type reads, apart from how it is created. */
+  views?: Record<string, TypeViewConfig>;
 }
 
 /** What the composer draws differently because of a team's config. */
@@ -40,6 +55,65 @@ export interface FormDisplay {
 }
 
 export const FIELD_SHOWS: readonly FieldShow[] = ["form", "fold", "hidden"];
+export const VIEW_SHOWS: readonly ViewShow[] = ["pin", "always", "hidden"];
+
+/** What the board draws differently because of a team's view config. */
+export interface ViewDisplay {
+  show: Record<string, ViewShow>;
+  order: string[];
+}
+
+/** Leaves matching messages out of what a model reads. */
+export interface IngestRule {
+  id: string;
+  label: string;
+  enabled: boolean;
+  /** Tested against `{ message, item }`. */
+  where: Condition;
+}
+
+export const INGEST_FIELD_MODES = ["only", "except"] as const;
+export type IngestFieldMode = (typeof INGEST_FIELD_MODES)[number];
+
+/** `source_connections.config.ingest`. */
+export interface IngestConfig {
+  skip?: IngestRule[];
+  /** Payload paths a model reads (`only`) or not (`except`); absent: all. */
+  fields?: { mode: IngestFieldMode; paths: string[] };
+  /** Text the agent reads with a group's items, by group key. */
+  guidance?: Record<string, string>;
+}
+
+export interface IngestPreviewMessage {
+  key: string;
+  at: string | null;
+  author: string | null;
+  author_label: string | null;
+  visibility: string;
+  direction: string;
+  automated: boolean;
+  chars: number;
+  excerpt: string;
+  /** Id of the rule that skips it; null when a model reads it. */
+  skipped_by: string | null;
+}
+
+export interface IngestPreview {
+  messages: IngestPreviewMessage[];
+  /** Message and payload characters: stored, and as a model reads them. */
+  chars: { stored: number; read: number };
+  guidance: string | null;
+}
+
+export const INGEST_MESSAGE_FIELDS: FlowOption[] = [
+  { value: "message.author", label: "author", hint: "the source's user id" },
+  { value: "message.author_label", label: "author name or email" },
+  { value: "message.visibility", label: "visibility" },
+  { value: "message.direction", label: "direction" },
+  { value: "message.automated", label: "automated" },
+  { value: "message.body", label: "text" },
+  { value: "message.chars", label: "length", hint: "characters" },
+];
 
 /**
  * A flow is triggers and a tree of steps. Each list of steps runs in order; an
@@ -259,8 +333,31 @@ function same(a: unknown, b: unknown): boolean {
   return lower(a) === lower(b);
 }
 
+const RELATIVE_TIME = /^now\s*(?:([+-])\s*(\d+)\s*([mhd]))?$/i;
+const UNIT_MS: Record<string, number> = {
+  m: 60_000,
+  h: 3_600_000,
+  d: 86_400_000,
+};
+
+/** Epoch ms for `now`, `now+4h`, `now-2d`; null for any other value. */
+function relativeTime(value: unknown): number | null {
+  const match =
+    typeof value === "string" ? RELATIVE_TIME.exec(value.trim()) : null;
+  if (!match) return null;
+  const [, sign, amount, unit] = match;
+  if (!sign) return Date.now();
+  const offsetMs = Number(amount) * UNIT_MS[unit.toLowerCase()];
+  return Date.now() + (sign === "-" ? -offsetMs : offsetMs);
+}
+
 function compare(a: unknown, b: unknown): number | null {
   if (a == null || b == null || a === "" || b === "") return null;
+  const moment = relativeTime(b);
+  if (moment != null) {
+    const at = Date.parse(String(a));
+    return Number.isNaN(at) ? null : at - moment;
+  }
   const na = Number(a);
   const nb = Number(b);
   if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
@@ -273,7 +370,8 @@ function compare(a: unknown, b: unknown): number | null {
 /**
  * Whether a condition holds for a subject. Text compares without case, a list
  * field matches when any of its values does, and a condition that cannot be
- * judged (a bad pattern, a missing value to order) does not hold.
+ * judged (a bad pattern, a missing value to order) does not hold. `gt` and
+ * `lt` take `now`, `now+4h` or `now-2d` (m, h, d) against a time.
  */
 export function evaluateCondition(
   condition: Condition,

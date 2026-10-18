@@ -283,33 +283,38 @@
 
   const hasComponents = $derived(componentList.length > 0);
 
-  $effect(() => {
-    if (!isCurator()) return;
-    return setTopActions(curate);
-  });
+  $effect(() => setTopActions(actions));
 </script>
 
 <!-- Rendered by App into the carved row beside the subnav, not here. -->
-{#snippet curate()}
-  {#if hasComponents && !toc?.categories.length}
+{#snippet actions()}
+  {#if isCurator()}
+    {#if hasComponents && !toc?.categories.length}
+      <Button
+        variant="ghost"
+        tone="ok"
+        size="sm"
+        icon="seed"
+        {busy}
+        onclick={seed}>seed from components</Button
+      >
+    {/if}
+    <Button variant="ghost" tone="ok" size="sm" icon="plus" onclick={startAdd}
+      >section</Button
+    >
     <Button
       variant="ghost"
       tone="ok"
       size="sm"
-      icon="seed"
-      {busy}
-      onclick={seed}>seed from components</Button
+      icon="plus"
+      onclick={() => navigate(wikiPath(scope, "new"))}>article</Button
     >
   {/if}
-  <Button variant="ghost" tone="ok" size="sm" icon="plus" onclick={startAdd}
-    >section</Button
-  >
   <Button
     variant="ghost"
-    tone="ok"
     size="sm"
-    icon="plus"
-    onclick={() => navigate(wikiPath(scope, "new"))}>article</Button
+    icon="gaps"
+    onclick={() => navigate(wikiPath(scope, "gaps"))}>gaps</Button
   >
 {/snippet}
 
@@ -539,10 +544,10 @@
             {#if isCurator()}
               <a
                 class="mapl"
-                href="/console/components"
+                href="/console/structure/components"
                 onclick={(e) => {
                   e.preventDefault();
-                  navigate("/console/components");
+                  navigate("/console/structure/components");
                 }}>open in Components map →</a
               >
             {/if}

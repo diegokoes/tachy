@@ -55,7 +55,9 @@
     <thead>
       <tr>
         {#each columns as column}
-          <th class={column.align === "end" ? "end" : ""}>{column.label}</th>
+          <th class={column.align === "end" ? "end" : ""}>
+            {#if column.head}{@render column.head()}{:else}{column.label}{/if}
+          </th>
         {/each}
       </tr>
     </thead>

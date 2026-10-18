@@ -10,6 +10,7 @@ import { defineSearchJobs } from "../search/jobs";
 import { defineSourceJobs } from "../sources/jobs";
 import { defineLoadTestJobs } from "../diagnostics/load-runs";
 import { defineWikiJobs } from "../wiki/jobs";
+import { defineWorkItemJobs } from "../work-items/jobs";
 import { createJobDefinition } from "./definitions";
 import { notifyRunFinished } from "./notify";
 import { describeJobKinds } from "./registry";
@@ -27,6 +28,7 @@ export function registerCoreJobs(): void {
   defineBucketJobs();
   defineReferenceJobs();
   defineMcpServerJobs();
+  defineWorkItemJobs();
 }
 
 /**

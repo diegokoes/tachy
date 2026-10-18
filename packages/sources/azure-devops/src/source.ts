@@ -19,12 +19,21 @@ import type {
   ListOptions,
   SourceFactory,
 } from "@tachy/core/sources";
+import {
+  followedChanges,
+  itemReading,
+  itemUrl,
+  listWorkItems,
+  peekWorkItems,
+  viewLayout,
+} from "./browser";
 import { composerForm, creatableTypes, templateValues } from "./composer";
 import { createWorkItem, explainAdoError, validateWorkItem } from "./create";
 import { workItemDefaults } from "./fields";
 import { updateEvents } from "./history";
 import {
   createAdoClient,
+  type AdoComment,
   type AdoRelation,
   type AdoWorkItem,
   type AdoWorkItemSummary,
@@ -68,6 +77,7 @@ const ATTACHMENT_URL =
   /\/_apis\/wit\/attachments\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})(?:\?(.*))?$/i;
 
 const IMG_SRC = /<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/gi;
+const MARKDOWN_IMAGE = /!\[[^\]]*\]\(\s*<?([^\s)>]+)/g;
 
 /**
  * The attachment an address names, when it is one of this organisation's. An
@@ -104,10 +114,14 @@ export function attachedFiles(
   return files;
 }
 
-/** The pictures pasted into an HTML field: each is an attachment its `img` names. */
+/**
+ * The pictures pasted into a field or comment: each is an attachment its `img`
+ * names, or its `![]()` when the text is Markdown.
+ */
 export function inlineImages(html: string, orgUrl: string): RawAttachment[] {
   const images: RawAttachment[] = [];
-  for (const [, src] of html.matchAll(IMG_SRC)) {
+  const sources = [...html.matchAll(IMG_SRC), ...html.matchAll(MARKDOWN_IMAGE)];
+  for (const [, src] of sources) {
     const at = attachmentAt(src.replace(/&amp;/g, "&"), orgUrl);
     if (!at || images.some((image) => image.id === at.id)) continue;
     images.push({ id: at.id, name: at.fileName ?? "image.png", inline: true });
@@ -203,7 +217,7 @@ export const createAzureDevopsSource: SourceFactory = (
       externalId: String(workItem.id),
       externalUrl:
         workItem._links?.html?.href ??
-        `${client.orgUrl}/${encodeURIComponent(fields["System.TeamProject"] ?? "")}/_workitems/edit/${workItem.id}`,
+        itemUrl(client.orgUrl, fields["System.TeamProject"] ?? "", workItem.id),
       kind: "work_item",
       title: fields["System.Title"],
       status: fields["System.State"],
@@ -344,7 +358,15 @@ export const createAzureDevopsSource: SourceFactory = (
    * each with the pictures pasted into it. Attached files belong to the item
    * and not to a message, so they ride on the first one.
    */
-  async function itemMessages(workItem: AdoWorkItem): Promise<RawMessage[]> {
+  async function itemComments(workItem: AdoWorkItem): Promise<AdoComment[]> {
+    const project = workItem.fields?.["System.TeamProject"];
+    return project ? client.getComments(project, String(workItem.id)) : [];
+  }
+
+  function itemMessages(
+    workItem: AdoWorkItem,
+    comments: AdoComment[],
+  ): RawMessage[] {
     const fields = workItem.fields ?? {};
     const opener = fields["System.CreatedBy"]?.displayName;
     const opened = fields["System.CreatedDate"];
@@ -352,10 +374,16 @@ export const createAzureDevopsSource: SourceFactory = (
     const fromHtml = (
       externalId: string,
       html: string,
-      message: Partial<RawMessage> & { lead?: string },
+      message: Partial<RawMessage> & {
+        lead?: string;
+        images?: RawAttachment[];
+      },
     ) => {
-      const { lead = "", ...rest } = message;
-      const images = inlineImages(html, client.orgUrl);
+      const {
+        lead = "",
+        images = inlineImages(html, client.orgUrl),
+        ...rest
+      } = message;
       messages.push({
         externalId,
         visibility: "internal",
@@ -393,20 +421,48 @@ export const createAzureDevopsSource: SourceFactory = (
     if (files.length)
       messages[0].attachments = [...(messages[0].attachments ?? []), ...files];
 
-    const project = fields["System.TeamProject"];
-    if (project)
-      for (const comment of await client.getComments(
-        project,
-        String(workItem.id),
-      ))
-        fromHtml(`comment-${comment.id}`, comment.text ?? "", {
+    // Markdown reads as text from its rendering, and its pictures from what
+    // was written: the rendering drops their address.
+    for (const comment of comments) {
+      const text = comment.text ?? "";
+      fromHtml(
+        `comment-${comment.id}`,
+        comment.format === "markdown" ? (comment.renderedText ?? text) : text,
+        {
           author: comment.createdBy?.displayName,
           createdAt: comment.createdDate,
-        });
+          images: inlineImages(text, client.orgUrl),
+        },
+      );
+    }
     return messages.sort((a, b) =>
       (a.createdAt ?? "").localeCompare(b.createdAt ?? ""),
     );
   }
+
+  async function readWhole(
+    externalId: string,
+  ): Promise<{ item: RawWorkItem; comments: AdoComment[] }> {
+    const workItem = await client.getWorkItem(externalId);
+    const comments = await itemComments(workItem);
+    const messages = itemMessages(workItem, comments);
+    const project = workItem.fields?.["System.TeamProject"];
+    const relations = await resolveRelations(workItem, project ?? "");
+    // Best effort: the item reads without its history.
+    const updates = await client
+      .getUpdates(externalId, workItem.rev)
+      .catch(() => null);
+    const item = {
+      ...toItem(workItem, messages, relations),
+      ...(updates
+        ? { events: updateEvents(updates), historyComplete: true as const }
+        : {}),
+    };
+    return { item, comments };
+  }
+
+  const fetchItem = async (externalId: string): Promise<RawWorkItem> =>
+    (await readWhole(externalId)).item;
 
   const defaultsFor = (
     project: string,
@@ -453,6 +509,20 @@ export const createAzureDevopsSource: SourceFactory = (
     capabilities: { postNote: false, incrementalSync: true },
     redactRaw: redactAdoRaw,
     composer,
+    peek: (ids) => peekWorkItems(client, connection.slug, ids),
+    browser: {
+      list: (project, query) =>
+        listWorkItems(client, connection.slug, project, query),
+      layout: (project, type) => viewLayout(client, project, type),
+      changes: (followed) => followedChanges(client, followed),
+      async read(id) {
+        const { item, comments } = await readWhole(id);
+        return {
+          raw: item,
+          view: await itemReading(client, connection.slug, item, comments),
+        };
+      },
+    },
 
     async verify() {
       // connectionData is a preview endpoint and only names the caller, so a
@@ -469,26 +539,11 @@ export const createAzureDevopsSource: SourceFactory = (
       };
     },
 
-    async fetchItem(externalId: string): Promise<RawWorkItem> {
-      const workItem = await client.getWorkItem(externalId);
-      const messages = await itemMessages(workItem);
-      const project = workItem.fields?.["System.TeamProject"];
-      const relations = await resolveRelations(workItem, project ?? "");
-      // Best effort: the item reads without its history.
-      const updates = await client
-        .getUpdates(externalId, workItem.rev)
-        .catch(() => null);
-      return {
-        ...toItem(workItem, messages, relations),
-        ...(updates
-          ? { events: updateEvents(updates), historyComplete: true as const }
-          : {}),
-      };
-    },
+    fetchItem,
 
     async openAttachment(externalId, attachmentId) {
       const workItem = await client.getWorkItem(externalId);
-      const file = (await itemMessages(workItem))
+      const file = itemMessages(workItem, await itemComments(workItem))
         .flatMap((message) => message.attachments ?? [])
         .find((listed) => listed.id === attachmentId.toLowerCase());
       if (!file)

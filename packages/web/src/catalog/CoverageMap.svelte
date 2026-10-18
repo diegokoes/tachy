@@ -31,7 +31,6 @@
     return pushScope([
       {
         key: "esc",
-        label: "zoom out",
         run: () =>
           trail.length > 1
             ? zoom(trail[trail.length - 2].key)
@@ -92,7 +91,7 @@
     justify-content: space-between;
     gap: var(--pad-4);
     padding-bottom: var(--pad-2);
-    border-bottom: 1px solid color-mix(in srgb, var(--muted) 45%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--rule) 45%, transparent);
     font-family: var(--font-mono);
     font-size: var(--fs-xs);
     color: var(--muted);
@@ -138,7 +137,7 @@
   }
   .swatch.hollow {
     margin-right: 0.5ch;
-    border: 1px dashed color-mix(in srgb, var(--muted) 55%, transparent);
+    border: 1px dashed color-mix(in srgb, var(--rule) 55%, transparent);
   }
   .swatch:last-of-type {
     margin-right: 0.5ch;

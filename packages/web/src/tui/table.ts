@@ -21,6 +21,8 @@ export type Column<T> = {
    */
   value?: (row: T) => unknown;
   cell?: Snippet<[T]>;
+  /** Replaces `label` in the table header, e.g. to carry a control. */
+  head?: Snippet;
   edit?: EditKind;
   /** A function when the choices depend on the rest of the draft. */
   options?: Opt[] | ((draft: Draft) => Opt[]);

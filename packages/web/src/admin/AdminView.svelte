@@ -134,6 +134,13 @@
     segment(1) === "connect" ? "integrations" : (segment(1) ?? "integrations"),
   );
 
+  // A page the console does not have would show integrations' sections under
+  // its name.
+  $effect(() => {
+    if (!CONSOLE_PAGES.some((p) => p.key === page))
+      navigate("/console", { replace: true });
+  });
+
   const live = $derived(
     (SECTIONS[page] ?? SECTIONS.integrations).filter((s) => s.show !== false),
   );

@@ -20,7 +20,6 @@ function currentLook(): AppearanceDefaults {
   return parseAppearanceDefaults({
     theme: themeState.theme,
     text_size: TEXT_SIZES.find((t) => t.scale === themeState.fontScale)?.key,
-    nav_hidden: themeState.navHidden,
     nav_labels: themeState.navLabels,
     accent: themeState.accentColor,
     accent2: themeState.accentColor2,

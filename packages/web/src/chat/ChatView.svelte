@@ -9,9 +9,17 @@
     ChatRefused,
     type ChatCommands,
   } from "./agent";
-  import { addEntry, chat, type Entry } from "./chatState.svelte";
+  import {
+    addEntry,
+    canRestore,
+    chat,
+    forgetCleared,
+    type Entry,
+  } from "./chatState.svelte";
+  import { clearConversation, restoreConversation } from "./clearing";
   import { renderMarkdown } from "../markdown/markdown";
   import { reflow } from "../motion/motion";
+  import { tintSky, type SkyTint } from "../motion/sky.svelte";
   import Scrollbar from "../tui/Scrollbar.svelte";
   import ArtifactPanel from "./ArtifactPanel.svelte";
   import CommandMenu, {
@@ -29,14 +37,10 @@
   import Launcher from "./Launcher.svelte";
   import { ArtifactMark, Button, Caret, caretSide, G, Icon, tip } from "../tui";
   import { pushScope } from "../keys/keys.svelte";
-  import { tuckTopbar, unveilTopbar, veilTopbar } from "../shell/topbar.svelte";
+  import PointerText from "../settings/PointerText.svelte";
+  import { topbar, tuckTopbar, unveilTopbar } from "../shell/topbar.svelte";
   import { CHAT_UPLOAD_ACCEPT, uploadRefusal } from "@tachy/contract";
-  import type {
-    AgentEffort,
-    WorkItemTypeOption,
-    CreatedTicket,
-    WorkItemFile,
-  } from "@tachy/contract";
+  import type { AgentEffort, WorkItemFile } from "@tachy/contract";
   import {
     effortOptions,
     modelOptions,
@@ -47,7 +51,6 @@
   } from "./modelCommand";
   import { agentPrefs, loadAgent } from "../settings/prefs.svelte";
   import FileTray from "../work-items/FileTray.svelte";
-  import TicketComposer from "../work-items/TicketComposer.svelte";
   import TicketCard from "../work-items/TicketCard.svelte";
   import {
     composer,
@@ -68,13 +71,36 @@
     parseAz,
   } from "../work-items/azCommand";
   import { typeColor, typeIcon } from "../work-items/ado-icons";
+  import ItemPeek from "../work-items/ItemPeek.svelte";
+  import {
+    clearPeek,
+    peek,
+    peekedSource,
+    peekLater,
+    workItemNumber,
+  } from "../work-items/peek.svelte";
+  import { parseTicketLine, ticketArgs } from "../work-items/ticketCommand";
   import { tallyCalls, tallyLabel } from "./toolCalls";
   import { recordFrame, type TurnSent, type TurnTrace } from "./trace";
   import TracePanel from "./TracePanel.svelte";
   import { isGlobalAdmin } from "../access/session.svelte";
   import Walkthrough from "../code/Walkthrough.svelte";
-  import { parseCode, scopeOptions, withScopeWord } from "../code/codeCommand";
-  import { codeScope, ensureRepos, scopeNote } from "../code/codeScope.svelte";
+  import {
+    mentionBeingTyped,
+    mentionOptions,
+    mentionWord,
+    parseMentionWord,
+    takeTypedMentions,
+    withMentions,
+    withoutMentionBeingTyped,
+  } from "./mentions";
+  import {
+    ensureMentionables,
+    mentionables,
+    mentionsNote,
+  } from "./mentions.svelte";
+  import type { IconName } from "../tui/icons";
+  import type { ChatModeName, MentionKind } from "@tachy/contract";
   import type { ShownStep, WalkStep } from "../code/walkthrough";
 
   /** Tools whose use makes a turn's answer one about code. */
@@ -82,6 +108,20 @@
   const WALKTHROUGH_COMMAND = { name: "walkthrough", args: "" };
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
+
+  const MODE_TINTS: Record<ChatModeName, SkyTint> = {
+    analyze: "amber",
+    code: "green",
+  };
+  const MODE_ICONS: Record<ChatModeName, IconName> = {
+    analyze: "knowledge",
+    code: "code",
+  };
+  const MENTION_ICONS: Record<MentionKind, IconName> = {
+    repo: "repo",
+    bucket: "bucket",
+    project: "project",
+  };
 
   /** MCP results arrive as content blocks; the payload is JSON in the first text block. */
   function toolPayload(result: unknown): Record<string, unknown> | undefined {
@@ -106,6 +146,7 @@
   let transcriptEl = $state<HTMLDivElement>();
   let composerEl = $state<HTMLTextAreaElement>();
   let dockEl = $state<HTMLDivElement>();
+  let edgeEl = $state<HTMLElement>();
   let pinned = true;
 
   // Where the composer's text is scrolled to, and how much of its width a
@@ -128,13 +169,23 @@
 
   const empty = $derived(chat.entries.length === 0);
 
-  // A pre effect, so the dock is read where it still sits: centred before the
-  // first message, at the foot after it. Its landing shows a nav that a clear
-  // brought back veiled.
+  /** Starts slow and lands at full speed, with no wind-back before it goes. */
+  const DOCK_EASE = "power4.in";
+  /** Longer than reflow's default: the ease covers little ground in its first half. */
+  const DOCK_TRAVEL_S = 0.45;
+
+  // A pre effect, so the dock, the nav and the artifact tab are read where they
+  // still sit, and one Flip moves all three. Its landing shows a nav that a
+  // clear brought back veiled.
   $effect.pre(() => {
     void empty;
     const play = untrack(() =>
-      reflow([dockEl], { absolute: false, onComplete: unveilTopbar }),
+      reflow([topbar.el, dockEl, edgeEl], {
+        absolute: false,
+        duration: DOCK_TRAVEL_S,
+        ease: DOCK_EASE,
+        onComplete: unveilTopbar,
+      }),
     );
     void tick().then(play);
   });
@@ -147,8 +198,6 @@
     pushScope([
       {
         key: "ctrl+k",
-        label: "",
-        hidden: true,
         inFields: true,
         run: () => composerEl?.focus(),
       },
@@ -207,25 +256,27 @@
     azCommand ? parseAz(chat.input, az.projects ?? []) : null,
   );
 
-  const codeCtx = $derived(
-    commands?.builtins.some((b) => b.name === "code")
-      ? parseCode(chat.input)
-      : null,
-  );
+  const ticketCtx = $derived(commands ? parseTicketLine(chat.input) : null);
+  const mentionCtx = $derived(mentionBeingTyped(chat.input));
 
   const offeredModels = $derived(agentPrefs.models?.models ?? null);
   const listedModels = $derived(offeredModels ?? []);
   const modelCtx = $derived(parseModel(chat.input, offeredModels));
 
-  /** `/name` picks a command; `/artifact <query>`, `/az …`, `/code @…` and `/model …` pick arguments. */
+  /**
+   * `/name` picks a command or mode; `/artifact <query>`, `/az …`, a ticket
+   * line and `/model …` pick arguments; an `@` word anywhere picks a source.
+   */
   const cmdCtx = $derived.by(() => {
     const name = chat.input.match(/^\/([a-z0-9-]*)$/);
     if (name) return { mode: "command" as const, query: name[1] };
     const arg = chat.input.match(/^\/artifact[ \t]+([^\n]*)$/);
     if (arg) return { mode: "artifact" as const, query: arg[1] };
     if (azCtx) return { mode: "options" as const, query: azCtx.query };
-    if (codeCtx) return { mode: "options" as const, query: codeCtx.query };
+    if (ticketCtx) return { mode: "options" as const, query: ticketCtx.id };
     if (modelCtx) return { mode: "options" as const, query: modelCtx.query };
+    if (mentionCtx)
+      return { mode: "options" as const, query: mentionCtx.query };
     return null;
   });
 
@@ -282,46 +333,65 @@
   );
 
   $effect(() => {
-    if (codeCtx) ensureRepos();
+    if (mentionCtx) ensureMentionables();
   });
 
-  /** Picked to search every linked repo: the menu closes and the line stays. */
-  const EVERY_REPO = "";
-
-  const codeMenu = $derived.by(
+  const mentionMenu = $derived.by(
     (): { options: MenuOption[]; crumb: MenuCrumb } | null => {
-      if (!codeCtx) return null;
-      const scopes = scopeOptions(codeScope.repos ?? [], codeCtx.query).map(
-        (o): MenuOption => ({
-          value: o.word,
-          label: o.label,
-          hint: o.hint,
-          desc: o.desc,
-          icon: o.kind === "repo" ? "repo" : "project",
-        }),
-      );
-      const everywhere: MenuOption = {
-        value: EVERY_REPO,
-        label: "all linked repos",
-        desc: "or type @ at any point to narrow",
-        icon: "search",
-      };
+      if (!mentionCtx) return null;
+      const offered = mentionables.list
+        ? mentionOptions(mentionables.list, mentionCtx)
+        : [];
       return {
         crumb: {
-          cmd: "/code",
-          param: "scope",
-          desc: "repos and projects to answer from",
-          empty: scopeNote(),
+          cmd: "@",
+          param: mentionCtx.kind ?? "source",
+          desc: "attach a repo, bucket or project to the conversation",
+          empty: mentionsNote(),
         },
-        options:
-          codeCtx.fresh && scopes.length ? [everywhere, ...scopes] : scopes,
+        options: offered.map((o) => ({
+          value: mentionWord(o.mention),
+          label: o.mention.key,
+          hint: o.mention.kind,
+          desc: o.hint,
+          icon: MENTION_ICONS[o.mention.kind],
+        })),
       };
     },
   );
 
+  const ticketMenu = $derived.by(
+    (): { options: MenuOption[]; crumb: MenuCrumb } | null =>
+      ticketCtx
+        ? {
+            crumb: {
+              cmd: `/${ticketCtx.name}`,
+              param: "ticket",
+              desc: "a Freshdesk ticket number",
+            },
+            options: [],
+          }
+        : null,
+  );
+
   $effect(() => {
-    if (azCtx && azCtx.stage !== "sub") ensureProjects();
+    if (azCtx?.stage === "project" || azCtx?.stage === "type") ensureProjects();
     if (azCtx?.stage === "type") ensureTypes(azCtx.project.id);
+  });
+
+  // Two strings rather than one object, so typing a flag after the id does
+  // not restart the lookup.
+  const peekSourceType = $derived.by(() => {
+    if (azCtx?.stage === "id") return "azure-devops";
+    return ticketCtx ? "freshdesk" : null;
+  });
+  const peekId = $derived.by(() => {
+    if (azCtx?.stage === "id") return workItemNumber(azCtx.query);
+    return ticketCtx?.id || null;
+  });
+  $effect(() => {
+    if (peekSourceType && peekId) return peekLater(peekSourceType, peekId);
+    clearPeek();
   });
 
   function projectsEmpty() {
@@ -349,6 +419,15 @@
               hint: s.args,
               desc: s.description,
             })),
+        };
+      if (azCtx.stage === "id")
+        return {
+          crumb: {
+            cmd: "/az explain",
+            param: "id",
+            desc: "an Azure DevOps work item number",
+          },
+          options: [],
         };
       if (azCtx.stage === "project")
         return {
@@ -386,7 +465,15 @@
       };
     },
   );
-  const optionsMenu = $derived(azMenu ?? codeMenu ?? modelMenu);
+  function peekPreview() {
+    if (azCtx?.stage === "id") return explainPeek;
+    if (ticketCtx) return ticketPeek;
+    return undefined;
+  }
+
+  const optionsMenu = $derived(
+    azMenu ?? ticketMenu ?? modelMenu ?? mentionMenu,
+  );
   const menuOpen = $derived(
     cmdCtx !== null &&
       !cmdDismissed &&
@@ -413,6 +500,12 @@
     void chat.input;
     cmdDismissed = false;
   });
+  $effect(() => {
+    if (chat.debug) return tintSky("red");
+  });
+  $effect(() => {
+    if (chat.mode) return tintSky(MODE_TINTS[chat.mode]);
+  });
 
   function pickCommand(pick: CommandPick) {
     if (pick.kind === "builtin" && pick.builtin.name === STOP_COMMAND.name) {
@@ -425,9 +518,10 @@
       chat.input = "";
       chat.debug = !chat.debug;
     } else if (pick.kind === "builtin") chat.input = `/${pick.builtin.name} `;
+    else if (pick.kind === "mode") pickMode(pick.mode.name);
     else if (pick.kind === "option" && azCtx) pickAz(pick.value);
     else if (pick.kind === "option" && modelCtx) pickModel(pick.value);
-    else if (pick.kind === "option") pickCode(pick.value);
+    else if (pick.kind === "option") pickMention(pick.value);
     else {
       chat.artifact = { id: pick.artifact.id, title: pick.artifact.title };
       chat.input = "";
@@ -453,9 +547,31 @@
     else setModel(pickOf(model));
   }
 
-  function pickCode(word: string) {
-    if (word === EVERY_REPO) cmdDismissed = true;
-    else chat.input = withScopeWord(chat.input, word);
+  function toggleMode(name: ChatModeName) {
+    chat.input = "";
+    chat.mode = chat.mode === name ? undefined : name;
+  }
+
+  /** Entering analyze mode asks for a ticket first; it may be left empty. */
+  function pickMode(name: ChatModeName) {
+    if (name === "analyze" && chat.mode !== name) chat.input = "/analyze ";
+    else toggleMode(name);
+  }
+
+  function pickMention(word: string) {
+    const mention = parseMentionWord(word);
+    if (!mention) return;
+    chat.mentions = withMentions(chat.mentions, [mention]);
+    chat.input = withoutMentionBeingTyped(chat.input);
+  }
+
+  /** `/analyze …` or `/code …` typed whole: the mode, and what follows it. */
+  function parseModeLine(
+    message: string,
+  ): { name: ChatModeName; rest: string } | null {
+    const match = message.match(/^\/([a-z]+)(?:\s+([\s\S]*))?$/);
+    const mode = commands?.modes.find((m) => m.name === match?.[1]);
+    return mode ? { name: mode.name, rest: match?.[2]?.trim() ?? "" } : null;
   }
 
   function pickAz(value: string) {
@@ -467,10 +583,10 @@
     else if (ctx.stage === "project") {
       const project = az.projects?.find((x) => x.id === value);
       if (project) chat.input = `/az new ${project.name} `;
-    } else {
+    } else if (ctx.stage === "type") {
       const type = typesOf(ctx.project.id).find((x) => x.name === value);
       chat.input = "";
-      openComposer(ctx.project, type);
+      openComposer(ctx.project, type, { from: "chat" });
     }
   }
 
@@ -479,21 +595,16 @@
     chat.input = "";
     const rest = message.replace(/^\/az[ \t]+new[ \t]*/, "");
     const hit = rest ? matchProject(`${rest} `, await ensureProjects()) : null;
-    if (!hit) return openComposer();
+    if (!hit) return openComposer(null, null, { from: "chat" });
     const types = await ensureTypes(hit.project.id);
     const type = types.find(
       (t) => t.name.toLowerCase() === hit.rest.toLowerCase(),
     );
-    openComposer(hit.project, type);
-  }
-
-  function ticketMade(ticket: CreatedTicket, type: WorkItemTypeOption) {
-    addEntry({ kind: "ticket", ticket, icon: type.icon, color: type.color });
-    snap(true);
+    openComposer(hit.project, type, { from: "chat" });
   }
 
   /** A draft set aside with the X: the chat says so and offers it back. */
-  const draftWaiting = $derived(!composer.open && hasDraft());
+  const draftWaiting = $derived(hasDraft());
 
   function composerKeydown(e: KeyboardEvent) {
     if (
@@ -564,9 +675,40 @@
     // puts one in the composer - would go out as plain text without this.
     if (message.startsWith("/") && !commands)
       commands = await getCommands().catch(() => null);
-    const command = parseCommand(message);
+    const typed = await takeMentions(message);
+    // Read before the input clears, which clears the lookup it comes from.
+    const ticketArgsTyped = ticketLineArgs(typed);
     chat.input = "";
-    return startTurn(message, command);
+    if (!typed) return;
+    const modeLine = parseModeLine(typed);
+    if (modeLine && !modeLine.rest) return toggleMode(modeLine.name);
+    if (modeLine) {
+      chat.mode = modeLine.name;
+      return startTurn(typed, undefined, ticketArgsTyped);
+    }
+    const command = parseCommand(typed);
+    return startTurn(
+      typed,
+      command && ticketArgsTyped
+        ? { ...command, args: ticketArgsTyped }
+        : command,
+    );
+  }
+
+  /** Attaches the `@` words that name something; the line without them, or "" for none left. */
+  async function takeMentions(message: string): Promise<string> {
+    if (!message.includes("@")) return message;
+    const list = await ensureMentionables();
+    if (!list) return message;
+    const { mentions, rest } = takeTypedMentions(message, list);
+    chat.mentions = withMentions(chat.mentions, mentions);
+    return rest;
+  }
+
+  /** A ticket line's arguments with the source the lookup found, if it found one. */
+  function ticketLineArgs(message: string): string | undefined {
+    const line = parseTicketLine(message);
+    return line?.id ? ticketArgs(line, peekedSource(line.id)) : undefined;
   }
 
   /** The newest answer written from code, the one a walkthrough is made of. */
@@ -577,7 +719,13 @@
   async function startTurn(
     message: string,
     command?: { name: string; args: string },
+    modeArgs = "",
   ) {
+    const leftMode =
+      chat.modeOfLastTurn && chat.modeOfLastTurn !== chat.mode
+        ? chat.modeOfLastTurn
+        : undefined;
+    chat.modeOfLastTurn = chat.mode;
     let readCode = false;
     let trace: TurnTrace | undefined;
     addEntry({ kind: "user", text: message });
@@ -586,7 +734,7 @@
     chat.busy = true;
     chat.turnId = undefined;
     stopRequested = false;
-    clearArmed = false;
+    forgetCleared();
     snap(true);
     // Aborted when the view goes away, so a turn left running does not hold its
     // response open behind a component nobody is looking at any more.
@@ -600,6 +748,9 @@
           uploadPaths: uploadPaths.length ? uploadPaths : undefined,
           artifactId: chat.artifact?.id,
           command,
+          mode: chat.mode ? { name: chat.mode, args: modeArgs } : undefined,
+          leftMode,
+          mentions: chat.mentions.length ? chat.mentions : undefined,
           model: chat.model?.id,
           effort: chat.model?.effort,
           debug: chat.debug || undefined,
@@ -842,38 +993,23 @@
     turnAbort?.abort();
     unveilTopbar();
   });
-  let clearArmed = $state(false);
-  let disarmTimer: ReturnType<typeof setTimeout> | undefined;
-
-  function armClear() {
-    clearArmed = true;
-    clearTimeout(disarmTimer);
-    disarmTimer = setTimeout(() => (clearArmed = false), 4000);
-  }
-
-  /**
-   * The transcript goes at once. The nav takes its row back veiled, so the
-   * window settles while the dock travels to the centre, and the dock's
-   * landing shows it.
-   */
-  function confirmClear() {
-    clearTimeout(disarmTimer);
-    clearArmed = false;
-    veilTopbar();
-    chat.entries = [];
-    chat.sessionId = undefined;
-    chat.turnId = undefined;
-    chat.model = undefined;
-    chat.debug = false;
-  }
-
   function onClear() {
-    if (chat.busy || !chat.entries.length) return;
-    if (clearArmed) {
-      confirmClear();
-      composerEl?.focus();
-    } else armClear();
+    clearConversation();
+    composerEl?.focus();
   }
+
+  // Bound only while the composer is empty, so text in it keeps the field's
+  // own undo.
+  $effect(() => {
+    if (!canRestore() || chat.input) return;
+    return pushScope([
+      {
+        key: "ctrl+z",
+        inFields: true,
+        run: restoreConversation,
+      },
+    ]);
+  });
 
   // Every mark leaves once it has nothing to act on, and focus would go with
   // it.
@@ -888,294 +1024,338 @@
   }
 </script>
 
-{#if composer.open}
-  <div class="chat">
-    <TicketComposer oncreated={ticketMade} />
-  </div>
-{:else}
-  <div
-    class="chat bare"
-    class:empty
-    role="region"
-    aria-label="Chat"
-    ondragenter={(e) => {
-      e.preventDefault();
-      dragDepth++;
-    }}
-    ondragover={(e) => e.preventDefault()}
-    ondragleave={() => (dragDepth = Math.max(0, dragDepth - 1))}
-    ondrop={onDrop}
-  >
-    {#if dragDepth > 0}
-      <div class="dropzone">drop to attach</div>
-    {/if}
-    <div class="transcript-wrap">
-      <div
-        class="transcript"
-        id="chat-transcript"
-        bind:this={transcriptEl}
-        onscroll={onScroll}
-      >
-        {#each chat.entries as entry, i (entry.key)}
-          {#if entry.kind === "user"}
-            <div class="turn user">
-              <span class="who"
-                >you<span class="mk" aria-hidden="true">{G.marker}</span></span
-              >
-              <div class="body">{entry.text}</div>
-            </div>
-          {:else if entry.kind === "assistant"}
-            <div class="turn">
-              <span class="who"
-                ><span class="mk" aria-hidden="true">{G.marker}</span
-                >tachy</span
-              >
-              <div
-                class="body md"
-                class:streaming={chat.busy && i === chat.entries.length - 1}
-              >
-                {@html renderMarkdown(entry.text)}
-              </div>
-              {#if entry.key === walkableKey && !chat.busy}
-                <Button
-                  size="sm"
-                  square
-                  icon="flows"
-                  title="Walk me through it"
-                  onclick={() =>
-                    startTurn("walk me through it", WALKTHROUGH_COMMAND)}
-                />
-              {/if}
-            </div>
-          {:else if entry.kind === "tools"}
-            <div class="tool">
-              <Icon name="tool" size="1em" weight={7} />
-              <span class="calls">
-                {#each tallyCalls(entry.calls) as tally, n (n)}
-                  {#if n > 0}<span class="sep" aria-hidden="true">·</span>{/if}
-                  <span>{tallyLabel(tally)}</span>
-                {/each}
-              </span>
-            </div>
-          {:else if entry.kind === "compact"}
-            <CompactPanel title={entry.title} stats={entry.stats} />
-          {:else if entry.kind === "output"}
-            <OutputCard file={entry.file} />
-          {:else if entry.kind === "files"}
-            <FileTray files={entry.files} />
-          {:else if entry.kind === "walkthrough"}
-            <Walkthrough
-              title={entry.title}
-              steps={entry.steps}
-              shown={entry.shown}
-            />
-          {:else if entry.kind === "ticket"}
-            <TicketCard
-              ticket={entry.ticket}
-              icon={entry.icon}
-              color={entry.color}
-            />
-          {:else if entry.kind === "error"}
-            <div class="turn">
-              <span class="who err">{G.marker}error</span>
-              <div class="body err">{entry.text}</div>
-            </div>
-          {:else if entry.kind === "trace"}
-            <TracePanel trace={entry.trace} />
-          {:else if entry.kind === "stopped"}
-            <div class="tool">
-              <Icon name="stop" size="1em" weight={7} />
-              <span>stopped</span>
-            </div>
-          {:else if entry.kind === "running"}
-            <div class="turn">
-              <span class="who err">{G.marker}busy</span>
-              <div class="body err">
-                {#if entry.stopped}stopped. send your message again.{:else}{entry.text}
-                  <Button size="sm" onclick={() => stopRunning(entry)}
-                    >stop it</Button
-                  >{/if}
-              </div>
-            </div>
-          {:else if entry.kind === "approval"}
-            <Approval
-              {entry}
-              ondecide={(ok, reason) => decide(entry, ok, reason)}
-            />
-          {/if}
-        {/each}
-        {#if chat.busy && chat.entries[chat.entries.length - 1]?.kind !== "assistant"}
+{#snippet explainPeek()}
+  <ItemPeek
+    state={peek.current}
+    sourceLabel="Azure DevOps projects"
+    idle={azCtx?.query
+      ? "a work item number is digits, like 4521"
+      : "type the number, then enter"}
+  />
+{/snippet}
+
+{#snippet ticketPeek()}
+  <ItemPeek
+    state={peek.current}
+    sourceLabel="Freshdesk groups"
+    idle={ticketCtx?.name === "analyze"
+      ? "type the ticket number, or enter to switch analyze mode on"
+      : "type the ticket number, then enter"}
+  />
+{/snippet}
+
+<div
+  class="chat bare"
+  class:empty
+  role="region"
+  aria-label="Chat"
+  ondragenter={(e) => {
+    e.preventDefault();
+    dragDepth++;
+  }}
+  ondragover={(e) => e.preventDefault()}
+  ondragleave={() => (dragDepth = Math.max(0, dragDepth - 1))}
+  ondrop={onDrop}
+>
+  {#if dragDepth > 0}
+    <div class="dropzone">drop to attach</div>
+  {/if}
+  <div class="transcript-wrap">
+    <div
+      class="transcript"
+      id="chat-transcript"
+      bind:this={transcriptEl}
+      onscroll={onScroll}
+    >
+      {#each chat.entries as entry, i (entry.key)}
+        {#if entry.kind === "user"}
+          <div class="turn user">
+            <span class="who"
+              >you<span class="mk" aria-hidden="true">{G.marker}</span></span
+            >
+            <div class="body">{entry.text}</div>
+          </div>
+        {:else if entry.kind === "assistant"}
           <div class="turn">
-            <span class="who">{G.marker}tachy</span>
-            <div class="body waiting">
-              {#if chat.queuePosition}<span class="muted"
-                  >waiting for a free chat slot · #{chat.queuePosition}
-                </span>{/if}<Caret />
+            <span class="who"
+              ><span class="mk" aria-hidden="true">{G.marker}</span>tachy</span
+            >
+            <div
+              class="body md"
+              class:streaming={chat.busy && i === chat.entries.length - 1}
+            >
+              {@html renderMarkdown(entry.text)}
+            </div>
+            {#if entry.key === walkableKey && !chat.busy}
+              <Button
+                size="sm"
+                square
+                icon="flows"
+                title="Walk me through it"
+                onclick={() =>
+                  startTurn("walk me through it", WALKTHROUGH_COMMAND)}
+              />
+            {/if}
+          </div>
+        {:else if entry.kind === "tools"}
+          <div class="tool">
+            <Icon name="tool" size="1em" weight={7} />
+            <span class="calls">
+              {#each tallyCalls(entry.calls) as tally, n (n)}
+                {#if n > 0}<span class="sep" aria-hidden="true">·</span>{/if}
+                <span>{tallyLabel(tally)}</span>
+              {/each}
+            </span>
+          </div>
+        {:else if entry.kind === "compact"}
+          <CompactPanel title={entry.title} stats={entry.stats} />
+        {:else if entry.kind === "output"}
+          <OutputCard file={entry.file} />
+        {:else if entry.kind === "files"}
+          <FileTray files={entry.files} />
+        {:else if entry.kind === "walkthrough"}
+          <Walkthrough
+            title={entry.title}
+            steps={entry.steps}
+            shown={entry.shown}
+          />
+        {:else if entry.kind === "ticket"}
+          <TicketCard
+            ticket={entry.ticket}
+            icon={entry.icon}
+            color={entry.color}
+          />
+        {:else if entry.kind === "error"}
+          <div class="turn">
+            <span class="who err">{G.marker}error</span>
+            <div class="body err"><PointerText text={entry.text} /></div>
+          </div>
+        {:else if entry.kind === "trace"}
+          <TracePanel trace={entry.trace} />
+        {:else if entry.kind === "stopped"}
+          <div class="tool">
+            <Icon name="stop" size="1em" weight={7} />
+            <span>stopped</span>
+          </div>
+        {:else if entry.kind === "running"}
+          <div class="turn">
+            <span class="who err">{G.marker}busy</span>
+            <div class="body err">
+              {#if entry.stopped}stopped. send your message again.{:else}{entry.text}
+                <Button size="sm" onclick={() => stopRunning(entry)}
+                  >stop it</Button
+                >{/if}
             </div>
           </div>
-        {/if}
-        {#if empty}
-          <Launcher />
-        {/if}
-      </div>
-      {#if !empty}
-        <div class="bar-col">
-          <Scrollbar target={transcriptEl} controls="chat-transcript" />
-        </div>
-      {/if}
-      <ArtifactPanel />
-    </div>
-
-    <div class="dock" bind:this={dockEl}>
-      {#if chat.uploads.length || chat.artifact || chat.model || chat.debug || draftWaiting}
-        <div class="attachments">
-          {#if chat.model}
-            <span class="attach model-chip">
-              <Icon name="ai" size="1em" />
-              {chat.model.label}{chat.model.effort
-                ? ` · ${chat.model.effort}`
-                : ""}
-              <button
-                class="chip-x"
-                aria-label="Back to your settings model"
-                use:tip={"Back to your settings model"}
-                onclick={() => (chat.model = undefined)}
-                ><Icon name="close" size="1em" weight={7} /></button
-              >
-            </span>
-          {/if}
-          {#if chat.debug}
-            <span class="attach model-chip">
-              <Icon name="bug" size="1em" />
-              debug
-              <button
-                class="chip-x"
-                aria-label="Switch debug off"
-                use:tip={"Switch debug off"}
-                onclick={() => (chat.debug = false)}
-                ><Icon name="close" size="1em" weight={7} /></button
-              >
-            </span>
-          {/if}
-          {#if draftWaiting}
-            <button class="attach draft-chip" onclick={() => openComposer()}>
-              <Icon name="review" size="1em" />
-              draft {composer.type?.name ?? "work item"}{composer.title.trim()
-                ? `: ${composer.title.trim()}`
-                : ""}
-            </button>
-          {/if}
-          {#if chat.artifact}
-            <span class="attach artifact-chip">
-              <ArtifactMark size="1em" />
-              {chat.artifact.title}
-              <button
-                class="chip-x"
-                aria-label="Detach artifact"
-                use:tip={"Detach artifact"}
-                onclick={() => (chat.artifact = undefined)}
-                ><Icon name="close" size="1em" weight={7} /></button
-              >
-            </span>
-          {/if}
-          {#each chat.uploads as upload, i (upload.path)}
-            {#if i > 0}<span class="sep" aria-hidden="true">~~</span>{/if}
-            <span class="attach">
-              <Icon name={upload.image ? "image" : "file"} size="1.1em" />
-              {upload.filename}
-              <button
-                class="chip-x"
-                aria-label="Remove attachment"
-                use:tip={"Remove attachment"}
-                onclick={() => chat.uploads.splice(i, 1)}
-                ><Icon name="close" size="1em" weight={7} /></button
-              >
-            </span>
-          {/each}
-        </div>
-      {/if}
-
-      <div class="composer">
-        {#if menuOpen && commands}
-          <CommandMenu
-            bind:this={cmdMenu}
-            mode={cmdCtx?.mode ?? "command"}
-            query={cmdCtx?.query ?? ""}
-            builtins={commands.builtins}
-            running={chat.busy}
-            debuggable={isGlobalAdmin()}
-            artifacts={commands.artifacts}
-            options={optionsMenu?.options}
-            crumb={optionsMenu?.crumb}
-            onpick={pickCommand}
+        {:else if entry.kind === "approval"}
+          <Approval
+            {entry}
+            ondecide={(ok, reason) => decide(entry, ok, reason)}
           />
         {/if}
-        <label class="upload" use:tip={"Attach a document"}>
-          <Icon name="attach" label="Attach a document" />
-          <input type="file" accept={CHAT_UPLOAD_ACCEPT} onchange={onFile} />
-        </label>
-        <span class="field">
-          <textarea
-            bind:this={composerEl}
-            aria-label="Message the assistant, / for commands"
-            bind:value={chat.input}
-            rows="2"
-            onscroll={restSync}
-            onkeydown={composerKeydown}></textarea>
-          <span
-            class="rest"
-            aria-hidden="true"
-            style:padding-right="calc(var(--pad-3) + {rest.gutter}px)"
-            ><span class="rest-line" style:translate="0 {-rest.scroll}px"
-              ><span class="typed">{chat.input}</span><span class="mark"
-                ><Caret side={caretSide(chat.input, chat.input.length)} /></span
-              ></span
-            ></span
-          >
-        </span>
-        <div class="send-col">
-          <span class="slot">
-            {#if chat.entries.length}
-              <Button
-                variant={clearArmed ? "danger" : "ghost"}
-                icon={clearArmed ? "confirm" : "clear"}
-                iconSize="1.25em"
-                morph
-                disabled={chat.busy}
-                aria-label="Clear the conversation"
-                title={clearArmed
-                  ? "click again to clear"
-                  : "Clear the conversation"}
-                onclick={onClear}
-              />
-            {/if}
-          </span>
-          <span class="slot">
-            {#if chat.busy}
-              <Button
-                variant="ghost"
-                icon="stop"
-                iconSize="1.25em"
-                aria-label="Stop"
-                title="Stop (/stop)"
-                onclick={stopClick}
-              />
-            {:else if chat.input.trim()}
-              <Button
-                variant="ghost"
-                icon="send"
-                iconSize="1.25em"
-                aria-label="Send"
-                title="Send"
-                onclick={sendClick}
-              />
-            {/if}
-          </span>
+      {/each}
+      {#if chat.busy && chat.entries[chat.entries.length - 1]?.kind !== "assistant"}
+        <div class="turn">
+          <span class="who">{G.marker}tachy</span>
+          <div class="body waiting">
+            {#if chat.queuePosition}<span class="muted"
+                >waiting for a free chat slot · #{chat.queuePosition}
+              </span>{/if}<Caret />
+          </div>
         </div>
+      {/if}
+      {#if empty}
+        <Launcher />
+      {/if}
+    </div>
+    {#if !empty}
+      <div class="bar-col">
+        <Scrollbar target={transcriptEl} controls="chat-transcript" />
+      </div>
+    {/if}
+    <ArtifactPanel bind:edge={edgeEl} />
+  </div>
+
+  <div class="dock" bind:this={dockEl}>
+    {#if chat.uploads.length || chat.artifact || chat.model || chat.debug || chat.mode || chat.mentions.length || draftWaiting}
+      <div class="attachments">
+        {#if chat.mode}
+          <span class="attach model-chip">
+            <span style:color="var(--star-ink-{MODE_TINTS[chat.mode]})">
+              <Icon name={MODE_ICONS[chat.mode]} size="1em" />
+            </span>
+            {chat.mode} mode
+            <button
+              class="chip-x"
+              aria-label="Leave {chat.mode} mode"
+              use:tip={`Leave ${chat.mode} mode`}
+              onclick={() => (chat.mode = undefined)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/if}
+        {#each chat.mentions as mention, i (mentionWord(mention))}
+          <span class="attach model-chip">
+            <Icon name={MENTION_ICONS[mention.kind]} size="1em" />
+            {mention.key}
+            <button
+              class="chip-x"
+              aria-label="Detach {mention.kind} {mention.key}"
+              use:tip={`Detach ${mention.kind} ${mention.key}`}
+              onclick={() => chat.mentions.splice(i, 1)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/each}
+        {#if chat.model}
+          <span class="attach model-chip">
+            <Icon name="ai" size="1em" />
+            {chat.model.label}{chat.model.effort
+              ? ` · ${chat.model.effort}`
+              : ""}
+            <button
+              class="chip-x"
+              aria-label="Back to your settings model"
+              use:tip={"Back to your settings model"}
+              onclick={() => (chat.model = undefined)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/if}
+        {#if chat.debug}
+          <span class="attach model-chip">
+            <Icon name="bug" size="1em" />
+            debug
+            <button
+              class="chip-x"
+              aria-label="Switch debug off"
+              use:tip={"Switch debug off"}
+              onclick={() => (chat.debug = false)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/if}
+        {#if draftWaiting}
+          <button
+            class="attach draft-chip"
+            onclick={() => openComposer(null, null, { from: "chat" })}
+          >
+            <Icon name="review" size="1em" />
+            draft {composer.type?.name ?? "work item"}{composer.title.trim()
+              ? `: ${composer.title.trim()}`
+              : ""}
+          </button>
+        {/if}
+        {#if chat.artifact}
+          <span class="attach artifact-chip">
+            <ArtifactMark size="1em" />
+            {chat.artifact.title}
+            <button
+              class="chip-x"
+              aria-label="Detach artifact"
+              use:tip={"Detach artifact"}
+              onclick={() => (chat.artifact = undefined)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/if}
+        {#each chat.uploads as upload, i (upload.path)}
+          {#if i > 0}<span class="sep" aria-hidden="true">~~</span>{/if}
+          <span class="attach">
+            <Icon name={upload.image ? "image" : "file"} size="1.1em" />
+            {upload.filename}
+            <button
+              class="chip-x"
+              aria-label="Remove attachment"
+              use:tip={"Remove attachment"}
+              onclick={() => chat.uploads.splice(i, 1)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/each}
+      </div>
+    {/if}
+
+    <div class="composer">
+      {#if menuOpen && commands}
+        <CommandMenu
+          bind:this={cmdMenu}
+          mode={cmdCtx?.mode ?? "command"}
+          query={cmdCtx?.query ?? ""}
+          modes={commands.modes}
+          activeMode={chat.mode}
+          builtins={commands.builtins}
+          running={chat.busy}
+          debuggable={isGlobalAdmin()}
+          artifacts={commands.artifacts}
+          options={optionsMenu?.options}
+          crumb={optionsMenu?.crumb}
+          preview={peekPreview()}
+          onpick={pickCommand}
+        />
+      {/if}
+      <label class="upload" use:tip={"Attach a document"}>
+        <Icon name="attach" label="Attach a document" />
+        <input type="file" accept={CHAT_UPLOAD_ACCEPT} onchange={onFile} />
+      </label>
+      <span class="field">
+        <textarea
+          bind:this={composerEl}
+          aria-label="Message the assistant, / for commands"
+          bind:value={chat.input}
+          rows="2"
+          onscroll={restSync}
+          onkeydown={composerKeydown}></textarea>
+        <span
+          class="rest"
+          aria-hidden="true"
+          style:padding-right="calc(var(--pad-3) + {rest.gutter}px)"
+          ><span class="rest-line" style:translate="0 {-rest.scroll}px"
+            ><span class="typed">{chat.input}</span><span class="mark"
+              ><Caret side={caretSide(chat.input, chat.input.length)} /></span
+            ></span
+          ></span
+        >
+      </span>
+      <div class="send-col">
+        <span class="slot">
+          {#if chat.entries.length}
+            <Button
+              variant="ghost"
+              icon="clear"
+              iconSize="1.25em"
+              disabled={chat.busy}
+              aria-label="Clear the conversation"
+              title="Clear the conversation"
+              onclick={onClear}
+            />
+          {/if}
+        </span>
+        <span class="slot">
+          {#if chat.busy}
+            <Button
+              variant="ghost"
+              icon="stop"
+              iconSize="1.25em"
+              aria-label="Stop"
+              title="Stop (/stop)"
+              onclick={stopClick}
+            />
+          {:else if chat.input.trim()}
+            <Button
+              variant="ghost"
+              icon="send"
+              iconSize="1.25em"
+              aria-label="Send"
+              title="Send"
+              onclick={sendClick}
+            />
+          {/if}
+        </span>
       </div>
     </div>
   </div>
-{/if}
+</div>
 
 <style>
   .chat {
