@@ -3,7 +3,7 @@
   "type": "module",
   "main": "src/index.ts",
   "dependencies": {
-    "@hono/node-server": "^2.1.4",
+    "@hono/node-server": "^2.1.5",
     "@hono/oidc-auth": "^1.10.0",
     "@hono/zod-validator": "^0.9.1",
     "@tachy/agent": "*",
@@ -12,6 +12,6 @@
     "@tachy/source-github": "*",
     "@tachy/source-azure-devops": "*",
     "hono": "^4.13.13",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   }
 }
