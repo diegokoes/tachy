@@ -8,11 +8,16 @@ import type { SubnavItem } from "../shell/subnav.svelte";
 import { t, showCustomer } from "../terms";
 import type { IconName } from "../tui/icons";
 
-export const CONSOLE_PAGES: SubnavItem[] = [
+export type ConsolePage = SubnavItem & {
+  /** False for a page with no overview of its own: it opens on its first section. */
+  overview?: false;
+};
+
+export const CONSOLE_PAGES: ConsolePage[] = [
   { key: "integrations", label: "integrations", icon: "integrations" },
   { key: "structure", label: "structure", icon: "structure" },
   { key: "access", label: "users", icon: "users" },
-  { key: "flows", label: "flows", icon: "flows" },
+  { key: "flows", label: "flows", icon: "flows", overview: false },
   { key: "workers", label: "jobs", icon: "workers" },
   { key: "system", label: "system", icon: "system" },
 ];
@@ -107,7 +112,7 @@ export function consoleSections(): Record<string, ConsoleSection[]> {
         n: "users",
         add: "add user",
       },
-      { key: "teams", label: t("teams"), n: "teams" },
+      { key: "teams", label: `${t("team")} members`, n: "teams" },
       { key: "admins", label: "app admins" },
     ],
     workers: [

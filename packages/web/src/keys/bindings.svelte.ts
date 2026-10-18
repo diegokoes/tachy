@@ -9,6 +9,8 @@
  * rather than per destination.
  */
 
+import { VIM_KEYS, vimState } from "./vim.svelte";
+
 const KEY = "tachy-keys";
 
 type Overrides = {
@@ -44,7 +46,7 @@ export const defaultSubnavKey = (i: number) => `shift+${i + 1}`;
  */
 export const ACTIONS = {
   feedback: { label: "feedback", key: "ctrl+." },
-  artifacts: { label: "artifacts panel", key: "a" },
+  artifacts: { label: "artifacts panel, in chat", key: "a" },
   // Firefox keeps ctrl+shift+p for a private window and never hands it to the
   // page; a rebind is the way round it there.
   palette: { label: "command palette", key: "ctrl+shift+p" },
@@ -122,21 +124,32 @@ export function keyLabel(chord: string): string {
     .join(" then ");
 }
 
-/**
- * Fixed bindings a rebind would shadow. The scope stack resolves innermost
- * first, so a collision does not error: it takes the key from whichever view
- * owns it, and the settings page warns first.
- */
-export const RESERVED: Record<string, string> = {
-  "ctrl+k": "focus search / composer",
-  "ctrl+,": "settings",
-  "⏎": "open",
-  esc: "back / dismiss",
-  backspace: "back",
-  space: "select",
-  "↑": "move up",
-  "↓": "move down",
+/** A row of the read-only key lists in Settings › keybinds. */
+export type KeyRef = {
+  keys: string[];
+  what: string;
+  /** Typed in a text field, which no rebind reaches: listed, never a collision. */
+  field?: true;
 };
+
+/**
+ * Bindings no setting moves. The scope stack resolves innermost first, so a
+ * rebind onto one would take the key from whichever view owns it; the settings
+ * page names the collision first.
+ */
+export const FIXED_KEYS: KeyRef[] = [
+  { keys: ["ctrl+k"], what: "focus search / composer" },
+  { keys: ["ctrl+,"], what: "settings" },
+  { keys: ["↑", "↓", "j", "k"], what: "move the cursor in a list" },
+  { keys: ["⏎"], what: "open the highlighted row" },
+  { keys: ["esc", "backspace"], what: "back / close" },
+  { keys: ["n"], what: "new work item, on the board" },
+  { keys: ["f"], what: "follow / unfollow, on a work item" },
+  { keys: ["ctrl+z"], what: "bring back a cleared conversation" },
+  { keys: ["⏎", "shift+⏎"], what: "send / new line, in chat", field: true },
+  { keys: ["/"], what: "commands, in the chat composer", field: true },
+  { keys: ["@"], what: "mentions, in the chat composer", field: true },
+];
 
 /** What a proposed key would collide with, given the current nav items. */
 export function conflicts(
@@ -149,7 +162,9 @@ export function conflicts(
     | { kind: "action"; item: Action },
 ): string[] {
   const hits: string[] = [];
-  if (RESERVED[key]) hits.push(RESERVED[key]);
+  const fixed = vimState.enabled ? [...FIXED_KEYS, ...VIM_KEYS] : FIXED_KEYS;
+  for (const ref of fixed)
+    if (!ref.field && ref.keys.includes(key)) hits.push(ref.what);
   navItems.forEach((n, i) => {
     if (skip?.kind === "nav" && skip.item === n.key) return;
     if (navKey(n.key, i) === key) hits.push(`section “${n.label}”`);

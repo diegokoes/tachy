@@ -31,7 +31,6 @@
     return pushScope([
       {
         key: "esc",
-        label: "zoom out",
         run: () =>
           trail.length > 1
             ? zoom(trail[trail.length - 2].key)

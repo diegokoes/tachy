@@ -8,7 +8,12 @@
   import type { KnowledgeRow } from "../knowledge/rows";
   import type { ReferenceRow } from "../reference/rows";
   import type { ComponentRow, ProductRow } from "@tachy/contract";
-  import { navigate, segment, segments } from "../shell/router.svelte";
+  import {
+    navigate,
+    openSection,
+    segment,
+    segments,
+  } from "../shell/router.svelte";
   import { keep, recall } from "../shell/kept";
   import { setSubnav } from "../shell/subnav.svelte";
   import { pushScope } from "../keys/keys.svelte";
@@ -82,6 +87,13 @@
     if (kind === "wiki") navigate(movedWikiPath(segments()), { replace: true });
   });
 
+  /** The second segments the library has a page for; the rest show the list. */
+  const KINDS = new Set(["all", "entries", "docs", "new", "wiki"]);
+
+  $effect(() => {
+    if (!KINDS.has(kind)) navigate("/library", { replace: true });
+  });
+
   $effect(() => {
     const narrowed = param ? undefined : TYPE_OF_SEGMENT[kind];
     if (!narrowed) return;
@@ -89,8 +101,9 @@
     navigate("/library", { replace: true });
   });
 
-  // No tabs: the library is one list. The subnav is registered for its row,
-  // which the detail views and forms put their actions in.
+  // No tabs: the library is one list, and the wiki opens from its row. The
+  // subnav is registered for that row, which the detail views and forms put
+  // their actions in.
   $effect(() =>
     setSubnav({
       items: [],
@@ -98,7 +111,7 @@
       onpick: () => {},
       // Only over a list. A detail view claims the row for itself, and a
       // create screen has nothing to create from.
-      actions: listing && isCurator() ? newAction : undefined,
+      actions: listing ? listActions : undefined,
     }),
   );
   /** Which form the create screen shows - in the URL, so it deep-links. */
@@ -486,74 +499,27 @@
     return pushScope([
       {
         key: "ctrl+k",
-        label: "",
-        hidden: true,
         inFields: true,
         run: () => searchEl?.focus(),
       },
-      {
-        key: "j",
-        label: "",
-        hidden: true,
-        run: () => moveCursor(1),
-      },
-      {
-        key: "k",
-        label: "",
-        hidden: true,
-        run: () => moveCursor(-1),
-      },
-      {
-        key: "↓",
-        label: "",
-        hidden: true,
-        run: () => moveCursor(1),
-      },
-      {
-        key: "↑",
-        label: "",
-        hidden: true,
-        run: () => moveCursor(-1),
-      },
-      {
-        key: "⏎",
-        label: "",
-        hidden: true,
-        run: () => items[cursor] && openItem(items[cursor]),
-      },
+      { key: "j", run: () => moveCursor(1) },
+      { key: "k", run: () => moveCursor(-1) },
+      { key: "↓", run: () => moveCursor(1) },
+      { key: "↑", run: () => moveCursor(-1) },
+      { key: "⏎", run: () => items[cursor] && openItem(items[cursor]) },
       // j/k and the arrows are always on - they cost nothing and cannot be
       // typed by accident outside a field. The rest is vim-mode only, because
       // g, G and / are keys someone who did not ask for vim would rather have.
       ...(vimState.enabled
         ? [
-            { key: "g g", label: "", hidden: true, run: () => jumpCursor(0) },
-            {
-              key: "shift+g",
-              label: "",
-              hidden: true,
-              run: () => jumpCursor(items.length - 1),
-            },
-            {
-              key: "/",
-              label: "",
-              hidden: true,
-              run: () => searchEl?.focus(),
-            },
+            { key: "g g", run: () => jumpCursor(0) },
+            { key: "shift+g", run: () => jumpCursor(items.length - 1) },
+            { key: "/", run: () => searchEl?.focus() },
             // n/N step the matches, and only with a query on. The check is
             // inside `run`: read in the effect body, `q` would re-register
             // these bindings on every keystroke, over any newer scope.
-            {
-              key: "n",
-              label: "",
-              hidden: true,
-              run: () => search.trim() && moveCursor(1),
-            },
-            {
-              key: "shift+n",
-              label: "",
-              hidden: true,
-              run: () => search.trim() && moveCursor(-1),
-            },
+            { key: "n", run: () => search.trim() && moveCursor(1) },
+            { key: "shift+n", run: () => search.trim() && moveCursor(-1) },
           ]
         : []),
     ]);
@@ -561,12 +527,20 @@
 </script>
 
 <!-- Rendered by App into the window's top row, not here. -->
-{#snippet newAction()}
+{#snippet listActions()}
+  {#if isCurator()}
+    <Button
+      size="sm"
+      tone="ok"
+      icon="plus"
+      onclick={() => navigate("/library/new/entry")}>new</Button
+    >
+  {/if}
   <Button
+    variant="ghost"
     size="sm"
-    tone="ok"
-    icon="plus"
-    onclick={() => navigate("/library/new/entry")}>new</Button
+    icon="wiki"
+    onclick={() => openSection("wiki")}>wiki</Button
   >
 {/snippet}
 

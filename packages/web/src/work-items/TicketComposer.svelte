@@ -63,9 +63,7 @@
     saveDraft();
   });
 
-  $effect(() =>
-    pushScope([{ key: "esc", label: "", hidden: true, run: closeComposer }]),
-  );
+  $effect(() => pushScope([{ key: "esc", run: closeComposer }]));
 
   const types = $derived(composer.project ? typesOf(composer.project.id) : []);
   const form = $derived(composer.form);
