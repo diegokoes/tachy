@@ -8,4 +8,6 @@ export * from "./links";
 export * from "./compact";
 export * from "./note-html";
 export * from "./summary";
+export * from "./analysis-note";
 export { workItemScope, externalWorkItemScope } from "./scope";
+export * from "./follows";

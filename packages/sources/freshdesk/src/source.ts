@@ -1,5 +1,6 @@
 import {
   changeTagList,
+  errorBody,
   fetchUntrustedUrl,
   sourceFetch,
 } from "@tachy/core/sources";
@@ -279,6 +280,8 @@ interface FreshdeskTicketField {
   name: string;
   label?: string;
   default?: boolean;
+  /** `custom_number`, `custom_checkbox`, `custom_dropdown`, ... */
+  type?: string;
   choices?: unknown;
 }
 
@@ -317,6 +320,43 @@ const TICKET_KEYS: Record<string, string> = {
   product: "product_id",
   requester: "requester_id",
 };
+
+/** Default ticket fields the update endpoint takes as numbers. */
+const NUMBER_KEYS = new Set([
+  "status",
+  "priority",
+  "source",
+  "group_id",
+  "responder_id",
+  "product_id",
+  "company_id",
+  "requester_id",
+]);
+
+/** Text to the type the ticket field takes; throws on a bad number. */
+export function typedValue(
+  field: FreshdeskTicketField,
+  value: string,
+): string | number | boolean {
+  const path = ticketFieldPath(field);
+  const isNumeric =
+    NUMBER_KEYS.has(path) ||
+    field.type === "custom_number" ||
+    field.type === "custom_decimal";
+  if (isNumeric) {
+    const parsed = Number(value);
+    if (value.trim() === "" || Number.isNaN(parsed))
+      throw new Error(
+        `'${field.label ?? field.name}' takes a number, not '${value}'`,
+      );
+    return parsed;
+  }
+  if (field.type === "custom_checkbox")
+    return value.trim().toLowerCase() === "true";
+  return value;
+}
+
+const CUSTOM_PREFIX = "custom_fields.";
 
 /** A ticket field's path on the ticket: custom ones live under custom_fields. */
 export const ticketFieldPath = (f: FreshdeskTicketField) =>
@@ -361,7 +401,7 @@ export const createFreshdeskSource: SourceFactory = (
     );
     if (!response.ok)
       throw new Error(
-        `Freshdesk GET ${path} -> ${response.status} ${await response.text()}`,
+        `Freshdesk GET ${path} -> ${response.status} ${await errorBody(response)}`,
       );
     return (await response.json()) as T;
   }
@@ -435,6 +475,26 @@ export const createFreshdeskSource: SourceFactory = (
     };
   }
 
+  async function putTicket(
+    externalId: string,
+    body: Record<string, unknown>,
+  ): Promise<void> {
+    const response = await sourceFetch(
+      "Freshdesk ticket PUT",
+      `${api}/tickets/${encodeURIComponent(externalId)}`,
+      {
+        method: "PUT",
+        headers: { Authorization: auth, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      { connection: connection.slug },
+    );
+    if (!response.ok)
+      throw new Error(
+        `Freshdesk ticket PUT -> ${response.status} ${await errorBody(response)}`,
+      );
+  }
+
   let agentNames: Map<string, string> | null = null;
   /**
    * Best-effort: a non-admin key may not list agents, and unnamed turns still
@@ -460,6 +520,55 @@ export const createFreshdeskSource: SourceFactory = (
     }
     agentNames = names;
     return names;
+  }
+
+  let fieldLabels: {
+    statuses: Map<string, string>;
+    groups: Map<string, string>;
+  } | null = null;
+  /** Best-effort, like the agent names: without them a peek shows the raw ids. */
+  async function loadFieldLabels() {
+    if (fieldLabels) return fieldLabels;
+    const choicesOf = (fields: FreshdeskTicketField[], name: string) =>
+      new Map(
+        fieldChoices(
+          fields.find((f) => f.default && f.name === name)?.choices,
+        ).map((option) => [option.value, option.label]),
+      );
+    try {
+      const listed = await get<FreshdeskTicketField[]>("/ticket_fields");
+      const fields = Array.isArray(listed) ? listed : [];
+      fieldLabels = {
+        statuses: choicesOf(fields, "status"),
+        groups: choicesOf(fields, "group"),
+      };
+    } catch {
+      return {
+        statuses: new Map<string, string>(),
+        groups: new Map<string, string>(),
+      };
+    }
+    return fieldLabels;
+  }
+
+  /**
+   * Null when the ticket does not exist. A 403 is thrown, not hidden: it is
+   * how Freshdesk refuses a location as well as a ticket.
+   */
+  async function peekTicket(ticketId: string): Promise<FreshdeskTicket | null> {
+    const path = `/tickets/${ticketId}`;
+    const response = await sourceFetch(
+      `Freshdesk GET ${path}`,
+      api + path,
+      { headers: { Authorization: auth } },
+      { connection: connection.slug },
+    );
+    if (response.status === 404) return null;
+    if (!response.ok)
+      throw new Error(
+        `Freshdesk GET ${path} -> ${response.status} ${await errorBody(response)}`,
+      );
+    return (await response.json()) as FreshdeskTicket;
   }
 
   function senderLabel(
@@ -546,6 +655,8 @@ export const createFreshdeskSource: SourceFactory = (
   return {
     type: "freshdesk",
     capabilities: { postNote: true, incrementalSync: true },
+    // The first message is the description, read from the same ticket.
+    modelOmits: ["description", "description_text"],
     redactRaw: redactFreshdeskRaw,
 
     async verify() {
@@ -571,6 +682,31 @@ export const createFreshdeskSource: SourceFactory = (
           groupsNote: errorText(e),
         };
       }
+    },
+
+    async peek(ids) {
+      const ticketIds = ids.filter((id) => /^\d+$/.test(id));
+      if (!ticketIds.length) return [];
+      const tickets = (await Promise.all(ticketIds.map(peekTicket))).filter(
+        (ticket): ticket is FreshdeskTicket => ticket !== null,
+      );
+      if (!tickets.length) return [];
+      const labels = await loadFieldLabels();
+      const labelOf = (
+        names: Map<string, string>,
+        id: number | null | undefined,
+      ) => (id == null ? null : (names.get(String(id)) ?? String(id)));
+      return tickets.map((ticket) => ({
+        id: String(ticket.id),
+        title: ticket.subject ?? "",
+        type: ticket.type ?? "Ticket",
+        state: labelOf(labels.statuses, ticket.status),
+        project: labelOf(labels.groups, ticket.group_id),
+        url: `${base}/a/tickets/${ticket.id}`,
+        color: null,
+        icon: null,
+        source_slug: connection.slug,
+      }));
     },
 
     async fetchItem(externalId: string): Promise<RawWorkItem> {
@@ -673,11 +809,31 @@ export const createFreshdeskSource: SourceFactory = (
       // Already gone is the wanted end state.
       if (!response.ok && response.status !== 404)
         throw new Error(
-          `Freshdesk conversation DELETE -> ${response.status} ${await response.text()}`,
+          `Freshdesk conversation DELETE -> ${response.status} ${await errorBody(response)}`,
         );
     },
 
+    async setFields(externalId, fields) {
+      const listed = await get<FreshdeskTicketField[]>("/ticket_fields");
+      const ticketFields = Array.isArray(listed) ? listed : [];
+      const body: Record<string, unknown> = {};
+      const custom: Record<string, unknown> = {};
+      for (const [path, value] of Object.entries(fields)) {
+        const field = ticketFields.find((f) => ticketFieldPath(f) === path);
+        if (!field) throw new Error(`Freshdesk has no ticket field '${path}'`);
+        if (path.startsWith(CUSTOM_PREFIX))
+          custom[path.slice(CUSTOM_PREFIX.length)] = typedValue(field, value);
+        else body[path] = typedValue(field, value);
+      }
+      if (Object.keys(custom).length) body.custom_fields = custom;
+      await putTicket(externalId, body);
+    },
+
     async options(name, params) {
+      if (name === "agents")
+        return [...(await loadAgentNames())]
+          .map(([id, agentName]) => ({ value: id, label: agentName, hint: id }))
+          .sort((a, b) => a.label.localeCompare(b.label));
       if (name === "companies") {
         const companies: FlowOption[] = [];
         for (let page = 1; page <= MAX_COMPANY_PAGES; page++) {
@@ -702,9 +858,18 @@ export const createFreshdeskSource: SourceFactory = (
           hint: f.default ? undefined : "custom",
         }));
       }
-      if (name === "ticket_fields" || name === "field_choices") {
+      if (
+        name === "ticket_fields" ||
+        name === "field_choices" ||
+        name === "groups"
+      ) {
         const fields = await get<FreshdeskTicketField[]>("/ticket_fields");
         const list = Array.isArray(fields) ? fields : [];
+        // An agent's key reads group names only as the group field's choices.
+        if (name === "groups") {
+          const field = list.find((f) => f.default && f.name === "group");
+          return field ? fieldChoices(field.choices) : [];
+        }
         if (name === "ticket_fields")
           return list.map((f) => ({
             value: ticketFieldPath(f),
@@ -725,20 +890,7 @@ export const createFreshdeskSource: SourceFactory = (
       const path = `/tickets/${encodeURIComponent(externalId)}`;
       const ticket = await get<{ tags?: string[] }>(path);
       const tags = changeTagList(ticket.tags ?? [], change);
-      const response = await sourceFetch(
-        "Freshdesk ticket PUT",
-        api + path,
-        {
-          method: "PUT",
-          headers: { Authorization: auth, "Content-Type": "application/json" },
-          body: JSON.stringify({ tags }),
-        },
-        { connection: connection.slug },
-      );
-      if (!response.ok)
-        throw new Error(
-          `Freshdesk ticket PUT -> ${response.status} ${await response.text()}`,
-        );
+      await putTicket(externalId, { tags });
       return tags;
     },
 
@@ -758,7 +910,7 @@ export const createFreshdeskSource: SourceFactory = (
       );
       if (!response.ok)
         throw new Error(
-          `Freshdesk note POST -> ${response.status} ${await response.text()}`,
+          `Freshdesk note POST -> ${response.status} ${await errorBody(response)}`,
         );
     },
   };

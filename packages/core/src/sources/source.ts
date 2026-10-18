@@ -2,6 +2,11 @@ import type {
   ComposerForm,
   FlowOption,
   TicketValidation,
+  WorkItemLayout,
+  WorkItemPage,
+  WorkItemPeek,
+  WorkItemQuery,
+  WorkItemReading,
   WorkItemTypeOption,
 } from "@tachy/contract";
 import type { TokenMap } from "../compliance/redaction";
@@ -90,8 +95,20 @@ export interface WorkItemSource {
    * name where known. Import scrubText/TokenMap from @tachy/core.
    */
   redactRaw?(raw: unknown, map: TokenMap, customerSlug: string | null): unknown;
+  /**
+   * Paths into `raw` that its messages already carry, such as a ticket's
+   * description, left out of what a model reads so it is not sent twice.
+   */
+  readonly modelOmits?: readonly string[];
   /** Present when people can create items in this source from tachy. */
   composer?: WorkItemComposer;
+  /**
+   * Titles at a glance, read live with the caller's token and never stored.
+   * Ids the source does not have are left out; a refusal may throw instead.
+   */
+  peek?(ids: string[]): Promise<WorkItemPeek[]>;
+  /** Present when people can look items up live, with their own token. */
+  browser?: WorkItemBrowser;
   /**
    * Named lists of the source's own values, for a flow's pickers: a
    * helpdesk's companies, its ticket fields and their choices. An unknown
@@ -112,6 +129,8 @@ export interface WorkItemSource {
     externalId: string,
     change: { add: string[]; remove: string[] },
   ): Promise<string[]>;
+  /** Paths as `options("ticket_fields")` gives them; the adapter types the values. */
+  setFields?(externalId: string, fields: Record<string, string>): Promise<void>;
 }
 
 export interface PastedImage {
@@ -176,6 +195,31 @@ export interface WorkItemComposer {
     ctx: CreateContext,
     projectConfig?: Record<string, unknown>,
   ): Promise<{ id: number | string; url: string }>;
+}
+
+/** Reads for a person browsing the source: nothing read here is stored. */
+export interface WorkItemBrowser {
+  list(project: string, query: WorkItemQuery): Promise<WorkItemPage>;
+  /** How the source's own form lays out an item of `type`, for reading one. */
+  layout(project: string, type: string): Promise<WorkItemLayout>;
+  /** One item whole: `raw` for its stored copy, `view` for the reader. */
+  read(id: string): Promise<{ raw: RawWorkItem; view: WorkItemReading }>;
+  /**
+   * Each item's current revision and what others changed past `seenRev`,
+   * one line per change. An item with no `seenRev` has no lines.
+   */
+  changes(
+    followed: { id: string; seenRev: number | null }[],
+  ): Promise<FollowedChange[]>;
+}
+
+export interface FollowedChange {
+  id: string;
+  rev: number;
+  title: string;
+  url: string;
+  /** Empty when nothing changed, or only the reader did. */
+  lines: string[];
 }
 
 export type SourceFactory = (connection: {

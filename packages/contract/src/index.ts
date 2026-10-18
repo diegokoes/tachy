@@ -79,6 +79,7 @@ export type {
   FieldSpec,
   WorkItemSchema,
   WorkItemTypeOption,
+  WorkItemPeek,
   ComposerProject,
   PrefillOrigin,
   PathOption,
@@ -103,10 +104,8 @@ export {
   releaseMinor,
   normalizeVersion,
   projectToken,
-  parseCodeScope,
 } from "./code";
 export type {
-  CodeScope,
   RepoIndexStatus,
   RepoRow,
   RepoLineRow,
@@ -226,13 +225,29 @@ export {
 export type { LibraryAssetType } from "./assets";
 
 export { MAX_PAGE } from "./paging";
+export { CHAT_MODES, MENTION_KINDS } from "./chat";
+export type { ChatModeName, MentionKind, Mention, Mentionables } from "./chat";
+export { WORK_ITEM_SCOPES, WORK_ITEM_SORTS } from "./work-items";
 export type {
+  LinkedCode,
+  LinkedWorkItem,
   StoredItem,
   StoredItemEntry,
   StoredItemEvent,
   StoredItemMessage,
   StoredItemPage,
   StoredItemRow,
+  WorkItemComment,
+  WorkItemFieldInfo,
+  WorkItemLayout,
+  WorkItemPage,
+  WorkItemQuery,
+  WorkItemReading,
+  WorkItemRelations,
+  WorkItemRow,
+  WorkItemScope,
+  WorkItemSort,
+  WorkItemView,
 } from "./work-items";
 
 export { AUDIT_ACTIONS } from "./audit";
@@ -304,6 +319,9 @@ export type {
 } from "./jobs";
 export {
   FIELD_SHOWS,
+  VIEW_SHOWS,
+  INGEST_FIELD_MODES,
+  INGEST_MESSAGE_FIELDS,
   FLOW_TRIGGER_KINDS,
   CONDITION_OPS,
   FLOW_ACTION_CATEGORIES,
@@ -316,10 +334,18 @@ export {
 export type {
   ComposeConfig,
   TypeFormConfig,
+  TypeViewConfig,
+  ViewDisplay,
+  ViewShow,
   FieldFormConfig,
   FieldDefault,
   FieldShow,
   FormDisplay,
+  IngestRule,
+  IngestFieldMode,
+  IngestConfig,
+  IngestPreview,
+  IngestPreviewMessage,
   FlowTriggerKind,
   ConditionOp,
   Condition,

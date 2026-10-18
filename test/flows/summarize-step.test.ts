@@ -24,6 +24,7 @@ const posted: string[] = [];
 const deleted: string[] = [];
 let thread: RawWorkItem["messages"] = [];
 let takesNotes = true;
+let groupKey: string | undefined;
 
 registerSource("fake-summary", () => ({
   type: "fake-summary",
@@ -35,6 +36,7 @@ registerSource("fake-summary", () => ({
       title: "Scanner offline",
       raw: {},
       messages: thread,
+      ...(groupKey ? { groupKey } : {}),
     };
   },
   async listItems() {
@@ -82,6 +84,7 @@ async function context(modelCallsPerDay?: number) {
   return {
     flowId: flow.id,
     flowRunId: flow.id,
+    stepId: "s",
     scope: {},
     userId: null,
     item: {
@@ -101,6 +104,7 @@ beforeEach(async () => {
   posted.length = 0;
   deleted.length = 0;
   takesNotes = true;
+  groupKey = undefined;
   thread = [
     {
       externalId: "1",
@@ -137,7 +141,8 @@ describe("agent.summarize_item", () => {
       replaced: 1,
     });
     expect(posted).toHaveLength(1);
-    expect(posted[0]).toContain("<strong>Tried / ruled out</strong>");
+    expect(posted[0]).toContain(">Tried</p>");
+    expect(posted[0]).toMatch(/>Flow: summarise \d+<\/td>/);
     expect(deleted).toEqual(["old-summary"]);
   });
 
@@ -150,6 +155,57 @@ describe("agent.summarize_item", () => {
     expect(prompt).not.toContain("[tachy:summary]");
     expect(advisory.mode).toBe("flow");
     expect(advisory.meta).toMatchObject({ flow_id: expect.any(String) });
+  });
+
+  it("summarises without the messages the connection's rules skip", async () => {
+    thread.push({
+      externalId: "analysis",
+      author: "900",
+      direction: "outgoing",
+      visibility: "private",
+      bodyText: "AI analysis of the scanner, at length.",
+    });
+    await addSourceConnection({
+      sourceType: "fake-summary",
+      slug: "summary-conn",
+      baseUrl: "https://example.invalid",
+      config: {
+        ingest: {
+          skip: [
+            {
+              id: "manager",
+              label: "Manager analysis",
+              enabled: true,
+              where: { field: "message.author", op: "eq", value: "900" },
+            },
+          ],
+        },
+      },
+    });
+    const step = flowAction("agent.summarize_item");
+    await step.run(await context(), step.params.parse({}));
+    const [advisory] = vi.mocked(runAdvisory).mock.calls[0];
+    const prompt = advisory.prompt((text) => text);
+    expect(prompt).toContain("offline since this morning");
+    expect(prompt).not.toContain("AI analysis");
+  });
+
+  it("passes on the guidance an admin set for the ticket's group", async () => {
+    groupKey = "dock";
+    await addSourceConnection({
+      sourceType: "fake-summary",
+      slug: "summary-conn",
+      baseUrl: "https://example.invalid",
+      config: {
+        ingest: { guidance: { dock: "Name the dock and the scanner model." } },
+      },
+    });
+    const step = flowAction("agent.summarize_item");
+    await step.run(await context(), step.params.parse({}));
+    const [advisory] = vi.mocked(runAdvisory).mock.calls[0];
+    expect(advisory.prompt((text) => text)).toMatch(
+      /^The team that handles these tickets also asks: Name the dock and the scanner model\.\n\nJSON schema/,
+    );
   });
 
   it("keeps the summary in the run when told not to post", async () => {
@@ -193,5 +249,21 @@ describe("agent.summarize_item", () => {
       step.run(await context(), step.params.parse({})),
     ).rejects.toThrow(/cannot take notes/);
     expect(runAdvisory).not.toHaveBeenCalled();
+  });
+});
+
+describe("item.post_note", () => {
+  it("frames the note under the flow's name, keeping the text's paragraphs", async () => {
+    const step = flowAction("item.post_note");
+    const ctx = await context();
+    await step.run(ctx, step.params.parse({ body: "One.\n\nTwo." }));
+    expect(posted[0]).toMatch(
+      />Analysis<\/span><strong>summarise \d+<\/strong>/,
+    );
+    expect(posted[0]).toMatch(/>Flow: summarise \d+<\/td>/);
+    expect(posted[0]).toContain('<p style="margin:0 0 8px 0">Two.</p>');
+    expect(posted[0]).toContain("[tachy:note]");
+    await step.run(ctx, step.params.parse({ title: "Triage", body: "x" }));
+    expect(posted[1]).toContain("<strong>Triage</strong>");
   });
 });

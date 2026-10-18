@@ -1,4 +1,6 @@
-export type Tone = "accent" | "ok" | "warn" | "danger" | "muted" | "info";
+/** `alt` is a third series colour with no status meaning, for charts only. */
+export type Tone =
+  "accent" | "ok" | "warn" | "danger" | "muted" | "info" | "alt";
 
 const STATUS_TONE: Record<string, "ok" | "warn" | "danger" | "accent"> = {
   running: "accent",

@@ -422,6 +422,32 @@ create unique index work_item_links_external_idx
     nulls not distinct
     where to_external_id is not null;
 
+-- Items a person follows on the board, read for changes with their own token.
+-- The item need not be stored: it is the source's id on a connection.
+create table work_item_follows (
+    user_id              uuid not null references users(id) on delete cascade,
+    source_connection_id uuid not null references source_connections(id) on delete cascade,
+    external_id          text not null,
+    source_project_id    uuid references source_projects(id) on delete set null,
+    -- The source's revision last notified, null until the first check reads it.
+    seen_rev             integer,
+    checked_at           timestamptz,
+    created_at           timestamptz not null default now(),
+    primary key (user_id, source_connection_id, external_id)
+);
+
+-- Unused: kept so the previous release still runs against this schema.
+create table work_item_follow_notes (
+    user_id              uuid not null,
+    source_connection_id uuid not null,
+    external_id          text not null,
+    work_item_id         uuid not null references work_items(id) on delete cascade,
+    created_at           timestamptz not null default now(),
+    primary key (user_id, source_connection_id, external_id, work_item_id),
+    foreign key (user_id, source_connection_id, external_id)
+        references work_item_follows on delete cascade
+);
+
 create table resolution_patterns (
     slug         text primary key,
     description  text not null,
@@ -1442,7 +1468,7 @@ create index report_messages_report_idx on report_messages(report_id, created_at
 create table notifications (
     id          uuid primary key default gen_random_uuid(),
     user_id     uuid not null references users(id) on delete cascade,
-    kind        text not null check (kind in ('report_reply')),
+    kind        text not null check (kind in ('report_reply','work_item_changed','flow_notice')),
     title       text,
     body_text   text,
     ref         jsonb not null default '{}'::jsonb,

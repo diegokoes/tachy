@@ -6,6 +6,7 @@
   import { Button } from "../tui";
   import { close, rebind } from "./rebind.svelte";
   import RebindModal from "./RebindModal.svelte";
+  import Account from "./Account.svelte";
   import Agent from "./Agent.svelte";
   import Credentials from "./Credentials.svelte";
   import Tokens from "./Tokens.svelte";
@@ -16,9 +17,17 @@
   import Keybinds from "./Keybinds.svelte";
   import Columns from "./Columns.svelte";
   import Group from "./Group.svelte";
+  import OwnTokens from "../mcp-servers/OwnTokens.svelte";
+  import { agentPrefs } from "./prefs.svelte";
   import { SETTINGS_TABS } from "./tabs";
 
-  type Section = { label: string; hint?: string; view: Component };
+  type Section = {
+    label: string;
+    hint?: string;
+    view: Component;
+    /** Left out while it returns false. */
+    shown?: () => boolean;
+  };
 
   /** A tab is a pair of columns of groups, or one view that lays itself out. */
   type Layout = { left: Section[]; right: Section[] } | { view: Component };
@@ -54,8 +63,17 @@
           view: Credentials,
         },
         {
+          label: "mcp servers",
+          view: OwnTokens,
+          shown: () => Boolean(agentPrefs.creds?.mcp_servers.length),
+        },
+      ],
+    },
+    account: {
+      left: [{ label: "you", view: Account }],
+      right: [
+        {
           label: "api tokens",
-          hint: "For scripts that call the API as you. Shown once, stored as a hash.",
           view: Tokens,
         },
       ],
@@ -86,7 +104,6 @@
     "subnav-keys": "keybinds",
     vim: "keybinds",
     reference: "keybinds",
-    account: "agent",
     keys: "agent",
   };
 
@@ -131,7 +148,7 @@
 {/snippet}
 
 {#snippet column(sections: Section[])}
-  {#each sections as section (section.label)}
+  {#each sections.filter((s) => !s.shown || s.shown()) as section (section.label)}
     {@const View = section.view}
     <Group label={section.label} hint={section.hint}><View /></Group>
   {/each}
@@ -154,7 +171,10 @@
 {/if}
 
 <style>
+  /* A settings tab is a list of rows to scan, looser than the forms elsewhere
+     that share Rows. */
   .tab {
+    --rows-gap: var(--pad-3);
     display: flex;
     flex-direction: column;
     gap: calc(var(--pad-4) * 1.5);

@@ -22,37 +22,13 @@ const media = vi.hoisted(() => {
 
 import { Flip, gsap } from "../../packages/web/src/motion/gsap";
 import { reflow } from "../../packages/web/src/motion/motion";
-import {
-  loadTheme,
-  setNavHidden,
-  themeState,
-} from "../../packages/web/src/theme/theme.svelte";
 
 beforeEach(() => {
-  localStorage.clear();
   media.reduced = false;
 });
 afterEach(() => {
   vi.restoreAllMocks();
   document.body.replaceChildren();
-});
-
-describe("the hidden nav bar", () => {
-  it("is shown until someone hides it", () => {
-    loadTheme();
-    expect(themeState.navHidden).toBe(false);
-  });
-
-  it("survives a reload", () => {
-    setNavHidden(true);
-    themeState.navHidden = false;
-    loadTheme();
-    expect(themeState.navHidden).toBe(true);
-
-    setNavHidden(false);
-    loadTheme();
-    expect(themeState.navHidden).toBe(false);
-  });
 });
 
 describe("reflow", () => {

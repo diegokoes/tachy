@@ -51,8 +51,6 @@
     pushScope([
       {
         key: "esc",
-        label: "",
-        hidden: true,
         inFields: true,
         run: () => {
           const el = document.activeElement;
@@ -265,7 +263,7 @@
   .form input,
   .form textarea {
     background: var(--panel-solid);
-    border-color: var(--muted);
+    border-color: var(--rule);
   }
   .form input:focus-visible,
   .form textarea:focus-visible {

@@ -87,6 +87,41 @@ describe("a stopped Claude turn", () => {
   });
 });
 
+describe("a Claude turn the CLI could not start", () => {
+  it("shows the CLI's failure as one error, not as an answer", async () => {
+    const events = await eventsOf(async function* () {
+      yield {
+        type: "assistant",
+        session_id: "session-1",
+        error: "authentication_failed",
+        message: {
+          content: [
+            { type: "text", text: "Not logged in · Please run /login" },
+          ],
+        },
+      };
+      throw new Error("Claude Code process exited with code 1");
+    });
+    expect(events).toEqual([
+      {
+        type: "error",
+        kind: "no_credential",
+        message:
+          "No Claude credential is set for your account. Add one under Settings › agent.",
+      },
+    ]);
+  });
+
+  it("names the failure kind when the CLI sent no text", async () => {
+    const events = await eventsOf(async function* () {
+      yield { ...ANSWER, error: "billing_error", message: { content: [] } };
+    });
+    expect(events).toEqual([
+      { type: "error", kind: "other", message: "billing_error" },
+    ]);
+  });
+});
+
 describe("a Claude turn's own account of its model", () => {
   const INIT = {
     type: "system",

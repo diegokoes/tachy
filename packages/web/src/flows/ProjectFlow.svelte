@@ -7,13 +7,16 @@
     ComposerProject,
     FieldFormConfig,
     FieldSpec,
+    FlowOption,
     TypeFormConfig,
+    TypeViewConfig,
+    ViewShow,
+    WorkItemLayout,
     WorkItemTypeOption,
   } from "@tachy/contract";
   import { api } from "../api";
   import { setPageActions } from "../admin/pageActions.svelte";
   import { keep, recall } from "../shell/kept";
-  import { navigate } from "../shell/router.svelte";
   import Choice from "../settings/Choice.svelte";
   import Group from "../settings/Group.svelte";
   import Row from "../settings/Row.svelte";
@@ -28,23 +31,37 @@
     type IconName,
   } from "../tui";
   import { typeColor, typeIcon } from "../work-items/ado-icons";
+  import { inOrder } from "../work-items/board";
   import { openComposer } from "../work-items/composer.svelte";
   import FieldInput from "../work-items/FieldInput.svelte";
   import { arrange, editable, labelOf, TITLE } from "../work-items/layout";
+  import IngestFlow from "./IngestFlow.svelte";
+  import { fetchOptions } from "./options.svelte";
 
   let { lead }: { lead: Snippet } = $props();
 
   const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+  /** Picker value prefix for a helpdesk connection, whose rules cover all its groups. */
+  const INGEST = "ingest:";
+  const isHelpdesk = (id: string) => id.startsWith(INGEST);
+
   let projects = $state<ComposerProject[]>([]);
+  let helpdesks = $state<FlowOption[]>([]);
   let projectsError = $state<string | null>(null);
   $effect(() => {
-    api
-      .get<ComposerProject[]>("/compose/projects")
-      .then((loaded) => {
+    Promise.all([
+      api.get<ComposerProject[]>("/compose/projects?source_type=azure-devops"),
+      fetchOptions("connections", { source_type: "freshdesk" }),
+    ])
+      .then(([loaded, connections]) => {
         projects = loaded;
-        if (!loaded.some((x) => x.id === projectId))
-          projectId = loaded[0]?.id ?? "";
+        helpdesks = connections;
+        const ids = [
+          ...loaded.map((x) => x.id),
+          ...connections.map((c) => INGEST + c.value),
+        ];
+        if (!ids.includes(projectId)) projectId = ids[0] ?? "";
       })
       .catch((e) => (projectsError = errText(e)));
   });
@@ -52,13 +69,21 @@
   let projectId = $state(recall("admin.flows.project", ""));
   $effect(() => keep("admin.flows.project", projectId));
   const project = $derived(projects.find((p) => p.id === projectId) ?? null);
-  const projectOptions = $derived(
-    projects.map((p) => ({
+  const ingestConnection = $derived(
+    isHelpdesk(projectId) ? projectId.slice(INGEST.length) : "",
+  );
+  const projectOptions = $derived([
+    ...projects.map((p) => ({
       value: p.id,
       label: p.name,
       hint: p.product_slug ?? p.team_slug,
     })),
-  );
+    ...helpdesks.map((c) => ({
+      value: INGEST + c.value,
+      label: `${c.label} · all groups`,
+      hint: "freshdesk",
+    })),
+  ]);
 
   let types = $state<WorkItemTypeOption[]>([]);
   let config = $state<ComposeConfig>({});
@@ -68,9 +93,9 @@
 
   $effect(() => {
     const id = projectId;
-    if (!id) return;
     loadError = null;
     types = [];
+    if (!id || isHelpdesk(id)) return;
     Promise.all([
       api.get<WorkItemTypeOption[]>(`/compose/projects/${id}/types?all=1`),
       api.get<ComposeConfig>(`/compose/projects/${id}/config`),
@@ -92,7 +117,7 @@
     const forType = type;
     raw = null;
     formError = null;
-    if (!id || !forType) return;
+    if (!id || !forType || isHelpdesk(id)) return;
     api
       .get<ComposerForm>(
         `/compose/projects/${id}/form?type=${encodeURIComponent(forType)}&raw=1`,
@@ -336,6 +361,117 @@
     ];
   }
 
+  /** Creating an item and reading one show different fields: each has its own config. */
+  type Mode = "create" | "view";
+  const MODES: { value: Mode; label: string }[] = [
+    { value: "create", label: "create" },
+    { value: "view", label: "read" },
+  ];
+  let mode = $state<Mode>(recall("admin.flows.project.mode", "create") as Mode);
+  $effect(() => keep("admin.flows.project.mode", mode));
+
+  let readForm = $state<WorkItemLayout | null>(null);
+  let readFormError = $state<string | null>(null);
+  $effect(() => {
+    const id = projectId;
+    const forType = type;
+    readForm = null;
+    readFormError = null;
+    if (mode !== "view" || !id || !forType || isHelpdesk(id)) return;
+    api
+      .get<WorkItemLayout>(
+        `/work-items/projects/${id}/layout?type=${encodeURIComponent(forType)}`,
+      )
+      .then((loaded) => {
+        if (id === projectId && forType === type) readForm = loaded;
+      })
+      .catch((e) => (readFormError = errText(e)));
+  });
+
+  const viewConfig = $derived<TypeViewConfig>(config.views?.[type] ?? {});
+
+  function setVc(next: TypeViewConfig) {
+    const views = { ...(config.views ?? {}) };
+    if (!Object.keys(next.fields ?? {}).length && !next.order?.length)
+      delete views[type];
+    else views[type] = next;
+    config = { ...config, views };
+  }
+
+  function setViewShow(ref: string, show: ViewShow | undefined) {
+    const fields = { ...(viewConfig.fields ?? {}) };
+    if (show) fields[ref] = { show };
+    else delete fields[ref];
+    setVc({ ...viewConfig, fields });
+  }
+
+  type ViewBlock = {
+    key: string;
+    title: string;
+    hint?: string;
+    refs: string[];
+  };
+  const viewBlocks = $derived.by<ViewBlock[]>(() => {
+    if (!readForm) return [];
+    const order = viewConfig.order ?? [];
+    const layout = readForm.layout;
+    const placed = new Set([
+      ...(layout?.body ?? []),
+      ...(layout?.groups.flatMap((group) => group.fields) ?? []),
+    ]);
+    const nameOf = (ref: string) => readForm?.fields[ref]?.name ?? ref;
+    const rest = Object.keys(readForm.fields)
+      .filter((ref) => !placed.has(ref))
+      .sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+    const blocks: ViewBlock[] = [
+      {
+        key: "body",
+        title: "written",
+        refs: inOrder(layout?.body ?? [], order),
+      },
+      ...(layout?.groups ?? []).map((group, i) => ({
+        key: `g${i}`,
+        title: group.label ?? "header",
+        refs: inOrder(group.fields, order),
+      })),
+      {
+        key: "rest",
+        title: `not on ${sourceName}'s form`,
+        hint: "shown only when pinned or always shown",
+        refs: rest,
+      },
+    ];
+    return blocks.filter((block) => block.refs.length);
+  });
+
+  function moveInView(block: ViewBlock, ref: string, by: -1 | 1) {
+    const from = block.refs.indexOf(ref);
+    const to = from + by;
+    if (from < 0 || to < 0 || to >= block.refs.length) return;
+    const order = viewBlocks.flatMap((each) => {
+      const refs = [...each.refs];
+      if (each.key === block.key)
+        [refs[from], refs[to]] = [refs[to], refs[from]];
+      return refs;
+    });
+    setVc({ ...viewConfig, order });
+  }
+
+  const viewPlaceOptions = (
+    placedOnForm: boolean,
+  ): { value: ViewShow | ""; label: string; icon: IconName }[] => [
+    {
+      value: "",
+      label: placedOnForm
+        ? `like ${sourceName} · shown when it holds something`
+        : "left out",
+      icon: "placeAsSource",
+    },
+    { value: "pin", label: "in the header", icon: "placeHeader" },
+    { value: "always", label: "always show · even empty", icon: "placePinned" },
+    { value: "hidden", label: "leave out", icon: "placeOmitted" },
+  ];
+
   let saving = $state(false);
   let saveError = $state<string | null>(null);
   async function save() {
@@ -358,12 +494,61 @@
   function tryIt() {
     const typeOption = typeByName.get(type);
     if (!project || !typeOption) return;
-    navigate("/chat");
     openComposer(project, typeOption);
   }
 
-  $effect(() => setPageActions(actions));
+  // IngestFlow sets its own page actions.
+  $effect(() => {
+    if (!ingestConnection) return setPageActions(actions);
+  });
 </script>
+
+{#snippet viewEditor()}
+  {#if readFormError}
+    <Note tone="danger">{readFormError}</Note>
+  {:else if !readForm}
+    <Note>reading {project?.name}'s {type} form…</Note>
+  {:else}
+    {#each viewBlocks as block (block.key)}
+      <Group label={block.title} hint={block.hint}>
+        <Rows>
+          {#each block.refs as ref, i (ref)}
+            {@const label = readForm.fields[ref]?.name ?? ref}
+            <Row {label}>
+              {#snippet actions()}
+                {#if block.key !== "rest"}
+                  <span class="order">
+                    <button
+                      class="tiny"
+                      aria-label={`Move ${label} up`}
+                      disabled={i === 0}
+                      onclick={() => moveInView(block, ref, -1)}
+                      ><Icon name="moveUp" size="0.85em" /></button
+                    >
+                    <button
+                      class="tiny"
+                      aria-label={`Move ${label} down`}
+                      disabled={i === block.refs.length - 1}
+                      onclick={() => moveInView(block, ref, 1)}
+                      ><Icon name="moveDown" size="0.85em" /></button
+                    >
+                  </span>
+                {/if}
+                <span class="ref">{ref}</span>
+              {/snippet}
+              <Choice
+                label={`How ${label} shows on a read item`}
+                options={viewPlaceOptions(block.key !== "rest")}
+                value={viewConfig.fields?.[ref]?.show ?? ""}
+                onpick={(picked) => setViewShow(ref, picked || undefined)}
+              />
+            </Row>
+          {/each}
+        </Rows>
+      </Group>
+    {/each}
+  {/if}
+{/snippet}
 
 {#snippet actions()}
   <Button
@@ -396,7 +581,7 @@
       onchange={(v) => (projectId = String(v ?? ""))}
     />
   </span>
-  {#if types.length}
+  {#if types.length && !ingestConnection}
     <span class="pick">
       <Select
         value={type}
@@ -406,6 +591,12 @@
         onchange={(v) => (type = String(v ?? ""))}
       />
     </span>
+    <Choice
+      label="Fields for creating an item or reading one"
+      options={MODES}
+      value={mode}
+      onpick={(picked) => (mode = picked)}
+    />
   {/if}
 </header>
 
@@ -413,7 +604,9 @@
   {#if saveError}<Note tone="danger">{saveError}</Note>{/if}
   {#if projectsError}
     <Note tone="danger">{projectsError}</Note>
-  {:else if !projects.length}
+  {:else if ingestConnection}
+    <IngestFlow connection={ingestConnection} />
+  {:else if !projectOptions.length}
     <Note>No registered projects your teams own.</Note>
   {:else if loadError}
     <Note tone="danger">{loadError}</Note>
@@ -471,7 +664,9 @@
       </div>
     </Group>
 
-    {#if formError}
+    {#if mode === "view"}
+      {@render viewEditor()}
+    {:else if formError}
       <Note tone="danger">{formError}</Note>
     {:else if !raw}
       <Note>reading {project.name}'s {type} form…</Note>
@@ -763,5 +958,9 @@
   .guidance {
     width: 100%;
     resize: vertical;
+  }
+  .ref {
+    font-size: var(--fs-sm);
+    color: var(--muted);
   }
 </style>

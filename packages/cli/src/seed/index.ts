@@ -9,7 +9,7 @@ import type { Tx } from "./batches";
 import { SCALES, type ScaleName } from "./scale";
 import { seedOrg, ADMIN_EMAIL, DEV_PASSWORD, MEMBER_EMAIL } from "./org";
 import { seedCatalog } from "./catalog";
-import { seedSources } from "./sources";
+import { seedFollows, seedSources } from "./sources";
 import {
   deriveProductAreas,
   seedKnowledge,
@@ -94,6 +94,8 @@ const TABLES = [
   "reference_docs",
   "knowledge_feedback",
   "knowledge_entries",
+  "work_item_follow_notes",
+  "work_item_follows",
   "work_item_links",
   "work_item_events",
   "work_item_messages",
@@ -374,6 +376,7 @@ export async function seed(opts: SeedOptions): Promise<void> {
         org.artifacts,
       );
       await seedTelemetry(tx, org.users, sources.connections);
+      await seedFollows(tx, org.users, sources.workItems);
     });
     await phases.run("library", () =>
       seedLibrary(tx, volumes, knowledge, org.users),

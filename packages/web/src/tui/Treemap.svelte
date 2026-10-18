@@ -201,7 +201,7 @@
     flex-direction: column;
     justify-content: flex-start;
     padding: 0;
-    border: 1px solid color-mix(in srgb, var(--muted) 40%, transparent);
+    border: 1px solid color-mix(in srgb, var(--rule) 40%, transparent);
     background: none;
     color: var(--muted);
     font: inherit;
@@ -240,7 +240,7 @@
      it at all. */
   .leaf.hollow {
     border-style: dashed;
-    border-color: color-mix(in srgb, var(--muted) 55%, transparent);
+    border-color: color-mix(in srgb, var(--rule) 55%, transparent);
     color: var(--muted);
   }
   .leaf.edges {

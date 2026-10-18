@@ -82,7 +82,7 @@ part is open. Not a third tab bar: it answers what can be configured here.
   }
   .row:hover {
     color: var(--text);
-    background: color-mix(in srgb, var(--muted) 12%, transparent);
+    background: color-mix(in srgb, var(--rule) 12%, transparent);
   }
   .row.on {
     color: var(--text);

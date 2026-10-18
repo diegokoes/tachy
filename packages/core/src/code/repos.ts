@@ -221,7 +221,7 @@ export async function listRepos(
 }
 
 /**
- * The repos of the project a `/code` scope word or a tool argument names: by
+ * The repos of the project an `@project` mention or a tool argument names: by
  * its key or its name, in the spelling `projectToken` gives either.
  */
 export async function reposInProject(project: string): Promise<RepoRow[]> {

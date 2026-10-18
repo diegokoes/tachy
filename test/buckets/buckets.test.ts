@@ -393,6 +393,7 @@ describe("who can read a bucket", () => {
     const ctx = (userId: string) => ({
       flowId: "f",
       flowRunId: "r",
+      stepId: "s",
       scope: { userId },
       userId,
       item: null,

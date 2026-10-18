@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount, tick, untrack } from "svelte";
+  import { onMount, untrack } from "svelte";
   import ChatView from "./chat/ChatView.svelte";
   import LibraryView from "./library/LibraryView.svelte";
+  import BoardView from "./work-items/BoardView.svelte";
   import WikiView from "./wiki/WikiView.svelte";
   import AdminView from "./admin/AdminView.svelte";
   import SettingsView from "./settings/SettingsView.svelte";
@@ -12,35 +13,32 @@
   import Palette from "./palette/Palette.svelte";
   import { openFeedback } from "./reports/feedback";
   import { session, initSession } from "./access/session.svelte";
-  import { navItems } from "./shell/nav";
-  import { jellyPress, reflow } from "./motion/motion";
+  import { isSection, navItems, tabOf } from "./shell/nav";
+  import { jellyPress } from "./motion/motion";
   import StarField from "./motion/StarField.svelte";
   import Wordmark from "./motion/Wordmark.svelte";
   import { loadTheme, themeState } from "./theme/theme.svelte";
   import { applyOrgDefaults } from "./theme/defaults";
   import { loadFonts } from "./theme/fonts.svelte";
   import { loadDateFormat } from "./dates.svelte";
-  import { openSection, section, startRouter } from "./shell/router.svelte";
+  import {
+    navigate,
+    openSection,
+    section,
+    startRouter,
+  } from "./shell/router.svelte";
   import {
     refreshNotifications,
     startNotifications,
   } from "./notifications/notify.svelte";
-  import { hints, pushScope, startKeys } from "./keys/keys.svelte";
+  import NotificationBell from "./notifications/NotificationBell.svelte";
+  import { pushScope, startKeys } from "./keys/keys.svelte";
   import { navKey, actionKey } from "./keys/bindings.svelte";
   import { loadVim, vimState, scrollBindings } from "./keys/vim.svelte";
   import { subnav, topActions } from "./shell/subnav.svelte";
   import { setScrollport } from "./shell/scrollport.svelte";
   import { topbar } from "./shell/topbar.svelte";
-  import {
-    CaretHost,
-    HintRule,
-    Icon,
-    Panel,
-    Scrollbar,
-    Tabs,
-    TipHost,
-    tip,
-  } from "./tui";
+  import { CaretHost, Icon, Panel, Scrollbar, Tabs, TipHost, tip } from "./tui";
 
   const nav = $derived(navItems());
 
@@ -68,7 +66,6 @@
     localStorage.setItem("tachy-skip-wizard", "1");
   }
 
-  let topbarEl = $state<HTMLElement>();
   let topbarH = $state(0);
   let mainEl = $state<HTMLElement>();
   let subEl = $state<HTMLElement>();
@@ -190,50 +187,37 @@
 
   $effect(() => setScrollport(mainEl ?? null));
 
-  // A pre effect, so the boxes are read while the bar is still where it was;
-  // the tween starts once the DOM has caught up with the setting.
-  $effect.pre(() => {
-    void themeState.navHidden;
-    const play = untrack(() => reflow([topbarEl, windowEl]));
-    void tick().then(play);
+  // An address no section owns would render chat under it with no tab lit.
+  $effect(() => {
+    if (!isSection(view)) navigate("/chat", { replace: true });
   });
 
-  // Hidden: four more entries would crowd the hint rule. Settings › keybinds
-  // lists them.
   $effect(() => {
     const items = nav;
     return pushScope(
       items.map((n, i) => ({
         key: navKey(n.key, i),
-        label: n.label,
-        hidden: true,
         run: () => openSection(n.key),
       })),
     );
   });
 
-  // Settings is not a tab, so navItems() assigns it no digit. It registers
-  // its own hidden binding, as do feedback and the palette.
+  // ctrl+, is fixed beside the settings tab's digit: rebinding it would share
+  // the tab's stored key. Feedback and the palette are not tabs.
   $effect(() =>
     pushScope([
       {
-        key: actionKey("settings"),
-        label: "",
-        hidden: true,
+        key: "ctrl+,",
         inFields: true,
         run: () => openSection("settings"),
       },
       {
         key: actionKey("feedback"),
-        label: "",
-        hidden: true,
         inFields: true,
         run: openFeedback,
       },
       {
         key: actionKey("palette"),
-        label: "",
-        hidden: true,
         inFields: true,
         repeats: false,
         run: () => (paletteOpen = paletteAllowed && !paletteOpen),
@@ -245,14 +229,16 @@
   $effect(() => {
     if (!vimState.enabled) return;
     const items = nav;
-    const at = items.findIndex((n) => n.key === view);
+    const tab = tabOf(view);
+    const at = items.findIndex((n) => n.key === tab);
     const go = (delta: number) => () => {
+      if (at < 0) return;
       const next = items[Math.min(items.length - 1, Math.max(0, at + delta))];
-      if (next && next.key !== view) openSection(next.key);
+      if (next && next.key !== tab) openSection(next.key);
     };
     return pushScope([
-      { key: "h", label: "", hidden: true, run: go(-1) },
-      { key: "l", label: "", hidden: true, run: go(1) },
+      { key: "h", run: go(-1) },
+      { key: "l", run: go(1) },
       ...scrollBindings(() => mainEl),
     ]);
   });
@@ -304,15 +290,14 @@
 {:else}
   <div class="app" data-scene>
     <!-- Ahead of the bar, so hovering it reaches the bar as a sibling. -->
-    {#if topbar.tucked && !themeState.navHidden}
+    {#if topbar.tucked}
       <div class="nav-edge"></div>
     {/if}
     <div
       class="topbar"
-      class:hidden={themeState.navHidden}
       class:tucked={topbar.tucked}
       class:veiled={topbar.veiled}
-      bind:this={topbarEl}
+      bind:this={topbar.el}
       bind:offsetHeight={topbarH}
       style:--topbar-h="{topbarH}px"
     >
@@ -321,7 +306,7 @@
         <Panel>
           <Tabs
             items={nav}
-            active={view}
+            active={tabOf(view)}
             anchor="--tab-nav"
             labels={themeState.navLabels}
             onpick={openSection}
@@ -331,47 +316,22 @@
       <!-- Empty: balances the wordmark's track so the pill sits on the true
            centre. -->
       <div class="mark"></div>
+      <div class="bell">
+        <NotificationBell />
+        <button
+          class="feedback"
+          aria-label="feedback"
+          use:tip={"feedback"}
+          onclick={(e) => {
+            openFeedback();
+            if (e.detail !== 0) e.currentTarget.blur();
+          }}
+          use:jellyPress
+        >
+          <Icon name="flag" weight={7} />
+        </button>
+      </div>
     </div>
-
-    <!-- Out of flow, so nothing about it can shift the window: settings is
-         not a place work happens, so it takes no slot in the bar. -->
-    <button
-      class="settings-btn"
-      class:on={view === "settings"}
-      aria-current={view === "settings" ? "page" : undefined}
-      aria-label="settings"
-      use:tip={"settings"}
-      onclick={(e) => {
-        openSection("settings");
-        if (e.detail !== 0) e.currentTarget.blur();
-      }}
-      use:jellyPress
-    >
-      <span class="lbl"
-        ><span class="br" aria-hidden="true">[</span><span class="ico"
-          ><Icon name="settings" weight={7} /></span
-        ><span class="br" aria-hidden="true">]</span></span
-      >
-    </button>
-
-    <button
-      class="settings-btn feedback-btn"
-      class:on={view === "feedback"}
-      aria-current={view === "feedback" ? "page" : undefined}
-      aria-label="feedback"
-      use:tip={"feedback"}
-      onclick={(e) => {
-        openFeedback();
-        if (e.detail !== 0) e.currentTarget.blur();
-      }}
-      use:jellyPress
-    >
-      <span class="lbl"
-        ><span class="br" aria-hidden="true">[</span><span class="ico"
-          ><Icon name="flag" weight={7} /></span
-        ><span class="br" aria-hidden="true">]</span></span
-      >
-    </button>
 
     <div
       class="window"
@@ -379,9 +339,8 @@
       class:carved={sub}
       style="--sub-h-raw: {subH}px; --sub-mouth: {carveW}px; --sub-mask: {carveMask}"
     >
-      <!-- Rendered before the window so its hotkey scope is pushed first and
-           the view's scope stays innermost - otherwise this bar's (all hidden)
-           bindings would sit on top and blank the hint rule. -->
+      <!-- Rendered before the window so its hotkey scope is pushed first: the
+           view's scope stays innermost and wins a key both bind. -->
       {#if sub}
         <svg
           class="notch"
@@ -410,8 +369,14 @@
       <Panel grow>
         <div class="shell">
           <div class="content">
-            <main id="main-content" bind:this={mainEl}>
-              {#if view === "library"}
+            <main
+              id="main-content"
+              bind:this={mainEl}
+              class:unclipped={topbar.veiled}
+            >
+              {#if view === "board"}
+                <BoardView />
+              {:else if view === "library"}
                 <LibraryView />
               {:else if view === "wiki"}
                 <WikiView />
@@ -423,11 +388,13 @@
                 <ChatView />
               {/if}
             </main>
-            <Scrollbar target={mainEl} controls="main-content" />
-          </div>
-
-          <div class="hintrow">
-            <HintRule hints={hints()} />
+            <!-- A veiled bar means the view is moving its content, and the
+                 overflow a moving element makes is not the page's. -->
+            <Scrollbar
+              target={mainEl}
+              controls="main-content"
+              held={topbar.veiled}
+            />
           </div>
         </div>
       </Panel>
@@ -503,8 +470,7 @@
     border-color: transparent;
   }
 
-  /* A conversation under way runs to the window's outer bottom edge, the line
-     the settings mark stands on, so the composer's foot meets the mark's. The
+  /* A conversation under way runs to the window's outer bottom edge. The
      three rules give back the Panel's padding, its rule and `main`'s air. */
   .window:has(main > :global(.chat.bare:not(.empty))) > :global(section) {
     padding-bottom: 0;
@@ -525,8 +491,18 @@
     align-items: center;
     gap: var(--gap);
   }
-  .topbar.hidden {
-    display: none;
+  /* Out of the grid, so the narrow layout that drops the wordmark keeps it. */
+  .topbar {
+    position: relative;
+  }
+  .bell {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
   }
   .mark {
     display: flex;
@@ -534,22 +510,22 @@
     min-width: 0;
   }
 
-  /* A view may tuck the bar away (shell/topbar): pulled up by its own height,
-     so the window takes the row, on the timing `reflow` gives the chat's dock.
+  /* A view may tuck the bar away (shell/topbar) and moves it in its own
+     `reflow`, which has to read a settled layout: no margin transition.
      Always above the window, which moves under a bar the pointer is holding. */
   .topbar {
     --tuck: calc(var(--topbar-h, 0px) + var(--pad-2));
     position: relative;
     z-index: 10;
-    transition:
-      margin-top 0.35s cubic-bezier(0.65, 0, 0.35, 1),
-      translate 0.35s cubic-bezier(0.65, 0, 0.35, 1);
   }
+  /* The translate eases only while tucked: untucking drops it with the
+     margin, so a bar the pointer holds stays where it is drawn. */
   .topbar.tucked {
     margin-top: calc(-1 * var(--tuck));
+    transition: translate 0.35s cubic-bezier(0.65, 0, 0.35, 1);
   }
-  /* Faded on the bar's parts: `reflow` tweens the bar's own opacity when the
-     nav setting hides it, and a transition there would chase the tween. Not
+  /* Faded on the bar's parts: a `reflow` that moves the bar tweens its own
+     opacity, and a transition there would chase the tween. Not
      visibility, which takes the bar out of the tab order focus returns by. */
   .mark,
   .navbar {
@@ -594,24 +570,17 @@
     height: calc(var(--pad-3) * 2);
   }
   @media (prefers-reduced-motion: reduce) {
-    .topbar,
+    .topbar.tucked,
     .mark,
     .navbar {
       transition: none;
     }
   }
 
-  /* A lone tab, styled like one of Tabs.svelte's own, without the indicator
-     that only makes sense among siblings. Pinned to the viewport's
-     lower-left corner with its line box on the window's bottom edge. */
-  .settings-btn {
-    position: absolute;
-    left: var(--pad-2);
-    bottom: var(--pad-4);
-    z-index: 2;
+  /* A lone mark beside the bell, coloured like an inactive tab. */
+  .feedback {
     display: inline-flex;
-    align-items: baseline;
-    gap: 0.1em;
+    align-items: center;
     font: inherit;
     cursor: pointer;
     background: transparent;
@@ -619,32 +588,14 @@
     color: var(--muted);
     padding: 0 var(--pad-1);
     line-height: 1;
-    white-space: nowrap;
+    user-select: none;
   }
-  /* Sits one line above settings, sharing its lone-control styling. */
-  .feedback-btn {
-    bottom: calc(var(--pad-4) + var(--row-h));
-  }
-  .settings-btn:hover {
+  .feedback:hover {
     color: var(--text);
   }
-  .settings-btn.on {
-    color: var(--accent);
-  }
-  .settings-btn:focus-visible {
+  .feedback:focus-visible {
     outline: none;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-  .settings-btn .br {
-    visibility: hidden;
-  }
-  .settings-btn.on .br {
-    visibility: visible;
-  }
-  .settings-btn .ico {
-    display: inline-block;
-    vertical-align: middle;
+    color: var(--accent);
   }
 
   /* Hugs its content rather than the frame, so it reads as a separate object
@@ -720,7 +671,7 @@
   }
   .notch path {
     fill: none;
-    stroke: var(--muted);
+    stroke: var(--rule);
     stroke-width: var(--panel-line-w);
   }
 
@@ -827,7 +778,11 @@
   /* Native bar hidden: the drawn scrollbar beside it takes over. The block
      padding is clearance: a Panel's title and hint straddle its rule, so
      half of each sits outside the panel and `overflow: auto` would clip it. */
+  /* Positioned so absolutely placed content, such as an icon's hidden label,
+     is held inside the scroll area: otherwise it is placed against the page
+     and makes the page itself scroll. */
   main {
+    position: relative;
     flex: 1;
     min-width: 0;
     overflow: auto;
@@ -839,6 +794,12 @@
   }
   main::-webkit-scrollbar {
     display: none;
+  }
+  /* A veiled bar means the view is moving its content, and a part on its way
+     may pass the edge. The row `.content` lays out sets the height, so it
+     holds without the scroll container. */
+  main.unclipped {
+    overflow: visible;
   }
 
   :global(.panel.grow:has(.bleed)) {
@@ -859,18 +820,5 @@
   main > :global(.chat) {
     flex: 1 1 auto;
     min-height: 0;
-  }
-
-  /* Its own top spacing, not a gap on .shell, so a row with nothing to print
-     takes no room. Most scopes mark their bindings hidden, and Settings ›
-     keybinds is where they are found. */
-  .hintrow {
-    flex: none;
-    min-height: 1.2rem;
-    padding-top: var(--pad-2);
-  }
-  .hintrow:not(:has(*)) {
-    min-height: 0;
-    padding-top: 0;
   }
 </style>

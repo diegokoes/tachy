@@ -1,10 +1,6 @@
 <script lang="ts">
   import { AGENT_KEY_LABELS, agentKeyError } from "./credentials";
-  import {
-    API_KEY_EXAMPLE,
-    MCP_TOKEN_CREDENTIAL,
-    OAUTH_PREFIX,
-  } from "@tachy/contract";
+  import { API_KEY_EXAMPLE, OAUTH_PREFIX } from "@tachy/contract";
   import { Button, DeleteButton, InfoMark, Note } from "../tui";
   import { agentPrefs, origin, removeKey, saveKey } from "./prefs.svelte";
   import Origin from "./Origin.svelte";
@@ -16,10 +12,7 @@
   let drafts = $state<Record<string, string>>({});
 
   function keyLabel(name: string): string {
-    const [kind, slug] = name.split(":");
-    if (AGENT_KEY_LABELS[name]) return AGENT_KEY_LABELS[name];
-    if (kind === MCP_TOKEN_CREDENTIAL && slug) return `${slug} (MCP server)`;
-    return slug ?? name;
+    return AGENT_KEY_LABELS[name] ?? name.split(":")[1] ?? name;
   }
 
   const names = $derived(creds ? Object.keys(creds.effective) : []);

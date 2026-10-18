@@ -32,6 +32,15 @@ export function ensureProjects(): Promise<ComposerProject[]> {
   return projectsCall;
 }
 
+/** Picks up a project registered since the first read; a failure keeps the old list. */
+export function refreshProjects(): Promise<ComposerProject[]> {
+  if (!az.projects) return ensureProjects();
+  return api
+    .get<ComposerProject[]>("/compose/projects?source_type=azure-devops")
+    .then((p) => (az.projects = p))
+    .catch(() => az.projects ?? []);
+}
+
 export function ensureTypes(projectId: string): Promise<WorkItemTypeOption[]> {
   const known = az.types[projectId];
   if (Array.isArray(known)) return Promise.resolve(known);

@@ -463,6 +463,7 @@ describe("a flow's model calls", () => {
         {
           flowId: flow.id,
           flowRunId: flow.id,
+          stepId: "s",
           scope: {},
           userId: null,
           item: null,

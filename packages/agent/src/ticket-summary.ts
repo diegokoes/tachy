@@ -18,9 +18,12 @@ one shows only where the thread itself says it.
 Answer with one JSON object matching the schema and nothing else.`;
 
 /** The thread and the answer's shape, as the one prompt of the call. */
-export function summaryPrompt(raw: RawWorkItem): string {
+export function summaryPrompt(raw: RawWorkItem, guidance?: string): string {
   const schema = JSON.stringify(z.toJSONSchema(ticketSummarySchema));
-  return `JSON schema of the answer:\n${schema}\n\n---\n${renderCompactScript(compactWorkItem(raw))}`;
+  const asks = guidance?.trim()
+    ? `The team that handles these tickets also asks: ${guidance.trim()}\n\n`
+    : "";
+  return `${asks}JSON schema of the answer:\n${schema}\n\n---\n${renderCompactScript(compactWorkItem(raw))}`;
 }
 
 /** Null when the answer holds no object of the summary's shape. */
@@ -32,6 +35,8 @@ export function parseSummary(answer: string): TicketSummary | null {
 export interface SummaryRun {
   /** analysis_runs.mode; a flow's daily limit counts the runs of mode "flow". */
   mode: string;
+  /** The admin's guidance for the ticket's group, from its ingest rules. */
+  guidance?: string;
   meta?: Record<string, unknown>;
 }
 
@@ -45,7 +50,7 @@ export async function summarizeTicket(
   const answer = await runAdvisory(
     {
       system: SYSTEM,
-      prompt: (scrub) => scrub(summaryPrompt(raw)),
+      prompt: (scrub) => scrub(summaryPrompt(raw, run.guidance)),
       tier: "caller",
       timeoutMs: 120_000,
       mode: run.mode,

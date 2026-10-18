@@ -8,6 +8,8 @@ import { listRepos } from "../code/repos";
 import type { ScopeContext } from "../config/scoped";
 import { sql } from "../infra/db";
 import { badInput } from "../infra/errors";
+import { errorText } from "../infra/known-secrets";
+import { log } from "../infra/log";
 import { describeJobKinds } from "../jobs/registry";
 import { getSourceProject, listSourceProjects } from "../sources/projects";
 import { resolveSource } from "../sources/registry";
@@ -39,7 +41,8 @@ const need = (request: OptionRequest, name: string) => {
 /**
  * `source.<name>` asks the connection's adapter, so each source offers its
  * own lists (a helpdesk's companies, its ticket fields) without core knowing
- * them. `source.groups` is the adapter's probe, which every source has.
+ * them. `source.groups` is the adapter's probe, which every source has, and
+ * the adapter's own list where the probe's token may not read groups.
  */
 async function fromSource(
   name: string,
@@ -50,13 +53,16 @@ async function fromSource(
     request.scope,
   );
   if (name === "groups") {
-    if (!source.verify) return [];
-    const probe = await source.verify();
-    return probe.groups.map((g) => ({
-      value: g.key,
-      label: g.name,
-      hint: g.key,
-    }));
+    const probe = source.verify
+      ? await source.verify().catch(() => null)
+      : null;
+    if (probe?.groups.length)
+      return probe.groups.map((g) => ({
+        value: g.key,
+        label: g.name,
+        hint: g.key,
+      }));
+    return source.options ? source.options("groups", request.params) : [];
   }
   if (!source.options) return [];
   return source.options(name, request.params);
@@ -133,6 +139,64 @@ defineOptionSource("item.values", async (request) =>
   subjectValues(need(request, "connection"), need(request, "field")),
 );
 
+const asOptions = (values: string[]): FlowOption[] =>
+  values.map((value) => ({ value, label: value }));
+
+const MESSAGE_VALUES: Record<string, FlowOption[]> = {
+  "message.visibility": asOptions(["public", "private", "internal"]),
+  "message.direction": asOptions(["incoming", "outgoing"]),
+  "message.automated": asOptions(["true", "false"]),
+};
+
+const RAW_PREFIX = "item.raw.";
+
+async function fromSourceOrNone(
+  name: string,
+  request: OptionRequest,
+): Promise<FlowOption[]> {
+  try {
+    return await fromSource(name, request);
+  } catch (e) {
+    log("warn", "source_options_unread", {
+      connection: request.params.connection,
+      name,
+      error: errorText(e),
+    });
+    return [];
+  }
+}
+
+defineOptionSource("ingest.fields", async (request) => {
+  const connection = need(request, "connection");
+  const tags = { value: "item.tags", label: "tags" };
+  const ticketFields = await fromSourceOrNone("ticket_fields", request);
+  if (ticketFields.length)
+    return [
+      ...ticketFields.map((field) => ({
+        ...field,
+        value: RAW_PREFIX + field.value,
+      })),
+      tags,
+    ];
+  const stored = await subjectFields(connection);
+  return [
+    tags,
+    ...stored.filter((field) => field.value.startsWith(RAW_PREFIX)),
+  ];
+});
+
+// `message.author` is the source's user id; its agent list names them.
+defineOptionSource("ingest.values", async (request) => {
+  const field = need(request, "field");
+  if (field === "message.author") return fromSource("agents", request);
+  if (field.startsWith("message.")) return MESSAGE_VALUES[field] ?? [];
+  if (field.startsWith(RAW_PREFIX)) {
+    const choices = await fromSourceOrNone("field_choices", request);
+    if (choices.length) return choices;
+  }
+  return subjectValues(need(request, "connection"), field);
+});
+
 defineOptionSource("item.tags", async (request) =>
   request.params.connection
     ? subjectValues(request.params.connection, "item.tags")
@@ -162,6 +226,17 @@ defineOptionSource("work_items", async (request) => {
     value: r.id as string,
     label: `#${r.external_id} ${r.title ?? ""}`.trim(),
     hint: r.slug as string,
+  }));
+});
+
+defineOptionSource("ado.connections", async () => {
+  const rows = await sql`
+    select slug from source_connections where source_type = 'azure-devops'
+    order by slug
+  `;
+  return rows.map((row) => ({
+    value: row.slug as string,
+    label: row.slug as string,
   }));
 });
 

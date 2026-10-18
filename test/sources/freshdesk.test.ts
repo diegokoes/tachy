@@ -753,6 +753,105 @@ describe("freshdesk companies and tags", () => {
     ]);
   });
 
+  it("lists agents by name, for a rule on who wrote a message", async () => {
+    mockFetch({
+      "/agents": [
+        { id: 900, contact: { name: "Zoe Manager" } },
+        { id: 901, contact: { name: "Ana Support" } },
+      ],
+    });
+    expect(await source().options!("agents", {})).toEqual([
+      { value: "901", label: "Ana Support", hint: "901" },
+      { value: "900", label: "Zoe Manager", hint: "900" },
+    ]);
+  });
+
+  it("lists groups as the group field's choices, which an agent's key reads", async () => {
+    mockFetch({
+      "/ticket_fields": [
+        {
+          name: "group",
+          label: "Group",
+          default: true,
+          choices: { "Second level": 12, Billing: 13 },
+        },
+      ],
+    });
+    expect(await source().options!("groups", {})).toEqual([
+      { value: "12", label: "Second level" },
+      { value: "13", label: "Billing" },
+    ]);
+  });
+
+  it("names a refusal that answers with a page by the page's title", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            "<!DOCTYPE html><html><head><title>Unauthorized location</title></head><body>long page</body></html>",
+            { status: 403 },
+          ),
+      ),
+    );
+    await expect(source().options!("ticket_fields", {})).rejects.toThrow(
+      "Freshdesk GET /ticket_fields -> 403 Unauthorized location",
+    );
+  });
+
+  it("keeps a JSON refusal's body as it is", async () => {
+    const body = '{"code":"access_denied"}';
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(body, { status: 403 })),
+    );
+    await expect(source().options!("ticket_fields", {})).rejects.toThrow(
+      `-> 403 ${body}`,
+    );
+  });
+
+  it("sets fields typed as the update endpoint takes them", async () => {
+    mockFetch({
+      "/ticket_fields": [
+        { name: "status", label: "Status", default: true },
+        { name: "ticket_type", label: "Type", default: true },
+        { name: "cf_area", label: "Area", type: "custom_dropdown" },
+        { name: "cf_effort", label: "Effort", type: "custom_number" },
+        { name: "cf_billable", label: "Billable", type: "custom_checkbox" },
+      ],
+      "/tickets/7": {},
+    });
+    await source().setFields!("7", {
+      status: "4",
+      type: "Incident",
+      "custom_fields.cf_area": "export",
+      "custom_fields.cf_effort": "3",
+      "custom_fields.cf_billable": "true",
+    });
+    const put = requests.find((r) => r.init?.method === "PUT")!;
+    expect(put.path).toBe("/tickets/7");
+    expect(JSON.parse(String(put.init?.body))).toEqual({
+      status: 4,
+      type: "Incident",
+      custom_fields: { cf_area: "export", cf_effort: 3, cf_billable: true },
+    });
+  });
+
+  it("refuses a field the helpdesk lacks, or text where it wants a number", async () => {
+    mockFetch({
+      "/ticket_fields": [
+        { name: "priority", label: "Priority", default: true },
+      ],
+    });
+    await expect(source().setFields!("7", { cf_gone: "x" })).rejects.toThrow(
+      /no ticket field 'cf_gone'/,
+    );
+    await expect(
+      source().setFields!("7", { priority: "high" }),
+    ).rejects.toThrow(/'Priority' takes a number/);
+    expect(requests.some((r) => r.init?.method === "PUT")).toBe(false);
+  });
+
   it("writes the whole tag list back, since Freshdesk takes it whole", async () => {
     mockFetch({ "/tickets/7": { ...ticket, tags: ["bug", "Plant-3"] } });
     expect(
@@ -763,5 +862,68 @@ describe("freshdesk companies and tags", () => {
     expect(JSON.parse(String(put.init?.body))).toEqual({
       tags: ["bug", "escalated"],
     });
+  });
+});
+
+describe("freshdesk peek", () => {
+  const fields = [
+    {
+      name: "status",
+      default: true,
+      choices: { 2: ["Open", "Being processed"] },
+    },
+    { name: "group", default: true, choices: { Billing: 11 } },
+  ];
+
+  it("reads a ticket's title, status and group by their own names", async () => {
+    mockFetch({
+      "/tickets/7": { ...ticket, type: "Incident" },
+      "/ticket_fields": fields,
+    });
+    expect(await source().peek!(["7"])).toEqual([
+      {
+        id: "7",
+        title: "printer down",
+        type: "Incident",
+        state: "Open",
+        project: "Billing",
+        url: "https://x.freshdesk.com/a/tickets/7",
+        color: null,
+        icon: null,
+        source_slug: "fd",
+      },
+    ]);
+    expect(requests.some((r) => r.path.includes("conversations"))).toBe(false);
+  });
+
+  it("leaves out ids that are not numbers or not there, and says why it was refused", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const path = url.replace("https://x.freshdesk.com/api/v2", "");
+        if (path === "/tickets/404") return new Response("", { status: 404 });
+        if (path === "/tickets/403") return new Response("", { status: 403 });
+        if (path === "/tickets/500")
+          return new Response("boom", { status: 500 });
+        throw new Error(`unexpected fetch ${path}`);
+      }) as unknown as typeof fetch,
+    );
+    expect(await source().peek!(["404", "7x"])).toEqual([]);
+    await expect(source().peek!(["403"])).rejects.toThrow(/403/);
+    await expect(source().peek!(["500"])).rejects.toThrow(/500/);
+  });
+
+  it("shows the raw ids when the field labels cannot be read", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url.endsWith("/ticket_fields")
+          ? new Response("", { status: 403 })
+          : Response.json(ticket),
+      ) as unknown as typeof fetch,
+    );
+    expect(await source().peek!(["7"])).toMatchObject([
+      { state: "2", project: "11", type: "Ticket" },
+    ]);
   });
 });

@@ -16,8 +16,11 @@ import {
   radarMax,
   radarPath,
   radarPoint,
+  radarReserve,
   radarRing,
   radarTicks,
+  RADAR_LABEL_GAP,
+  RADAR_LINE,
 } from "../../packages/web/src/tui/radar";
 import {
   clock,
@@ -226,6 +229,15 @@ describe("radar", () => {
   it("outlines one value per spoke against the top of the scale", () => {
     expect(radarPath([10, 0, 5], 10, 20)).toBe("M0 -20 L0 0 L-8.66 5 Z");
     expect(radarPath([], 10, 20)).toBe("");
+  });
+
+  it("keeps room past the bottom spoke for the label and the value under it", () => {
+    const fs = 12;
+    // A hanging label, then the value one line down, each a full glyph tall.
+    const valueBottom = fs * (RADAR_LABEL_GAP + RADAR_LINE + 1);
+    expect(radarReserve(fs, 2)).toBeGreaterThan(valueBottom);
+    expect(radarReserve(fs, 1)).toBeLessThan(radarReserve(fs, 2));
+    expect(radarReserve(fs, 0)).toBe(radarReserve(fs, 1));
   });
 
   it("draws a ring as every spoke at the same distance", () => {

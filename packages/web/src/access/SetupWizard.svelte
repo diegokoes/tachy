@@ -287,7 +287,7 @@
               <Note tone="accent">
                 Claude <strong>subscription token</strong>. Saved as your own
                 key, under this admin account; everyone else sets theirs in
-                Settings › Keys.
+                Settings › agent.
               </Note>
             {/if}
             <Field label="effort">

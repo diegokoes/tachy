@@ -185,7 +185,7 @@
     width: 100%;
     margin: 0.35rem 0;
     background: var(--panel-solid);
-    border: 3px double var(--muted);
+    border: 3px double var(--rule);
     font-family: var(--font-mono);
     outline: none;
   }

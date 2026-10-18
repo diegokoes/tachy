@@ -304,7 +304,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
     background-image: radial-gradient(
-      color-mix(in srgb, var(--muted) 22%, transparent) 1px,
+      color-mix(in srgb, var(--rule) 22%, transparent) 1px,
       transparent 1px
     );
     background-size: 18px 18px;
@@ -327,7 +327,7 @@
   }
   path {
     fill: none;
-    stroke: color-mix(in srgb, var(--muted) 55%, transparent);
+    stroke: color-mix(in srgb, var(--rule) 55%, transparent);
     stroke-width: 1.25;
   }
   path.else {

@@ -120,10 +120,11 @@ export function stackParts(parts: Part[] | undefined): Stacked[] {
 const SERIES: Record<Tone, string> = {
   accent: "--series",
   info: "--series-2",
+  alt: "--series-3",
   ok: "--series-ok",
   warn: "--series-warn",
   danger: "--series-danger",
-  muted: "--muted",
+  muted: "--rule",
 };
 
 /** The chart ink for a tone: the series tokens, never the raw accent or status colours. */

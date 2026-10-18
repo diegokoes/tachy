@@ -1,5 +1,5 @@
 /**
- * Three semantic faces, each pickable from Settings › ui.
+ * Three semantic faces, each pickable from Settings › theme.
  *
  * Every stack ends in DejaVu Mono before its generic - see the note in
  * tokens.css. It is the only bundled face carrying the block, box-drawing and

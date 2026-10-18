@@ -2,6 +2,8 @@ import { onUnauthorized } from "../access/session.svelte";
 import {
   isProblemType,
   type AgentEffort,
+  type ChatModeName,
+  type Mention,
   type UploadLimits,
 } from "@tachy/contract";
 import { readError } from "../problems";
@@ -12,6 +14,10 @@ export interface ChatBody {
   uploadPaths?: string[];
   artifactId?: string;
   command?: { name: string; args: string };
+  mode?: { name: ChatModeName; args: string };
+  /** The mode the previous turn ran in, when the user has since left it. */
+  leftMode?: ChatModeName;
+  mentions?: Mention[];
   /** The conversation's `/model` pick; unset, the settings decide. */
   model?: string;
   effort?: AgentEffort;
@@ -32,6 +38,14 @@ export interface BuiltinCommandMeta {
   args: string;
   description: string;
   subcommands?: SubcommandMeta[];
+  /** Sent by a control, never offered in the menu. */
+  hidden?: boolean;
+}
+
+export interface ChatModeMeta {
+  name: ChatModeName;
+  args: string;
+  description: string;
 }
 
 export interface CommandArtifactMeta {
@@ -43,6 +57,7 @@ export interface CommandArtifactMeta {
 }
 
 export interface ChatCommands {
+  modes: ChatModeMeta[];
   builtins: BuiltinCommandMeta[];
   artifacts: CommandArtifactMeta[];
   /** This server's own; absent until it answers, when the defaults apply. */
@@ -53,7 +68,7 @@ export async function getCommands(): Promise<ChatCommands> {
   const response = await fetch("/api/agent/commands");
   if (response.status === 401) {
     onUnauthorized();
-    return { builtins: [], artifacts: [] };
+    return { modes: [], builtins: [], artifacts: [] };
   }
   if (!response.ok) throw new Error(`commands failed: ${response.status}`);
   return response.json();

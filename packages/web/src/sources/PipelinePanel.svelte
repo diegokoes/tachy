@@ -37,7 +37,7 @@
   const ORIGINS = [
     { key: "agent", label: "agent", tone: "accent" },
     { key: "sync", label: "sync", tone: "info" },
-    { key: "app", label: "app", tone: "muted" },
+    { key: "app", label: "app", tone: "alt" },
   ] as const;
 
   const split = (x: { agent: number; sync: number; app: number }) =>
@@ -237,6 +237,12 @@
       label: "buckets",
       value: census.data.counts.buckets ?? 0,
       to: "buckets",
+    },
+    {
+      key: "mcp-servers",
+      label: "mcp servers",
+      value: census.data.counts.mcp_servers ?? 0,
+      to: "mcp-servers",
     },
     {
       key: "calls",

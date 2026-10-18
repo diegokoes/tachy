@@ -42,7 +42,7 @@
 
 <style>
   .band {
-    fill: color-mix(in srgb, var(--muted) 14%, transparent);
+    fill: color-mix(in srgb, var(--rule) 14%, transparent);
     pointer-events: none;
   }
   .hit {

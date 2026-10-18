@@ -77,13 +77,13 @@ export function explainFailure(raw: string): {
     return {
       kind: "no_credential",
       message:
-        "No Claude credential is set for your account. Add one under Settings › Keys.",
+        "No Claude credential is set for your account. Add one under Settings › agent.",
     };
   if (/invalid api key|fix external api key/i.test(raw))
     return {
       kind: "bad_credential",
       message:
-        "Your saved Claude credential was rejected. It may be expired, revoked, or saved in the wrong field - re-add it under Settings › Keys.",
+        "Your saved Claude credential was rejected. It may be expired, revoked, or saved in the wrong field - re-add it under Settings › agent.",
     };
   return { kind: "other", message: raw };
 }
@@ -199,6 +199,15 @@ export function withoutImageData(content: unknown): unknown {
   );
 }
 
+/** The text blocks of an assistant message, joined. */
+function textOf(content: unknown): string {
+  if (!Array.isArray(content)) return "";
+  return (content as ContentBlock[])
+    .map((block) => (block.type === "text" ? (block.text ?? "") : ""))
+    .join("")
+    .trim();
+}
+
 /** The start-of-turn message, cut down to what a debug view names. */
 export function sessionFacts(init: SDKSystemMessage): SessionFacts {
   return {
@@ -266,11 +275,22 @@ export class ClaudeTurn extends TurnBase {
     const pending = new Map<string, string>();
     let answeredSessionId: string | undefined;
     let resulted = false;
+    let failed = false;
     const answeredBy = new Set<string>();
     try {
       for await (const sdkMessage of query({ prompt, options })) {
         if (sdkMessage.type === "system" && sdkMessage.subtype === "init") {
           this.queue.push({ type: "session", ...sessionFacts(sdkMessage) });
+        } else if (sdkMessage.type === "assistant" && sdkMessage.error) {
+          // The CLI's own account of a failed API call, worded for its
+          // terminal ("run /login"); the chat shows it as the turn's error.
+          failed = true;
+          this.queue.push({
+            type: "error",
+            ...explainFailure(
+              textOf(sdkMessage.message.content) || sdkMessage.error,
+            ),
+          });
         } else if (sdkMessage.type === "assistant") {
           answeredSessionId = sdkMessage.session_id;
           if (sdkMessage.message.model)
@@ -337,7 +357,7 @@ export class ClaudeTurn extends TurnBase {
       }
     } catch (e) {
       // An abort reaches here as a throw; it is reported below as a stop.
-      if (!this.controller.signal.aborted)
+      if (!this.controller.signal.aborted && !failed)
         this.queue.push({ type: "error", ...explainFailure(errorText(e)) });
     } finally {
       if (this.controller.signal.aborted && !resulted)

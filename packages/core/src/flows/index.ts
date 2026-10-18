@@ -4,6 +4,7 @@ export {
   offeredTypes,
   typeConfig,
   applyFormConfig,
+  applyViewConfig,
 } from "./forms";
 export {
   defineFlowAction,
@@ -16,6 +17,7 @@ export { validateGraph } from "./graph";
 export {
   listFlows,
   getFlow,
+  flowName,
   flowScope,
   createFlow,
   updateFlow,
@@ -28,3 +30,14 @@ export {
 export { runFlow, ownerScope, sweepFlowRuns } from "./run";
 export { itemTriggers, scheduledItems, type ItemEvent } from "./triggers";
 export { getSubject, type FlowSubject } from "./subject";
+export {
+  ingestConfig,
+  ingestConfigSchema,
+  getIngestConfig,
+  setIngestConfig,
+  applyIngest,
+  readForModel,
+  previewIngest,
+  type IngestOutcome,
+  type ModelRead,
+} from "./ingest";
