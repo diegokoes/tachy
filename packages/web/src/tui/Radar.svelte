@@ -1,10 +1,13 @@
 <script lang="ts">
   import { measureBox, typeSize } from "./fit";
   import {
+    RADAR_LABEL_GAP,
+    RADAR_LINE,
     radarAnchor,
     radarMax,
     radarPath,
     radarPoint,
+    radarReserve,
     radarRing,
     radarTicks,
   } from "./radar";
@@ -52,10 +55,16 @@
       Math.max(0, ...axes.map((a) => shown(a.label).length)) * CH_EM * fs,
     ) + 8,
   );
-  const radius = $derived(
-    Math.max(0, Math.min(w / 2 - labelW - fs * 1.6, h / 2 - fs * 2.8)),
-  );
   const lone = $derived(series.length === 1);
+  const radius = $derived(
+    Math.max(
+      0,
+      Math.min(
+        w / 2 - labelW - fs * 1.6,
+        h / 2 - radarReserve(fs, lone ? 2 : 1),
+      ),
+    ),
+  );
 </script>
 
 <!--
@@ -103,12 +112,12 @@ the grid.
         {/each}
 
         {#each axes as axis, i (axis.key)}
-          {@const end = radarPoint(i, n, radius + fs * 0.9)}
+          {@const end = radarPoint(i, n, radius + fs * RADAR_LABEL_GAP)}
           {@const anchor = radarAnchor(i, n)}
           <text
             class="lbl"
             x={end.x}
-            y={end.y - (lone && end.y < -radius * 0.9 ? fs * 1.2 : 0)}
+            y={end.y - (lone && end.y < -radius * 0.9 ? fs * RADAR_LINE : 0)}
             text-anchor={anchor}
             dominant-baseline={end.y < -radius * 0.9
               ? "auto"
@@ -118,7 +127,7 @@ the grid.
           >
             {shown(axis.label)}
             {#if lone}
-              <tspan class="val" x={end.x} dy={fs * 1.15}
+              <tspan class="val" x={end.x} dy={fs * RADAR_LINE}
                 >{format(series[0].values[i])}</tspan
               >
             {/if}

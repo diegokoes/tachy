@@ -35,6 +35,21 @@ export function radarTicks(max: number, count = 3): number[] {
   return max > 0 ? ticks(0, max, count).filter((t) => t > 0) : [];
 }
 
+/** From a spoke's tip to its label, in ems. */
+export const RADAR_LABEL_GAP = 0.9;
+/** From a label's line to the value printed under it, in ems. */
+export const RADAR_LINE = 1.15;
+/** One line of glyphs, ascender to descender, in ems. */
+const GLYPH_EM = 1.25;
+
+/**
+ * Height kept above and below the rings for the labels at the top and bottom
+ * spokes, in px: the gap, then `lines` lines of text, the value under the label
+ * when one series is drawn.
+ */
+export const radarReserve = (fs: number, lines: number) =>
+  fs * (RADAR_LABEL_GAP + (Math.max(1, lines) - 1) * RADAR_LINE + GLYPH_EM);
+
 /** Past this cosine a spoke leans far enough sideways for its label to sit beside it. */
 const SIDE_COSINE = 0.25;
 
