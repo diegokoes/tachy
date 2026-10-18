@@ -127,6 +127,8 @@
     /* Lets the indicator sit at z-index -1: behind the labels, in front of the
        surface under the bar. */
     isolation: isolate;
+    /* A bar is pressed, not read: a drag across it must not select labels. */
+    user-select: none;
 
     /* A damped spring cut where it first crosses back through 1 and re-timed
        to end there: the tail past that point reads as a second bounce. */
