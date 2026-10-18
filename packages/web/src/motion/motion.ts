@@ -333,8 +333,10 @@ export function ripple(
 
 /**
  * A burst of confetti fired upward from the bottom of `container`, arcing out
- * and falling under gravity (Physics2DPlugin). The pieces mount into the
- * container and remove themselves once spent, so the caller owns nothing.
+ * and falling under gravity (Physics2DPlugin). The pieces fly in a fixed layer
+ * on the body over the container's box, not inside it: a piece in a scrolling
+ * box would grow its scroll height as it falls. The layer goes with the last
+ * piece, so the caller owns nothing.
  */
 export function confetti(container: HTMLElement, count = 36) {
   if (reducedMotion()) return;
@@ -347,12 +349,16 @@ export function confetti(container: HTMLElement, count = 36) {
     "#6366f1",
     "#d946ef",
   ];
-  const { width, height } = container.getBoundingClientRect();
+  const { left, top, width, height } = container.getBoundingClientRect();
+  const layer = document.createElement("div");
+  layer.style.cssText = `position:fixed;left:${left}px;top:${top}px;width:${width}px;height:${height}px;pointer-events:none;z-index:var(--z-overlay);`;
+  document.body.appendChild(layer);
+  let flying = count;
   for (let i = 0; i < count; i++) {
     const piece = document.createElement("span");
     const size = gsap.utils.random(6, 12);
-    piece.style.cssText = `position:absolute;top:${height}px;left:${width / 2}px;width:${size}px;height:${size * gsap.utils.random(0.4, 1)}px;background:${colors[i % colors.length]};border-radius:1px;pointer-events:none;will-change:transform;`;
-    container.appendChild(piece);
+    piece.style.cssText = `position:absolute;top:${height}px;left:${width / 2}px;width:${size}px;height:${size * gsap.utils.random(0.4, 1)}px;background:${colors[i % colors.length]};border-radius:1px;will-change:transform;`;
+    layer.appendChild(piece);
     gsap.to(piece, {
       duration: gsap.utils.random(1.4, 2.4),
       physics2D: {
@@ -363,7 +369,9 @@ export function confetti(container: HTMLElement, count = 36) {
       rotation: gsap.utils.random(-540, 540),
       opacity: 0,
       ease: "none",
-      onComplete: () => piece.remove(),
+      onComplete: () => {
+        if (--flying === 0) layer.remove();
+      },
     });
   }
 }
