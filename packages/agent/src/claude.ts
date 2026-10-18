@@ -77,13 +77,13 @@ export function explainFailure(raw: string): {
     return {
       kind: "no_credential",
       message:
-        "No Claude credential is set for your account. Add one under Settings › Keys.",
+        "No Claude credential is set for your account. Add one under Settings › agent.",
     };
   if (/invalid api key|fix external api key/i.test(raw))
     return {
       kind: "bad_credential",
       message:
-        "Your saved Claude credential was rejected. It may be expired, revoked, or saved in the wrong field - re-add it under Settings › Keys.",
+        "Your saved Claude credential was rejected. It may be expired, revoked, or saved in the wrong field - re-add it under Settings › agent.",
     };
   return { kind: "other", message: raw };
 }

@@ -37,7 +37,7 @@ export async function adoClientFor(
     // The env fallback's message names server variables the person cannot set.
     if (!token && e instanceof Error && e.message.startsWith("Missing"))
       throw badInput(
-        `No Azure DevOps token for '${slug}'. Add your PAT under Settings › credentials, or ask an admin to set the connection's.`,
+        `No Azure DevOps token for '${slug}'. Add your PAT under Settings › agent, or ask an admin to set the connection's.`,
       );
     throw e;
   }

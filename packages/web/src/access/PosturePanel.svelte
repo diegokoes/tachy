@@ -128,7 +128,7 @@
         tone: creds.anthropic_api_key ? "ok" : "muted",
         title: creds.anthropic_api_key
           ? `${settings.agent_model.value}, fallback key from ${creds.anthropic_api_key}`
-          : "no anthropic_api_key in the environment: each user brings their own in Settings › Keys",
+          : "no anthropic_api_key in the environment: each user brings their own in Settings › agent",
       },
     ];
     cells.push({

@@ -39,6 +39,7 @@
   import { ArtifactMark, Button, Caret, caretSide, G, Icon, tip } from "../tui";
   import { pushScope } from "../keys/keys.svelte";
   import { toast } from "../notifications/notify.svelte";
+  import PointerText from "../settings/PointerText.svelte";
   import {
     topbar,
     tuckTopbar,
@@ -1146,7 +1147,7 @@
         {:else if entry.kind === "error"}
           <div class="turn">
             <span class="who err">{G.marker}error</span>
-            <div class="body err">{entry.text}</div>
+            <div class="body err"><PointerText text={entry.text} /></div>
           </div>
         {:else if entry.kind === "trace"}
           <TracePanel trace={entry.trace} />

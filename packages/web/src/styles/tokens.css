@@ -12,7 +12,7 @@
   font-size: calc(clamp(14.5px, 0.35vw + 12.5px, 18px) * var(--font-scale, 1));
   font-family: var(--font-ui);
 
-  /* Three semantic faces, pickable in Settings › ui: chrome, running text,
+  /* Three semantic faces, pickable in Settings › theme: chrome, running text,
      and the character grid. Each stack ends in DejaVu Mono, which has the
      block, box-drawing and geometric glyphs neither Plex face has. */
   --font-ui:
