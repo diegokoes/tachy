@@ -11,11 +11,20 @@ table inet tachy_host {
     elements = { 127.0.0.1{% for c in (ssh_allowed_cidrs + (backup_downloaders | selectattr('from', 'defined') | map(attribute='from') | list)) | unique %}, {{ c }}{% endfor %}{% if tailscale_enabled %}, {{ tailscale_cidr }}{% endif %} }
   }
 
+  # Docker's IPv4 published ports are DNATed to FORWARD and never reach this
+  # chain; over IPv6 they are served by docker-proxy, which does.
   chain input {
-    type filter hook input priority filter; policy accept;
+    type filter hook input priority filter; policy drop;
     ct state established,related accept
     iif lo accept
+    meta l4proto { icmp, igmp, ipv6-icmp } accept
+    udp sport 67 udp dport 68 accept
+    udp sport 547 udp dport 546 accept
     tcp dport 22 ip saddr @ssh_allowed accept
-    tcp dport 22 drop
+{% if lan_cidrs %}
+    udp dport 5353 ip saddr { {{ lan_cidrs | join(', ') }} } accept
+{% endif %}
+    udp dport 5353 ip6 saddr fe80::/10 accept
+    tcp dport { 80, 443 } ip6 saddr fe80::/10 accept
   }
 }
