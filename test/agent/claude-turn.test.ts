@@ -107,7 +107,7 @@ describe("a Claude turn the CLI could not start", () => {
         type: "error",
         kind: "no_credential",
         message:
-          "No Claude credential is set for your account. Add one under Settings › Keys.",
+          "No Claude credential is set for your account. Add one under Settings › agent.",
       },
     ]);
   });

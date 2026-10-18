@@ -169,7 +169,7 @@ describe("MCP server admin", () => {
     ).json();
     expect(missing).toMatchObject({
       ok: false,
-      error: expect.stringMatching(/Settings › Agent/),
+      error: expect.stringMatching(/Settings › agent/),
     });
     await admin("/api/me/credentials/mcp_token:hub", "PUT", {
       value: TOKENS.ok,
