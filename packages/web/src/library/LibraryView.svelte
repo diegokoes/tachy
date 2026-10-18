@@ -8,7 +8,12 @@
   import type { KnowledgeRow } from "../knowledge/rows";
   import type { ReferenceRow } from "../reference/rows";
   import type { ComponentRow, ProductRow } from "@tachy/contract";
-  import { navigate, segment, segments } from "../shell/router.svelte";
+  import {
+    navigate,
+    openSection,
+    segment,
+    segments,
+  } from "../shell/router.svelte";
   import { keep, recall } from "../shell/kept";
   import { setSubnav } from "../shell/subnav.svelte";
   import { pushScope } from "../keys/keys.svelte";
@@ -89,8 +94,9 @@
     navigate("/library", { replace: true });
   });
 
-  // No tabs: the library is one list. The subnav is registered for its row,
-  // which the detail views and forms put their actions in.
+  // No tabs: the library is one list, and the wiki opens from its row. The
+  // subnav is registered for that row, which the detail views and forms put
+  // their actions in.
   $effect(() =>
     setSubnav({
       items: [],
@@ -98,7 +104,7 @@
       onpick: () => {},
       // Only over a list. A detail view claims the row for itself, and a
       // create screen has nothing to create from.
-      actions: listing && isCurator() ? newAction : undefined,
+      actions: listing ? listActions : undefined,
     }),
   );
   /** Which form the create screen shows - in the URL, so it deep-links. */
@@ -561,12 +567,20 @@
 </script>
 
 <!-- Rendered by App into the window's top row, not here. -->
-{#snippet newAction()}
+{#snippet listActions()}
+  {#if isCurator()}
+    <Button
+      size="sm"
+      tone="ok"
+      icon="plus"
+      onclick={() => navigate("/library/new/entry")}>new</Button
+    >
+  {/if}
   <Button
+    variant="ghost"
     size="sm"
-    tone="ok"
-    icon="plus"
-    onclick={() => navigate("/library/new/entry")}>new</Button
+    icon="wiki"
+    onclick={() => openSection("wiki")}>wiki</Button
   >
 {/snippet}
 

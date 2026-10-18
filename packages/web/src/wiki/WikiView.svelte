@@ -15,7 +15,7 @@
   import { api, ApiError } from "../api";
   import { errText } from "../resource.svelte";
   import { navigate, segment } from "../shell/router.svelte";
-  import { setSubnav, type SubnavItem } from "../shell/subnav.svelte";
+  import { setSubnav } from "../shell/subnav.svelte";
   import { Note } from "../tui";
   import type { ReferenceRow } from "../reference/rows";
   import ArticleView from "./ArticleView.svelte";
@@ -47,21 +47,9 @@
   }
   const page = $derived(pageOf(second, third));
 
-  const PLACES: SubnavItem[] = [
-    { key: "overview", label: "overview", icon: "overview" },
-    { key: "gaps", label: "gaps", icon: "gaps" },
-  ];
-
-  // An article or a section is neither place, so no tab claims it; the aside is
-  // what says where you are.
-  $effect(() =>
-    setSubnav({
-      items: PLACES,
-      active: page === "overview" || page === "gaps" ? page : "",
-      onpick: (k) =>
-        navigate(k === "overview" ? wikiPath(scope) : wikiPath(scope, k)),
-    }),
-  );
+  // No tabs: the wiki opens from the library's row, and the landing and gaps
+  // each put the way to the other in this one.
+  $effect(() => setSubnav({ items: [], active: "", onpick: () => {} }));
 
   onMount(() => {
     void loadWikis();
