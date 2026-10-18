@@ -310,7 +310,7 @@ export async function itemReading(
       id: String(comment.id),
       author: comment.createdBy?.displayName ?? null,
       at: comment.createdDate ?? null,
-      html: comment.renderedText ?? comment.text ?? "",
+      html: comment.text ?? "",
     })),
   };
 }

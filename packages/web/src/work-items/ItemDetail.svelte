@@ -11,7 +11,7 @@
   import { pushScope } from "../keys/keys.svelte";
   import { refreshNotifications } from "../notifications/notify.svelte";
   import { link, navigate } from "../shell/router.svelte";
-  import { Badge, Button, Icon, Note, Spinner, Time } from "../tui";
+  import { Badge, Button, Icon, Note, Panel, Spinner, Time } from "../tui";
   import { typeColor, typeIcon } from "./ado-icons";
   import { boardItemPath, shownSections, type ShownField } from "./board";
   import { fieldHtml, itemHtml } from "./itemHtml";
@@ -84,6 +84,7 @@
       {
         key: "f",
         label: following ? "unfollow" : "follow",
+        hidden: true,
         run: () => void toggleFollow(),
       },
     ]),
@@ -186,18 +187,21 @@
   <div class="columns">
     <div class="main">
       {#each sections.body as field (field.ref)}
-        <section>
-          <h3>{field.label}</h3>
-          {#if field.kind === "html"}
-            <div class="prose">{@html html(field.value)}</div>
-          {:else}
-            <p>{@render value(field)}</p>
-          {/if}
-        </section>
+        <div class="field">
+          <Panel title={field.label}>
+            {#if field.kind === "html"}
+              <div class="prose">{@html html(field.value)}</div>
+            {:else}
+              <p>{@render value(field)}</p>
+            {/if}
+          </Panel>
+        </div>
       {/each}
       <section>
         <div class="heading">
-          <h3>conversation</h3>
+          <h3 class="thread">
+            <Icon name="conversation" size="1.1em" />conversation
+          </h3>
           {#if view.history.length}
             <Button
               size="sm"
@@ -219,7 +223,7 @@
           <article class="comment">
             <header>
               <span class="who">{comment.author ?? "someone"}</span>
-              <span class="dim"><Time at={comment.at} /></span>
+              <span class="dim when"><Time at={comment.at} /></span>
             </header>
             <div class="prose">{@html html(comment.html)}</div>
           </article>
@@ -327,8 +331,17 @@
     font-weight: 600;
     color: var(--muted);
   }
+  .field {
+    margin: var(--pad-4) 0;
+  }
   .prose {
     overflow-wrap: anywhere;
+  }
+  .prose > :global(:last-child) {
+    margin-bottom: 0;
+  }
+  .prose :global(.mention) {
+    color: var(--accent);
   }
   .prose :global(p),
   .prose :global(div) {
@@ -433,19 +446,36 @@
   .heading h3 {
     margin: 0;
   }
+  .thread {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pad-2);
+    text-transform: uppercase;
+    letter-spacing: var(--label-spacing);
+  }
   .history {
     margin-bottom: var(--pad-4);
   }
   .comment {
-    border-top: 1px solid var(--border);
-    padding: var(--pad-2) 0 var(--pad-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel-bg);
+    margin-bottom: var(--pad-3);
   }
   .comment header {
     display: flex;
     gap: var(--pad-3);
     align-items: baseline;
-    margin-bottom: var(--pad-1);
+    margin: 0;
+    padding: var(--pad-2) var(--pad-4);
+    border-bottom: 1px solid var(--border);
     font-size: var(--fs-sm);
+  }
+  .comment .prose {
+    padding: var(--pad-3) var(--pad-4);
+  }
+  .when {
+    margin-left: auto;
   }
   .who {
     font-weight: 600;

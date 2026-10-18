@@ -233,6 +233,37 @@ describe("azure-devops adapter", () => {
       ]);
     });
 
+    it("finds pictures in a comment's own text, HTML or Markdown", async () => {
+      mockFetch({
+        ...fileRoutes,
+        "/ProjA/_apis/wit/workItems/42/comments": {
+          comments: [
+            {
+              id: 1,
+              text: `<div>works<img src="${org}/_apis/wit/attachments/${IN_COMMENT}?fileName=image.png" alt=Image></div>`,
+              renderedText: `<div>works<img src="/${IN_COMMENT}?fileName=image.png" alt=Image></div>`,
+              format: "html",
+              createdDate: "2026-01-02T00:00:00Z",
+            },
+            {
+              id: 2,
+              text: `see ![shot](${org}/_apis/wit/attachments/${PASTED}?fileName=shot.png)`,
+              format: "markdown",
+              createdDate: "2026-01-03T00:00:00Z",
+            },
+          ],
+        },
+      });
+      const item = await source().fetchItem("42");
+      const [, , html, markdown] = item.messages;
+      expect(html.attachments).toEqual([
+        { id: IN_COMMENT, name: "image.png", inline: true },
+      ]);
+      expect(markdown.attachments).toEqual([
+        { id: PASTED, name: "shot.png", inline: true },
+      ]);
+    });
+
     it("gives the files a message of their own when the item has no description", async () => {
       const {
         "System.Description": _d,

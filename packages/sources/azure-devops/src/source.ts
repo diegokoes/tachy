@@ -77,6 +77,7 @@ const ATTACHMENT_URL =
   /\/_apis\/wit\/attachments\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})(?:\?(.*))?$/i;
 
 const IMG_SRC = /<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/gi;
+const MARKDOWN_IMAGE = /!\[[^\]]*\]\(\s*<?([^\s)>]+)/g;
 
 /**
  * The attachment an address names, when it is one of this organisation's. An
@@ -113,10 +114,14 @@ export function attachedFiles(
   return files;
 }
 
-/** The pictures pasted into an HTML field: each is an attachment its `img` names. */
+/**
+ * The pictures pasted into a field or comment: each is an attachment its `img`
+ * names, or its `![]()` when the text is Markdown.
+ */
 export function inlineImages(html: string, orgUrl: string): RawAttachment[] {
   const images: RawAttachment[] = [];
-  for (const [, src] of html.matchAll(IMG_SRC)) {
+  const sources = [...html.matchAll(IMG_SRC), ...html.matchAll(MARKDOWN_IMAGE)];
+  for (const [, src] of sources) {
     const at = attachmentAt(src.replace(/&amp;/g, "&"), orgUrl);
     if (!at || images.some((image) => image.id === at.id)) continue;
     images.push({ id: at.id, name: at.fileName ?? "image.png", inline: true });
@@ -369,10 +374,16 @@ export const createAzureDevopsSource: SourceFactory = (
     const fromHtml = (
       externalId: string,
       html: string,
-      message: Partial<RawMessage> & { lead?: string },
+      message: Partial<RawMessage> & {
+        lead?: string;
+        images?: RawAttachment[];
+      },
     ) => {
-      const { lead = "", ...rest } = message;
-      const images = inlineImages(html, client.orgUrl);
+      const {
+        lead = "",
+        images = inlineImages(html, client.orgUrl),
+        ...rest
+      } = message;
       messages.push({
         externalId,
         visibility: "internal",
@@ -410,15 +421,20 @@ export const createAzureDevopsSource: SourceFactory = (
     if (files.length)
       messages[0].attachments = [...(messages[0].attachments ?? []), ...files];
 
-    for (const comment of comments)
+    // Markdown reads as text from its rendering, and its pictures from what
+    // was written: the rendering drops their address.
+    for (const comment of comments) {
+      const text = comment.text ?? "";
       fromHtml(
         `comment-${comment.id}`,
-        comment.renderedText ?? comment.text ?? "",
+        comment.format === "markdown" ? (comment.renderedText ?? text) : text,
         {
           author: comment.createdBy?.displayName,
           createdAt: comment.createdDate,
+          images: inlineImages(text, client.orgUrl),
         },
       );
+    }
     return messages.sort((a, b) =>
       (a.createdAt ?? "").localeCompare(b.createdAt ?? ""),
     );
