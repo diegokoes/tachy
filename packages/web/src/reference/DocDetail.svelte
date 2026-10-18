@@ -6,14 +6,15 @@
   import type { ReferenceLineageRow, ReferenceRow } from "./rows";
   import type { ProductRow } from "@tachy/contract";
   import { canCurateScope, isCurator } from "../access/session.svelte";
-  import Readership from "../library/Readership.svelte";
+  import Reads from "../library/Reads.svelte";
+  import Versions from "../library/Versions.svelte";
   import Backlinks from "../library/Backlinks.svelte";
   import { renderMarkdown, markBrokenLinks } from "../markdown/markdown";
   import { LinkTargets } from "../wiki/wikilinks.svelte";
   import { pushScope } from "../keys/keys.svelte";
   import { setTopActions } from "../shell/subnav.svelte";
   import { createSequence, errText } from "../resource.svelte";
-  import { Badge, Button, Chip, Icon, Note, Select, Time } from "../tui";
+  import { Badge, Button, Chip, Icon, Note, Select } from "../tui";
   import ReferenceForm from "./ReferenceForm.svelte";
   import ScopeCrumb from "../library/ScopeCrumb.svelte";
   import StatusActions from "../library/StatusActions.svelte";
@@ -260,6 +261,7 @@
     }}
   />
 {:else}
+  <Reads base="reference" id={doc.id} version={doc.version} />
   <div class="read">
     <StatusActions actions={statusActions} />
     <ScopeCrumb area={doc.product_area} />
@@ -274,9 +276,14 @@
         {/if}
       </span>
       <span class="when">
-        {#if doc.updated_at}<span class="muted"
-            >updated <Time at={doc.updated_at} date /></span
-          >{/if}
+        <Versions
+          base="reference"
+          id={doc.id}
+          at={doc.updated_at}
+          version={doc.version}
+          {canEdit}
+          onReverted={() => load(doc!.id)}
+        />
       </span>
     </div>
 
@@ -328,13 +335,6 @@
 
     <Backlinks base="reference" id={doc.id} />
   </div>
-  <Readership
-    base="reference"
-    id={doc.id}
-    version={doc.version}
-    {canEdit}
-    onReverted={() => load(doc!.id)}
-  />
 {/if}
 
 <style>

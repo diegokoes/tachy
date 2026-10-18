@@ -5,7 +5,8 @@
   import { api } from "../api";
   import type { KnowledgeRow, Feedback } from "./rows";
   import type { ProductRow } from "@tachy/contract";
-  import Readership from "../library/Readership.svelte";
+  import Reads from "../library/Reads.svelte";
+  import Versions from "../library/Versions.svelte";
   import DeprecatedMark from "../library/DeprecatedMark.svelte";
   import Backlinks from "../library/Backlinks.svelte";
   import { renderMarkdown, markBrokenLinks } from "../markdown/markdown";
@@ -19,7 +20,7 @@
   import { isCurator, canCurateScope } from "../access/session.svelte";
   import { pushScope } from "../keys/keys.svelte";
   import { setTopActions } from "../shell/subnav.svelte";
-  import { Badge, Button, Chip, Icon, Time } from "../tui";
+  import { Badge, Button, Chip, Icon } from "../tui";
 
   let {
     id,
@@ -296,6 +297,7 @@
         }}
       />
     {:else}
+      <Reads base="knowledge" {id} version={entry.version} />
       <div class="read">
         <StatusActions actions={statusActions} />
         <ScopeCrumb area={entry.product_area} />
@@ -328,9 +330,14 @@
                   {/if}
                 </span>
                 <span class="when">
-                  {#if entry.updated_at}<span class="muted"
-                      >updated <Time at={entry.updated_at} date /></span
-                    >{/if}
+                  <Versions
+                    base="knowledge"
+                    {id}
+                    at={entry.updated_at}
+                    version={entry.version}
+                    {canEdit}
+                    onReverted={load}
+                  />
                 </span>
               </div>
 
@@ -511,13 +518,6 @@
           {/if}
         </div>
       </div>
-      <Readership
-        base="knowledge"
-        {id}
-        version={entry.version}
-        {canEdit}
-        onReverted={load}
-      />
     {/if}
   {:else if !error}
     <p class="muted">Loading…</p>
@@ -535,8 +535,6 @@
     padding: 0 var(--pad-4);
   }
 
-  /* Fills the frame, so the readership lines settle in its bottom-left corner
-     however short the entry is. */
   .detail {
     flex: 1 0 auto;
     display: flex;
