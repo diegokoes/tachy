@@ -4,13 +4,16 @@
   import { ANSI16 } from "./accent-palette";
   import {
     themeState as th,
-    type Theme,
+    type ThemeMode,
     selectAccent,
     resetAccent,
+    resolveMode,
     setTheme,
     setFontScale,
+    setMotion,
     setNavLabels,
-    setNavHidden,
+    setVision,
+    MOTIONS,
     NAV_LABELS,
     TEXT_SIZES,
   } from "../theme/theme.svelte";
@@ -37,11 +40,16 @@
   );
   let picking = $state(false);
 
-  function pickTheme(theme: Theme) {
-    if (theme === th.theme) return;
+  function pickMode(mode: ThemeMode) {
+    if (mode === th.mode) return;
+    const theme = resolveMode(mode);
+    if (theme === th.theme) {
+      setTheme(mode);
+      return;
+    }
     themeWipe(
       async () => {
-        setTheme(theme);
+        setTheme(mode);
         await tick();
       },
       theme === "dark" ? "top" : "bottom",
@@ -51,18 +59,20 @@
   const MODES = [
     { value: "dark", label: "dark" },
     { value: "light", label: "light" },
+    { value: "system", label: "system" },
   ] as const;
   const SIZES = TEXT_SIZES.map((t) => ({ value: t.scale, label: t.key }));
-  const SHOWN = [
-    { value: "shown", label: "shown" },
-    { value: "hidden", label: "hidden" },
-  ] as const;
   const LABELS = NAV_LABELS.map((l) => ({ value: l, label: l }));
+  const MOTION_OPTIONS = MOTIONS.map((m) => ({ value: m, label: m }));
+  const VISION_OPTIONS = [
+    { value: "standard", label: "standard" },
+    { value: "red-green", label: "red-green safe" },
+  ] as const;
 </script>
 
 <Rows>
   <Row label="mode">
-    <Choice label="mode" options={MODES} value={th.theme} onpick={pickTheme} />
+    <Choice label="mode" options={MODES} value={th.mode} onpick={pickMode} />
   </Row>
 
   <!-- Three steps, not a slider: dragging one re-lays out the whole app on
@@ -73,15 +83,6 @@
       options={SIZES}
       value={th.fontScale}
       onpick={setFontScale}
-    />
-  </Row>
-
-  <Row label="nav bar">
-    <Choice
-      label="nav bar"
-      options={SHOWN}
-      value={th.navHidden ? "hidden" : "shown"}
-      onpick={(v) => setNavHidden(v === "hidden")}
     />
   </Row>
 
@@ -139,6 +140,24 @@
         {/if}
       </span>
     {/snippet}
+  </Row>
+
+  <Row label="color vision">
+    <Choice
+      label="color vision"
+      options={VISION_OPTIONS}
+      value={th.vision}
+      onpick={setVision}
+    />
+  </Row>
+
+  <Row label="motion">
+    <Choice
+      label="motion"
+      options={MOTION_OPTIONS}
+      value={th.motion}
+      onpick={setMotion}
+    />
   </Row>
 </Rows>
 

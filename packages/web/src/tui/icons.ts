@@ -348,6 +348,7 @@ export const ICONS = {
   theme: Wallpaper,
   keybinds: Keyboard,
   agent: KeyRound,
+  account: UserRound,
   token: KeyRound,
 
   // Reach

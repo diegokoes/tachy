@@ -1,9 +1,9 @@
 /* Design tokens. Everything downstream derives from these - no component may
    hard-code a color, a radius, or a spacing step.
 
-   data-theme on <html> is the one attribute axis. --accent, --font-scale and
-   the three --font-* stacks are set inline on <html> by theme.svelte.ts and
-   fonts.ts. */
+   data-theme on <html> is the main attribute axis; data-vision swaps the
+   status colors. --accent, --font-scale and the three --font-* stacks are set
+   inline on <html> by theme.svelte.ts and fonts.ts. */
 
 :root {
   /* Without this the browser paints form controls and any remaining native
@@ -133,6 +133,26 @@
 
   --scrim-ink: color-mix(in srgb, #000 13%, transparent);
   --scrim-blur: 4px;
+}
+
+/* Green, amber and red share one hue under red-green color blindness; these
+   differ on the blue-yellow axis and in lightness. Light mode's danger is
+   magenta: a dark vermillion would read as its amber. */
+:root[data-vision="red-green"] {
+  --ok: #2fb593;
+  --warn: #f0e442;
+  --danger: #ea5d2a;
+  --star-ink-red: rgba(234, 93, 42, 0.5);
+  --star-ink-amber: rgba(240, 228, 66, 0.5);
+  --star-ink-green: rgba(47, 181, 147, 0.5);
+}
+:root[data-theme="light"][data-vision="red-green"] {
+  --ok: #007a5e;
+  --warn: #8a6d00;
+  --danger: #9e2a8c;
+  --star-ink-red: rgba(158, 42, 140, 0.5);
+  --star-ink-amber: rgba(138, 109, 0, 0.5);
+  --star-ink-green: rgba(0, 122, 94, 0.5);
 }
 
 /* Radius. Two steps: rounded corners are the web's signal for "this is

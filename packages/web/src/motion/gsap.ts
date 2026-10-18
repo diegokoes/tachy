@@ -17,7 +17,9 @@ gsap.registerPlugin(
   Physics2DPlugin,
 );
 
+/** The OS asks for less motion, or the reader did in Settings › theme. */
 export const reducedMotion = () =>
+  document.documentElement.dataset.motion === "reduced" ||
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export {

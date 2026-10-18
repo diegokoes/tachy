@@ -226,3 +226,16 @@ details.callout[open] > summary.callout-title::after {
 :root[data-theme-wipe]::view-transition-new(root) {
   clip-path: var(--theme-wipe);
 }
+
+/* Settings › theme can ask for less motion than the OS does; the components'
+   own reduced-motion blocks only answer the OS. */
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}

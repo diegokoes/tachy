@@ -6,7 +6,6 @@ describe("parseAppearanceDefaults", () => {
     const full = {
       theme: "light",
       text_size: "large",
-      nav_hidden: true,
       nav_labels: "icons",
       accent: "#0dbc79",
       accent2: "#2472c8",

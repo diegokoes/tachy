@@ -5,4 +5,5 @@ export const SETTINGS_TABS: SubnavItem[] = [
   { key: "theme", label: "theme", icon: "theme" },
   { key: "keybinds", label: "keybinds", icon: "keybinds" },
   { key: "agent", label: "agent", icon: "agent" },
+  { key: "account", label: "account", icon: "account" },
 ];
