@@ -68,8 +68,11 @@
   /* Chart ink. Fixed rather than derived from --accent, so a user's accent
      choice never recolours data, and quieter than the status tokens because a
      chart is a field of colour where a badge is a spot of it. */
-  --series: #8ea4ba;
-  --series-2: #b39d7c;
+  /* Blue, ochre, rose: one lightness band, apart in hue for every kind of
+     colour vision, and quiet enough to fill an area. */
+  --series: #5894d0;
+  --series-2: #b9883c;
+  --series-3: #b4608a;
   --series-ok: color-mix(in srgb, var(--ok) 70%, var(--panel-solid));
   --series-warn: color-mix(in srgb, var(--warn) 70%, var(--panel-solid));
   --series-danger: color-mix(in srgb, var(--danger) 70%, var(--panel-solid));
@@ -117,8 +120,9 @@
   --doc: #8a6520;
   --article: #7a4f86;
   --gauge-tick: #f3f0e8;
-  --series: #4b6580;
-  --series-2: #8a6a3a;
+  --series: #316ca5;
+  --series-2: #a07020;
+  --series-3: #9a4873;
   --series-ok: color-mix(in srgb, var(--ok) 85%, var(--panel-solid));
   --series-warn: color-mix(in srgb, var(--warn) 85%, var(--panel-solid));
   --series-danger: color-mix(in srgb, var(--danger) 85%, var(--panel-solid));

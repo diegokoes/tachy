@@ -131,6 +131,7 @@ describe("tones", () => {
     expect(toneVar()).toBe("var(--series)");
     expect(toneVar("info")).toBe("var(--series-2)");
     expect(toneVar("muted")).toBe("var(--rule)");
+    expect(toneVar("alt")).toBe("var(--series-3)");
   });
 
   it("thins one token rather than reaching for a second", () => {
