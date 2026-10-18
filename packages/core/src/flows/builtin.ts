@@ -16,11 +16,13 @@ import { searchReferenceDocs } from "../reference/reference";
 import { getSourceProject } from "../sources/projects";
 import { resolveSource } from "../sources/registry";
 import { followWorkItem } from "../work-items/follows";
+import { asNoteHtml, renderNote } from "../work-items/note-html";
 import { ingestWorkItem } from "../work-items/ingest";
 import { extractAdoRefs } from "../work-items/linked-refs";
 import { recordAdoRefs } from "../work-items/links";
 import { readStoredRaw } from "../work-items/stored";
 import { defineFlowAction, type FlowActionContext } from "./actions";
+import { flowName } from "./definitions";
 import { customerProperties } from "./customer";
 import { applyIngest, getIngestConfig, ingestConfig } from "./ingest";
 import { applyFormConfig, getComposeConfig, typeConfig } from "./forms";
@@ -484,6 +486,10 @@ export function registerBuiltinFlowActions(): void {
     source: "freshdesk",
     writes: true,
     params: z.object({
+      title: z
+        .string()
+        .default("")
+        .describe("The note's heading. Empty: the flow's name."),
       body: z.string().min(1).describe("The note. Takes {{steps.<id>.text}}."),
       private: z.boolean().default(true),
     }),
@@ -493,7 +499,16 @@ export function registerBuiltinFlowActions(): void {
       const { source } = await resolveSource(item.connection, ctx.scope);
       if (!source.postNote)
         throw badInput(`${item.source_type} items cannot take notes`);
-      await source.postNote(item.external_id, params.body, {
+      const flow = await flowName(ctx.flowId);
+      const note = renderNote({
+        kind: "analysis",
+        externalId: item.external_id,
+        title: params.title || flow || undefined,
+        requestedBy: flow ? `Flow: ${flow}` : undefined,
+        sections: [{ html: asNoteHtml(params.body) }],
+        caveat: "Posted by a tachy flow.",
+      });
+      await source.postNote(item.external_id, note, {
         private: params.private,
       });
       return { posted: true };

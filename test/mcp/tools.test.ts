@@ -915,7 +915,7 @@ describe("notes written back to a ticket", () => {
     });
     expect(answer.isError).toBe(false);
     expect(posted).toHaveLength(1);
-    expect(posted[0]).toContain("<strong>Problem</strong>");
+    expect(posted[0]).toContain(">Problem</p>");
     expect(posted[0]).toContain("[tachy:summary]");
     expect(answer.json).toMatchObject({
       posted_private_note: { notes: 1 },
@@ -938,7 +938,7 @@ describe("notes written back to a ticket", () => {
       ],
     });
     expect(answer.isError).toBe(false);
-    expect(posted[0]).toContain("<strong>Files</strong>");
+    expect(posted[0]).toContain(">Files</p>");
     expect(posted[0]).toContain("<strong>screen.png</strong>");
     expect(posted[0]).toContain("The spooler error E-209.");
   });
@@ -1008,6 +1008,46 @@ describe("notes written back to a ticket", () => {
     });
   });
 
+  it("points the summary at the transcript already on the ticket", async () => {
+    thread.push({
+      externalId: "old-transcript",
+      direction: "outgoing",
+      visibility: "private",
+      bodyText: "turns ... [tachy:compacted-transcript]",
+      createdAt: "2026-06-17T10:00:00Z",
+    });
+    await call("post_work_item_summary", {
+      source: "notes-conn",
+      external_id: "n-1",
+      ...summary,
+      state: "waiting_customer",
+      next_step: "Ask for the spooler log.",
+    });
+    expect(posted[0]).toContain(">Waiting on customer</span>");
+    expect(posted[0]).toContain(
+      "<strong>Next step:</strong> Ask for the spooler log.",
+    );
+    expect(posted[0]).toContain("Compacted transcript");
+  });
+
+  it("frames a private note under its title, keeping the text's paragraphs", async () => {
+    const answer = await call("post_private_note", {
+      source: "notes-conn",
+      external_id: "n-1",
+      title: "Why line 3 stops",
+      body: "The <b>spooler</b> drops the batch.\n\nRestart it nightly.",
+    });
+    expect(answer.isError).toBe(false);
+    expect(posted[0]).toContain(
+      ">Analysis</span><strong>Why line 3 stops</strong>",
+    );
+    expect(posted[0]).toContain(
+      '<p style="margin:0 0 8px 0">The <b>spooler</b> drops the batch.</p>',
+    );
+    expect(posted[0]).toContain("[tachy:note]");
+    expect(answer.json).toMatchObject({ posted: true, cited: [] });
+  });
+
   it("refuses a source that takes no notes", async () => {
     await addSourceConnection({
       sourceType: "fake-mcp",
@@ -1036,7 +1076,7 @@ describe("notes written back to a ticket", () => {
     });
     expect(answer.isError).toBe(false);
     expect(posted).toHaveLength(1);
-    expect(posted[0]).toContain("<strong>Compacted transcript</strong>");
+    expect(posted[0]).toContain(">Transcript</span>");
     expect(posted[0]).toContain("border-left:3px solid");
     expect(deleted).toEqual(["old-transcript"]);
     expect(answer.json).toMatchObject({
