@@ -2,15 +2,12 @@ import { formatBytes } from "../files/size";
 import type { RawMessage, RawWorkItem } from "./raw";
 import {
   SUMMARY_MARKER,
-  TRANSCRIPT_MARKER,
   card,
   escapeHtml,
   mutedLine,
-  noteFooter,
-  noteHeader,
   packBlocks,
-  sectionRule,
-  statTable,
+  renderNote,
+  sectionLabel,
   textToHtml,
 } from "./note-html";
 
@@ -138,6 +135,28 @@ const PRIOR_TRANSCRIPT =
 /** A transcript or summary tachy posted, which a later run finds and replaces. */
 export const isTachyNote = (body: string): boolean =>
   PRIOR_TRANSCRIPT.test(body) || body.includes(SUMMARY_MARKER);
+
+export interface TranscriptOnTicket {
+  parts: number;
+  /** When the newest part was posted, where the source says. */
+  postedAt?: string;
+}
+
+/** The compacted transcript an earlier run left on the ticket, or null. */
+export function transcriptOnTicket(
+  messages: RawMessage[],
+): TranscriptOnTicket | null {
+  const parts = messages.filter((message) =>
+    PRIOR_TRANSCRIPT.test(message.bodyText),
+  );
+  if (!parts.length) return null;
+  const postedAt = parts
+    .map((part) => part.createdAt)
+    .filter((at): at is string => Boolean(at))
+    .sort()
+    .at(-1);
+  return { parts: parts.length, ...(postedAt ? { postedAt } : {}) };
+}
 
 /** A longer message that mentions being out of office is a real reply. */
 const AUTO_REPLY_MAX_CHARS = 1200;
@@ -918,20 +937,24 @@ function turnPieces(text: string, maxChars: number): string[] {
 /** Markup roughly doubles a turn's length, so a piece takes half a note. */
 const PIECE_SHARE_OF_NOTE = 0.5;
 
-function turnCards(
-  turn: CompactTurn,
-  withBadge: boolean,
-  maxChars: number,
-): string[] {
-  const pieces = turnPieces(turn.text, maxChars * PIECE_SHARE_OF_NOTE);
+interface TurnCardOptions {
+  withBadge: boolean;
+  maxChars: number;
+  /** The turn's place in the order the note shows, e.g. "3 of 9". */
+  position: string;
+}
+
+function turnCards(turn: CompactTurn, opts: TurnCardOptions): string[] {
+  const pieces = turnPieces(turn.text, opts.maxChars * PIECE_SHARE_OF_NOTE);
   return pieces.map((piece, index) => {
     const isLast = index === pieces.length - 1;
-    const kindBadge = withBadge ? TURN_BADGE[turn.kind] : undefined;
+    const kindBadge = opts.withBadge ? TURN_BADGE[turn.kind] : undefined;
     return card({
       who: turn.speaker,
       date: day(turn.at),
       tone: turn.kind,
       badge: index === 0 ? kindBadge : "continued",
+      position: opts.position,
       bodyHtml: textToHtml(piece, { preformatted: looksStructured }),
       files:
         isLast && turn.attachments?.length
@@ -941,60 +964,106 @@ function turnCards(
   });
 }
 
-function transcriptHeader(compacted: CompactedWorkItem): string {
+/** Each speaker with how many turns they have, most first. */
+function speakerTally(turns: CompactTurn[]): string {
+  const counts = new Map<string, number>();
+  for (const turn of turns)
+    counts.set(turn.speaker, (counts.get(turn.speaker) ?? 0) + 1);
+  return [...counts]
+    .sort(([, a], [, b]) => b - a)
+    .map(([speaker, count]) => `${speaker} (${count})`)
+    .join(" · ");
+}
+
+function transcriptFacts(compacted: CompactedWorkItem) {
   const { source_messages, raw_chars, compact_chars } = compacted.compaction;
+  return [
+    {
+      label: "Messages",
+      html: escapeHtml(
+        `${source_messages} → ${plural(compacted.turns.length, "turn")}`,
+      ),
+    },
+    {
+      label: "To read",
+      html: escapeHtml(
+        `${roundedKb(compact_chars)} of ${roundedKb(raw_chars)}`,
+      ),
+    },
+    { label: "Less", html: `${savedPercent(compacted.compaction)}%` },
+  ];
+}
+
+function transcriptIntro(
+  compacted: CompactedWorkItem,
+  shownTurns: CompactTurn[],
+): string {
   const summary = summarizeCompaction(compacted);
   const accounting = [summary.removed, summary.recovered, summary.files]
     .filter(Boolean)
     .join(" ");
-  return [
-    noteHeader(
-      "Compacted transcript",
-      compacted.ticket.title,
-      compacted.ticket.external_id,
-    ),
-    statTable([
-      { value: String(source_messages), label: "messages" },
-      { value: roundedKb(compact_chars), label: "to read" },
-      { value: roundedKb(raw_chars), label: "before" },
-      { value: `${savedPercent(compacted.compaction)}%`, label: "less" },
-    ]),
-    accounting ? mutedLine(escapeHtml(accounting)) : "",
-    mutedLine(
-      "Every word below is quoted verbatim - nothing was summarised or reworded.",
-    ),
-  ].join("");
+  return (
+    (accounting ? mutedLine(accounting) : "") +
+    sectionLabel("transcript", "Who wrote") +
+    `<p style="margin:0 0 8px 0">${escapeHtml(speakerTally(shownTurns))}</p>`
+  );
 }
 
 /** Freshdesk documents no body limit; a note this size posts reliably. */
 const NOTE_MAX_CHARS = 60000;
 
+const TRANSCRIPT_CAVEAT =
+  "Every word is quoted verbatim - nothing was summarised or reworded.";
+
+export interface CompactNoteOptions {
+  maxChars?: number;
+  requestedBy?: string;
+}
+
 /**
- * The transcript as private-note bodies: a header, then one card per turn.
+ * The transcript as private-note bodies: an intro, then one card per turn.
  * A long transcript becomes a numbered series cut between cards, and every
  * part carries the marker so a later run finds and replaces all of them.
  */
 export function renderCompactNotes(
   compacted: CompactedWorkItem,
-  maxChars = NOTE_MAX_CHARS,
+  opts: CompactNoteOptions = {},
 ): string[] {
+  const maxChars = opts.maxChars ?? NOTE_MAX_CHARS;
   const { prologue, thread } = splitPrologue(compacted);
-  const blocks: string[] = [transcriptHeader(compacted)];
+  const shownTurns = [...prologue, ...thread];
+  const cardsOf = (turn: CompactTurn, withBadge: boolean) =>
+    turnCards(turn, {
+      withBadge,
+      maxChars,
+      position: `${shownTurns.indexOf(turn) + 1} of ${shownTurns.length}`,
+    });
+  const blocks: string[] = [transcriptIntro(compacted, shownTurns)];
   if (prologue.length) {
     blocks.push(
-      sectionRule(
+      sectionLabel(
+        "transcript",
         "Earlier mail, recovered from quoted replies",
         `${plural(prologue.length, "message")} that appear nowhere else on this ticket`,
       ),
     );
-    for (const turn of prologue)
-      blocks.push(...turnCards(turn, false, maxChars));
-    blocks.push(sectionRule("The ticket thread"));
+    for (const turn of prologue) blocks.push(...cardsOf(turn, false));
+    blocks.push(sectionLabel("transcript", "The ticket thread"));
   }
-  for (const turn of thread) blocks.push(...turnCards(turn, true, maxChars));
+  for (const turn of thread) blocks.push(...cardsOf(turn, true));
   const notes = packBlocks(blocks, maxChars);
-  return notes.map((noteBlocks, index) => {
-    const part = notes.length > 1 ? ` - part ${index + 1}/${notes.length}` : "";
-    return `<div>${noteBlocks.join("\n")}${noteFooter(`Generated by tachy${part}`, TRANSCRIPT_MARKER)}</div>`;
-  });
+  return notes.map((noteBlocks, index) =>
+    renderNote({
+      kind: "transcript",
+      externalId: compacted.ticket.external_id,
+      title: compacted.ticket.title,
+      requestedBy: opts.requestedBy,
+      facts: index === 0 ? transcriptFacts(compacted) : undefined,
+      sections: [{ html: noteBlocks.join("\n") }],
+      caveat: TRANSCRIPT_CAVEAT,
+      ...(notes.length > 1
+        ? { part: { index: index + 1, total: notes.length } }
+        : {}),
+    }),
+  );
 }

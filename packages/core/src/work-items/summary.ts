@@ -1,15 +1,37 @@
 import { z } from "zod";
 import type { WorkItemSource } from "../sources/source";
+import type { TranscriptOnTicket } from "./compact";
 import type { RawMessage } from "./raw";
 import {
-  SUMMARY_MARKER,
   escapeHtml,
-  mutedLine,
-  noteFooter,
-  noteHeader,
-  sectionRule,
+  mutedText,
+  noteLink,
+  pill,
+  renderNote,
+  rowsTable,
+  SUMMARY_MARKER,
   textToHtml,
+  type NoteCallout,
+  type NoteFact,
+  type NoteSection,
+  type PillTone,
 } from "./note-html";
+
+export const SUMMARY_STATES = [
+  "resolved",
+  "waiting_customer",
+  "waiting_us",
+  "blocked",
+  "in_progress",
+] as const;
+
+export const TRY_RESULTS = [
+  "worked",
+  "workaround",
+  "failed",
+  "ruled_out",
+  "unknown",
+] as const;
 
 /**
  * What a ticket summary holds. The descriptions are the writing brief: they
@@ -22,11 +44,29 @@ export const ticketSummarySchema = z.object({
     .describe(
       "What the customer reported and its impact, in two to four sentences. Facts from the thread only.",
     ),
+  state: z
+    .enum(SUMMARY_STATES)
+    .optional()
+    .describe(
+      "Which of these the thread shows. resolved: the customer confirmed the fix, or the ticket was closed as fixed. waiting_customer: we asked them something they have not answered. waiting_us: the next move is ours, development included. blocked: neither side can move until something outside both changes, such as a third party. in_progress: someone is working on it now.",
+    ),
   status: z
     .string()
     .min(1)
     .describe(
-      "Where the ticket stands now: resolved, waiting on whom, or blocked on what. One or two sentences.",
+      "Where the ticket stands now, in one or two sentences: what happened last, and who or what it waits on. state carries the category; this gives the particulars.",
+    ),
+  next_step: z
+    .string()
+    .optional()
+    .describe(
+      "The first thing the colleague who picks this up should do, in one sentence. Only when the thread makes it plain: a reply someone promised, a question waiting for an answer, a fix waiting for a release. Never a step of your own. Leave it out when the ticket is resolved.",
+    ),
+  open_questions: z
+    .array(z.string().min(1))
+    .default([])
+    .describe(
+      "Questions someone on the thread asked that nobody answered, one sentence each, worded as the asker put it. Empty when there are none.",
     ),
   timeline: z
     .array(
@@ -46,6 +86,12 @@ export const ticketSummarySchema = z.object({
     .array(
       z.object({
         action: z.string().min(1).describe("What was attempted or checked."),
+        result: z
+          .enum(TRY_RESULTS)
+          .optional()
+          .describe(
+            "worked: it fixed the problem. workaround: the problem is held off but its cause remains. failed: it was tried and the problem stayed. ruled_out: it was checked and is not the cause. unknown: the thread does not say what came of it.",
+          ),
         outcome: z
           .string()
           .min(1)
@@ -88,31 +134,56 @@ export const ticketSummarySchema = z.object({
 });
 
 export type TicketSummary = z.infer<typeof ticketSummarySchema>;
-/** A summary as it is handed in: `files` may be left out. */
+/** A summary as it is handed in: `files` and `open_questions` may be left out. */
 export type TicketSummaryInput = z.input<typeof ticketSummarySchema>;
+type SummaryState = (typeof SUMMARY_STATES)[number];
+type TryResult = (typeof TRY_RESULTS)[number];
 
 export interface SummarizedTicket {
   external_id: string;
   title?: string;
 }
 
-const CELL = "padding:4px 10px 4px 0;vertical-align:top";
+const STATE_LABEL: Record<SummaryState, { text: string; tone: PillTone }> = {
+  resolved: { text: "Resolved", tone: "good" },
+  waiting_customer: { text: "Waiting on customer", tone: "warn" },
+  waiting_us: { text: "Waiting on us", tone: "info" },
+  blocked: { text: "Blocked", tone: "bad" },
+  in_progress: { text: "In progress", tone: "neutral" },
+};
+
+const RESULT_LABEL: Record<TryResult, { text: string; tone: PillTone }> = {
+  worked: { text: "Worked", tone: "good" },
+  workaround: { text: "Workaround", tone: "warn" },
+  failed: { text: "Failed", tone: "bad" },
+  ruled_out: { text: "Ruled out", tone: "neutral" },
+  unknown: { text: "No result", tone: "neutral" },
+};
+
+const SUMMARY_CAVEAT =
+  "Written by a model from the ticket thread. Check it against the thread before acting on it.";
 
 function timelineHtml(timeline: TicketSummary["timeline"]): string {
-  const rows = timeline.map(
-    (entry) =>
-      `<tr><td style="${CELL};white-space:nowrap;color:#777">${escapeHtml(entry.date)}</td>` +
-      `<td style="${CELL}">${entry.who ? `<strong>${escapeHtml(entry.who)}</strong>: ` : ""}${escapeHtml(entry.event)}</td></tr>`,
+  return rowsTable(
+    timeline.map((entry) => [
+      mutedText(entry.date),
+      entry.who ? `<strong>${escapeHtml(entry.who)}</strong>` : "",
+      escapeHtml(entry.event),
+    ]),
   );
-  return `<table style="border-collapse:collapse;margin:0 0 8px 0">${rows.join("")}</table>`;
 }
 
 function triedHtml(tried: TicketSummary["tried"]): string {
-  const items = tried.map(
-    (attempt) =>
-      `<li style="margin:0 0 4px 0">${escapeHtml(attempt.action)}<br><span style="color:#777">${escapeHtml(attempt.outcome)}</span></li>`,
+  return rowsTable(
+    tried.map((attempt) => {
+      const result = attempt.result ? RESULT_LABEL[attempt.result] : null;
+      return [
+        escapeHtml(attempt.action),
+        result ? pill(result.text, result.tone) : "",
+        mutedText(attempt.outcome),
+      ];
+    }),
   );
-  return `<ul style="margin:0 0 8px 0;padding-left:22px">${items.join("")}</ul>`;
 }
 
 /** Who sent a file and when, where the summary says. */
@@ -129,12 +200,10 @@ function filesHtml(
   const items = files.map((file) => {
     const sent = sentBy(file);
     const href = file.path ? linkOf?.(file.path) : null;
-    const name = href
-      ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(file.name)}</a>`
-      : escapeHtml(file.name);
+    const name = href ? noteLink(href, file.name) : escapeHtml(file.name);
     return (
       `<li style="margin:0 0 4px 0"><strong>${name}</strong>` +
-      (sent ? ` <span style="color:#777">${escapeHtml(sent)}</span>` : "") +
+      (sent ? ` ${mutedText(sent)}` : "") +
       (file.shows ? `<br>${escapeHtml(file.shows)}` : "") +
       "</li>"
     );
@@ -142,41 +211,97 @@ function filesHtml(
   return `<ul style="margin:0 0 8px 0;padding-left:22px">${items.join("")}</ul>`;
 }
 
-/**
- * The summary as one private-note body, stamped so the next one replaces it.
- * With `linkOf`, a file the summary gives a path for is a link to it.
- */
+export interface SummaryNoteOptions {
+  /** Turns a file's path into a link; without it file names are plain. */
+  linkOf?: FileLinker;
+  /** The customer tachy matched the ticket to. */
+  customer?: string | null;
+  requestedBy?: string;
+  /** The compacted transcript already on the ticket, if any. */
+  transcript?: TranscriptOnTicket | null;
+}
+
+function summaryFacts(
+  summary: TicketSummaryInput,
+  opts: SummaryNoteOptions,
+): NoteFact[] {
+  const facts: NoteFact[] = [];
+  if (summary.state) {
+    const state = STATE_LABEL[summary.state];
+    facts.push({ label: "State", html: pill(state.text, state.tone) });
+  }
+  if (opts.customer)
+    facts.push({ label: "Customer", html: escapeHtml(opts.customer) });
+  const fileCount = summary.files?.length ?? 0;
+  if (fileCount) facts.push({ label: "Files", html: String(fileCount) });
+  if (opts.transcript) {
+    const { parts, postedAt } = opts.transcript;
+    const detail = [parts > 1 ? `${parts} parts` : "", postedAt?.slice(0, 10)]
+      .filter(Boolean)
+      .join(", ");
+    facts.push({
+      label: "Full thread",
+      html: `Compacted transcript${detail ? ` ${mutedText(detail)}` : ""}`,
+    });
+  }
+  return facts;
+}
+
+function summaryCallouts(summary: TicketSummaryInput): NoteCallout[] {
+  const callouts: NoteCallout[] = [];
+  if (summary.next_step)
+    callouts.push({ label: "Next step", html: escapeHtml(summary.next_step) });
+  const questions = summary.open_questions ?? [];
+  if (questions.length === 1)
+    callouts.push({ label: "Open question", html: escapeHtml(questions[0]) });
+  if (questions.length > 1)
+    callouts.push({
+      label: "Open questions",
+      html: `<ul style="margin:4px 0 0 0;padding-left:20px">${questions.map((question) => `<li>${escapeHtml(question)}</li>`).join("")}</ul>`,
+    });
+  return callouts;
+}
+
+/** The summary as one private-note body, stamped so the next one replaces it. */
 export function renderSummaryHtml(
   ticket: SummarizedTicket,
   summary: TicketSummaryInput,
-  linkOf?: FileLinker,
+  opts: SummaryNoteOptions = {},
 ): string {
   const files = summary.files ?? [];
-  const sections = [
-    noteHeader("Summary", ticket.title, ticket.external_id),
-    sectionRule("Problem"),
-    textToHtml(summary.problem),
-    sectionRule("Current status"),
-    textToHtml(summary.status),
+  const sections: NoteSection[] = [
+    { label: "Problem", html: textToHtml(summary.problem) },
+    { label: "Where it stands", html: textToHtml(summary.status) },
   ];
   if (summary.timeline.length)
-    sections.push(sectionRule("Timeline"), timelineHtml(summary.timeline));
+    sections.push({ label: "Timeline", html: timelineHtml(summary.timeline) });
   if (summary.tried.length)
-    sections.push(sectionRule("Tried / ruled out"), triedHtml(summary.tried));
+    sections.push({ label: "Tried", html: triedHtml(summary.tried) });
   if (files.length)
-    sections.push(sectionRule("Files"), filesHtml(files, linkOf));
-  sections.push(
-    mutedLine(
-      "Written by a model from the ticket thread; check it against the thread before acting on it.",
-    ),
-    noteFooter("Generated by tachy", SUMMARY_MARKER),
-  );
-  return `<div>${sections.join("\n")}</div>`;
+    sections.push({ label: "Files", html: filesHtml(files, opts.linkOf) });
+  return renderNote({
+    kind: "summary",
+    externalId: ticket.external_id,
+    title: ticket.title,
+    requestedBy: opts.requestedBy,
+    facts: summaryFacts(summary, opts),
+    callouts: summaryCallouts(summary),
+    sections,
+    caveat: SUMMARY_CAVEAT,
+  });
 }
 
 /** The summary as plain text, for a flow step that reads it. */
 export function renderSummaryText(summary: TicketSummaryInput): string {
-  const lines = [`Problem: ${summary.problem}`, `Status: ${summary.status}`];
+  const lines = [`Problem: ${summary.problem}`];
+  if (summary.state) lines.push(`State: ${STATE_LABEL[summary.state].text}`);
+  lines.push(`Status: ${summary.status}`);
+  if (summary.next_step) lines.push(`Next step: ${summary.next_step}`);
+  const questions = summary.open_questions ?? [];
+  if (questions.length) {
+    lines.push("Open questions:");
+    for (const question of questions) lines.push(`- ${question}`);
+  }
   if (summary.timeline.length) {
     lines.push("Timeline:");
     for (const entry of summary.timeline)
@@ -186,8 +311,12 @@ export function renderSummaryText(summary: TicketSummaryInput): string {
   }
   if (summary.tried.length) {
     lines.push("Tried / ruled out:");
-    for (const attempt of summary.tried)
-      lines.push(`- ${attempt.action} -> ${attempt.outcome}`);
+    for (const attempt of summary.tried) {
+      const result = attempt.result
+        ? ` (${RESULT_LABEL[attempt.result].text})`
+        : "";
+      lines.push(`- ${attempt.action} -> ${attempt.outcome}${result}`);
+    }
   }
   const files = summary.files ?? [];
   if (files.length) {

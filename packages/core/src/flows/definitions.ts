@@ -64,6 +64,12 @@ export async function listFlows(teamIds?: string[] | null): Promise<Flow[]> {
   `) as never;
 }
 
+/** Null for an id no flow has. */
+export async function flowName(id: string): Promise<string | null> {
+  const [row] = await sql`select name from flows where id = ${id}`;
+  return (row?.name as string | undefined) ?? null;
+}
+
 export async function getFlow(id: string): Promise<Flow> {
   const [row] = await sql`${SELECT} where f.id = ${id}`;
   if (!row) throw notFound(`flow ${id} not found`);
