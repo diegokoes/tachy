@@ -74,7 +74,6 @@
       right: [
         {
           label: "api tokens",
-          hint: "For scripts that call the API as you. Shown once, stored as a hash.",
           view: Tokens,
         },
       ],
