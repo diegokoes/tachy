@@ -20,14 +20,16 @@ export const notifyState = $state<{
 
 let toastSeq = 0;
 
+/** Shows a toast for `ms`, or until dismissed when `ms` is 0. Returns its id. */
 export function toast(
   text: string,
   tone: Toast["tone"] = "ok",
   ms = 4000,
-): void {
+): number {
   const id = ++toastSeq;
   notifyState.toasts.push({ id, tone, text });
   if (ms > 0) setTimeout(() => dismissToast(id), ms);
+  return id;
 }
 
 export function dismissToast(id: number): void {
