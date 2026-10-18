@@ -446,7 +446,7 @@
   }
 
   .link {
-    stroke: color-mix(in srgb, var(--muted) 45%, transparent);
+    stroke: color-mix(in srgb, var(--rule) 45%, transparent);
     stroke-width: 1;
   }
 
@@ -455,7 +455,7 @@
   }
   .dot {
     fill: var(--panel-solid);
-    stroke: var(--muted);
+    stroke: var(--rule);
     stroke-width: 1.5;
   }
   .node text {

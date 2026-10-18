@@ -103,7 +103,7 @@ count of things, which a bar cannot do.
     flex: none;
   }
   rect {
-    fill: color-mix(in srgb, var(--muted) 30%, transparent);
+    fill: color-mix(in srgb, var(--rule) 30%, transparent);
   }
   rect.lit {
     fill: var(--tone-color);

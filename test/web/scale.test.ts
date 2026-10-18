@@ -130,7 +130,7 @@ describe("tones", () => {
     expect(toneVar("ok")).toBe("var(--series-ok)");
     expect(toneVar()).toBe("var(--series)");
     expect(toneVar("info")).toBe("var(--series-2)");
-    expect(toneVar("muted")).toBe("var(--muted)");
+    expect(toneVar("muted")).toBe("var(--rule)");
   });
 
   it("thins one token rather than reaching for a second", () => {

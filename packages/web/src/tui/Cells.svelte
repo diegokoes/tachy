@@ -116,7 +116,7 @@
   }
   .muted,
   .more {
-    --tone-color: var(--muted);
+    --tone-color: var(--rule);
     color: var(--muted);
   }
   .more {

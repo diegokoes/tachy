@@ -135,7 +135,7 @@
     justify-content: space-between;
     gap: var(--pad-3);
     padding-bottom: var(--pad-2);
-    border-bottom: 1px solid color-mix(in srgb, var(--muted) 45%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--rule) 45%, transparent);
   }
   h3 {
     margin: 0;

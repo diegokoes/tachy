@@ -104,7 +104,7 @@
     color: var(--text);
     background: var(--dialog-bg);
     border: var(--panel-line);
-    border-left: 3px solid var(--muted);
+    border-left: 3px solid var(--rule);
     border-radius: var(--radius-control);
     padding: var(--pad-2) var(--pad-3);
     box-shadow: 0 8px 30px var(--drop);

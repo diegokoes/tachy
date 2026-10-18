@@ -102,7 +102,7 @@
     margin: 0.35rem 0;
     padding: 0.75rem 1.15rem 0.85rem;
     background: var(--panel-solid);
-    border: 3px double var(--muted);
+    border: 3px double var(--rule);
     font-family: var(--font-mono);
     background-image: repeating-linear-gradient(
       var(--bg) 0 1px,

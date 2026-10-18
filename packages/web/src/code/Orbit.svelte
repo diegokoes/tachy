@@ -406,28 +406,28 @@
     color: var(--muted);
   }
   .s-a {
-    stop-color: color-mix(in oklch, var(--orb-a) var(--sat), var(--muted));
+    stop-color: color-mix(in oklch, var(--orb-a) var(--sat), var(--rule));
   }
   .s-b {
-    stop-color: color-mix(in oklch, var(--orb-b) var(--sat), var(--muted));
+    stop-color: color-mix(in oklch, var(--orb-b) var(--sat), var(--rule));
   }
   .s-c {
-    stop-color: color-mix(in oklch, var(--orb-c) var(--sat), var(--muted));
+    stop-color: color-mix(in oklch, var(--orb-c) var(--sat), var(--rule));
   }
   .s-d {
-    stop-color: color-mix(in oklch, var(--orb-d) var(--sat), var(--muted));
+    stop-color: color-mix(in oklch, var(--orb-d) var(--sat), var(--rule));
   }
 
   .moon {
     fill-opacity: 0.22;
   }
   .m-a {
-    stroke: color-mix(in oklch, var(--orb-a) var(--sat), var(--muted));
-    fill: color-mix(in oklch, var(--orb-a) var(--sat), var(--muted));
+    stroke: color-mix(in oklch, var(--orb-a) var(--sat), var(--rule));
+    fill: color-mix(in oklch, var(--orb-a) var(--sat), var(--rule));
   }
   .m-c {
-    stroke: color-mix(in oklch, var(--orb-c) var(--sat), var(--muted));
-    fill: color-mix(in oklch, var(--orb-c) var(--sat), var(--muted));
+    stroke: color-mix(in oklch, var(--orb-c) var(--sat), var(--rule));
+    fill: color-mix(in oklch, var(--orb-c) var(--sat), var(--rule));
   }
 
   /* The hole the comets fall into: opaque, so what passes behind it is gone. */
@@ -436,7 +436,7 @@
   }
 
   .ring {
-    stroke: var(--muted);
+    stroke: var(--rule);
     stroke-width: 0.35;
     stroke-dasharray: 0.4 1.6;
     opacity: calc(0.28 + var(--heat) * 0.25);

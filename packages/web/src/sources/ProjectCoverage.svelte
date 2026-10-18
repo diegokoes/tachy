@@ -104,7 +104,7 @@
   }
   .head:not(:disabled):hover,
   .head:focus-visible {
-    background: color-mix(in srgb, var(--muted) 12%, transparent);
+    background: color-mix(in srgb, var(--rule) 12%, transparent);
   }
   .mark {
     align-self: center;
