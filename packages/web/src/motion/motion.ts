@@ -371,11 +371,11 @@ export function confetti(container: HTMLElement, count = 36) {
 let wipeRun = 0;
 
 /**
- * Swaps the theme behind a wavy edge that crosses the screen, two bands of
- * accent ahead of it. `swap` makes the change. Both pages are snapshots of a
- * view transition, the only way to paint two themes at once; the new one is
- * clipped to a path GSAP rewrites each frame through `--theme-wipe`. Each edge
- * is ten points leaving at shared offsets, so the edges ripple and never cross.
+ * Swaps the theme behind one wave that crosses the screen. `swap` makes the
+ * change. Both pages are snapshots of a view transition, the only way to paint
+ * two themes at once; the new one is clipped to a path GSAP rewrites each frame
+ * through `--theme-wipe`. The wave rolls sideways as it travels, and its rest
+ * line starts and ends one amplitude off screen so no crest shows at either end.
  */
 export function themeWipe(
   swap: () => void | Promise<void>,
@@ -386,73 +386,52 @@ export function themeWipe(
     void swap();
     return;
   }
-  const POINTS = 10;
-  const EDGES = 3;
+  const POINTS = 25;
+  const CYCLES = 1.25;
   const run = ++wipeRun;
   const w = window.innerWidth;
   const h = window.innerHeight;
   const start = from === "bottom" ? h : 0;
+  const heading = from === "bottom" ? -1 : 1;
+  const amplitude = Math.min(48, h * 0.06);
+  const restFrom = start - heading * amplitude;
+  const restTo = h - start + heading * amplitude;
   const step = w / (POINTS - 1);
-  const edges = Array.from({ length: EDGES }, () =>
-    Array<number>(POINTS).fill(start),
-  );
-  const last = edges[EDGES - 1];
+  const wave = { progress: 0 };
 
-  const SVG_NS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(SVG_NS, "svg");
-  svg.classList.add("theme-wipe");
-  const bands = edges.slice(1).map(() => {
-    const path = document.createElementNS(SVG_NS, "path");
-    svg.append(path);
-    return path;
-  });
-
-  const along = (ys: number[], back = false) => {
-    let d = "";
-    for (let n = 0; n < POINTS - 1; n++) {
-      const j = back ? POINTS - 1 - n : n;
-      const k = back ? j - 1 : j + 1;
-      const control = ((j + k) / 2) * step;
-      d += ` C ${control} ${ys[j]} ${control} ${ys[k]} ${k * step} ${ys[k]}`;
-    }
-    return d;
+  const edge = () => {
+    const rest = restFrom + (restTo - restFrom) * wave.progress;
+    return Array.from(
+      { length: POINTS },
+      (_, j) =>
+        rest +
+        amplitude *
+          Math.sin(2 * Math.PI * (CYCLES * (j / (POINTS - 1)) + wave.progress)),
+    );
   };
   const draw = () => {
-    root.style.setProperty(
-      "--theme-wipe",
-      `path("M 0 ${last[0]}${along(last)} V ${start} H 0 Z")`,
-    );
-    bands.forEach((path, i) => {
-      const lead = edges[i];
-      const trail = edges[i + 1];
-      path.setAttribute(
-        "d",
-        `M 0 ${lead[0]}${along(lead)} V ${trail[POINTS - 1]}${along(trail, true)} Z`,
-      );
-    });
+    const ys = edge();
+    let d = `M 0 ${ys[0]}`;
+    for (let j = 0; j < POINTS - 1; j++) {
+      const control = (j + 0.5) * step;
+      d += ` C ${control} ${ys[j]} ${control} ${ys[j + 1]} ${(j + 1) * step} ${ys[j + 1]}`;
+    }
+    root.style.setProperty("--theme-wipe", `path("${d} V ${start} H 0 Z")`);
   };
 
-  const tl = gsap.timeline({
+  const tween = gsap.to(wave, {
+    progress: 1,
+    duration: 0.9,
+    ease: "power2.inOut",
     paused: true,
     onUpdate: draw,
-    defaults: { ease: "power2.inOut", duration: 0.6 },
   });
-  const offsets = last.map(() => Math.random() * 0.2);
-  edges.forEach((ys, i) =>
-    offsets.forEach((delay, j) =>
-      tl.to(ys, { [j]: h - start }, delay + i * 0.12),
-    ),
-  );
 
   root.dataset.themeWipe = "";
   draw();
-  const transition = document.startViewTransition(async () => {
-    await swap();
-    document.body.append(svg);
-  });
+  const transition = document.startViewTransition(() => swap());
   const done = () => {
-    tl.kill();
-    svg.remove();
+    tween.kill();
     if (run !== wipeRun) return;
     delete root.dataset.themeWipe;
     root.style.removeProperty("--theme-wipe");
@@ -460,15 +439,15 @@ export function themeWipe(
   transition.ready.then(() => {
     // A view transition ends when its pseudo-elements stop animating, and the
     // wipe is not an animation the browser can see. This one changes nothing
-    // and keeps the snapshots up for as long as the timeline runs.
+    // and keeps the snapshots up for as long as the tween runs.
     root.animate(
       { opacity: [1, 1] },
       {
-        duration: tl.duration() * 1000 + 50,
+        duration: tween.duration() * 1000 + 50,
         pseudoElement: "::view-transition-old(root)",
       },
     );
-    tl.play();
+    tween.play();
   }, done);
   transition.finished.then(done, done);
 }

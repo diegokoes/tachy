@@ -72,15 +72,12 @@ describe("themeWipe", () => {
     expect(doc.startViewTransition).not.toHaveBeenCalled();
   });
 
-  it("swaps inside the transition and mounts the bands after it", async () => {
+  it("swaps inside the transition", async () => {
     const phases = fakeTransition();
-    const swap = vi.fn(() => {
-      expect(document.querySelector(".theme-wipe")).toBeNull();
-    });
+    const swap = vi.fn();
     themeWipe(swap, "bottom");
     await phases.updated;
     expect(swap).toHaveBeenCalledOnce();
-    expect(document.querySelectorAll(".theme-wipe path")).toHaveLength(2);
     expect(root.dataset.themeWipe).toBe("");
   });
 
@@ -91,8 +88,8 @@ describe("themeWipe", () => {
     const clip = () => root.style.getPropertyValue("--theme-wipe");
     const ys = () =>
       [...clip().matchAll(/C \S+ \S+ \S+ \S+ \S+ (\S+)/g)].map((m) => +m[1]);
-    expect(ys()).toHaveLength(9);
-    expect(ys().every((y) => y === h)).toBe(true);
+    expect(ys()).toHaveLength(24);
+    expect(ys().every((y) => y >= h)).toBe(true);
 
     phases.ready.resolve();
     await settle();
@@ -102,7 +99,7 @@ describe("themeWipe", () => {
     );
     const tl = gsap.globalTimeline.getChildren(false)[0];
     tl.progress(1);
-    expect(ys().every((y) => y === 0)).toBe(true);
+    expect(ys().every((y) => y <= 0)).toBe(true);
     expect(clip()).toContain(`V ${h} H 0 Z`);
   });
 
@@ -113,8 +110,12 @@ describe("themeWipe", () => {
     phases.ready.resolve();
     await settle();
     gsap.globalTimeline.getChildren(false)[0].progress(1);
-    const band = document.querySelector(".theme-wipe path")!.getAttribute("d")!;
-    expect(band.startsWith(`M 0 ${window.innerHeight} C`)).toBe(true);
+    const ys = [
+      ...root.style
+        .getPropertyValue("--theme-wipe")
+        .matchAll(/C \S+ \S+ \S+ \S+ \S+ (\S+)/g),
+    ].map((m) => +m[1]);
+    expect(ys.every((y) => y >= window.innerHeight)).toBe(true);
   });
 
   it("cleans up when the transition finishes", async () => {
@@ -123,7 +124,6 @@ describe("themeWipe", () => {
     await phases.updated;
     phases.finished.resolve();
     await settle();
-    expect(document.querySelector(".theme-wipe")).toBeNull();
     expect(root.dataset.themeWipe).toBeUndefined();
     expect(root.style.getPropertyValue("--theme-wipe")).toBe("");
   });
@@ -135,7 +135,6 @@ describe("themeWipe", () => {
     phases.ready.reject(new Error("skipped"));
     phases.finished.resolve();
     await settle();
-    expect(document.querySelector(".theme-wipe")).toBeNull();
     expect(root.dataset.themeWipe).toBeUndefined();
   });
 
@@ -148,7 +147,6 @@ describe("themeWipe", () => {
     await second.updated;
     first.finished.resolve();
     await settle();
-    expect(document.querySelectorAll(".theme-wipe")).toHaveLength(1);
     expect(root.dataset.themeWipe).toBe("");
     expect(root.style.getPropertyValue("--theme-wipe")).not.toBe("");
   });
