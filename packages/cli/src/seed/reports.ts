@@ -39,7 +39,7 @@ const BUGS: Draft[] = [
   {
     title: "Admin overview counters flash zero on load",
     body: "Opening admin → integrations, the counters at the top show 0 for about a second before the real numbers appear. Looks like everything is broken at first glance.",
-    from: "/admin/integrations",
+    from: "/console/integrations",
   },
   {
     title: "Filter by component resets when switching tabs",
@@ -97,7 +97,7 @@ const FEATURES: Draft[] = [
   {
     title: "Export a report thread to PDF",
     body: "When a bug report turns into a customer escalation I have to copy the thread into an email by hand. A PDF export of the report and its replies would help.",
-    from: "/admin/system",
+    from: "/console/system",
   },
   {
     title: "Show who last edited a wiki article",
@@ -112,7 +112,7 @@ const FEATURES: Draft[] = [
   {
     title: "Notify me when a job fails",
     body: "The source syncs fail silently now and then. An in-app notification to admins when a scheduled job fails would mean we notice before users do.",
-    from: "/admin/workers",
+    from: "/console/workers",
   },
   {
     title: "Draft wiki articles from resolved tickets",
@@ -132,7 +132,7 @@ const FEATURES: Draft[] = [
   {
     title: "Mention a colleague in a report reply",
     body: "When replying to a report I'd like to @mention the engineer who owns the area so they get the notification too, instead of forwarding the link.",
-    from: "/admin/system",
+    from: "/console/system",
   },
   {
     title: "Remember the last filter per section",

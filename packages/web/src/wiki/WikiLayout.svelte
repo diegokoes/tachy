@@ -74,7 +74,6 @@
     pushScope([
       {
         key: "ctrl+k",
-        label: "search wiki",
         inFields: true,
         run: () => (searching = true),
       },

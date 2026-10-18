@@ -32,3 +32,10 @@ setLanding("board", () => {
   const projectId = landingProject();
   return projectId ? boardListPath(projectId) : `/board/${BOARD_SOURCE}`;
 });
+
+/**
+ * A new item asked for from outside the board, such as the palette. BoardView
+ * opens its type menu once a project is on screen, and drops the ask on
+ * leaving, so a board with no project does not keep it for the next visit.
+ */
+export const boardAsk = $state({ newItem: false });

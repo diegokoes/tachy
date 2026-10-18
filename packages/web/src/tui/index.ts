@@ -47,7 +47,6 @@ export { default as Band } from "./Band.svelte";
 export { default as Cells } from "./Cells.svelte";
 export { default as Timeline, type Lane } from "./Timeline.svelte";
 export { default as Treemap } from "./Treemap.svelte";
-export { default as HintRule } from "./HintRule.svelte";
 export { default as Icon } from "./Icon.svelte";
 export { default as Chevron } from "./Chevron.svelte";
 export { default as Time } from "./Time.svelte";

@@ -7,7 +7,7 @@
    *   azure-devops/:projectId         its items
    *   azure-devops/:projectId/:itemId one item
    */
-  import { onMount } from "svelte";
+  import { onDestroy, onMount, tick } from "svelte";
   import type {
     ComposerProject,
     CreatedTicket,
@@ -20,7 +20,7 @@
   import { AdoMark, Button, EmptyState, Note, Spinner } from "../tui";
   import { az, refreshProjects } from "./az.svelte";
   import { BOARD_SOURCE, boardItemPath, boardListPath } from "./board";
-  import { landingProject, rememberProject } from "./board.svelte";
+  import { boardAsk, landingProject, rememberProject } from "./board.svelte";
   import { composer, openComposer } from "./composer.svelte";
   import ItemDetail from "./ItemDetail.svelte";
   import ItemList from "./ItemList.svelte";
@@ -50,6 +50,15 @@
 
   let typeMenu = $state<TypeMenu>();
 
+  // A tick late: the type menu closes on a route change, and the ask arrives
+  // with one.
+  $effect(() => {
+    if (!boardAsk.newItem || !typeMenu) return;
+    boardAsk.newItem = false;
+    void tick().then(() => typeMenu?.open());
+  });
+  onDestroy(() => (boardAsk.newItem = false));
+
   function startNew(type: WorkItemTypeOption) {
     if (project) void openComposer(project, type);
   }
@@ -77,22 +86,8 @@
 
   $effect(() =>
     pushScope([
-      {
-        key: "n",
-        label: "new item",
-        hidden: true,
-        run: () => typeMenu?.open(),
-      },
-      ...(itemId
-        ? [
-            {
-              key: "escape",
-              label: "back to the list",
-              hidden: true,
-              run: backToList,
-            },
-          ]
-        : []),
+      { key: "n", run: () => typeMenu?.open() },
+      ...(itemId ? [{ key: "esc", run: backToList }] : []),
     ]),
   );
 </script>

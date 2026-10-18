@@ -55,21 +55,18 @@
     if (activeMatches) stickyKey = active;
   });
 
-  // Hidden: no digit is rendered on the tab. Settings › keybinds lists these.
+  // No digit is drawn on the tab; Settings › keybinds lists these.
   $effect(() => {
     if (hotkeys !== "shift") return;
     const pick = onpick;
     return pushScope([
-      ...items.slice(0, 9).map((item, i) => ({
-        key: subnavKey(i),
-        label: item.label,
-        hidden: true,
-        run: () => pick(item.key),
-      })),
+      ...items
+        .slice(0, 9)
+        .map((item, i) => ({ key: subnavKey(i), run: () => pick(item.key) })),
       ...(vimState.enabled
         ? [
-            { key: "shift+h", label: "", hidden: true, run: () => step(-1) },
-            { key: "shift+l", label: "", hidden: true, run: () => step(1) },
+            { key: "shift+h", run: () => step(-1) },
+            { key: "shift+l", run: () => step(1) },
           ]
         : []),
     ]);

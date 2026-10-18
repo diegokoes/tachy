@@ -13,15 +13,20 @@ import {
   subnavKey,
 } from "../keys/bindings.svelte";
 import { normalize } from "../keys/keys.svelte";
+import { CONSOLE_PAGES } from "../admin/pages";
 import { navItems } from "../shell/nav";
+import { SETTINGS_TABS } from "./tabs";
 
 export type Target =
   | { kind: "nav"; item: string }
   | { kind: "subnav"; slot: number }
   | { kind: "action"; item: Action };
 
-/** The widest subnav in the app; admin, wiki and library all run three deep. */
-export const SUBNAV_SLOTS = 3;
+/** The widest subnav in the app: the console's pages or settings' tabs. */
+export const SUBNAV_SLOTS = Math.max(
+  CONSOLE_PAGES.length,
+  SETTINGS_TABS.length,
+);
 
 /**
  * The binding open in the rebind dialog, and the press it has recorded so far.
