@@ -219,20 +219,25 @@
     }
   }
 
-  $effect(() => {
-    if (!isCurator()) return;
-    return setTopActions(curate);
-  });
+  $effect(() => setTopActions(actions));
 </script>
 
 <!-- Rendered by App into the carved row beside the subnav, not here. -->
-{#snippet curate()}
+{#snippet actions()}
+  {#if isCurator()}
+    <Button
+      variant="ghost"
+      size="sm"
+      icon="refresh"
+      busy={rescanning}
+      onclick={rescan}>rescan</Button
+    >
+  {/if}
   <Button
     variant="ghost"
     size="sm"
-    icon="refresh"
-    busy={rescanning}
-    onclick={rescan}>rescan</Button
+    icon="overview"
+    onclick={() => navigate(wikiPath(scope))}>overview</Button
   >
 {/snippet}
 

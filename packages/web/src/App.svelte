@@ -13,7 +13,7 @@
   import Palette from "./palette/Palette.svelte";
   import { openFeedback } from "./reports/feedback";
   import { session, initSession } from "./access/session.svelte";
-  import { navItems } from "./shell/nav";
+  import { navItems, tabOf } from "./shell/nav";
   import { jellyPress } from "./motion/motion";
   import StarField from "./motion/StarField.svelte";
   import Wordmark from "./motion/Wordmark.svelte";
@@ -313,7 +313,7 @@
         <Panel>
           <Tabs
             items={nav}
-            active={view}
+            active={tabOf(view)}
             anchor="--tab-nav"
             labels={themeState.navLabels}
             onpick={openSection}
