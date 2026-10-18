@@ -45,6 +45,9 @@ export const tagsField = z
     "Free-form labels for filtering. Call list_labels first and reuse a slug rather than inventing a near-duplicate; a component slug used as a tag makes the entry findable by component.",
   );
 
+/** The longest code range a walkthrough step or a note citation may span. */
+export const MAX_CODE_RANGE_LINES = 60;
+
 /** A page size for list and search tools. */
 export const limitField = z.number().int().positive().max(100).optional();
 

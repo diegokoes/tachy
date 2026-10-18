@@ -24,6 +24,7 @@ import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
 import { GRADE_NOTE, out, outScrubbed, searchOut } from "../results";
 import { resolveScopeIds } from "../context";
+import { MAX_CODE_RANGE_LINES } from "../fields";
 
 const PROJECT_FIELD =
   "A source project by key or name, as list_repos `project_key` gives it or as an @project mention names it: every repo linked under it.";
@@ -359,12 +360,11 @@ tool(
 );
 
 const MAX_WALKTHROUGH_STEPS = 8;
-const MAX_STEP_LINES = 60;
 
 tool(
   "show_code_walkthrough",
   {
-    description: `Show the user a walkthrough panel: ordered steps through a flow, each one a range of real code with the deciding lines lit and a short note beside it. You send only where the code is; the app reads the lines itself, so never put code in a note. Use it when asked to walk through, show or visualise how something works, after you have read the ranges with read_code_file. Steps go in execution order, at most ${MAX_WALKTHROUGH_STEPS}, each the narrowest range that shows its point (at most ${MAX_STEP_LINES} lines). Afterwards say one line; do not repeat the code or the notes in text.`,
+    description: `Show the user a walkthrough panel: ordered steps through a flow, each one a range of real code with the deciding lines lit and a short note beside it. You send only where the code is; the app reads the lines itself, so never put code in a note. Use it when asked to walk through, show or visualise how something works, after you have read the ranges with read_code_file. Steps go in execution order, at most ${MAX_WALKTHROUGH_STEPS}, each the narrowest range that shows its point (at most ${MAX_CODE_RANGE_LINES} lines). Afterwards say one line; do not repeat the code or the notes in text.`,
     inputSchema: {
       title: z.string().describe("What is being walked through, a few words."),
       steps: z
@@ -409,9 +409,9 @@ tool(
     const userId = await resolveCurrentUserId();
     const shown = [];
     for (const step of steps) {
-      if (step.end_line - step.start_line >= MAX_STEP_LINES)
+      if (step.end_line - step.start_line >= MAX_CODE_RANGE_LINES)
         throw badInput(
-          `step '${step.label}' spans more than ${MAX_STEP_LINES} lines; split it or narrow it`,
+          `step '${step.label}' spans more than ${MAX_CODE_RANGE_LINES} lines; split it or narrow it`,
         );
       const read = await readCodeFile(step.repo, step.path, {
         startLine: step.start_line,
