@@ -120,6 +120,7 @@ export function stackParts(parts: Part[] | undefined): Stacked[] {
 const SERIES: Record<Tone, string> = {
   accent: "--series",
   info: "--series-2",
+  alt: "--series-3",
   ok: "--series-ok",
   warn: "--series-warn",
   danger: "--series-danger",
