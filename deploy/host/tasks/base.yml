@@ -1,10 +1,18 @@
 - name: Packages the host scripts and monitoring need
   ansible.builtin.apt:
     name: [age, zstd, jq, curl, git, ca-certificates, openssl, smartmontools, nvme-cli,
-           nftables, iptables, unattended-upgrades, apt-listchanges, tlp, upower, sudo]
+           nftables, iptables, unattended-upgrades, apt-listchanges, tlp, upower, sudo,
+           avahi-daemon]
     state: present
     update_cache: true
     cache_valid_time: 3600
+
+- name: mDNS answers for <hostname>.local on the LAN
+  ansible.builtin.systemd_service:
+    name: avahi-daemon
+    masked: false
+    enabled: true
+    state: started
 
 - name: Unattended security upgrades
   ansible.builtin.copy:
