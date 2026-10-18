@@ -130,8 +130,8 @@
   $effect(() => {
     if (editing || !entry) return;
     return pushScope([
-      { key: "backspace", label: "", hidden: true, run: onClose },
-      { key: "esc", label: "", hidden: true, run: onClose },
+      { key: "backspace", run: onClose },
+      { key: "esc", run: onClose },
     ]);
   });
 

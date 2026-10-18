@@ -20,3 +20,12 @@ const HOSTED: Record<string, string> = { wiki: "library" };
 
 /** The tab lit while `section` is open. */
 export const tabOf = (section: string) => HOSTED[section] ?? section;
+
+/** Opens over the whole window, with no tab and no host. */
+const STANDALONE = ["feedback"];
+
+/** Whether `key` names a section the app renders, as a path's first segment. */
+export const isSection = (key: string) =>
+  SECTIONS.some((s) => s.key === key) ||
+  key in HOSTED ||
+  STANDALONE.includes(key);

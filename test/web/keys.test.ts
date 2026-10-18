@@ -2,9 +2,10 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { CONSOLE_PAGES } from "../../packages/web/src/admin/pages";
 import {
   ACTIONS,
-  RESERVED,
+  FIXED_KEYS,
   actionKey,
   conflicts,
   defaultNavKey,
@@ -21,6 +22,9 @@ import {
   pushScope,
   startKeys,
 } from "../../packages/web/src/keys/keys.svelte";
+import { setVim } from "../../packages/web/src/keys/vim.svelte";
+import { SUBNAV_SLOTS } from "../../packages/web/src/settings/rebind.svelte";
+import { SETTINGS_TABS } from "../../packages/web/src/settings/tabs";
 
 const NAV = [
   { key: "chat", label: "Chat" },
@@ -131,7 +135,38 @@ describe("conflicts", () => {
   });
 
   it("names the fixed binding a rebind would shadow", () => {
-    expect(conflicts("ctrl+k", NAV, 0)).toEqual([RESERVED["ctrl+k"]]);
+    expect(conflicts("ctrl+k", NAV, 0)).toEqual(["focus search / composer"]);
+  });
+
+  it("names the letters a view binds as fixed", () => {
+    expect(conflicts("j", NAV, 0)).toEqual(["move the cursor in a list"]);
+    expect(conflicts("n", NAV, 0)).toEqual(["new work item, on the board"]);
+    expect(conflicts("f", NAV, 0)).toEqual([
+      "follow / unfollow, on a work item",
+    ]);
+    expect(conflicts("space", NAV, 0)).toEqual([]);
+  });
+
+  // Typed in a field, where no section key fires.
+  it("lists a composer's keys without counting them", () => {
+    expect(FIXED_KEYS.some((ref) => ref.keys.includes("@"))).toBe(true);
+    expect(conflicts("@", NAV, 0)).toEqual([]);
+  });
+
+  it("counts vim's keys only while vim is on", () => {
+    expect(conflicts("l", NAV, 0)).toEqual([]);
+    setVim(true);
+    try {
+      expect(conflicts("l", NAV, 0)).toEqual(["previous / next section"]);
+      expect(conflicts("/", NAV, 0)).toEqual(["focus the search box"]);
+    } finally {
+      setVim(false);
+    }
+  });
+
+  it("offers a rebind for every tab of the widest subnav", () => {
+    expect(SUBNAV_SLOTS).toBeGreaterThanOrEqual(CONSOLE_PAGES.length);
+    expect(SUBNAV_SLOTS).toBeGreaterThanOrEqual(SETTINGS_TABS.length);
   });
 
   it("names the section already holding the key", () => {
@@ -206,9 +241,7 @@ describe("dispatch", () => {
   const bind = (...keys: string[]) => {
     const ran: string[] = [];
     teardown.push(
-      pushScope(
-        keys.map((key) => ({ key, label: key, run: () => ran.push(key) })),
-      ),
+      pushScope(keys.map((key) => ({ key, run: () => ran.push(key) }))),
     );
     return ran;
   };
@@ -235,6 +268,17 @@ describe("dispatch", () => {
     expect(document.activeElement).toBe(input);
   });
 
+  it("leaves an Escape a popup spent to the popup", () => {
+    const ran = bind("esc");
+    const menu = document.createElement("div");
+    document.body.append(menu);
+    menu.addEventListener("keydown", (e) => e.preventDefault());
+    press("Escape", menu);
+    expect(ran).toEqual([]);
+    press("Escape");
+    expect(ran).toEqual(["esc"]);
+  });
+
   it("keeps focus on any other key", () => {
     const input = focusedInput();
     press("a", input);
@@ -247,7 +291,6 @@ describe("dispatch", () => {
       pushScope([
         {
           key: "ctrl+shift+p",
-          label: "",
           inFields: true,
           run: () => ran.push("palette"),
         },
@@ -288,7 +331,6 @@ describe("dispatch", () => {
       pushScope([
         {
           key: "ctrl+shift+p",
-          label: "",
           inFields: true,
           repeats: false,
           run: () => (open = !open),

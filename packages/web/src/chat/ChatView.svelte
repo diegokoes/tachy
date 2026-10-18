@@ -13,11 +13,10 @@
     addEntry,
     canRestore,
     chat,
-    clearChat,
     forgetCleared,
-    restoreChat,
     type Entry,
   } from "./chatState.svelte";
+  import { clearConversation, restoreConversation } from "./clearing";
   import { renderMarkdown } from "../markdown/markdown";
   import { reflow } from "../motion/motion";
   import { tintSky, type SkyTint } from "../motion/sky.svelte";
@@ -38,14 +37,8 @@
   import Launcher from "./Launcher.svelte";
   import { ArtifactMark, Button, Caret, caretSide, G, Icon, tip } from "../tui";
   import { pushScope } from "../keys/keys.svelte";
-  import { dismissToast, toast } from "../notifications/notify.svelte";
   import PointerText from "../settings/PointerText.svelte";
-  import {
-    topbar,
-    tuckTopbar,
-    unveilTopbar,
-    veilTopbar,
-  } from "../shell/topbar.svelte";
+  import { topbar, tuckTopbar, unveilTopbar } from "../shell/topbar.svelte";
   import { CHAT_UPLOAD_ACCEPT, uploadRefusal } from "@tachy/contract";
   import type { AgentEffort, WorkItemFile } from "@tachy/contract";
   import {
@@ -205,8 +198,6 @@
     pushScope([
       {
         key: "ctrl+k",
-        label: "",
-        hidden: true,
         inFields: true,
         run: () => composerEl?.focus(),
       },
@@ -1002,28 +993,9 @@
     turnAbort?.abort();
     unveilTopbar();
   });
-  /**
-   * The transcript goes at once, and ctrl+z brings it back until the next
-   * turn. The nav takes its row back veiled, so the window settles while the
-   * dock travels to the centre, and the dock's landing shows it.
-   */
-  let clearedToast: number | undefined;
-
   function onClear() {
-    if (chat.busy || !chat.entries.length) return;
-    veilTopbar();
-    clearChat();
-    clearedToast = toast(
-      "conversation cleared · ctrl+z brings it back",
-      "accent",
-      6000,
-    );
+    clearConversation();
     composerEl?.focus();
-  }
-
-  function onRestore() {
-    restoreChat();
-    if (clearedToast !== undefined) dismissToast(clearedToast);
   }
 
   // Bound only while the composer is empty, so text in it keeps the field's
@@ -1033,10 +1005,8 @@
     return pushScope([
       {
         key: "ctrl+z",
-        label: "",
-        hidden: true,
         inFields: true,
-        run: onRestore,
+        run: restoreConversation,
       },
     ]);
   });

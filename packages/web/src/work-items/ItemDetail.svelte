@@ -79,16 +79,7 @@
     }
   }
 
-  $effect(() =>
-    pushScope([
-      {
-        key: "f",
-        label: following ? "unfollow" : "follow",
-        hidden: true,
-        run: () => void toggleFollow(),
-      },
-    ]),
-  );
+  $effect(() => pushScope([{ key: "f", run: () => void toggleFollow() }]));
 
   function explainInChat() {
     chat.input = `/az explain ${itemId}`;

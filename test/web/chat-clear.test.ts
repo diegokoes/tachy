@@ -7,6 +7,13 @@ import {
   forgetCleared,
   restoreChat,
 } from "../../packages/web/src/chat/chatState.svelte";
+import {
+  canClear,
+  clearConversation,
+  restoreConversation,
+} from "../../packages/web/src/chat/clearing";
+import { notifyState } from "../../packages/web/src/notifications/notify.svelte";
+import { topbar } from "../../packages/web/src/shell/topbar.svelte";
 
 describe("clearing the conversation", () => {
   beforeEach(() => {
@@ -44,5 +51,43 @@ describe("clearing the conversation", () => {
     restoreChat();
     expect(chat.entries).toEqual([]);
     expect(canRestore()).toBe(false);
+  });
+});
+
+describe("clearing from the chat or the palette", () => {
+  beforeEach(() => {
+    forgetCleared();
+    chat.entries = [];
+    chat.busy = false;
+    notifyState.toasts = [];
+    topbar.tucked = false;
+    topbar.veiled = false;
+    addEntry({ kind: "user", text: "why is the export empty?" });
+  });
+
+  it("offers the conversation back, and takes the offer down with it", () => {
+    clearConversation();
+    expect(chat.entries).toEqual([]);
+    expect(notifyState.toasts).toHaveLength(1);
+    restoreConversation();
+    expect(chat.entries).toHaveLength(1);
+    expect(notifyState.toasts).toHaveLength(0);
+  });
+
+  it("leaves a turn under way alone", () => {
+    chat.busy = true;
+    expect(canClear()).toBe(false);
+    clearConversation();
+    expect(chat.entries).toHaveLength(1);
+  });
+
+  // Off screen the bar was never tucked, and nothing would show it again.
+  it("veils the bar only while the conversation holds its row", () => {
+    clearConversation();
+    expect(topbar.veiled).toBe(false);
+    restoreConversation();
+    topbar.tucked = true;
+    clearConversation();
+    expect(topbar.veiled).toBe(true);
   });
 });

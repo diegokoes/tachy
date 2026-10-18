@@ -8,6 +8,7 @@
   import { enterDialog, isTopDialog, leaveDialog } from "../tui/dialogs.svelte";
   import { portal } from "../tui/portal";
   import { loadWikis, wikis } from "../wiki/wikis.svelte";
+  import { ensureProjects } from "../work-items/az.svelte";
   import { rank, runs } from "./fuzzy";
   import { places, type Place } from "./places";
   import { countPick, picks } from "./usage";
@@ -118,6 +119,7 @@
     enterDialog(me, { sinkBelow: true });
     input?.focus();
     if (!wikis.loaded) void loadWikis();
+    void ensureProjects();
     return () => {
       leaveDialog(me);
       // Only when nothing took focus meanwhile: a create opens its form, and a

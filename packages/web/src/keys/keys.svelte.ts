@@ -1,10 +1,8 @@
 export type Binding = {
   /** A normalized key, or a space-separated sequence of them - e.g. "g g". */
   key: string;
-  label: string;
   run: () => void;
   inFields?: boolean;
-  hidden?: boolean;
   /**
    * Whether a held key runs it again on each auto-repeat. On by default, so a
    * held j keeps moving; a toggle turns it off, or holding it flickers.
@@ -18,27 +16,14 @@ const SEQUENCE_MS = 700;
 type Scope = { bindings: Binding[] };
 
 const scopes: Scope[] = [];
-let seq = 0;
-let stamp = $state.raw(0);
 
 /** Innermost scope wins - a modal's bindings shadow the view's. */
-const top = (): Scope | undefined => scopes[scopes.length - 1];
-
-export function hints(): { key: string; label: string }[] {
-  void stamp;
-  return (top()?.bindings ?? [])
-    .filter((b) => !b.hidden && b.label)
-    .map(({ key, label }) => ({ key, label }));
-}
-
 export function pushScope(bindings: Binding[]) {
   const scope: Scope = { bindings };
   scopes.push(scope);
-  stamp = ++seq;
   return () => {
     const i = scopes.indexOf(scope);
     if (i >= 0) scopes.splice(i, 1);
-    stamp = ++seq;
   };
 }
 
@@ -128,6 +113,9 @@ export function startKeys() {
   const onKey = (e: KeyboardEvent) => {
     if (e.metaKey || e.altKey) return;
     const pressed = normalize(e, e.ctrlKey);
+    // A popup that closes on Escape prevents the default; the view under it
+    // must not close too.
+    if (pressed === "esc" && e.defaultPrevented) return;
     const field = inTextField(e.target);
 
     const chord = [...pending, pressed].join(" ");
