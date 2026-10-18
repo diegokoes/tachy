@@ -102,7 +102,7 @@ restore_test() {
   stamp=$("${scratch[@]}" "select coalesce((select schema_sha256 from schema_meta where id), 'unstamped')")
   want_stamp=$(sha256sum "$TACHY_DIR/db/schema.sql" | cut -d' ' -f1)
   ended=$(date +%s)
-  docker rm -f "$name" >/dev/null 2>&1 || true
+  docker rm -f -v "$name" >/dev/null 2>&1 || true
 
   local generated
   for pair in $prod_counts; do
