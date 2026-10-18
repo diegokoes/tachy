@@ -436,8 +436,7 @@ create table work_item_follows (
     primary key (user_id, source_connection_id, external_id)
 );
 
--- Tickets a follow writes back to: each gets a private note, with the
--- follower's own token, when the followed item changes.
+-- Unused: kept so the previous release still runs against this schema.
 create table work_item_follow_notes (
     user_id              uuid not null,
     source_connection_id uuid not null,

@@ -1,7 +1,8 @@
 /**
  * Items a person follows on the board. A scheduled check reads each one's
- * revision with the follower's own token and leaves one unread note per item
- * when someone else changed it; a follower with no saved token is skipped.
+ * revision with the follower's own token and leaves one unread in-app
+ * notification per item when someone else changed it; nothing is posted back
+ * to a ticket. A follower with no saved token is skipped.
  */
 import { sql } from "../infra/db";
 import { errorText } from "../infra/known-secrets";
@@ -28,8 +29,6 @@ export interface FollowInput {
   sourceProjectId?: string | null;
   /** The revision the follower has seen; null lets the next check set it. */
   seenRev?: number | null;
-  /** A work item that gets a private note on each change. */
-  noteOnItemId?: string;
 }
 
 export async function followWorkItem(input: FollowInput): Promise<void> {
@@ -41,13 +40,6 @@ export async function followWorkItem(input: FollowInput): Promise<void> {
     on conflict (user_id, source_connection_id, external_id) do update
       set source_project_id = coalesce(excluded.source_project_id,
                                        work_item_follows.source_project_id)
-  `;
-  if (!input.noteOnItemId) return;
-  await sql`
-    insert into work_item_follow_notes
-      (user_id, source_connection_id, external_id, work_item_id)
-    values (${input.userId}, ${input.connectionId}, ${input.externalId}, ${input.noteOnItemId})
-    on conflict do nothing
   `;
 }
 
@@ -161,10 +153,6 @@ export interface FollowCheck {
   changed: number;
   /** Follows not read: no token of the follower's own, or the source refused. */
   skipped: number;
-  /** Private notes posted on the tickets follows write back to. */
-  notes_posted: number;
-  /** Notes not posted: no token of the follower's own, or the source refused. */
-  notes_skipped: number;
 }
 
 interface FollowedRow {
@@ -196,8 +184,6 @@ export async function checkFollows(): Promise<FollowCheck> {
     checked: 0,
     changed: 0,
     skipped: 0,
-    notes_posted: 0,
-    notes_skipped: 0,
   };
   for (const follows of groups.values()) {
     const [first] = follows;
@@ -246,57 +232,7 @@ export async function checkFollows(): Promise<FollowCheck> {
         },
         change,
       );
-      await postChangeNotes(
-        first.user_id,
-        first.connection_id,
-        change,
-        outcome,
-      );
     }
   }
   return outcome;
-}
-
-function changeNote(change: FollowedChange): string {
-  return [
-    `#${change.id} ${change.title} changed:`,
-    ...change.lines.map((line) => `- ${line}`),
-    change.url,
-  ].join("\n");
-}
-
-/** Posts on each ticket the follow writes back to, with the follower's own token. */
-async function postChangeNotes(
-  userId: string,
-  connectionId: string,
-  change: FollowedChange,
-  outcome: FollowCheck,
-): Promise<void> {
-  const tickets = await sql<{ connection: string; external_id: string }[]>`
-    select c.slug as connection, wi.external_id
-    from work_item_follow_notes n
-    join work_items wi on wi.id = n.work_item_id
-    join source_connections c on c.id = wi.source_connection_id
-    where n.user_id = ${userId} and n.source_connection_id = ${connectionId}
-      and n.external_id = ${change.id}
-  `;
-  for (const ticket of tickets) {
-    const resolved = await resolvePersonalSource(ticket.connection, userId);
-    if (!resolved?.source.postNote) {
-      outcome.notes_skipped++;
-      continue;
-    }
-    try {
-      await resolved.source.postNote(ticket.external_id, changeNote(change), {
-        private: true,
-      });
-      outcome.notes_posted++;
-    } catch (e) {
-      log("warn", "follow_note_failed", {
-        connection: ticket.connection,
-        error: errorText(e),
-      });
-      outcome.notes_skipped++;
-    }
-  }
 }
