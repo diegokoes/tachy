@@ -6,6 +6,7 @@
   import { Button } from "../tui";
   import { close, rebind } from "./rebind.svelte";
   import RebindModal from "./RebindModal.svelte";
+  import Account from "./Account.svelte";
   import Agent from "./Agent.svelte";
   import Credentials from "./Credentials.svelte";
   import Tokens from "./Tokens.svelte";
@@ -66,6 +67,11 @@
           view: OwnTokens,
           shown: () => Boolean(agentPrefs.creds?.mcp_servers.length),
         },
+      ],
+    },
+    account: {
+      left: [{ label: "you", view: Account }],
+      right: [
         {
           label: "api tokens",
           hint: "For scripts that call the API as you. Shown once, stored as a hash.",
@@ -99,7 +105,6 @@
     "subnav-keys": "keybinds",
     vim: "keybinds",
     reference: "keybinds",
-    account: "agent",
     keys: "agent",
   };
 
@@ -167,7 +172,10 @@
 {/if}
 
 <style>
+  /* A settings tab is a list of rows to scan, looser than the forms elsewhere
+     that share Rows. */
   .tab {
+    --rows-gap: var(--pad-3);
     display: flex;
     flex-direction: column;
     gap: calc(var(--pad-4) * 1.5);

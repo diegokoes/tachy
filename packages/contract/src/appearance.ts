@@ -38,7 +38,6 @@ export function isHexColor(value: unknown): value is string {
 export interface AppearanceDefaults {
   theme?: Theme;
   text_size?: TextSize;
-  nav_hidden?: boolean;
   nav_labels?: NavLabels;
   accent?: string;
   /** The far end of the accent gradient. Kept only beside `accent`. */
@@ -58,7 +57,6 @@ const oneOf =
 const VALID: Record<keyof AppearanceDefaults, (value: unknown) => boolean> = {
   theme: oneOf(THEMES),
   text_size: oneOf(TEXT_SIZES.map((size) => size.key)),
-  nav_hidden: (value) => typeof value === "boolean",
   nav_labels: oneOf(NAV_LABELS),
   accent: isHexColor,
   accent2: isHexColor,

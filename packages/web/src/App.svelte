@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick, untrack } from "svelte";
+  import { onMount, untrack } from "svelte";
   import ChatView from "./chat/ChatView.svelte";
   import LibraryView from "./library/LibraryView.svelte";
   import BoardView from "./work-items/BoardView.svelte";
@@ -14,7 +14,7 @@
   import { openFeedback } from "./reports/feedback";
   import { session, initSession } from "./access/session.svelte";
   import { navItems } from "./shell/nav";
-  import { jellyPress, reflow } from "./motion/motion";
+  import { jellyPress } from "./motion/motion";
   import StarField from "./motion/StarField.svelte";
   import Wordmark from "./motion/Wordmark.svelte";
   import { loadTheme, themeState } from "./theme/theme.svelte";
@@ -191,14 +191,6 @@
 
   $effect(() => setScrollport(mainEl ?? null));
 
-  // A pre effect, so the boxes are read while the bar is still where it was;
-  // the tween starts once the DOM has caught up with the setting.
-  $effect.pre(() => {
-    void themeState.navHidden;
-    const play = untrack(() => reflow([topbar.el, windowEl]));
-    void tick().then(play);
-  });
-
   // Hidden: four more entries would crowd the hint rule. Settings › keybinds
   // lists them.
   $effect(() => {
@@ -305,12 +297,11 @@
 {:else}
   <div class="app" data-scene>
     <!-- Ahead of the bar, so hovering it reaches the bar as a sibling. -->
-    {#if topbar.tucked && !themeState.navHidden}
+    {#if topbar.tucked}
       <div class="nav-edge"></div>
     {/if}
     <div
       class="topbar"
-      class:hidden={themeState.navHidden}
       class:tucked={topbar.tucked}
       class:veiled={topbar.veiled}
       bind:this={topbar.el}
@@ -512,9 +503,6 @@
     align-items: center;
     gap: var(--gap);
   }
-  .topbar.hidden {
-    display: none;
-  }
   /* Out of the grid, so the narrow layout that drops the wordmark keeps it. */
   .topbar {
     position: relative;
@@ -548,8 +536,8 @@
     margin-top: calc(-1 * var(--tuck));
     transition: translate 0.35s cubic-bezier(0.65, 0, 0.35, 1);
   }
-  /* Faded on the bar's parts: `reflow` tweens the bar's own opacity when the
-     nav setting hides it, and a transition there would chase the tween. Not
+  /* Faded on the bar's parts: a `reflow` that moves the bar tweens its own
+     opacity, and a transition there would chase the tween. Not
      visibility, which takes the bar out of the tab order focus returns by. */
   .mark,
   .navbar {
