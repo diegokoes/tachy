@@ -9,7 +9,15 @@
     ChatRefused,
     type ChatCommands,
   } from "./agent";
-  import { addEntry, chat, type Entry } from "./chatState.svelte";
+  import {
+    addEntry,
+    canRestore,
+    chat,
+    clearChat,
+    forgetCleared,
+    restoreChat,
+    type Entry,
+  } from "./chatState.svelte";
   import { renderMarkdown } from "../markdown/markdown";
   import { reflow } from "../motion/motion";
   import { tintSky, type SkyTint } from "../motion/sky.svelte";
@@ -30,6 +38,8 @@
   import Launcher from "./Launcher.svelte";
   import { ArtifactMark, Button, Caret, caretSide, G, Icon, tip } from "../tui";
   import { pushScope } from "../keys/keys.svelte";
+  import { dismissToast, toast } from "../notifications/notify.svelte";
+  import PointerText from "../settings/PointerText.svelte";
   import {
     topbar,
     tuckTopbar,
@@ -733,7 +743,7 @@
     chat.busy = true;
     chat.turnId = undefined;
     stopRequested = false;
-    clearArmed = false;
+    forgetCleared();
     snap(true);
     // Aborted when the view goes away, so a turn left running does not hold its
     // response open behind a component nobody is looking at any more.
@@ -992,41 +1002,44 @@
     turnAbort?.abort();
     unveilTopbar();
   });
-  let clearArmed = $state(false);
-  let disarmTimer: ReturnType<typeof setTimeout> | undefined;
-
-  function armClear() {
-    clearArmed = true;
-    clearTimeout(disarmTimer);
-    disarmTimer = setTimeout(() => (clearArmed = false), 4000);
-  }
-
   /**
-   * The transcript goes at once. The nav takes its row back veiled, so the
-   * window settles while the dock travels to the centre, and the dock's
-   * landing shows it.
+   * The transcript goes at once, and ctrl+z brings it back until the next
+   * turn. The nav takes its row back veiled, so the window settles while the
+   * dock travels to the centre, and the dock's landing shows it.
    */
-  function confirmClear() {
-    clearTimeout(disarmTimer);
-    clearArmed = false;
-    veilTopbar();
-    chat.entries = [];
-    chat.sessionId = undefined;
-    chat.turnId = undefined;
-    chat.model = undefined;
-    chat.debug = false;
-    chat.mode = undefined;
-    chat.modeOfLastTurn = undefined;
-    chat.mentions = [];
-  }
+  let clearedToast: number | undefined;
 
   function onClear() {
     if (chat.busy || !chat.entries.length) return;
-    if (clearArmed) {
-      confirmClear();
-      composerEl?.focus();
-    } else armClear();
+    veilTopbar();
+    clearChat();
+    clearedToast = toast(
+      "conversation cleared · ctrl+z brings it back",
+      "accent",
+      6000,
+    );
+    composerEl?.focus();
   }
+
+  function onRestore() {
+    restoreChat();
+    if (clearedToast !== undefined) dismissToast(clearedToast);
+  }
+
+  // Bound only while the composer is empty, so text in it keeps the field's
+  // own undo.
+  $effect(() => {
+    if (!canRestore() || chat.input) return;
+    return pushScope([
+      {
+        key: "ctrl+z",
+        label: "",
+        hidden: true,
+        inFields: true,
+        run: onRestore,
+      },
+    ]);
+  });
 
   // Every mark leaves once it has nothing to act on, and focus would go with
   // it.
@@ -1145,7 +1158,7 @@
         {:else if entry.kind === "error"}
           <div class="turn">
             <span class="who err">{G.marker}error</span>
-            <div class="body err">{entry.text}</div>
+            <div class="body err"><PointerText text={entry.text} /></div>
           </div>
         {:else if entry.kind === "trace"}
           <TracePanel trace={entry.trace} />
@@ -1338,15 +1351,12 @@
         <span class="slot">
           {#if chat.entries.length}
             <Button
-              variant={clearArmed ? "danger" : "ghost"}
-              icon={clearArmed ? "confirm" : "clear"}
+              variant="ghost"
+              icon="clear"
               iconSize="1.25em"
-              morph
               disabled={chat.busy}
               aria-label="Clear the conversation"
-              title={clearArmed
-                ? "click again to clear"
-                : "Clear the conversation"}
+              title="Clear the conversation"
               onclick={onClear}
             />
           {/if}

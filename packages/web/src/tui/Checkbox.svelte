@@ -60,7 +60,7 @@
     padding: 0.18em;
     border-radius: var(--radius-chip);
     background: var(--panel-solid);
-    box-shadow: inset 0 0 0 1px var(--muted);
+    box-shadow: inset 0 0 0 1px var(--rule);
     transition:
       box-shadow 0.2s ease,
       background 0.2s ease;
@@ -70,7 +70,7 @@
     width: 50%;
     height: 100%;
     border-radius: var(--radius-chip);
-    background: var(--muted);
+    background: var(--rule);
     transition:
       transform 0.2s ease,
       background 0.2s ease;

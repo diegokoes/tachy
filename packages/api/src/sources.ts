@@ -11,7 +11,7 @@ export async function callerSource(c: Context, slug: string) {
     // An adapter's env fallback names server variables the person cannot set.
     if (e instanceof Error && e.message.startsWith("Missing"))
       throw badInput(
-        `No token for '${slug}'. Add yours under Settings › credentials, or ask an admin to set the connection's.`,
+        `No token for '${slug}'. Add yours under Settings › agent, or ask an admin to set the connection's.`,
       );
     throw e;
   }

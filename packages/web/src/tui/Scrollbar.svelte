@@ -154,14 +154,14 @@
     width: 0.4rem;
   }
   .row {
-    background: color-mix(in srgb, var(--muted) 40%, transparent);
+    background: color-mix(in srgb, var(--rule) 40%, transparent);
   }
   .row.on {
     background: var(--accent-fill);
     border-radius: 1px;
   }
   .scrollbar:hover .row {
-    background: color-mix(in srgb, var(--muted) 70%, transparent);
+    background: color-mix(in srgb, var(--rule) 70%, transparent);
   }
   .scrollbar:hover .row.on {
     background: var(--accent-fill);
@@ -183,9 +183,9 @@
     border-right: 0.29rem solid transparent;
   }
   .cap.up::before {
-    border-bottom: 0.39rem solid var(--muted);
+    border-bottom: 0.39rem solid var(--rule);
   }
   .cap.down::before {
-    border-top: 0.39rem solid var(--muted);
+    border-top: 0.39rem solid var(--rule);
   }
 </style>

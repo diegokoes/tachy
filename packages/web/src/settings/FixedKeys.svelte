@@ -3,6 +3,7 @@
 
   const FIXED: { keys: string[]; what: string }[] = [
     { keys: ["ctrl+k"], what: "focus search / composer" },
+    { keys: ["ctrl+,"], what: "settings" },
     { keys: ["↑", "↓", "j", "k"], what: "move the cursor in a list" },
     { keys: ["⏎"], what: "open the highlighted row" },
     { keys: ["esc", "backspace"], what: "back / close" },

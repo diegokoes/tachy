@@ -333,8 +333,10 @@ export function ripple(
 
 /**
  * A burst of confetti fired upward from the bottom of `container`, arcing out
- * and falling under gravity (Physics2DPlugin). The pieces mount into the
- * container and remove themselves once spent, so the caller owns nothing.
+ * and falling under gravity (Physics2DPlugin). The pieces fly in a fixed layer
+ * on the body over the container's box, not inside it: a piece in a scrolling
+ * box would grow its scroll height as it falls. The layer goes with the last
+ * piece, so the caller owns nothing.
  */
 export function confetti(container: HTMLElement, count = 36) {
   if (reducedMotion()) return;
@@ -347,12 +349,16 @@ export function confetti(container: HTMLElement, count = 36) {
     "#6366f1",
     "#d946ef",
   ];
-  const { width, height } = container.getBoundingClientRect();
+  const { left, top, width, height } = container.getBoundingClientRect();
+  const layer = document.createElement("div");
+  layer.style.cssText = `position:fixed;left:${left}px;top:${top}px;width:${width}px;height:${height}px;pointer-events:none;z-index:var(--z-overlay);`;
+  document.body.appendChild(layer);
+  let flying = count;
   for (let i = 0; i < count; i++) {
     const piece = document.createElement("span");
     const size = gsap.utils.random(6, 12);
-    piece.style.cssText = `position:absolute;top:${height}px;left:${width / 2}px;width:${size}px;height:${size * gsap.utils.random(0.4, 1)}px;background:${colors[i % colors.length]};border-radius:1px;pointer-events:none;will-change:transform;`;
-    container.appendChild(piece);
+    piece.style.cssText = `position:absolute;top:${height}px;left:${width / 2}px;width:${size}px;height:${size * gsap.utils.random(0.4, 1)}px;background:${colors[i % colors.length]};border-radius:1px;will-change:transform;`;
+    layer.appendChild(piece);
     gsap.to(piece, {
       duration: gsap.utils.random(1.4, 2.4),
       physics2D: {
@@ -363,7 +369,9 @@ export function confetti(container: HTMLElement, count = 36) {
       rotation: gsap.utils.random(-540, 540),
       opacity: 0,
       ease: "none",
-      onComplete: () => piece.remove(),
+      onComplete: () => {
+        if (--flying === 0) layer.remove();
+      },
     });
   }
 }
@@ -695,32 +703,26 @@ export function reflow(
 }
 
 /**
- * Takes `tile` to the size of the window, or back: the browser morphs the
- * tile's box between the two layouts as a view transition. `swap` changes the
- * layout and returns when the DOM shows it. The name is on the tile only for
- * the transition: two elements with one name abort it, and a name left behind
- * snapshots a node nobody animates.
+ * Takes `tile` to the size of the window, or back: the live node resizes
+ * between its two boxes, so its chart redraws at each size on the way instead
+ * of crossfading two pictures. `swap` changes the layout and returns when the
+ * DOM shows it. `data-morphing` is on the tile while it moves, so it can clip
+ * what does not fit yet.
  */
-export function morphTile(
+export async function morphTile(
   tile: HTMLElement | null | undefined,
   swap: () => void | Promise<void>,
 ) {
-  const root = document.documentElement;
-  if (!tile || reducedMotion() || !document.startViewTransition) {
-    void swap();
-    return;
-  }
-  root.dataset.tileMorph = "";
-  tile.style.viewTransitionName = "tile";
-  const transition = document.startViewTransition(async () => {
-    await swap();
+  if (tile) tile.dataset.morphing = "";
+  const play = reflow([tile], {
+    duration: 0.5,
+    ease: "expo.out",
+    onComplete: () => {
+      if (tile) delete tile.dataset.morphing;
+    },
   });
-  const done = () => {
-    tile.style.viewTransitionName = "";
-    delete root.dataset.tileMorph;
-  };
-  transition.ready.catch(() => {});
-  transition.finished.then(done, done);
+  await swap();
+  play();
 }
 
 /**

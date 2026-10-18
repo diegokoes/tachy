@@ -37,7 +37,7 @@
   const ORIGINS = [
     { key: "agent", label: "agent", tone: "accent" },
     { key: "sync", label: "sync", tone: "info" },
-    { key: "app", label: "app", tone: "muted" },
+    { key: "app", label: "app", tone: "alt" },
   ] as const;
 
   const split = (x: { agent: number; sync: number; app: number }) =>

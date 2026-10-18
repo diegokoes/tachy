@@ -167,7 +167,7 @@
     stroke-width: 1.5;
   }
   .behind {
-    fill: color-mix(in srgb, var(--muted) 22%, transparent);
+    fill: color-mix(in srgb, var(--rule) 22%, transparent);
   }
 
   .n {

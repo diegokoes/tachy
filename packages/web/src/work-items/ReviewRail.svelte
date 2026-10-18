@@ -3,6 +3,7 @@
   import { tick } from "svelte";
   import { wipeIn } from "../motion/motion";
   import { Button, Icon, Meter, Note } from "../tui";
+  import PointerText from "../settings/PointerText.svelte";
 
   let {
     review,
@@ -71,7 +72,9 @@
     </p>
   {:else if !review.available}
     <Note tone="warn"
-      >No model is set up for you. Add one under Settings › agent.</Note
+      ><PointerText
+        text="No model is set up for you. Add one under Settings › agent."
+      /></Note
     >
   {:else}
     {@const readiness = READINESS[review.readiness]}
@@ -183,7 +186,7 @@
   .finding {
     padding: var(--pad-2);
     border: 1px solid var(--border);
-    border-left: 2px solid var(--muted);
+    border-left: 2px solid var(--rule);
     border-radius: var(--radius);
   }
   .finding.gap {
