@@ -179,7 +179,7 @@
         { value: "personal", label: "personal" },
       ],
       initial: "shared",
-      info: "Shared: a pool kept here. Personal: each person's own, saved in Settings › Agent.",
+      info: "Shared: a pool kept here. Personal: each person's own, saved in Settings › agent.",
       group: "access",
     },
     {

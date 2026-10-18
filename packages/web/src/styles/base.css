@@ -16,7 +16,7 @@ body {
    The main column and the chat transcript hide theirs and use AsciiScrollbar. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted) 50%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--rule) 50%, transparent) transparent;
 }
 
 /* Anything on a character grid keeps the mono face regardless of where it
@@ -225,55 +225,4 @@ details.callout[open] > summary.callout-title::after {
 
 :root[data-theme-wipe]::view-transition-new(root) {
   clip-path: var(--theme-wipe);
-}
-
-/* A chart tile taking the window, or giving it back. The tile's box grows
-   between its two sizes while its old contents fade out and the new fade in,
-   scaled to the box and not stretched. The page around it only dims. */
-:root[data-tile-morph]::view-transition-group(tile) {
-  animation-duration: 0.5s;
-  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-:root[data-tile-morph]::view-transition-old(tile),
-:root[data-tile-morph]::view-transition-new(tile) {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  mix-blend-mode: normal;
-  animation-duration: 0.5s;
-  animation-fill-mode: both;
-}
-
-:root[data-tile-morph]::view-transition-old(tile) {
-  animation-name: tile-out;
-}
-
-:root[data-tile-morph]::view-transition-new(tile) {
-  animation-name: tile-in;
-}
-
-@keyframes tile-out {
-  0% {
-    opacity: 1;
-  }
-  55%,
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes tile-in {
-  0%,
-  20% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-:root[data-tile-morph]::view-transition-old(root),
-:root[data-tile-morph]::view-transition-new(root) {
-  animation-duration: 0.25s;
 }

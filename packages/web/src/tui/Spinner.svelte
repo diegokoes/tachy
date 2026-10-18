@@ -80,13 +80,13 @@
     width: 0.4em;
     height: 0.9em;
     border-radius: 1px;
-    background: color-mix(in srgb, var(--muted) 28%, transparent);
+    background: color-mix(in srgb, var(--rule) 28%, transparent);
   }
   .cell.lit {
     background: color-mix(
       in srgb,
       var(--accent) calc(var(--heat) * 100%),
-      color-mix(in srgb, var(--muted) 28%, transparent)
+      color-mix(in srgb, var(--rule) 28%, transparent)
     );
   }
 

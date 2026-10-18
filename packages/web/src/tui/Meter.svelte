@@ -53,13 +53,13 @@
     width: 0.42em;
     height: 0.85em;
     border-radius: 1px;
-    background: color-mix(in srgb, var(--muted) 30%, transparent);
+    background: color-mix(in srgb, var(--rule) 30%, transparent);
   }
   .cell.lit {
     background: color-mix(
       in srgb,
       var(--tone-color) calc(var(--fill) * 100%),
-      color-mix(in srgb, var(--muted) 30%, transparent)
+      color-mix(in srgb, var(--rule) 30%, transparent)
     );
   }
 
@@ -76,6 +76,6 @@
     --tone-color: var(--series-danger);
   }
   .meter.muted {
-    --tone-color: var(--muted);
+    --tone-color: var(--rule);
   }
 </style>

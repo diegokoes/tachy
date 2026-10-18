@@ -128,7 +128,7 @@
     stroke-width: 1.5;
   }
   .rule {
-    stroke: var(--muted);
+    stroke: var(--rule);
     stroke-width: 1;
     stroke-dasharray: 3 3;
     pointer-events: none;

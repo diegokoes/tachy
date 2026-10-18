@@ -69,7 +69,7 @@ function sourceRefusal(reason: unknown): Error {
   const message = reason instanceof Error ? reason.message : "";
   if (TOKEN_REFUSED.test(message))
     return badInput(
-      "The source refused your token. Check it under Settings › credentials.",
+      "The source refused your token. Check it under Settings › agent.",
     );
   if (ITEM_MISSING.test(message))
     return notFound("No such item, or your token cannot read it.");

@@ -8,6 +8,7 @@ const SECTIONS: NavItem[] = [
   { key: "library", label: "library", icon: "library" },
   { key: "wiki", label: "wiki", icon: "wiki" },
   { key: "console", label: "console", icon: "admin" },
+  { key: "settings", label: "settings", icon: "settings" },
 ];
 
 /** The tab bar's items, in hotkey order. */

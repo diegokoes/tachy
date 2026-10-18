@@ -107,6 +107,10 @@
   .tile.content {
     flex: none;
   }
+  /* Mid-resize the box is smaller than the content it is growing towards. */
+  .tile:global([data-morphing]) {
+    overflow: hidden;
+  }
   /* A size container has no intrinsic height, so a tile that sizes to its
      content must contain its width only. */
   .tile.content .body {
@@ -135,7 +139,7 @@
     justify-content: space-between;
     gap: var(--pad-3);
     padding-bottom: var(--pad-2);
-    border-bottom: 1px solid color-mix(in srgb, var(--muted) 45%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--rule) 45%, transparent);
   }
   h3 {
     margin: 0;

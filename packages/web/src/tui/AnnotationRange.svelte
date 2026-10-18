@@ -47,7 +47,7 @@
 
 <style>
   pattern line {
-    stroke: var(--muted);
+    stroke: var(--rule);
     stroke-width: 2;
     opacity: 0.2;
   }

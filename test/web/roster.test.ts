@@ -56,13 +56,14 @@ describe("what a member is sent", () => {
 });
 
 describe("the tab bar", () => {
-  it("offers the console to everyone", () => {
+  it("offers the console and settings to everyone", () => {
     expect(navItems().map((n) => n.key)).toEqual([
       "chat",
       "board",
       "library",
       "wiki",
       "console",
+      "settings",
     ]);
   });
 });

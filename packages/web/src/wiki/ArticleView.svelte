@@ -10,7 +10,8 @@
   import { isCurator } from "../access/session.svelte";
   import { setTopActions } from "../shell/subnav.svelte";
   import { Badge, Button, EmptyState, Note } from "../tui";
-  import Readership from "../library/Readership.svelte";
+  import Reads from "../library/Reads.svelte";
+  import Versions from "../library/Versions.svelte";
   import { patchLibraryItem } from "../library/edit";
   import { statusTone } from "../library/status";
   import { LinkTargets } from "./wikilinks.svelte";
@@ -251,11 +252,22 @@
     </EmptyState>
   {:else if article}
     <article class="wiki">
+      <Reads base="reference" id={article.id} version={article.version} />
       <header>
         <h2 bind:this={titleEl}>{article.title}</h2>
         {#if article.status !== "approved"}
           <Badge tone={statusTone(article.status)}>{article.status}</Badge>
         {/if}
+        <span class="when">
+          <Versions
+            base="reference"
+            id={article.id}
+            at={article.updated_at}
+            version={article.version}
+            canEdit={isCurator()}
+            onReverted={load}
+          />
+        </span>
       </header>
 
       {#if mutateError}
@@ -310,14 +322,6 @@
           <span class="muted">Filed under no category yet.</span>
         {/if}
       </footer>
-
-      <Readership
-        base="reference"
-        id={article.id}
-        version={article.version}
-        canEdit={isCurator()}
-        onReverted={load}
-      />
     </article>
   {:else}
     <p class="muted">loading…</p>
@@ -325,7 +329,9 @@
 </WikiLayout>
 
 <style>
+  /* The reads line sits flush with the title. */
   .wiki {
+    --reads-inset: 0;
     max-width: 78ch;
     padding-left: calc(var(--pad-4) * 2);
     display: flex;
@@ -342,6 +348,10 @@
   h2 {
     font-size: var(--fs-lg);
     margin: 0;
+  }
+  .when {
+    margin-left: auto;
+    font-size: var(--fs-xs);
   }
   /* Held open for the title that arrives on scroll, so the switcher below it
      never moves. Two lines; a longer title is cut rather than let grow. */
