@@ -20,6 +20,12 @@ EXPORT=${TACHY_BACKUP_EXPORT:-$TACHY_SRV/backup-export}
 RECIPIENTS=${TACHY_BACKUP_RECIPIENTS:-/etc/tachy/backup-recipients.txt}
 DEPLOY_LOG=${TACHY_DEPLOY_LOG:-$TACHY_SRV/deploy.log}
 ROW_TOLERANCE_PCT=${TACHY_RESTORE_ROW_TOLERANCE_PCT:-1}
+LOCK=${TACHY_BACKUP_LOCK:-/run/lock/tachy-backup.lock}
+
+# One run at a time: timers that catch up at boot start together, and runs in
+# the same second would share a staging file name.
+exec 9>"$LOCK"
+flock 9
 
 umask 077
 mkdir -p "$STAGING" "$EXPORT"
@@ -96,7 +102,7 @@ restore_test() {
   stamp=$("${scratch[@]}" "select coalesce((select schema_sha256 from schema_meta where id), 'unstamped')")
   want_stamp=$(sha256sum "$TACHY_DIR/db/schema.sql" | cut -d' ' -f1)
   ended=$(date +%s)
-  docker rm -f "$name" >/dev/null 2>&1 || true
+  docker rm -f -v "$name" >/dev/null 2>&1 || true
 
   local generated
   for pair in $prod_counts; do
