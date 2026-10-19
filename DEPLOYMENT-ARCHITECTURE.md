@@ -2215,10 +2215,14 @@ and the SFTP pull keeps working as it is.
 - **Downloads from home** are allowed over Tailscale, once it exists. Each
   downloader's `from=` then covers the office LAN and `100.64.0.0/10`, the
   tailnet's address range.
-- The host firewall has two parts. nftables guards port 22, for admin
-  machines and the backup downloaders' network (§6.2). Ports 80 and 443 are
-  published by Docker, which bypasses nftables' input chain, so an iptables
-  `DOCKER-USER` rule limits them to the LAN (`deploy/host/templates/tachy-edge.sh.j2`).
+- The host firewall has two parts. nftables drops every inbound connection to
+  the host except port 22, for admin machines and the backup downloaders'
+  network (§6.2), mDNS from the LAN, and ICMP and DHCP replies. Ports 80 and
+  443 are published by Docker, which bypasses nftables' input chain, so an
+  iptables `DOCKER-USER` rule limits them to the LAN
+  (`deploy/host/templates/tachy-edge.sh.j2`).
+- `avahi-daemon` answers for `<hostname>.local`, so the site has a name before
+  IT gives it one in DNS.
 - SSH is key-only, with no root login. `AllowGroups` limits it to the admins
   and `tachy-backup`, and the backup group gets read-only SFTP in a chroot and
   nothing else.
