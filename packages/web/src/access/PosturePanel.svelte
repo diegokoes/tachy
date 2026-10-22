@@ -66,6 +66,11 @@
       text: compact(usage.input_tokens + usage.output_tokens),
     },
     {
+      key: "cached",
+      label: `cached ${usage.days} d`,
+      text: compact(usage.cached_tokens),
+    },
+    {
       key: "cost",
       label: `cost ${usage.days} d`,
       text: usd(usage.cost_usd),
@@ -369,6 +374,7 @@
   const tokenStats = $derived(seriesStats(tokens));
   const tokenFigures = $derived<Count[]>([
     { key: "tokens", label: "tokens", text: compact(tokenStats.total) },
+    { key: "cached", label: "cached", text: compact(usage.cached_tokens) },
     { key: "turns", label: "turns", value: usage.turns },
     { key: "cost", label: "cost", text: usd(usage.cost_usd) },
     {

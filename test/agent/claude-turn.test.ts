@@ -166,3 +166,31 @@ describe("a Claude turn's own account of its model", () => {
     });
   });
 });
+
+describe("a Claude turn's usage", () => {
+  it("reports the turn's cache reads and writes apart from its input", async () => {
+    const events = await eventsOf(async function* () {
+      yield ANSWER;
+      yield {
+        ...RESULT,
+        total_cost_usd: 0.017,
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 100,
+          cache_read_input_tokens: 5000,
+          cache_creation_input_tokens: 2000,
+        },
+      };
+    });
+    expect(events.at(-1)).toMatchObject({
+      type: "result",
+      costUsd: 0.017,
+      usage: {
+        inputTokens: 1000,
+        outputTokens: 100,
+        cacheReadTokens: 5000,
+        cacheWriteTokens: 2000,
+      },
+    });
+  });
+});
