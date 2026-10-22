@@ -30,6 +30,7 @@ import {
 import { server } from "../../packages/mcp/src/index";
 import { createApp } from "../../packages/api/src/app";
 import { loginCookie } from "../http";
+import { resetData } from "../database";
 
 let srcDir: string;
 let dataDir: string;
@@ -102,6 +103,9 @@ async function call(name: string, args: Record<string, unknown> = {}) {
 
 // master: init (v2.0.0) -- #77 fix (v2.0.1) -- generated (v2.1.0) -- wip
 beforeAll(async () => {
+  // A worker's schema keeps what the file before this one left, and an admin
+  // among it would turn on the write gates this file's sessions do not pass.
+  await resetData();
   srcDir = await mkdtemp(join(tmpdir(), "tachy-q-src-"));
   dataDir = await mkdtemp(join(tmpdir(), "tachy-q-repos-"));
   process.env.TACHY_REPO_DIR = dataDir;
