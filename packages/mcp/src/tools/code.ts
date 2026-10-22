@@ -17,7 +17,9 @@ import {
   listCodeDir,
   codeChangesBetween,
   codeDiff,
+  codeHistory,
   codeReleasesContaining,
+  MAX_HISTORY_COMMITS,
   repoToken,
 } from "@tachy/core/code";
 import { badInput } from "@tachy/core/infra";
@@ -280,6 +282,49 @@ tool(
 
 const CHANGES_NEXT =
   "For one of these commits: code_diff with its sha shows what it changed, and code_releases_containing names the first release it shipped in.";
+
+tool(
+  "code_history",
+  {
+    description:
+      "When and why a file or directory of a linked repo changed: the newest commits that touched it, newest first, or with symbol only those that change how often the symbol occurs there (git log -S: where it was added, removed or its uses changed), with the archived work items their messages reference. Pass the path of a search_code hit. Only the newest `searched` commits touching the path are read; truncated: true means older history exists, so narrow the path to reach further back.",
+    inputSchema: {
+      repo: z.string(),
+      path: z.string().describe("A file or directory in the repo."),
+      symbol: z
+        .string()
+        .max(200)
+        .optional()
+        .describe(
+          "A name or string, matched literally: keeps the commits that change its count under path.",
+        ),
+      ref: z
+        .string()
+        .optional()
+        .describe(
+          "A tracked line from list_repos `lines`, a branch or tag name, or a commit sha, instead of the default line.",
+        ),
+      limit: z.number().int().positive().max(MAX_HISTORY_COMMITS).optional(),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ repo, path, symbol, ref, limit }) => {
+    const history = await codeHistory(repo, {
+      path,
+      symbol,
+      ref,
+      limit,
+      token: await repoToken(repo, await resolveCurrentUserId()),
+    });
+    if (!history.searched) return out({ ...history, note: NO_PATH_HISTORY });
+    return out(
+      history.commits.length ? { ...history, next: CHANGES_NEXT } : history,
+    );
+  },
+);
+
+const NO_PATH_HISTORY =
+  "No commit on this line touches the path. Check its spelling with list_code_tree; a file that was renamed keeps its history under the old path.";
 
 const REVISION_FIELD =
   "A release (1.51.32), a branch or tag name, or a commit sha.";

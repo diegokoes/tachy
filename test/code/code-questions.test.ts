@@ -350,6 +350,64 @@ describe("the tools", () => {
     );
   });
 
+  it("code_history lists the commits that touched a path, newest first", async () => {
+    const history = await call("code_history", {
+      repo: "qrepo",
+      path: "src/login.ts",
+    });
+    const body = history.json as {
+      commits: { subject: string }[];
+      searched: number;
+      truncated: boolean;
+      next: string;
+    };
+    expect(body.commits.map((c) => c.subject)).toEqual([
+      "#77 fix login loop",
+      "init",
+    ]);
+    expect(body).toMatchObject({ searched: 2, truncated: false });
+    expect(body.next).toContain("code_diff");
+  });
+
+  it("code_history with a symbol keeps the commits that change its count", async () => {
+    const subjects = async (symbol: string) =>
+      (
+        (
+          await call("code_history", {
+            repo: "qrepo",
+            path: "src",
+            symbol,
+          })
+        ).json as { commits: { sha: string; subject: string }[] }
+      ).commits.map((c) => c.subject);
+    expect(await subjects("/dashboard")).toEqual(["#77 fix login loop"]);
+    expect(await subjects("loginRedirectTarget")).toEqual(["init"]);
+    expect(await subjects("neverWritten")).toEqual([]);
+  });
+
+  it("code_history reads only the newest commits it is allowed", async () => {
+    const history = await call("code_history", {
+      repo: "qrepo",
+      path: "/src/",
+      limit: 1,
+    });
+    expect(history.json).toMatchObject({
+      path: "src",
+      searched: 1,
+      truncated: true,
+      commits: [{ subject: "wip" }],
+    });
+  });
+
+  it("code_history says when no commit touches the path", async () => {
+    const history = await call("code_history", {
+      repo: "qrepo",
+      path: "src/missing.ts",
+    });
+    expect(history.json).toMatchObject({ searched: 0, commits: [] });
+    expect((history.json as { note: string }).note).toMatch(/list_code_tree/);
+  });
+
   it("code_changes_between points at the tools that read a commit", async () => {
     const changes = await call("code_changes_between", {
       repo: "qrepo",
