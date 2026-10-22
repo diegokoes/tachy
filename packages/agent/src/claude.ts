@@ -15,8 +15,10 @@ import {
 } from "./tools";
 import {
   effectiveModel,
+  turnUsage,
   type AgentConfig,
   type AgentErrorKind,
+  type SdkUsage,
   type SessionFacts,
 } from "./backend";
 import { TurnBase, type ApprovalGate } from "./turn";
@@ -339,7 +341,7 @@ export class ClaudeTurn extends TurnBase {
             result?: string;
             total_cost_usd?: number;
             session_id: string;
-            usage?: { input_tokens?: number; output_tokens?: number };
+            usage?: SdkUsage;
           };
           resulted = true;
           this.queue.push({
@@ -347,10 +349,7 @@ export class ClaudeTurn extends TurnBase {
             result: resultMessage.result ?? "",
             costUsd: resultMessage.total_cost_usd ?? 0,
             sessionId: resultMessage.session_id,
-            usage: {
-              inputTokens: resultMessage.usage?.input_tokens ?? null,
-              outputTokens: resultMessage.usage?.output_tokens ?? null,
-            },
+            usage: turnUsage(resultMessage.usage),
             models: [...answeredBy],
           });
         }
