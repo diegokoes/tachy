@@ -160,12 +160,39 @@ export const GRADE_NOTE =
 export const CUSTOMER_NOTE =
   "Some hits carry a `customer`: that material came from one customer's install and must be attributed to them by name - never restated as general product behaviour. Hits with customer null are general. Where the two disagree, say so rather than merging them.";
 
-export function searchOut(rows: Record<string, unknown>[], kind: string) {
+const MAX_NAMED_REPOS = 5;
+
+/**
+ * Said on an archive search that found nothing better than weak while code is
+ * linked in its scope: past cases live in the archive, how the product
+ * behaves lives in its code.
+ */
+export function searchCodeNext(repoSlugs: string[]): string {
+  const named = repoSlugs.slice(0, MAX_NAMED_REPOS).join(", ");
+  const more = repoSlugs.length - MAX_NAMED_REPOS;
+  const repos = more > 0 ? `${named} and ${more} more` : named;
+  return `Linked repos hold this product's code (${repos}): a question about how the product behaves is answered from it. Run search_code before saying nothing is known.`;
+}
+
+/** `next` is attached as given; the caller decides when a result needs one. */
+export function searchOut(
+  rows: Record<string, unknown>[],
+  kind: string,
+  opts: { next?: string } = {},
+) {
   const trimmed = forAgent(rows);
+  const next = opts.next ? { next: opts.next } : {};
   if (!trimmed.length)
-    return outScrubbed({ results: [], note: `${kind}: ${NO_MATCHES}` });
+    return outScrubbed({
+      results: [],
+      note: `${kind}: ${NO_MATCHES}`,
+      ...next,
+    });
   const scoped = rows.some((r) => r.customer_slug ?? r.customer);
-  return outScrubbed(
-    scoped ? { results: trimmed, note: CUSTOMER_NOTE } : trimmed,
-  );
+  if (!scoped && !opts.next) return outScrubbed(trimmed);
+  return outScrubbed({
+    results: trimmed,
+    ...(scoped ? { note: CUSTOMER_NOTE } : {}),
+    ...next,
+  });
 }
