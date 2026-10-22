@@ -113,7 +113,7 @@ Draft it from what the conversation already holds and call `create_ado_work_item
 review box is the user's, and they may take the draft into `/az new` to finish by hand.
 Report the created URL.
 
-### Code consultation - "where/why does the code do X?" / code mode
+### Code consultation - "how does X work?" / "where/why does the code do X?" / code mode
 
 `list_repos` (flag any stale or erroring index) → `search_code`, narrowed by the repos
 and projects the user attached, else by `component` → `read_code_file` around the best
