@@ -35,6 +35,7 @@ export const READ_TOOLS = [
   "search_code",
   "read_code_file",
   "code_changes_between",
+  "code_history",
   "code_diff",
   "code_releases_containing",
   "list_code_tree",
