@@ -4,7 +4,7 @@ import { sql } from "../infra/db";
 import { count, num } from "../jobs/present";
 import { defineJob } from "../jobs/registry";
 import { indexRepo } from "./indexer";
-import { listRepos } from "./repos";
+import { listRepos, markIndexInterrupted, REINDEX_JOB } from "./repos";
 import { repoToken } from "./token";
 
 /** Each repo's queued or running reindex, by slug. */
@@ -33,7 +33,7 @@ export async function activeReindexes(): Promise<Map<string, RepoIndexRun>> {
 
 export function defineCodeJobs() {
   defineJob({
-    kind: "repo.reindex",
+    kind: REINDEX_JOB,
     title: "Index repository",
     description:
       "Fetches the repository's tracked lines and embeds the files that changed since the last index.",
@@ -77,6 +77,7 @@ export function defineCodeJobs() {
         : lines.map((l, i) => `${l.ref}: ${said[i]}`).join(" · ");
     },
     timeout: "8h",
+    abandoned: (params) => markIndexInterrupted(params.repo),
     run: async (ctx, params) => {
       ctx.log(`indexing ${params.repo}${params.line ? ` ${params.line}` : ""}`);
       const indexed = await indexRepo(params.repo, {
