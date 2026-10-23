@@ -8,7 +8,8 @@
  * Each question goes through the real searchCode. The report is where the
  * expected file ranks, by kind of question, and for the misses what the vector
  * leg alone ranked first, so a change to chunking, to a leg or to the model
- * can be judged by what it moved.
+ * can be judged by what it moved. It also reports how much text a page of hits
+ * carries against the chunks the hits come from.
  */
 import { searchCode } from "@tachy/core/code";
 import { sql } from "@tachy/core/infra";
@@ -81,6 +82,28 @@ async function vectorOnly(
     .map((r) => ({ path: r.path as string, cosine: 1 - (r.dist as number) }));
 }
 
+/** Characters of the hits' excerpts, and of the whole chunks they are cut from. */
+async function pageText(
+  hits: { path: string; start_line: number; excerpt: string }[],
+): Promise<{ excerptChars: number; chunkChars: number }> {
+  const [row] = await sql`
+    select coalesce(sum(length(c.chunk_text)), 0)::int as chars
+    from unnest(${hits.map((h) => h.path)}::text[], ${hits.map((h) => h.start_line)}::int[])
+      as h(path, start_line)
+    join lateral (
+      select c.chunk_text from code_blob_chunks c
+      join repos r on r.id = c.repo_id
+      join repo_line_files f on f.repo_id = c.repo_id and f.blob_sha = c.blob_sha
+      where r.slug = ${repoSlug} and f.path = h.path and c.start_line = h.start_line
+      limit 1
+    ) c on true
+  `;
+  return {
+    excerptChars: hits.reduce((sum, h) => sum + h.excerpt.length, 0),
+    chunkChars: row.chars as number,
+  };
+}
+
 /** Files the vector leg hands to the fusion at most. */
 const VECTOR_CANDIDATES = 50;
 
@@ -95,6 +118,8 @@ interface Outcome {
   ownCosine: number | null;
   top: string[];
   stale: boolean;
+  excerptChars: number;
+  chunkChars: number;
 }
 
 const outcomes: Outcome[] = [];
@@ -103,10 +128,12 @@ for (const golden of CODE_GOLDEN) {
     repoSlug,
     limit: PAGE + FILE_CHUNKS_ON_PAGE,
   });
-  const paths = hits
-    .map((h) => (h as { path: string }).path)
-    .filter((path) => path !== QUESTIONS_FILE)
+  const page = (
+    hits as unknown as { path: string; start_line: number; excerpt: string }[]
+  )
+    .filter((h) => h.path !== QUESTIONS_FILE)
     .slice(0, PAGE);
+  const paths = page.map((h) => h.path);
   const at = paths.findIndex((p) => golden.expect.includes(p));
   const vec = await vectorOnly(golden.q);
   const vecAt = vec
@@ -122,6 +149,7 @@ for (const golden of CODE_GOLDEN) {
     ownCosine: own?.cosine ?? null,
     top: paths.slice(0, 3),
     stale: !golden.expect.some((p) => indexed.has(p)),
+    ...(await pageText(page)),
   });
 }
 
@@ -140,6 +168,12 @@ const summarise = (list: Outcome[]) => {
     vectorTop1: vectorWithin(1),
     vectorTop3: vectorWithin(3),
     vectorPage: vectorWithin(PAGE),
+    excerptCharsPerPage: n
+      ? Math.round(list.reduce((s, o) => s + o.excerptChars, 0) / n)
+      : 0,
+    chunkCharsPerPage: n
+      ? Math.round(list.reduce((s, o) => s + o.chunkChars, 0) / n)
+      : 0,
   };
 };
 
@@ -189,6 +223,9 @@ if (json) {
   console.log("\nexpected file found, by kind of question:");
   for (const kind of kinds) row(kind, summary.byKind[kind]);
   row("all", summary.overall);
+  console.log(
+    `\ntext per page: excerpts ${summary.overall.excerptCharsPerPage} chars, the chunks they come from ${summary.overall.chunkCharsPerPage}`,
+  );
   console.log(
     `\nvector leg: nonsense reaches ${floor.nonsenseCeiling.toFixed(3)}, a question's own file ${floor.ownFileP25.toFixed(3)} at the 25th percentile; codeSemFloor in use ${floor.inUse}`,
   );
