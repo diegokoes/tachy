@@ -299,7 +299,7 @@ function dateNote(format: DateFormat | undefined): string | undefined {
 const MENTION_USE: Record<MentionKind, { label: string; use: string }> = {
   repo: {
     label: "repos",
-    use: "pass as `repos` to search_code; read_code_file takes one",
+    use: "pass as `repos` to search_code; read_code_file and list_code_tree take one",
   },
   project: {
     label: "projects",
