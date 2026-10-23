@@ -11,7 +11,9 @@ import {
 } from "../search/rank";
 import { currentVector } from "../search/backfill";
 import { CODE_SEM_FLOOR, withRelevance } from "../search/relevance";
+import { codeExcerpt } from "./excerpt";
 import { getRepoBySlug, getRepoLine } from "./repos";
+import { definedSymbols } from "./symbols";
 import { listDir, readBlob, readFileAt, resolveRef } from "./git";
 import { resolveVersion } from "./versions";
 
@@ -70,6 +72,18 @@ const NEAREST = 4;
  * one definition does.
  */
 const LEX_WEIGHTS = "{0.02, 0.2, 0.4, 1.0}";
+
+const MAX_DEFINES = 5;
+
+type ChunkRow = Record<string, unknown> & {
+  chunk_text: string;
+  start_line: number;
+};
+
+type ShownRow = Record<string, unknown> & {
+  excerpt: string;
+  defines: string[];
+};
 
 export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
   if (!query.trim()) return [];
@@ -217,7 +231,7 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
     select r.slug as repo_slug, comp.slug as component_slug, cu.slug as customer_slug,
            l.ref as line, l.version_label, l.index_status,
            p.path, p.lang, c.start_line, c.end_line,
-           left(c.chunk_text, 1200) as snippet,
+           c.chunk_text,
            p.cos_sim, p.fts_rank, p.trgm_sim, p.rrf,
            coalesce(l.indexing_commit, l.indexed_commit) as commit,
            l.last_indexed_at,
@@ -235,7 +249,12 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
   );
   // The page is cut by rank; within it, what is shown first should agree with
   // the grade it is shown with.
-  return (rows as unknown as Parameters<typeof withRelevance>[0][])
+  return (rows as unknown as ChunkRow[])
+    .map(({ chunk_text, ...row }): ShownRow => ({
+      ...row,
+      excerpt: codeExcerpt(chunk_text, row.start_line, query),
+      defines: definedSymbols(chunk_text).slice(0, MAX_DEFINES),
+    }))
     .map(withRelevance)
     .map((r, i) => ({ r, i }))
     .sort(

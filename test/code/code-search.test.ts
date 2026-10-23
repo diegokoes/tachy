@@ -7,6 +7,7 @@ import {
   backfillCodeWords,
   chunkCode,
   chunkSymbols,
+  codeExcerpt,
   definedSymbols,
   deleteRepo,
   fileStem,
@@ -88,6 +89,57 @@ describe("chunk size", () => {
   });
 });
 
+describe("the excerpt a hit shows", () => {
+  const chunk = [
+    "import { sql } from './db';",
+    "",
+    "/** Below it, two names are too far apart to merge. */",
+    "export const WORD_SIM_THRESHOLD = 0.35;",
+    "export const PER_FILE = 2;",
+    "const unrelated = true;",
+  ].join("\n");
+
+  it("shows the matching lines and their neighbours, numbered from the chunk's first line", () => {
+    expect(codeExcerpt(chunk, 40, "WORD_SIM_THRESHOLD")).toBe(
+      [
+        "42\t/** Below it, two names are too far apart to merge. */",
+        "43\texport const WORD_SIM_THRESHOLD = 0.35;",
+        "44\texport const PER_FILE = 2;",
+      ].join("\n"),
+    );
+  });
+
+  it("matches a symbol typed as words, and ignores words too short to point anywhere", () => {
+    expect(codeExcerpt(chunk, 1, "word sim threshold")).toContain(
+      "4\texport const WORD_SIM_THRESHOLD",
+    );
+    expect(codeExcerpt(chunk, 1, "id db")).toBe(
+      codeExcerpt(chunk, 1, "nothing here"),
+    );
+  });
+
+  it("shows the first lines of a chunk no line of which holds a query word", () => {
+    expect(codeExcerpt(chunk, 1, "nothing here").split("\n")[0]).toBe(
+      "1\timport { sql } from './db';",
+    );
+  });
+
+  it("keeps the line matching most of the query when the caps cut", () => {
+    const lines = Array.from({ length: 40 }, (_, i) => `const printer = ${i};`);
+    lines[30] = "export function flushPrinterBuffer() {}";
+    const excerpt = codeExcerpt(lines.join("\n"), 1, "printer buffer");
+    expect(excerpt).toContain("31\texport function flushPrinterBuffer");
+    expect(excerpt.split("\n").length).toBeLessThanOrEqual(8);
+  });
+
+  it("stays short whatever the chunk holds", () => {
+    const long = Array.from({ length: 60 }, () => `token ${"x".repeat(400)}`);
+    const excerpt = codeExcerpt(long.join("\n"), 1, "token");
+    expect(excerpt.length).toBeLessThanOrEqual(600);
+    expect(excerpt.split("\n")[0].endsWith("…")).toBe(true);
+  });
+});
+
 describe("identifiers as words", () => {
   it("splits camelCase, acronyms, snake_case and paths", async () => {
     const [row] = await sql`
@@ -160,6 +212,16 @@ describe("code search by name", () => {
 
   it("puts the definition before the files that use the name", async () => {
     expect((await paths("scheduleDueRuns"))[0]).toBe("scheduler.ts");
+  });
+
+  it("returns each hit's matching lines and the names it defines, not its chunk", async () => {
+    const [hit] = await searchCode("scheduleDueRuns", {
+      repoSlug: "searchrepo",
+    });
+    expect(hit.excerpt).toContain("2\texport async function scheduleDueRuns");
+    expect(hit.defines).toEqual(["scheduleDueRuns"]);
+    expect(hit).not.toHaveProperty("chunk_text");
+    expect(hit).not.toHaveProperty("snippet");
   });
 
   it("finds a symbol typed as words, in either casing", async () => {

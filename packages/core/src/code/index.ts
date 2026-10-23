@@ -1,4 +1,5 @@
 export { chunkCode } from "./chunk-code";
+export { codeExcerpt } from "./excerpt";
 export { chunkSymbols, definedSymbols, fileStem } from "./symbols";
 export type { CodeChunk } from "./chunk-code";
 export {
