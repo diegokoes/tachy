@@ -15,8 +15,6 @@ export const MAX_MAP_CHARS = 3200;
 /** Files one folder lists before the rest are only counted. */
 const MAX_LISTED_FILES = 15;
 const MAX_NAMES_PER_FILE = 4;
-/** Subfolders a folded folder names on its line, the largest first. */
-const MAX_NAMED_SUBFOLDERS = 6;
 const INDENT = "  ";
 
 interface Folder {
@@ -154,19 +152,29 @@ function linesOf(folder: Folder): MapLine[] {
   });
 }
 
-/** What a folded folder holds, by its largest subfolders. */
-function subfolderNames(folder: Folder): string | undefined {
-  if (folder.open || !folder.folders.length) return undefined;
+/**
+ * What a folded folder holds: its subfolders, the largest first, as many as
+ * `room` characters take, and how many more there are.
+ */
+function subfolderNames(folder: Folder, room: number): string | undefined {
   const largest = [...folder.folders].sort((a, b) => b.fileCount - a.fileCount);
-  const named = largest.slice(0, MAX_NAMED_SUBFOLDERS).map((f) => `${f.name}/`);
-  const rest = largest.length - named.length;
-  return `: ${named.join(", ")}${rest > 0 ? ` +${rest} more` : ""}`;
+  const named: string[] = [];
+  const text = (rest: number) =>
+    `: ${named.join(", ")}${rest > 0 ? ` +${rest} more` : ""}`;
+  for (const sub of largest) {
+    named.push(`${sub.name}/`);
+    if (text(largest.length - named.length).length > room) {
+      named.pop();
+      break;
+    }
+  }
+  return named.length ? text(largest.length - named.length) : undefined;
 }
 
 /**
  * The tree of `paths` as indented lines, and the paths it lists by name.
- * Folded folders then name their largest subfolders, and `names` adds what
- * each file defines, line by line while the tree fits.
+ * Folded folders then name their subfolders, the largest folders first, and
+ * `names` adds what each file defines, line by line while the tree fits.
  */
 export function drawRepoTree(
   paths: string[],
@@ -181,8 +189,20 @@ export function drawRepoTree(
     line.text += added;
     used += added.length;
   };
-  for (const line of lines)
-    if (line.folder) addWhileFits(line, subfolderNames(line.folder));
+  // The largest folded folders name their subfolders first, test folders
+  // last: theirs say most about the product.
+  const folded = lines
+    .filter(
+      (line) => line.folder && !line.folder.open && line.folder.folders.length,
+    )
+    .sort(
+      (a, b) =>
+        Number(TEST_FOLDER_RE.test(a.folder!.name)) -
+          Number(TEST_FOLDER_RE.test(b.folder!.name)) ||
+        b.folder!.fileCount - a.folder!.fileCount,
+    );
+  for (const line of folded)
+    addWhileFits(line, subfolderNames(line.folder!, MAX_MAP_CHARS - used));
   for (const line of lines) {
     const defined = line.path ? names.get(line.path) : undefined;
     if (defined?.length) addWhileFits(line, `: ${defined.join(", ")}`);
