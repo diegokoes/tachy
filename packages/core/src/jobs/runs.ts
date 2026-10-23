@@ -13,7 +13,8 @@ import {
 import { sql, type Db, jsonb } from "../infra/db";
 import { badInput, notFound } from "../infra/errors";
 import { presentRun } from "./present";
-import { getJobKind, type JobKind } from "./registry";
+import { log } from "../infra/log";
+import { getJobKind, hasJobKind, type JobKind } from "./registry";
 
 export type { JobRun, JobRunListed };
 
@@ -224,17 +225,32 @@ export async function cancelRun(runId: string): Promise<JobRun> {
   return row as never;
 }
 
-/** Runs whose worker stopped heartbeating: requeued, or failed if out of attempts. */
+/**
+ * Runs whose worker stopped heartbeating: requeued, or failed if out of
+ * attempts. Each kind's `abandoned` then clears what its run left half-done.
+ */
 export async function reapExpiredRuns(): Promise<number> {
-  const rows = await sql`
+  const rows = await sql<{ id: string; kind: string; params: unknown }[]>`
     update job_runs set
       status = case when attempts < max_attempts then 'queued' else 'failed' end,
       finished_at = case when attempts < max_attempts then null else now() end,
       error = 'the worker stopped heartbeating (it restarted or died)',
       locked_by = null, locked_until = null
     where status = 'running' and locked_until < now()
-    returning id
+    returning id, kind, params
   `;
+  for (const row of rows) {
+    const abandoned = hasJobKind(row.kind)
+      ? getJobKind(row.kind).abandoned
+      : undefined;
+    await abandoned?.(row.params).catch((err) =>
+      log("error", "job_abandon_failed", {
+        run: row.id,
+        kind: row.kind,
+        error: String(err),
+      }),
+    );
+  }
   return rows.length;
 }
 
