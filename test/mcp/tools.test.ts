@@ -768,6 +768,36 @@ describe("result guidance", () => {
     const body = answer.json as { results: unknown[]; note: string };
     expect(body.results).toEqual([]);
     expect(body.note).toMatch(/nothing on this/i);
+    expect(body).not.toHaveProperty("next");
+  });
+
+  it("points an empty archive search at the product's indexed code", async () => {
+    const productId = await tpdProductId();
+    const indexedRepo = async (slug: string, chunkCount: number) => {
+      const [repo] = await sql`
+        insert into repos (slug, url, product_id)
+        values (${slug}, ${`https://example.invalid/${slug}.git`}, ${productId})
+        returning id
+      `;
+      await sql`
+        insert into repo_lines (repo_id, ref, chunk_count, indexed_commit, index_status)
+        values (${repo.id}, 'main', ${chunkCount}, 'abc123', 'ready')
+      `;
+    };
+    await indexedRepo("printer-firmware", 40);
+    await indexedRepo("not-yet-indexed", 0);
+
+    for (const tool of ["search_knowledge", "search_reference"]) {
+      const answer = await call(tool, {
+        query: "a query about something nobody has ever written down",
+        product_slug: "tpd",
+      });
+      const body = answer.json as { note: string; next: string };
+      expect(body.note).toMatch(/nothing on this/i);
+      expect(body.next).toContain("printer-firmware");
+      expect(body.next).not.toContain("not-yet-indexed");
+      expect(body.next).toMatch(/search_code/);
+    }
   });
 
   it("carries the grade calibration on a search that did hit", async () => {
