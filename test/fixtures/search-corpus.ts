@@ -199,3 +199,95 @@ export const TICKET_LEADS_DE: { q: string; expect: string }[] = [
     expect: "cert-expiry",
   },
 ];
+
+/**
+ * For entries of `KNOWLEDGE`, the same lesson as another ticket's entry would
+ * put it, and a related entry that is not the same lesson: the same area, a
+ * different cause. The duplicate floor sits between the two.
+ */
+export const DUPLICATES: {
+  of: string;
+  same: Omit<CorpusEntry, "key">;
+  different: Omit<CorpusEntry, "key">;
+}[] = [
+  {
+    of: "printer-023",
+    same: {
+      issueSummary:
+        "Label printer refuses jobs with 023 TOO_MANY_STRINGS on templates with lots of variable text",
+      symptoms: ["printer shows error 023", "print job is refused"],
+      signals: ["023 TOO_MANY_STRINGS"],
+      rootCause:
+        "The template holds more variable strings than the printer's buffer allows.",
+      resolution:
+        "Cut down the variable fields in the label template, or print the label in two passes.",
+    },
+    different: {
+      issueSummary: "Label printer prints blank labels after a ribbon change",
+      symptoms: ["labels come out blank", "no error on the display"],
+      signals: [],
+      rootCause: "The new ribbon was loaded with the ink side facing away.",
+      resolution: "Reload the ribbon with the ink side towards the labels.",
+    },
+  },
+  {
+    of: "scanner-pairing",
+    same: {
+      issueSummary:
+        "Barcode scanner stays offline after the software update and cannot be paired",
+      symptoms: ["scanner offline", "pairing dialog missing"],
+      signals: ["ECONNREFUSED"],
+      rootCause: "The software update cleared the Bluetooth pairing table.",
+      resolution:
+        "Pair the scanner again in the device settings and restart the ingest service.",
+    },
+    different: {
+      issueSummary: "Barcode scanner enters the wrong characters",
+      symptoms: ["Y and Z swapped in scanned codes", "scans otherwise work"],
+      signals: [],
+      rootCause:
+        "The scanner emulates a US keyboard while the station uses a German layout.",
+      resolution: "Set the scanner's keyboard language to German.",
+    },
+  },
+  {
+    of: "cert-expiry",
+    same: {
+      issueSummary: "All machine agents lose their connection at midnight UTC",
+      symptoms: ["every agent disconnects at once", "agents keep reconnecting"],
+      signals: ["TLS_CERT_EXPIRED"],
+      rootCause:
+        "The agents' client certificate expired, and automatic renewal was switched off.",
+      resolution:
+        "Issue a new client certificate and switch automatic renewal back on.",
+    },
+    different: {
+      issueSummary: "Single machine agents drop out at random during the day",
+      symptoms: [
+        "one agent at a time disconnects",
+        "reconnects after a minute",
+      ],
+      signals: [],
+      rootCause:
+        "The agents roam between wifi access points and lose their session on each switch.",
+      resolution: "Pin the agents to one access point, or wire them.",
+    },
+  },
+  {
+    of: "export-empty-pdf",
+    same: {
+      issueSummary: "The monthly invoice export writes an empty PDF file",
+      symptoms: ["PDF of zero bytes", "the export reports success"],
+      signals: ["PDF_EMPTY"],
+      rootCause: "A stale, empty render was left in the export cache.",
+      resolution: "Clear the export cache, then run the monthly export again.",
+    },
+    different: {
+      issueSummary: "The monthly invoice export shows wrong totals",
+      symptoms: ["totals off by a few cents", "line items correct"],
+      signals: [],
+      rootCause: "Totals are rounded per line instead of per invoice.",
+      resolution: "Set the export's rounding to round per invoice.",
+    },
+  },
+];

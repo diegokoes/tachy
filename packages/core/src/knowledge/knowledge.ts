@@ -171,6 +171,13 @@ function buildEmbedText(
     .trim();
 }
 
+export async function saveKnowledgeEntry(input: KnowledgeInput) {
+  return insertKnowledgeEntry(await prepareKnowledgeEntry(input));
+}
+
+/** A new entry with its scope, component and vector resolved, not yet stored. */
+export type PreparedEntry = Awaited<ReturnType<typeof prepareKnowledgeEntry>>;
+
 /**
  * Product, team and version default from the work item; the customer does
  * not. Most lessons learned on one customer's ticket are true of the product,
@@ -178,7 +185,7 @@ function buildEmbedText(
  * cite it as theirs. The unit is inherited once a stated customer matches the
  * ticket's.
  */
-export async function saveKnowledgeEntry(input: KnowledgeInput) {
+export async function prepareKnowledgeEntry(input: KnowledgeInput) {
   let productId = input.productId ?? null;
   let teamId = input.teamId ?? null;
   let affectedVersion = input.affectedVersion ?? null;
@@ -217,7 +224,35 @@ export async function saveKnowledgeEntry(input: KnowledgeInput) {
   );
   const text = buildEmbedText(input, patternDescription, productArea);
   const embedding = text ? toVectorLiteral(await embedPassage(text)) : null;
+  return {
+    input,
+    productId,
+    teamId,
+    affectedVersion,
+    customerId,
+    customerUnitId,
+    componentId,
+    productArea,
+    confidence,
+    structured,
+    embedding,
+  };
+}
 
+export async function insertKnowledgeEntry(prepared: PreparedEntry) {
+  const {
+    input,
+    productId,
+    teamId,
+    affectedVersion,
+    customerId,
+    customerUnitId,
+    componentId,
+    productArea,
+    confidence,
+    structured,
+    embedding,
+  } = prepared;
   return sql.begin(async (tx) => {
     const [row] = await tx<RevisedRow[]>`
       insert into knowledge_entries
@@ -254,6 +289,49 @@ export async function saveKnowledgeEntry(input: KnowledgeInput) {
     );
     return { id: row.id, status: row.status };
   });
+}
+
+/** Near-copies offered at most for one new entry. */
+const MAX_NEAR_DUPLICATES = 3;
+
+export interface NearDuplicate {
+  id: string;
+  issue_summary: string | null;
+  status: string;
+  superseded_by: string | null;
+  /** Cosine between the two entries' vectors, 0 to 1. */
+  similarity: number;
+}
+
+/**
+ * Stored entries that hold nearly the lesson `prepared` does, at `floor` or
+ * above, closest first: in its product, or in none, and rejected or archived
+ * ones left out. An entry with no text to embed has none.
+ */
+export async function nearDuplicateEntries(
+  prepared: PreparedEntry,
+  floor: number,
+): Promise<NearDuplicate[]> {
+  if (!prepared.embedding) return [];
+  const inScope = prepared.productId
+    ? sql`and (product_id = ${prepared.productId} or product_id is null)`
+    : sql``;
+  const rows = await withSearchSession(
+    (tx) => tx`
+      select id, issue_summary, status, superseded_by,
+             1 - (embedding <=> ${prepared.embedding}::vector) as similarity
+      from knowledge_entries
+      where status in ('draft', 'approved', 'deprecated')
+        and embedding is not null and ${currentVector()} ${inScope}
+        and 1 - (embedding <=> ${prepared.embedding}::vector) >= ${floor}
+      order by embedding <=> ${prepared.embedding}::vector
+      limit ${MAX_NEAR_DUPLICATES}
+    `,
+  );
+  return (rows as unknown as NearDuplicate[]).map((row) => ({
+    ...row,
+    similarity: Number(Number(row.similarity).toFixed(3)),
+  }));
 }
 
 /**
