@@ -3,6 +3,8 @@ export interface AgentUsage {
   turns: number;
   input_tokens: number;
   output_tokens: number;
+  /** Prompt-cache reads and writes, counted apart from `input_tokens`. */
+  cached_tokens: number;
   /**
    * What the provider reported where it reported anything, list price for the
    * rest. A subscription is not billed per token, so this measures consumption
