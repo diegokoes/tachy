@@ -1,8 +1,9 @@
 /**
  * A repo laid out in one read: its folders as deep as a size budget allows,
- * the files they hold with the names each defines, and the README's opening.
- * Built from what the indexer stored, so files an admin excluded are absent,
- * and asking for it costs the agent one call instead of a folder per call.
+ * and the files they hold with the names each defines. Built from what the
+ * indexer stored, so files an admin excluded are absent, and asking for it
+ * costs the agent one call instead of a folder per call. No doc text goes in:
+ * a repo's own docs can be out of date, and the map stands for its code.
  */
 import { sql } from "../infra/db";
 import { definedSymbols, fileStem } from "./symbols";
@@ -14,9 +15,7 @@ export const MAX_MAP_CHARS = 3200;
 /** Files one folder lists before the rest are only counted. */
 const MAX_LISTED_FILES = 15;
 const MAX_NAMES_PER_FILE = 4;
-const README_CHARS = 300;
 const INDENT = "  ";
-const README_RE = /^readme(\.[a-z]+)?$/i;
 
 interface Folder {
   name: string;
@@ -176,7 +175,6 @@ export interface RepoMap {
   ref: string;
   commit: string;
   indexed_files: number;
-  readme?: string;
   tree: string;
 }
 
@@ -214,24 +212,6 @@ async function definedNames(
   );
 }
 
-async function readmeLead(
-  repoId: string,
-  files: LineFile[],
-): Promise<string | undefined> {
-  const readme = files.find(
-    (f) => !f.path.includes("/") && README_RE.test(f.path),
-  );
-  if (!readme) return undefined;
-  const [first] = await sql<{ chunk_text: string }[]>`
-    select chunk_text from code_blob_chunks
-    where repo_id = ${repoId} and blob_sha = ${readme.blob_sha}
-    order by ordinal limit 1
-  `;
-  const text = first?.chunk_text.trim();
-  if (!text) return undefined;
-  return text.length > README_CHARS ? `${text.slice(0, README_CHARS)}…` : text;
-}
-
 /**
  * The map of a repo's default line, or of the tracked line `ref` names. Null
  * when that line is not tracked or not indexed yet, for the caller to list
@@ -261,19 +241,15 @@ export async function repoMap(
   const paths = files.map((f) => f.path);
   const { listed } = drawRepoTree(paths);
   const shown = new Set(listed);
-  const [names, readme] = await Promise.all([
-    definedNames(
-      line.repo_id,
-      files.filter((f) => shown.has(f.path)),
-    ),
-    readmeLead(line.repo_id, files),
-  ]);
+  const names = await definedNames(
+    line.repo_id,
+    files.filter((f) => shown.has(f.path)),
+  );
   return {
     repo: slug,
     ref: line.ref,
     commit: line.indexed_commit,
     indexed_files: files.length,
-    ...(readme ? { readme } : {}),
     tree: drawRepoTree(paths, names).text,
   };
 }
