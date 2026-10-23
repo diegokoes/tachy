@@ -1637,8 +1637,10 @@
     display: inline-block;
     transform: scaleX(-1);
   }
+  /* Pasted ids, paths and URLs have no break opportunity of their own. */
   .turn.user .body {
     background: color-mix(in srgb, var(--accent) 14%, var(--panel-solid));
+    overflow-wrap: anywhere;
   }
 
   /* The textarea is what sits on the nav's centre line, not the row: the
