@@ -327,18 +327,42 @@ export async function deleteRepo(slug: string): Promise<void> {
   await removeClone(slug);
 }
 
+/** The job kind that writes a repo's lines, as `code/jobs` defines it. */
+export const REINDEX_JOB = "repo.reindex";
+
 /**
- * Lines stuck in a transient status after a process crash/restart. What they
- * had written stays searchable; the next reindex finishes the diff.
+ * Lines left in a transient status by a process that crashed or restarted.
+ * What they had written stays searchable; the next reindex finishes the diff.
+ * A line whose reindex run still holds its lease is being written by a worker
+ * that outlived this process, so it is left to that run, and to the reaper's
+ * `markIndexInterrupted` should that worker die too.
  */
 export async function sweepInterruptedIndexes(): Promise<number> {
   const rows = await sql`
-    update repo_lines
+    update repo_lines l
     set index_status = 'error', index_error = 'indexing interrupted (process restarted)'
-    where index_status in ('cloning','indexing')
-    returning id
+    from repos r
+    where r.id = l.repo_id
+      and l.index_status in ('cloning','indexing')
+      and not exists (
+        select 1 from job_runs j
+        where j.kind = ${REINDEX_JOB} and j.status = 'running'
+          and j.locked_until > now() and j.params->>'repo' = r.slug
+      )
+    returning l.id
   `;
   return rows.length;
+}
+
+/** A repo's lines a reindex run left in a transient status when its worker died. */
+export async function markIndexInterrupted(slug: string): Promise<void> {
+  await sql`
+    update repo_lines l
+    set index_status = 'error', index_error = 'indexing interrupted (its worker stopped)'
+    from repos r
+    where r.id = l.repo_id and r.slug = ${slug}
+      and l.index_status in ('cloning','indexing')
+  `;
 }
 
 /**
