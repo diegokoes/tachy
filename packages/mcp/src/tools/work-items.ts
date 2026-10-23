@@ -219,18 +219,20 @@ function ticketOpening(item: RawWorkItem): string {
 /**
  * What a ticket is searched by: the whole thread as the agent reads it, with
  * quoted chains, signatures and auto-replies taken out, so a problem stated in
- * a later message or an internal note is found too. It is embedded window by
- * window, one request each: the embedder runs a request as one batch, and
- * every other search waits behind it.
+ * a later message or an internal note is found too. Its windows are embedded
+ * one request each: the embedder runs a request as one batch, and every other
+ * search waits behind it.
  */
 async function ticketSearch(item: RawWorkItem): Promise<TicketSearch> {
-  const thread = [
-    item.title,
-    ...compactWorkItem(item).turns.map((turn) => turn.text),
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-  const windows = queryWindows(thread);
+  const [firstTurn = "", ...laterTurns] = compactWorkItem(item).turns.map(
+    (turn) => turn.text,
+  );
+  const messages = [
+    [item.title, firstTurn].filter(Boolean).join("\n\n"),
+    ...laterTurns,
+  ];
+  const thread = messages.join("\n\n");
+  const windows = queryWindows(messages);
   const queryVectors: string[] = [];
   for (const window of windows)
     queryVectors.push(await embedQueryLiteral(window));
