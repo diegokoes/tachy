@@ -85,6 +85,40 @@ export const ftsRank = (
 ) =>
   sql`greatest(ts_rank_cd(${tsv}, websearch_to_tsquery('simple', ${query})), ts_rank_cd(${tsvEn}, websearch_to_tsquery('english', ${query})))`;
 
+/** `<%` against any one of `texts`, each through the trigram index. */
+export const fuzzyMatch = (texts: string[], column: ReturnType<typeof sql>) =>
+  sql`(${texts
+    .slice(1)
+    .reduce(
+      (any, text) => sql`${any} or ${text} <% ${column}`,
+      sql`${texts[0]} <% ${column}`,
+    )})`;
+
+/** The best `word_similarity` of any one of `texts`. */
+export const fuzzyScore = (texts: string[], column: ReturnType<typeof sql>) =>
+  sql`greatest(${texts
+    .slice(1)
+    .reduce(
+      (scores, text) => sql`${scores}, word_similarity(${text}, ${column})`,
+      sql`word_similarity(${texts[0]}, ${column})`,
+    )})`;
+
+/**
+ * One scan per query vector, as one row set: `scanOne` is a surface's own
+ * scan for one vector literal, so each keeps its HNSW index. A row near
+ * several vectors comes back once for each; the caller keeps its best.
+ */
+export const nearestToAny = (
+  queryVectors: string[],
+  scanOne: (queryVector: string) => ReturnType<typeof sql>,
+) =>
+  queryVectors
+    .slice(1)
+    .reduce(
+      (rows, queryVector) => sql`${rows} union all (${scanOne(queryVector)})`,
+      sql`(${scanOne(queryVectors[0])})`,
+    );
+
 /**
  * Fuses three candidate CTEs named `vec`, `lex` and `fuzzy`, each exposing
  * (id, rnk) and its raw signal, into `fused`: the raw signals plus `rrf` to

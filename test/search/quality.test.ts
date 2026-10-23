@@ -1,7 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { saveKnowledgeEntry, searchKnowledge } from "@tachy/core/knowledge";
 import { saveReferenceDoc, searchReferenceDocs } from "@tachy/core/reference";
-import { relevance, SEM_FLOOR, SEM_CEIL } from "@tachy/core/search";
+import {
+  EMBEDDING_SPEC,
+  embedQueryLiteral,
+  exactTerms,
+  queryWindows,
+  relevance,
+  SEM_FLOOR,
+  SEM_CEIL,
+} from "@tachy/core/search";
 import { grade, GOOD, STRONG } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "../database";
 import {
@@ -94,6 +102,105 @@ describe("a ticket in German", () => {
     const [top] = await searchKnowledge(q);
     expect(top?.id).toBe(idByKey.get(key));
     expect(Number(top.cos_sim)).toBeGreaterThan(SEM_FLOOR);
+  });
+});
+
+/** Sentences about a site visit: no entry covers any of it. */
+const VISIT_TALK = [
+  "Hello team, thank you for the call this morning, it was good to hear from you again after the summer.",
+  "As agreed we are looking forward to your visit to our site in Leipzig next Thursday, and the whole team will be there.",
+  "Please register at the gate with an identity card, as the security desk will not let anyone in without one.",
+  "Parking for visitors is behind building C, next to the bicycle shelter, and it is free for the whole day.",
+  "The security desk hands out badges from eight o'clock, and they are needed to open the doors on every floor.",
+  "Lunch will be served in the canteen on the ground floor at half past twelve, with a choice of three menus.",
+  "Let us know about any dietary wishes by Tuesday so the kitchen can plan the meals for everyone on the day.",
+  "In the afternoon our colleagues from purchasing would like to walk you through the new office wing upstairs.",
+  "Afterwards there is time for coffee and cake on the terrace before your train back to the city in the evening.",
+  "We have also booked the large meeting room on the second floor for the whole day, with a projector and a whiteboard.",
+  "That should leave enough room in case you want to present the plans for next year to the department heads as well.",
+  "If the date does not suit you after all, just reply to this message and we will find another day in the same week.",
+  "Our reception is open until five in the afternoon, and the phone number is on the invitation we sent last week.",
+  "The nearest hotel is a ten minute walk from the main entrance, and our travel office can book a room for you.",
+  "Taxis wait at the station square, and the ride to the site takes about twenty minutes outside the rush hour.",
+  "We will send directions and a map of the buildings by email on Monday, together with the agenda for the day.",
+  "Several colleagues from the other sites will join by video, so the room is set up for a call in the afternoon.",
+  "Thank you again for making the time, and do not hesitate to reach out if anything else comes up before then.",
+  "Our managing director hopes to join you for lunch, although her calendar for that week is still quite full.",
+  "The weather forecast promises sunshine, so the tour of the grounds can take place outside as planned.",
+  "Please bring sturdy shoes for the walk across the yard, since some of the paths are still being paved.",
+  "Photos are allowed in the office wing and the canteen, but not in the archive rooms in the basement.",
+  "The visitor wifi is called Guest and the password is printed on the back of the badge you receive.",
+  "We are happy to arrange a short city tour on Friday morning if you decide to stay one more night.",
+];
+
+const windowChars = EMBEDDING_SPEC.codeChunkChars;
+
+/** One message of visit talk that fills a window, so the next message starts another. */
+const fullWindowOfTalk = VISIT_TALK.reduce(
+  (message, sentence) =>
+    message.length + sentence.length + 1 > windowChars
+      ? message
+      : `${message} ${sentence}`.trim(),
+  "",
+);
+
+/** One vector per window and the exact terms, as the ticket tools search. */
+async function searchThread(turns: string[]) {
+  const thread = turns.join("\n\n");
+  const windows = queryWindows(thread);
+  const queryVectors: string[] = [];
+  for (const window of windows)
+    queryVectors.push(await embedQueryLiteral(window));
+  const opening = turns[0].slice(0, 1000);
+  const rows = await searchKnowledge(opening, {
+    queryVectors,
+    exactTerms: exactTerms(thread),
+  });
+  return { windows, opening, rows };
+}
+
+const SUPPORT_REPLY =
+  "Thanks for writing in. Could you describe what you see on your side, with a screenshot if you have one, and since when?";
+
+describe("a whole ticket", () => {
+  it("finds an entry from a symptom stated after a long opening", async () => {
+    const { windows, opening, rows } = await searchThread([
+      fullWindowOfTalk,
+      SUPPORT_REPLY,
+      "Since the software upgrade our handheld barcode reader shows offline, and the pairing dialog never appears.",
+    ]);
+    expect(windows).toHaveLength(2);
+    expect(windows[0]).not.toContain("barcode");
+    expect(rows[0]?.id).toBe(idByKey.get("scanner-pairing"));
+    expect(rows[0].grade).not.toBe("weak");
+
+    const fromOpening = await searchKnowledge(opening);
+    const scanner = fromOpening.find(
+      (row) => row.id === idByKey.get("scanner-pairing"),
+    );
+    expect(scanner?.grade ?? "weak").toBe("weak");
+  });
+
+  it("matches an error code quoted deep in a long ticket on the keyword leg", async () => {
+    const { rows } = await searchThread([
+      fullWindowOfTalk,
+      SUPPORT_REPLY,
+      "The service log keeps repeating ECONNREFUSED since this morning.",
+    ]);
+    const scanner = rows.find(
+      (row) => row.id === idByKey.get("scanner-pairing"),
+    );
+    expect(Number(scanner?.fts_rank)).toBeGreaterThan(0);
+  });
+
+  it("keeps a long ticket on a subject no entry covers weak", async () => {
+    const { windows, rows } = await searchThread([
+      fullWindowOfTalk,
+      SUPPORT_REPLY,
+      VISIT_TALK.slice(-6).join(" "),
+    ]);
+    expect(windows).toHaveLength(2);
+    for (const row of rows) expect(row.grade).toBe("weak");
   });
 });
 
