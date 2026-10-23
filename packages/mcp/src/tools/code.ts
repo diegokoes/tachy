@@ -15,6 +15,7 @@ import {
   searchCode,
   readCodeFile,
   listCodeDir,
+  repoMap,
   codeChangesBetween,
   codeDiff,
   codeHistory,
@@ -419,11 +420,15 @@ tool(
   async ({ repo, commit }) => out(await codeReleasesContaining(repo, commit)),
 );
 
+/** Said with a repo map, whose deeper folders show only their file count. */
+const MAP_NEXT =
+  "A folder shown with only its file count is past the map's size: list_code_tree with its path lists it in full, and read_code_file reads a file.";
+
 tool(
   "list_code_tree",
   {
     description:
-      "The entries of one directory in a linked repo, directories first: for finding where things live when a search has no term to start from, or for describing how a repo is laid out. One level per call; pass an entry's path to go deeper. Read files with read_code_file.",
+      "How a linked repo is laid out, for finding where things live when a search has no term to start from, or for describing what a repo holds. At the root (no path, no version) it returns the repo's map: its indexed folders as deep as the map's size allows, each with its file count, the files with the names they define, and the README's opening. With a path it lists that one directory, directories first. Read files with read_code_file.",
     inputSchema: {
       repo: z.string(),
       path: z
@@ -443,8 +448,12 @@ tool(
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ repo, path, version, ref }) =>
-    out(await listCodeDir(repo, path ?? "", { version, ref })),
+  async ({ repo, path, version, ref }) => {
+    const atRoot = !path?.replace(/^\/+|\/+$/g, "");
+    const map = atRoot && !version ? await repoMap(repo, { ref }) : null;
+    if (map) return outScrubbed({ ...map, next: MAP_NEXT });
+    return out(await listCodeDir(repo, path ?? "", { version, ref }));
+  },
 );
 
 const MAX_WALKTHROUGH_STEPS = 8;
