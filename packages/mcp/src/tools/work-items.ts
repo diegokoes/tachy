@@ -81,7 +81,7 @@ tool(
   "fetch_work_item",
   {
     description:
-      "Fetch a work item (ticket/issue) from a source, store it, and return its normalized metadata + cleaned messages for analysis. Read the messages chronologically. linked_items holds the Azure DevOps items this ticket references, already fetched - they usually carry the engineering side of the story, so treat them as part of the ticket; never re-fetch them and never fetch relations of relations. component is the area→component match when the project has a rule for it. A long, repetitive ticket comes back as transcript + compaction instead of item.messages.",
+      "Fetch a work item (ticket/issue) from a source, store it, and return its normalized metadata + cleaned messages for analysis. Read the messages chronologically. linked_items holds the Azure DevOps items this ticket references, already fetched - they usually carry the engineering side of the story, so treat them as part of the ticket; never re-fetch them and never fetch relations of relations. component is the area→component match when the project has a rule for it. A long, repetitive ticket comes back as transcript + compaction instead of item.messages. 'code' points at places in the indexed repos of the ticket's project that a first search on the ticket's text found (path, lines, the names defined there): read them with read_code_file, and use search_code for more.",
     inputSchema: {
       source: sourceSlug,
       external_id: z.string(),
@@ -100,6 +100,11 @@ tool(
     const view = await readForModel(resolved, raw, {
       customerId: item.customerId,
     });
+    const code = await codePointers(
+      ticketQuery(raw.title, view.kept.messages),
+      undefined,
+      await resolveProjectContext({ workItemId: item.id }),
+    );
     return out({
       work_item_id: item.id,
       source_project_id: item.sourceProjectId,
@@ -109,6 +114,7 @@ tool(
       ...withGuidance(view),
       ...withCompaction(view.item),
       ...withFiles(view.item, conn.slug, src),
+      ...(code.length ? { code } : {}),
       ...(await withLinkedAdoItems(view.kept, item.id)),
     });
   },
@@ -184,6 +190,21 @@ tool(
   },
 );
 
+/**
+ * What a ticket is searched by: its title and the lead of its first incoming
+ * message. A whole first message overruns the embedding window, which drops
+ * the tail, and the lead carries the symptom.
+ */
+function ticketQuery(
+  title: string | undefined,
+  messages: { direction: string; bodyText: string }[],
+): string {
+  const firstIncoming = (
+    messages.find((m) => m.direction === "incoming")?.bodyText ?? ""
+  ).slice(0, QUERY_LEAD_CHARS);
+  return [title, firstIncoming].filter(Boolean).join(" ");
+}
+
 const MAX_CODE_POINTERS = 5;
 
 /**
@@ -203,7 +224,7 @@ async function codePointers(
       ),
     ),
   ];
-  if (!repoSlugs.length || !queryVector) return [];
+  if (!repoSlugs.length || !query.trim()) return [];
   const hits = await searchCode(query, {
     repoSlugs,
     queryVector,
@@ -245,12 +266,7 @@ tool(
       customerId: item.customerId,
     });
 
-    // A whole first message overruns the embedding window, which drops the
-    // tail. The lead carries the symptom.
-    const firstIncoming = (
-      view.kept.messages.find((m) => m.direction === "incoming")?.bodyText ?? ""
-    ).slice(0, QUERY_LEAD_CHARS);
-    const query = [raw.title, firstIncoming].filter(Boolean).join(" ");
+    const query = ticketQuery(raw.title, view.kept.messages);
     const productId = item.productId ?? undefined;
     // Embedded once for both searches.
     const queryVector = query.trim()

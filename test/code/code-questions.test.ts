@@ -431,7 +431,7 @@ describe("the tools", () => {
     expect(answer.text).toContain("not-linked");
   });
 
-  it("get_context points at the code of the ticket's project", async () => {
+  it("get_context and fetch_work_item point at the code of the ticket's project", async () => {
     await addSourceConnection({
       sourceType: "fake-code-tickets",
       slug: "code-tickets",
@@ -465,6 +465,14 @@ describe("the tools", () => {
       expect(pointers[0].defines).toContain("loginRedirectTarget");
       expect(pointers.every((p) => p.grade !== "weak")).toBe(true);
       expect(login.text).not.toContain("'/dashboard'");
+
+      const fetched = await call("fetch_work_item", {
+        source: "code-tickets",
+        external_id: "t-login",
+      });
+      expect((fetched.json as { code: { path: string }[] }).code[0].path).toBe(
+        "src/login.ts",
+      );
 
       const ink = await call("get_context", {
         source: "code-tickets",
