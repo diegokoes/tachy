@@ -25,10 +25,11 @@ import {
   type CitedCode,
   type RawWorkItem,
 } from "@tachy/core/work-items";
-import { searchKnowledge } from "@tachy/core/knowledge";
+import { searchKnowledge, suggestComponent } from "@tachy/core/knowledge";
 import { resolveCurrentUserId, userDisplayName } from "@tachy/core/access";
 import { recordRun } from "@tachy/core/analytics";
 import {
+  getComponentSlug,
   getCustomerIdBySlug,
   getCustomerName,
   setWorkItemCustomer,
@@ -86,7 +87,7 @@ tool(
   "fetch_work_item",
   {
     description:
-      "Fetch a work item (ticket/issue) from a source, store it, and return its normalized metadata + cleaned messages for analysis. Read the messages chronologically. linked_items holds the Azure DevOps items this ticket references, already fetched - they usually carry the engineering side of the story, so treat them as part of the ticket; never re-fetch them and never fetch relations of relations. component is the area→component match when the project has a rule for it. A long, repetitive ticket comes back as transcript + compaction instead of item.messages. 'code' points at places in the indexed repos of the ticket's project that a first search on the ticket's text found (path, lines, the names defined there): read them with read_code_file, and use search_code for more.",
+      "Fetch a work item (ticket/issue) from a source, store it, and return its normalized metadata + cleaned messages for analysis. Read the messages chronologically. linked_items holds the Azure DevOps items this ticket references, already fetched - they usually carry the engineering side of the story, so treat them as part of the ticket; never re-fetch them and never fetch relations of relations. component is the area→component match when the project has a rule for it; with no rule, component_suggestion names the component most of the ticket's similar past entries carry and how many agree - a hint to weigh, not a rule. A long, repetitive ticket comes back as transcript + compaction instead of item.messages. 'code' points at places in the indexed repos of the ticket's project that a first search on the ticket's text found (path, lines, the names defined there): read them with read_code_file, and use search_code for more.",
     inputSchema: {
       source: sourceSlug,
       external_id: z.string(),
@@ -108,9 +109,17 @@ tool(
     const repoSlugs = indexedRepoSlugs(
       await resolveProjectContext({ workItemId: item.id }),
     );
-    const code = repoSlugs.length
-      ? await codePointers(await ticketSearch(view.kept), repoSlugs)
-      : [];
+    const unmappedProductId = item.componentSlug ? null : item.productId;
+    const search =
+      repoSlugs.length || unmappedProductId
+        ? await ticketSearch(view.kept)
+        : null;
+    const [code, suggestion] = search
+      ? await Promise.all([
+          codePointers(search, repoSlugs),
+          componentSuggestion(search, unmappedProductId),
+        ])
+      : [[], null];
     return out({
       work_item_id: item.id,
       source_project_id: item.sourceProjectId,
@@ -121,6 +130,7 @@ tool(
       ...withCompaction(view.item),
       ...withFiles(view.item, conn.slug, src),
       ...(code.length ? { code } : {}),
+      ...(suggestion ? { component_suggestion: suggestion } : {}),
       ...(await withLinkedAdoItems(view.kept, item.id)),
     });
   },
@@ -250,6 +260,32 @@ const indexedRepoSlugs = (context: ProjectContext[]): string[] => [
     ),
   ),
 ];
+
+/** Similar past entries that vote on a ticket's component. */
+const COMPONENT_VOTERS = 5;
+
+/**
+ * For a ticket no area rule mapped, the component its similar past entries
+ * agree on, with how many do. Null when they don't agree, or when the ticket
+ * has a component or no product.
+ */
+async function componentSuggestion(
+  search: TicketSearch,
+  productId: string | null,
+) {
+  if (!productId || !search.query.trim()) return null;
+  const similar = await searchKnowledge(search.query, {
+    productId,
+    includeUnscoped: true,
+    limit: COMPONENT_VOTERS,
+    queryVectors: search.queryVectors,
+    exactTerms: search.exactTerms,
+  });
+  const vote = suggestComponent(similar);
+  const component = vote && (await getComponentSlug(vote.componentId));
+  if (!vote || !component) return null;
+  return { component, agreeing: vote.agreeing, of: vote.of };
+}
 
 const MAX_CODE_POINTERS = 5;
 
