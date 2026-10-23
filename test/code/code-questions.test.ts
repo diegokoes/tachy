@@ -393,6 +393,44 @@ describe("the tools", () => {
     expect(answer.text).toContain("not-linked");
   });
 
+  it("list_code_tree at the root returns the repo's map", async () => {
+    const answer = await call("list_code_tree", { repo: "qrepo" });
+    const map = answer.json as {
+      ref: string;
+      commit: string;
+      indexed_files: number;
+      tree: string;
+      next: string;
+    };
+    expect(map).toMatchObject({ ref: "master", commit: headSha });
+    expect(map.tree).toContain("src/ (3 files)");
+    expect(map.tree).toContain("login.ts: loginRedirectTarget");
+    expect(map.tree).toContain("session.ts: Session");
+    expect(map.tree).not.toContain("gen/");
+    expect(map.next).toContain("list_code_tree with its path");
+    expect(answer.text).not.toContain("# portal");
+
+    const released = await call("list_code_tree", {
+      repo: "qrepo",
+      version: "v2.0.0",
+    });
+    expect(
+      (released.json as { entries: { name: string }[] }).entries.map(
+        (e) => e.name,
+      ),
+    ).toEqual(["src", "README.md"]);
+
+    const untracked = await call("list_code_tree", {
+      repo: "qrepo",
+      ref: "v2.1.0",
+    });
+    expect(
+      (untracked.json as { entries: { name: string }[] }).entries.map(
+        (e) => e.name,
+      ),
+    ).toContain("gen");
+  });
+
   it("list_code_tree, code_diff and code_releases_containing answer", async () => {
     const tree = await call("list_code_tree", { repo: "qrepo", path: "src" });
     expect(
