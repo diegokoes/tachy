@@ -86,6 +86,11 @@ const GENERATED_FILES = 45;
 /** In the history for the diff to be wide, and kept out of the index. */
 const UNINDEXED = { exclude: ["gen"] };
 
+interface SearchPage {
+  repos: Record<string, unknown>[];
+  results: { repo?: string; line?: string; path: string }[];
+}
+
 async function call(name: string, args: Record<string, unknown> = {}) {
   const answer = (await client.callTool({ name, arguments: args })) as {
     content: { type: string; text: string }[];
@@ -322,9 +327,61 @@ describe("the tools", () => {
       query: "loginRedirectTarget",
       project: "Portal-Mobile",
     });
-    const repos = (hits.json as { repo: string }[]).map((h) => h.repo);
-    expect(repos.length).toBeGreaterThan(0);
-    expect(new Set(repos)).toEqual(new Set(["qrepo-mobile"]));
+    const found = hits.json as SearchPage;
+    expect(found.results.length).toBeGreaterThan(0);
+    expect(found.repos.map((r) => r.repo)).toEqual(["qrepo-mobile"]);
+  });
+
+  it("search_code names a repo's line and commit once, not on every hit", async () => {
+    const hits = await call("search_code", {
+      query: "loginRedirectTarget",
+      repo: "qrepo",
+    });
+    const found = hits.json as SearchPage;
+    expect(hits.text).not.toContain("\n");
+    expect(found.repos).toEqual([
+      {
+        repo: "qrepo",
+        line: "master",
+        version_label: "v2.1.0",
+        indexed_commit: headSha,
+        indexed_days_ago: 0,
+      },
+    ]);
+    expect(found.results[0]).toMatchObject({ path: "src/login.ts" });
+    expect(found.results[0]).not.toHaveProperty("repo");
+    expect(found.results[0]).not.toHaveProperty("indexed_commit");
+  });
+
+  it("search_code across repos says which repo each hit is from", async () => {
+    const hits = await call("search_code", {
+      query: "loginRedirectTarget",
+      repos: ["qrepo", "qrepo-mobile"],
+    });
+    const found = hits.json as SearchPage;
+    expect(found.repos.map((r) => r.repo).sort()).toEqual([
+      "qrepo",
+      "qrepo-mobile",
+    ]);
+    expect(new Set(found.results.map((h) => h.repo))).toEqual(
+      new Set(["qrepo", "qrepo-mobile"]),
+    );
+    expect(found.results.every((h) => h.line === "master")).toBe(true);
+  });
+
+  it("a customer filter that names a repo points at the repo", async () => {
+    const named = await call("list_repos", { customer: "mobile" });
+    expect(named.isError).toBe(true);
+    expect(named.text).toContain("Unknown customer 'mobile'");
+    expect(named.text).toContain("qrepo-mobile");
+
+    const unrelated = await call("search_code", {
+      query: "login",
+      customer: "acme",
+    });
+    expect(unrelated.isError).toBe(true);
+    expect(unrelated.text).toContain("Unknown customer 'acme'");
+    expect(unrelated.text).not.toContain("qrepo");
   });
 
   it("search_code refuses a repo that is not linked", async () => {
