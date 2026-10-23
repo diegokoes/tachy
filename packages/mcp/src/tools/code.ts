@@ -420,9 +420,12 @@ tool(
   async ({ repo, commit }) => out(await codeReleasesContaining(repo, commit)),
 );
 
-/** Said with a repo map, whose deeper folders show only their file count. */
+/**
+ * Said with a repo map. Its names say what exists, not what the code does, and
+ * an answer written from names alone describes a repo nobody read.
+ */
 const MAP_NEXT =
-  "A folder shown with only its file count is past the map's size: list_code_tree with its path lists it in full, and read_code_file reads a file.";
+  "The map names what exists, not what it does: before saying what the code does, read the files the question turns on (the entry file the rest hangs off, the libraries it calls) with read_code_file. A folder shown with only its file count is past the map's size: list_code_tree with its path lists it in full.";
 
 tool(
   "list_code_tree",
