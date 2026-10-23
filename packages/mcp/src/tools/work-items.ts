@@ -306,7 +306,7 @@ tool(
     // else's: the tiebreaker search_knowledge gives an explicit `customer`.
     const boostCustomerId = item.customerId ?? undefined;
     const boostUnitId = item.customerUnitId ?? undefined;
-    const [similar, reference] = await Promise.all([
+    const [similar, reference, { context, code }] = await Promise.all([
       searchKnowledge(search.query, {
         productId,
         limit,
@@ -324,11 +324,13 @@ tool(
         exactTerms: search.exactTerms,
         boostCustomerId,
       }),
+      resolveProjectContext({ workItemId: item.id }).then(async (context) => ({
+        context,
+        code: await codePointers(search, indexedRepoSlugs(context)),
+      })),
     ]);
     const retrievalMap = new TokenMap();
     const { item: workItem, ...compaction } = withCompaction(view.item);
-    const context = await resolveProjectContext({ workItemId: item.id });
-    const code = await codePointers(search, indexedRepoSlugs(context));
     return out({
       work_item: workItem,
       ...compaction,
