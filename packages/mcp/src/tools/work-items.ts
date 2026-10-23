@@ -4,7 +4,11 @@
  * it was seen on).
  */
 import { z } from "zod";
-import { resolveSource, resolveProjectContext } from "@tachy/core/sources";
+import {
+  resolveSource,
+  resolveProjectContext,
+  type ProjectContext,
+} from "@tachy/core/sources";
 import {
   ingestWorkItem,
   compactWorkItem,
@@ -34,6 +38,7 @@ import {
   readCodeFile,
   repoFileUrl,
   repoToken,
+  searchCode,
 } from "@tachy/core/code";
 import {
   globalRedactionEnabled,
@@ -179,11 +184,47 @@ tool(
   },
 );
 
+const MAX_CODE_POINTERS = 5;
+
+/**
+ * Places in the project's indexed repos a first search on the ticket's text
+ * found: path, lines and the names defined there, never the code itself, so
+ * the agent reads them or searches further rather than answering from them.
+ */
+async function codePointers(
+  query: string,
+  queryVector: string | undefined,
+  context: ProjectContext[],
+) {
+  const repoSlugs = [
+    ...new Set(
+      context.flatMap((project) =>
+        project.repos.filter((r) => r.indexed_commit).map((r) => r.slug),
+      ),
+    ),
+  ];
+  if (!repoSlugs.length || !queryVector) return [];
+  const hits = await searchCode(query, {
+    repoSlugs,
+    queryVector,
+    limit: MAX_CODE_POINTERS,
+  });
+  return hits
+    .filter((hit: any) => hit.grade !== "weak")
+    .map((hit: any) => ({
+      repo: hit.repo_slug,
+      path: hit.path,
+      lines: `${hit.start_line}-${hit.end_line}`,
+      grade: hit.grade,
+      ...(hit.defines.length ? { defines: hit.defines } : {}),
+    }));
+}
+
 tool(
   "get_context",
   {
     description:
-      "Fetch a work item AND auto-search the archive for similar prior cases in one call - the consult-mode entry point. Returns 'similar' (past knowledge entries with their full structured context) and 'reference' (matching project reference docs), each graded; check every similar entry's status, because a 'deprecated' one is outdated and must be flagged as such rather than presented as current advice. 'linked_items' holds the referenced Azure DevOps items, already fetched - read them, never re-fetch. 'project_context' names the ticket's project, its wiki and its repos with the component each implements: use it to aim search_code at the right repo instead of searching everything. A long, repetitive ticket comes back as transcript + compaction instead of item.messages.",
+      "Fetch a work item AND auto-search the archive for similar prior cases in one call - the consult-mode entry point. Returns 'similar' (past knowledge entries with their full structured context) and 'reference' (matching project reference docs), each graded; check every similar entry's status, because a 'deprecated' one is outdated and must be flagged as such rather than presented as current advice. 'linked_items' holds the referenced Azure DevOps items, already fetched - read them, never re-fetch. 'project_context' names the ticket's project, its wiki and its repos with the component each implements: use it to aim search_code at the right repo instead of searching everything. 'code' points at places in those repos that a first search on the ticket's text found (path, lines, the names defined there): read them with read_code_file, and use search_code for more, since the ticket's words are not the code's. A long, repetitive ticket comes back as transcript + compaction instead of item.messages.",
     inputSchema: {
       source: sourceSlug,
       external_id: z.string(),
@@ -239,6 +280,7 @@ tool(
     const retrievalMap = new TokenMap();
     const { item: workItem, ...compaction } = withCompaction(view.item);
     const context = await resolveProjectContext({ workItemId: item.id });
+    const code = await codePointers(query, queryVector, context);
     return out({
       work_item: workItem,
       ...compaction,
@@ -255,6 +297,7 @@ tool(
       ...withGuidance(view),
       ...withFiles(view.item, conn.slug, src),
       ...(context.length ? { project_context: context } : {}),
+      ...(code.length ? { code } : {}),
       ...(await withLinkedAdoItems(view.kept, item.id)),
     });
   },

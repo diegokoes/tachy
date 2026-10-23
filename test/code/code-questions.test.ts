@@ -82,6 +82,44 @@ registerSource("fake-code-notes", () => ({
   },
 }));
 
+/** Tickets in the "Portal Tickets" project, by id: one about the code, one not. */
+const TICKETS: Record<string, { title: string; body: string }> = {
+  "t-login": {
+    title: "Users land on the wrong page after login",
+    body: "loginRedirectTarget sends a signed-in session to /dashboard instead of /home.",
+  },
+  "t-ink": {
+    title: "Ink cartridge rattles in transit",
+    body: "The cartridge box is loose in the parcel.",
+  },
+};
+
+registerSource("fake-code-tickets", () => ({
+  type: "fake-code-tickets",
+  capabilities: { postNote: false, incrementalSync: false },
+  async fetchItem(id: string) {
+    const { title, body } = TICKETS[id];
+    return {
+      externalId: id,
+      kind: "ticket" as const,
+      title,
+      groupKey: "Portal Tickets",
+      messages: [
+        {
+          externalId: `${id}-1`,
+          direction: "incoming" as const,
+          visibility: "public" as const,
+          bodyText: body,
+        },
+      ],
+      raw: {},
+    };
+  },
+  async listItems() {
+    return { items: [] };
+  },
+}));
+
 const GENERATED_FILES = 45;
 /** In the history for the diff to be wide, and kept out of the index. */
 const UNINDEXED = { exclude: ["gen"] };
@@ -391,6 +429,51 @@ describe("the tools", () => {
     });
     expect(answer.isError).toBe(true);
     expect(answer.text).toContain("not-linked");
+  });
+
+  it("get_context points at the code of the ticket's project", async () => {
+    await addSourceConnection({
+      sourceType: "fake-code-tickets",
+      slug: "code-tickets",
+      baseUrl: "https://example.invalid",
+    });
+    const project = await addSourceProject({
+      sourceSlug: "code-tickets",
+      externalKey: "Portal Tickets",
+      productSlug: "tpd",
+    });
+    await sql`update repos set source_project_id = ${project.id} where slug = 'qrepo'`;
+    try {
+      const login = await call("get_context", {
+        source: "code-tickets",
+        external_id: "t-login",
+      });
+      const pointers = (
+        login.json as {
+          code: {
+            repo: string;
+            path: string;
+            grade: string;
+            defines?: string[];
+          }[];
+        }
+      ).code;
+      expect(pointers[0]).toMatchObject({
+        repo: "qrepo",
+        path: "src/login.ts",
+      });
+      expect(pointers[0].defines).toContain("loginRedirectTarget");
+      expect(pointers.every((p) => p.grade !== "weak")).toBe(true);
+      expect(login.text).not.toContain("'/dashboard'");
+
+      const ink = await call("get_context", {
+        source: "code-tickets",
+        external_id: "t-ink",
+      });
+      expect(ink.json).not.toHaveProperty("code");
+    } finally {
+      await sql`update repos set source_project_id = null where slug = 'qrepo'`;
+    }
   });
 
   it("list_code_tree at the root returns the repo's map", async () => {
