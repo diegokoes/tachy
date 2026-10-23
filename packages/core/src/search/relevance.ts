@@ -15,6 +15,8 @@ export type { Grade };
 export const SEM_FLOOR = EMBEDDING_SPEC.semFloor;
 export const SEM_CEIL = EMBEDDING_SPEC.semCeil;
 export const CODE_SEM_FLOOR = EMBEDDING_SPEC.codeSemFloor;
+/** Undefined for a model whose duplicate floor is not measured. */
+export const DUPLICATE_FLOOR = EMBEDDING_SPEC.duplicateFloor;
 
 export interface Ranked {
   cos_sim?: number | null;

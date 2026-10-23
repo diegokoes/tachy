@@ -1,5 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { saveKnowledgeEntry, searchKnowledge } from "@tachy/core/knowledge";
+import {
+  prepareKnowledgeEntry,
+  saveKnowledgeEntry,
+  searchKnowledge,
+} from "@tachy/core/knowledge";
 import { saveReferenceDoc, searchReferenceDocs } from "@tachy/core/reference";
 import {
   EMBEDDING_SPEC,
@@ -13,6 +17,7 @@ import {
 import { grade, GOOD, STRONG } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "../database";
 import {
+  DUPLICATES,
   GOLDEN,
   KNOWLEDGE,
   NONSENSE,
@@ -201,6 +206,40 @@ describe("a whole ticket", () => {
     ]);
     expect(windows).toHaveLength(2);
     for (const row of rows) expect(row.grade).toBe("weak");
+  });
+});
+
+describe("near-copies of an entry", () => {
+  /** Cosine between a stored entry and one prepared from `entry`, in SQL. */
+  async function similarityTo(
+    key: string,
+    entry: (typeof DUPLICATES)[number]["same"],
+  ) {
+    const prepared = await prepareKnowledgeEntry({
+      productId: await tpdProductId(),
+      ...entry,
+    });
+    const [{ similarity }] = await sql`
+      select 1 - (embedding <=> ${prepared.embedding}::vector) as similarity
+      from knowledge_entries where id = ${idByKey.get(key)!}
+    `;
+    return Number(similarity);
+  }
+
+  it("score above related entries that are a different lesson", async () => {
+    let lowestSame = 1;
+    let highestDifferent = 0;
+    for (const { of, same, different } of DUPLICATES) {
+      lowestSame = Math.min(lowestSame, await similarityTo(of, same));
+      highestDifferent = Math.max(
+        highestDifferent,
+        await similarityTo(of, different),
+      );
+    }
+    process.stdout.write(
+      `duplicate separation: lowest same ${lowestSame.toFixed(3)}, highest different ${highestDifferent.toFixed(3)}\n`,
+    );
+    expect(lowestSame).toBeGreaterThan(highestDifferent);
   });
 });
 
