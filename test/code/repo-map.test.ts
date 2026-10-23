@@ -61,6 +61,25 @@ describe("drawRepoTree", () => {
     expect(text).not.toContain("a_helper_for_the_suite");
   });
 
+  it("names the largest subfolders of a folder it folds", () => {
+    const area = (name: string, files: number) =>
+      Array.from(
+        { length: files },
+        (_, i) => `src/screens/${name}/a_component_with_a_long_name_${i}.tsx`,
+      );
+    const { text } = drawRepoTree([
+      ...area("masterData", 120),
+      ...area("reporting", 80),
+      ...area("manufacturing", 70),
+      ...Array.from({ length: 100 }, (_, i) =>
+        area(`small_area_with_long_name_${i}`, 2),
+      ).flat(),
+    ]);
+    expect(text).toContain(
+      "src/screens/ (470 files): masterData/, reporting/, manufacturing/, small_area_with_long_name_0/, small_area_with_long_name_1/, small_area_with_long_name_10/ +97 more",
+    );
+  });
+
   it("keeps a large repo inside the budget, deep folders folded with their counts", () => {
     const paths = Array.from({ length: 30 }, (_, d) =>
       Array.from(
