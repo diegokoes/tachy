@@ -408,6 +408,7 @@ describe("the tools", () => {
     expect(map.tree).toContain("session.ts: Session");
     expect(map.tree).not.toContain("gen/");
     expect(map.next).toContain("list_code_tree with its path");
+    expect(answer.text).not.toContain("# portal");
 
     const released = await call("list_code_tree", {
       repo: "qrepo",
