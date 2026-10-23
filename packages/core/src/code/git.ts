@@ -347,6 +347,17 @@ export interface CommitSummary {
   subject: string;
 }
 
+const SUMMARY_FORMAT = "--format=%H%x1f%an%x1f%aI%x1f%s";
+
+const summariesOf = (stdout: string): CommitSummary[] =>
+  stdout
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [sha, author, date, subject] = line.split("\x1f");
+      return { sha, author, date, subject };
+    });
+
 export async function logBetween(
   slug: string,
   from: string,
@@ -356,18 +367,83 @@ export async function logBetween(
   const stdout = await git(slug, [
     "log",
     `--max-count=${opts.limit}`,
-    "--format=%H%x1f%an%x1f%aI%x1f%s",
+    SUMMARY_FORMAT,
     `${from}..${to}`,
     "--",
     ...(opts.path ? [opts.path] : []),
   ]);
-  return stdout
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      const [sha, author, date, subject] = line.split("\x1f");
-      return { sha, author, date, subject };
-    });
+  return summariesOf(stdout);
+}
+
+/** The newest commits reachable from `commit` that touch `path`, newest first. */
+export async function listPathCommits(
+  slug: string,
+  commit: string,
+  path: string,
+  limit: number,
+): Promise<string[]> {
+  const stdout = await git(slug, [
+    "log",
+    `--max-count=${limit}`,
+    "--format=%H",
+    assertOid(commit),
+    "--",
+    path,
+  ]);
+  return stdout.split("\n").filter(Boolean);
+}
+
+const NULL_OID_RE = /^0+$/;
+
+/**
+ * `shas` in the order given, kept to those that change how often `pickaxe`
+ * occurs under `path` when it is set (`git log -S`). The pickaxe reads every
+ * version of the path those commits hold, so they are fetched in one batch
+ * first; the search covers only `shas`, however far back a match might be.
+ */
+export async function listCommits(
+  slug: string,
+  shas: string[],
+  opts: { path: string; pickaxe?: string; token?: string },
+): Promise<CommitSummary[]> {
+  if (!shas.length) return [];
+  const input = shas.map(assertOid).join("\n") + "\n";
+  const onlyListed = ["--no-walk=unsorted", "--stdin"];
+  if (opts.pickaxe) {
+    const raw = await git(
+      slug,
+      [
+        "log",
+        "--format=",
+        "--raw",
+        "--no-abbrev",
+        ...onlyListed,
+        "--",
+        opts.path,
+      ],
+      { input },
+    );
+    // A --raw line: `:<mode> <mode> <old blob> <new blob> <status>\t<path>`.
+    const blobs = raw
+      .split("\n")
+      .filter((line) => line.startsWith(":"))
+      .flatMap((line) => line.split(/\s+/).slice(2, 4))
+      .filter((oid) => !NULL_OID_RE.test(oid));
+    await prefetchBlobs(slug, [...new Set(blobs)], opts.token);
+  }
+  const stdout = await git(
+    slug,
+    [
+      "log",
+      ...onlyListed,
+      ...(opts.pickaxe ? [`-S${opts.pickaxe}`] : []),
+      SUMMARY_FORMAT,
+      "--",
+      opts.path,
+    ],
+    { input },
+  );
+  return summariesOf(stdout);
 }
 
 const ABBREVIATED_OID_RE = /^[0-9a-f]{7,64}$/;
@@ -449,7 +525,7 @@ export async function commitSummary(
   const stdout = await git(slug, [
     "log",
     "--max-count=1",
-    "--format=%H%x1f%an%x1f%aI%x1f%s",
+    SUMMARY_FORMAT,
     assertOid(sha),
   ]);
   const [id, author, date, subject] = stdout.trim().split("\x1f");
