@@ -73,7 +73,9 @@ export async function runAdvisory(
       model,
       inputTokens: completion.usage.inputTokens,
       outputTokens: completion.usage.outputTokens,
-      meta: { ...(advisory.meta ?? {}), backend_cost_usd: completion.costUsd },
+      cacheReadTokens: completion.usage.cacheReadTokens,
+      cacheWriteTokens: completion.usage.cacheWriteTokens,
+      meta: { ...(advisory.meta ?? {}), cost_usd: completion.costUsd },
     });
     return completion.text;
   } catch {

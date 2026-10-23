@@ -77,7 +77,26 @@ export function effectiveModel(
 export interface TurnUsage {
   inputTokens: number | null;
   outputTokens: number | null;
+  /** Prompt-cache reads, counted apart from `inputTokens`. */
+  cacheReadTokens: number | null;
+  /** Prompt-cache writes, counted apart from `inputTokens`. */
+  cacheWriteTokens: number | null;
 }
+
+/** The token counts of the Claude Agent SDK's result `usage`, for this query() call. */
+export interface SdkUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+}
+
+export const turnUsage = (usage: SdkUsage | undefined): TurnUsage => ({
+  inputTokens: usage?.input_tokens ?? null,
+  outputTokens: usage?.output_tokens ?? null,
+  cacheReadTokens: usage?.cache_read_input_tokens ?? null,
+  cacheWriteTokens: usage?.cache_creation_input_tokens ?? null,
+});
 
 /**
  * What Claude Code says it started the turn with, as opposed to what it was

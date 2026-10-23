@@ -15,6 +15,8 @@ interface Priced {
   reported: number;
   unpriced_in: number;
   unpriced_out: number;
+  unpriced_cache_read: number;
+  unpriced_cache_write: number;
 }
 
 const costOf = (rows: Priced[]) =>
@@ -22,11 +24,35 @@ const costOf = (rows: Priced[]) =>
     (sum, r) =>
       sum +
       r.reported +
-      (estimateCostUsd(r.model, r.unpriced_in, r.unpriced_out) ?? 0),
+      (estimateCostUsd(r.model, {
+        input: r.unpriced_in,
+        output: r.unpriced_out,
+        cacheRead: r.unpriced_cache_read,
+        cacheWrite: r.unpriced_cache_write,
+      }) ?? 0),
     0,
   );
 
-const REPORTED = sql`nullif((meta->>'cost_usd')::numeric, 0)`;
+/** Model calls outside chat turns report their cost as `backend_cost_usd` in older rows. */
+const REPORTED = sql`coalesce(
+  nullif((meta->>'cost_usd')::numeric, 0),
+  nullif((meta->>'backend_cost_usd')::numeric, 0)
+)`;
+
+const CACHE_READ = sql`coalesce((meta->>'cache_read_tokens')::bigint, 0)`;
+const CACHE_WRITE = sql`coalesce((meta->>'cache_write_tokens')::bigint, 0)`;
+
+/** The token sums `costOf` prices for the rows that reported no cost. */
+const UNPRICED = sql`
+  coalesce(sum(input_tokens) filter (where ${REPORTED} is null), 0)::bigint::float8
+    as unpriced_in,
+  coalesce(sum(output_tokens) filter (where ${REPORTED} is null), 0)::bigint::float8
+    as unpriced_out,
+  coalesce(sum(${CACHE_READ}) filter (where ${REPORTED} is null), 0)::bigint::float8
+    as unpriced_cache_read,
+  coalesce(sum(${CACHE_WRITE}) filter (where ${REPORTED} is null), 0)::bigint::float8
+    as unpriced_cache_write
+`;
 
 /**
  * What flows spent on the model: each model step records a run of mode
@@ -39,10 +65,7 @@ async function flowUsage(days: number): Promise<AgentUsage["flows"]> {
       coalesce(sum(coalesce(r.input_tokens, 0) + coalesce(r.output_tokens, 0)), 0)::bigint::float8
         as tokens,
       coalesce(sum(${REPORTED}), 0)::float8 as reported,
-      coalesce(sum(r.input_tokens) filter (where ${REPORTED} is null), 0)::bigint::float8
-        as unpriced_in,
-      coalesce(sum(r.output_tokens) filter (where ${REPORTED} is null), 0)::bigint::float8
-        as unpriced_out
+      ${UNPRICED}
     from analysis_runs r
     left join flows f on f.id::text = r.meta->>'flow_id'
     where r.mode = 'flow' and r.created_at > now() - make_interval(days => ${days})
@@ -91,6 +114,7 @@ export async function agentUsageCensus(days = 30): Promise<AgentUsage> {
       count(*)::int as turns,
       coalesce(sum(input_tokens), 0)::bigint::float8 as input_tokens,
       coalesce(sum(output_tokens), 0)::bigint::float8 as output_tokens,
+      coalesce(sum(${CACHE_READ} + ${CACHE_WRITE}), 0)::bigint::float8 as cached_tokens,
       count(distinct user_id) filter (where created_at > now() - interval '7 days')::int
         as active_7d,
       count(distinct user_id)::int as active
@@ -139,10 +163,7 @@ export async function agentUsageCensus(days = 30): Promise<AgentUsage> {
       coalesce(sum(coalesce(r.input_tokens, 0) + coalesce(r.output_tokens, 0)), 0)::bigint::float8
         as tokens,
       coalesce(sum(${REPORTED}), 0)::float8 as reported,
-      coalesce(sum(r.input_tokens) filter (where ${REPORTED} is null), 0)::bigint::float8
-        as unpriced_in,
-      coalesce(sum(r.output_tokens) filter (where ${REPORTED} is null), 0)::bigint::float8
-        as unpriced_out
+      ${UNPRICED}
     from analysis_runs r
     left join users u on u.id = r.user_id
     where r.mode = 'chat' and r.created_at > now() - make_interval(days => ${days})
@@ -179,6 +200,7 @@ export async function agentUsageCensus(days = 30): Promise<AgentUsage> {
     turns: totals.turns as number,
     input_tokens: totals.input_tokens as number,
     output_tokens: totals.output_tokens as number,
+    cached_tokens: totals.cached_tokens as number,
     cost_usd: costOf(rows),
     active_7d: totals.active_7d as number,
     active: totals.active as number,

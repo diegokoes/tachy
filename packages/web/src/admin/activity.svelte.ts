@@ -9,6 +9,7 @@ const EMPTY: Activity = {
     turns: 0,
     input_tokens: 0,
     output_tokens: 0,
+    cached_tokens: 0,
     cost_usd: 0,
     active_7d: 0,
     active: 0,
