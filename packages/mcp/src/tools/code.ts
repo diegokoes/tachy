@@ -48,6 +48,51 @@ async function scopedRepoSlugs(scope: {
   return slugs.size ? [...slugs] : undefined;
 }
 
+/**
+ * Each repo and line the hits came from, once: every hit on it shares the
+ * component, customer, release and indexed commit. Unset fields are left out.
+ */
+function searchedLines(hits: any[]): Record<string, unknown>[] {
+  const byLine = new Map<string, Record<string, unknown>>();
+  for (const r of hits) {
+    const key = `${r.repo_slug}\u0000${r.line}`;
+    if (byLine.has(key)) continue;
+    const fields = {
+      repo: r.repo_slug,
+      component: r.component_slug,
+      customer: r.customer_slug,
+      line: r.line,
+      version_label: r.version_label,
+      indexed_commit: r.commit,
+      indexed_days_ago: r.indexed_days_ago,
+    };
+    byLine.set(
+      key,
+      Object.fromEntries(Object.entries(fields).filter(([, v]) => v != null)),
+    );
+  }
+  return [...byLine.values()];
+}
+
+/**
+ * A customer filter's id. A name that is no customer is often the repo's own
+ * ("the acme addon"), so the refusal names the repos whose slug holds it.
+ */
+async function customerIdOrRepoHint(customer: string): Promise<string> {
+  try {
+    return await getCustomerIdBySlug(customer);
+  } catch (err) {
+    const word = customer.toLowerCase();
+    const slugs = (await listRepos({}))
+      .map((r) => r.slug)
+      .filter((slug) => slug.toLowerCase().includes(word));
+    if (!slugs.length) throw err;
+    throw badInput(
+      `${(err as Error).message} Repos whose slug holds '${customer}': ${slugs.join(", ")} - if one of them was meant, pass it as repo to search_code, read_code_file or list_code_tree.`,
+    );
+  }
+}
+
 tool(
   "list_repos",
   {
@@ -75,7 +120,7 @@ tool(
         productId && component
           ? (await resolveComponentStrict(productId, component)).id
           : undefined,
-      customerId: customer ? await getCustomerIdBySlug(customer) : undefined,
+      customerId: customer ? await customerIdOrRepoHint(customer) : undefined,
     });
     const rows = inProject
       ? listed.filter((r) => inProject.includes(r.slug))
@@ -109,7 +154,7 @@ tool(
 tool(
   "search_code",
   {
-    description: `Hybrid (semantic + trigram) search over the indexed code of linked repositories. Returns the top-matching chunks with path, line range, the line (branch) and the commit they were indexed at. A hit's excerpt is the chunk's lines holding the query words, numbered; defines names what the chunk declares. Search with symptom terms, symbol names, or error strings; then use read_code_file to read narrowly around a hit. Results reflect the indexed commit, not necessarily the latest code - always cite path:start-end @ commit, and say so when indexed_days_ago is more than a few days; a hit with partial: true comes from an index still being written or interrupted. ${GRADE_NOTE}`,
+    description: `Hybrid (semantic + trigram) search over the indexed code of linked repositories. Returns the top-matching chunks with path and line range; \`repos\` gives once, for each repo the hits came from, the line (branch) and the commit it was indexed at, and when there are several each hit names its repo and line. A hit's excerpt is the chunk's lines holding the query words, numbered; defines names what the chunk declares. Search with symptom terms, symbol names, or error strings; then use read_code_file to read narrowly around a hit. Results reflect the indexed commit, not necessarily the latest code - always cite path:start-end @ commit, and say so when indexed_days_ago is more than a few days; a hit with partial: true comes from an index still being written or interrupted. ${GRADE_NOTE}`,
     inputSchema: {
       query: z.string(),
       repo: z.string().optional().describe("Repo slug from list_repos"),
@@ -174,7 +219,7 @@ tool(
         productId && component
           ? (await resolveComponentStrict(productId, component)).id
           : undefined,
-      customerId: customer ? await getCustomerIdBySlug(customer) : undefined,
+      customerId: customer ? await customerIdOrRepoHint(customer) : undefined,
       version,
       line,
       pathPrefix: path_prefix,
@@ -189,13 +234,11 @@ tool(
         hits: hits.length,
       },
     });
+    const linesHit = searchedLines(hits);
+    const several = linesHit.length > 1;
     return searchOut(
       hits.map((r: any) => ({
-        repo: r.repo_slug,
-        component: r.component_slug,
-        customer: r.customer_slug,
-        line: r.line,
-        version_label: r.version_label,
+        ...(several ? { repo: r.repo_slug, line: r.line } : {}),
         path: r.path,
         lines: `${r.start_line}-${r.end_line}`,
         lang: r.lang,
@@ -203,11 +246,10 @@ tool(
         grade: r.grade,
         excerpt: r.excerpt,
         ...(r.defines.length ? { defines: r.defines } : {}),
-        indexed_commit: r.commit,
-        indexed_days_ago: r.indexed_days_ago,
         ...(r.index_status !== "ready" ? { partial: true } : {}),
       })),
       "search_code",
+      { repos: linesHit },
     );
   },
 );

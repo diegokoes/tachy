@@ -15,15 +15,16 @@ import {
   type TextWindow,
 } from "@tachy/core/files";
 
+/**
+ * Compact JSON: the model reads it as well as indented JSON, and every result
+ * stays in the context, paid again on each later round of the turn.
+ */
 export function out(payload: unknown) {
   return {
     content: [
       {
         type: "text" as const,
-        text:
-          typeof payload === "string"
-            ? payload
-            : JSON.stringify(payload, null, 2),
+        text: typeof payload === "string" ? payload : JSON.stringify(payload),
       },
     ],
   };
@@ -174,11 +175,14 @@ export function searchCodeNext(repoSlugs: string[]): string {
   return `Linked repos hold this product's code (${repos}): a question about how the product behaves is answered from it. Run search_code before saying nothing is known.`;
 }
 
-/** `next` is attached as given; the caller decides when a result needs one. */
+/**
+ * `next` is attached as given; the caller decides when a result needs one.
+ * `repos` says once what every hit from a repo shares, ahead of the hits.
+ */
 export function searchOut(
   rows: Record<string, unknown>[],
   kind: string,
-  opts: { next?: string } = {},
+  opts: { next?: string; repos?: Record<string, unknown>[] } = {},
 ) {
   const trimmed = forAgent(rows);
   const next = opts.next ? { next: opts.next } : {};
@@ -188,9 +192,12 @@ export function searchOut(
       note: `${kind}: ${NO_MATCHES}`,
       ...next,
     });
-  const scoped = rows.some((r) => r.customer_slug ?? r.customer);
-  if (!scoped && !opts.next) return outScrubbed(trimmed);
+  const scoped = [...rows, ...(opts.repos ?? [])].some(
+    (r) => r.customer_slug ?? r.customer,
+  );
+  if (!scoped && !opts.next && !opts.repos) return outScrubbed(trimmed);
   return outScrubbed({
+    ...(opts.repos ? { repos: opts.repos } : {}),
     results: trimmed,
     ...(scoped ? { note: CUSTOMER_NOTE } : {}),
     ...next,

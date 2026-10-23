@@ -6,6 +6,7 @@ The service persists and retrieves; you reason and structure.
 
 The tool schemas are the catalogue: read a tool's own description before calling it, and
 trust what a result tells you (`next`, `note`, `retrieval_note`) over any assumption.
+The tools load through ToolSearch: select every tool a playbook names in one call.
 
 ## Invariants
 
@@ -117,7 +118,7 @@ Report the created URL.
 
 `list_repos` (flag any stale or erroring index) → `search_code`, narrowed by the repos
 and projects the user attached, else by `component` → `read_code_file` around the best
-hits only.
+hits only; `list_code_tree` for what a repo holds.
 Cite every claim as `path:start-end @ commit`. Never paste a whole file into an answer
 or a saved entry.
 
