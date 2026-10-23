@@ -140,7 +140,7 @@ const VISIT_TALK = [
 
 const windowChars = EMBEDDING_SPEC.codeChunkChars;
 
-/** One message of visit talk that fills a window, so the next message starts another. */
+/** One long opening message of visit talk, as long as a window. */
 const fullWindowOfTalk = VISIT_TALK.reduce(
   (message, sentence) =>
     message.length + sentence.length + 1 > windowChars
@@ -152,7 +152,7 @@ const fullWindowOfTalk = VISIT_TALK.reduce(
 /** One vector per window and the exact terms, as the ticket tools search. */
 async function searchThread(turns: string[]) {
   const thread = turns.join("\n\n");
-  const windows = queryWindows(thread);
+  const windows = queryWindows(turns);
   const queryVectors: string[] = [];
   for (const window of windows)
     queryVectors.push(await embedQueryLiteral(window));
@@ -167,15 +167,17 @@ async function searchThread(turns: string[]) {
 const SUPPORT_REPLY =
   "Thanks for writing in. Could you describe what you see on your side, with a screenshot if you have one, and since when?";
 
+const SYMPTOM =
+  "Since the software upgrade our handheld barcode reader shows offline, and the pairing dialog never appears.";
+
 describe("a whole ticket", () => {
   it("finds an entry from a symptom stated after a long opening", async () => {
     const { windows, opening, rows } = await searchThread([
       fullWindowOfTalk,
       SUPPORT_REPLY,
-      "Since the software upgrade our handheld barcode reader shows offline, and the pairing dialog never appears.",
+      SYMPTOM,
     ]);
-    expect(windows).toHaveLength(2);
-    expect(windows[0]).not.toContain("barcode");
+    expect(windows).toEqual([fullWindowOfTalk, SUPPORT_REPLY, SYMPTOM]);
     expect(rows[0]?.id).toBe(idByKey.get("scanner-pairing"));
     expect(rows[0].grade).not.toBe("weak");
 
@@ -204,7 +206,7 @@ describe("a whole ticket", () => {
       SUPPORT_REPLY,
       VISIT_TALK.slice(-6).join(" "),
     ]);
-    expect(windows).toHaveLength(2);
+    expect(windows).toHaveLength(3);
     for (const row of rows) expect(row.grade).toBe("weak");
   });
 });

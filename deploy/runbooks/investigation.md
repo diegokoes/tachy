@@ -12,9 +12,9 @@ $C logs --since 1h api | grep <request id>
 **Slow search.** Admin › system: event-loop delay and the embedding queue. A
 passage backlog (a reference save, a reindex) delays queries by at most one
 batch. Opening a ticket (`get_context`, `fetch_work_item`) also searches the
-code of its project, and embeds the whole thread in windows: up to 8, of
-about a second each on the laptop. The embedder logs its thread count at
-start (`embedding_model_ready`). Then `pg_stat_statements`:
+code of its project, and embeds the whole thread a message at a time: up to
+about 8 s of model time on the laptop for a long one. The embedder logs its
+thread count at start (`embedding_model_ready`). Then `pg_stat_statements`:
 `$C exec -T postgres psql -U tachy -d tachy -c "select calls, mean_exec_time, query from pg_stat_statements order by mean_exec_time desc limit 5"`.
 `explain (analyze, buffers)` on the slow statement shows which leg spends the
 time: the HNSW scan of the vector leg, or the trigram (`<%`) scan.
