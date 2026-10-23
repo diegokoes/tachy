@@ -6,11 +6,15 @@ import {
   CANDIDATES,
   clampLimit,
   fusedCte,
+  fuzzyMatch,
+  fuzzyScore,
+  nearestToAny,
   RRF_K,
   withSearchSession,
 } from "../search/rank";
 import { currentVector } from "../search/backfill";
 import { CODE_SEM_FLOOR, withRelevance } from "../search/relevance";
+import { keywordInputs } from "../search/terms";
 import { codeExcerpt } from "./excerpt";
 import { getRepoBySlug, getRepoLine } from "./repos";
 import { definedSymbols } from "./symbols";
@@ -40,8 +44,14 @@ export interface CodeSearchOptions {
   version?: string;
   pathPrefix?: string;
   limit?: number;
-  /** Pre-embedded query, so a caller searching two surfaces embeds once. */
-  queryVector?: string;
+  /**
+   * The query pre-embedded, one vector per window of a long one; a chunk
+   * scores by the window nearest it. A caller searching two surfaces embeds
+   * once.
+   */
+  queryVectors?: string[];
+  /** The exact terms of a long query, which the keyword legs read instead. */
+  exactTerms?: string[];
 }
 
 const GRADE_ORDER: Record<string, number> = { strong: 0, good: 1, weak: 2 };
@@ -93,7 +103,10 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
     throw badInput(
       `'${opts.version}' is not a version; expected major.minor or major.minor.patch`,
     );
-  const qvec = opts.queryVector ?? (await embedQueryLiteral(query));
+  const queryVectors = opts.queryVectors?.length
+    ? opts.queryVectors
+    : [await embedQueryLiteral(query)];
+  const keywords = keywordInputs(query, opts.exactTerms);
   const repoSlugs = [
     ...(opts.repoSlug ? [opts.repoSlug] : []),
     ...(opts.repoSlugs ?? []),
@@ -148,13 +161,19 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
         select n.id, n.dist,
                row_number() over (partition by n.repo_id, n.blob_sha order by n.dist) as nth
         from (
-          select c.id, c.repo_id, c.blob_sha, c.embedding <=> ${qvec}::vector as dist
-          from code_blob_chunks c
-          where c.embedding is not null and ${currentVector("c")}
-            and 1 - (c.embedding <=> ${qvec}::vector) >= ${CODE_SEM_FLOOR}
-            and ${holds}
-          order by c.embedding <=> ${qvec}::vector
-          limit ${CANDIDATES * NEAREST}
+          select id, repo_id, blob_sha, min(dist) as dist
+          from (${nearestToAny(
+            queryVectors,
+            (qvec) => sql`
+              select c.id, c.repo_id, c.blob_sha, c.embedding <=> ${qvec}::vector as dist
+              from code_blob_chunks c
+              where c.embedding is not null and ${currentVector("c")}
+                and 1 - (c.embedding <=> ${qvec}::vector) >= ${CODE_SEM_FLOOR}
+                and ${holds}
+              order by c.embedding <=> ${qvec}::vector
+              limit ${CANDIDATES * NEAREST}`,
+          )}) near
+          group by id, repo_id, blob_sha
         ) n
       ) x
       where nth <= ${PER_FILE}
@@ -166,7 +185,7 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
     -- lexemes weighted A, which are the names a chunk defines.
     words as (
       select q, regexp_replace(q::text, $re$'( |$)$re$, $to$':A\\1$to$, 'g')::tsquery as defines
-      from (select websearch_to_tsquery('simple', tachy_code_words(${query})) as q) x
+      from (select websearch_to_tsquery('simple', tachy_code_words(${keywords.words})) as q) x
     ),
     lex as (
       select id, row_number() over (order by score desc, id) as rnk, score as fts_rank
@@ -195,10 +214,10 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
                ) as nth
         from code_blob_chunks c, words w,
              lateral (
-               select word_similarity(${query}, c.chunk_text) as sim,
+               select ${fuzzyScore(keywords.fuzzy, sql`c.chunk_text`)} as sim,
                       ts_rank_cd(${LEX_WEIGHTS}::float4[], c.search_tsv, w.q) as score
              ) k
-        where ${query} <% c.chunk_text and ${holds}
+        where ${fuzzyMatch(keywords.fuzzy, sql`c.chunk_text`)} and ${holds}
       ) x
       where nth <= ${PER_FILE}
       order by sim desc, score desc, id

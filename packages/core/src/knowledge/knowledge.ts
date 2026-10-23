@@ -21,9 +21,13 @@ import {
   ftsMatch,
   ftsRank,
   fusedCte,
+  fuzzyMatch,
+  fuzzyScore,
+  nearestToAny,
   withSearchSession,
 } from "../search/rank";
 import { SEM_FLOOR, withRelevance } from "../search/relevance";
+import { keywordInputs } from "../search/terms";
 import { notFound, badInput } from "../infra/errors";
 import { parseStructured } from "./structured";
 import {
@@ -315,8 +319,14 @@ export interface SearchOptions extends KnowledgeFilters {
    */
   includeUnscoped?: boolean;
   limit?: number;
-  /** Pre-embedded query, so a caller searching two surfaces embeds once. */
-  queryVector?: string;
+  /**
+   * The query pre-embedded, one vector per window of a long one; an entry
+   * scores by the window nearest it. A caller searching two surfaces embeds
+   * once.
+   */
+  queryVectors?: string[];
+  /** The exact terms of a long query, which the keyword legs read instead. */
+  exactTerms?: string[];
   /**
    * Rank this customer's entries above equally-relevant general ones, without
    * excluding anything. Distinct from `customerId`, which narrows to them - the
@@ -333,7 +343,10 @@ export interface SearchOptions extends KnowledgeFilters {
 export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
   const limit = clampLimit(opts.limit, 8);
   if (!query.trim()) return [];
-  const qvec = opts.queryVector ?? (await embedQueryLiteral(query));
+  const queryVectors = opts.queryVectors?.length
+    ? opts.queryVectors
+    : [await embedQueryLiteral(query)];
+  const keywords = keywordInputs(query, opts.exactTerms);
 
   // Deprecated entries are included: a flagged stale lesson beats the model
   // re-deriving it. Consumers warn on status='deprecated'.
@@ -358,31 +371,40 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
     -- Each leg generates its own candidates through its own index, so a query
     -- that matches nothing on every leg returns nothing at all.
     vec as (
-      select id,
-             row_number() over (order by embedding <=> ${qvec}::vector) as rnk,
-             1 - (embedding <=> ${qvec}::vector) as cos_sim
-      from knowledge_entries
-      where ${filters} and embedding is not null and ${currentVector()}
-        and 1 - (embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
-      order by embedding <=> ${qvec}::vector
-      limit ${CANDIDATES}
+      select id, row_number() over (order by cos_sim desc, id) as rnk, cos_sim
+      from (
+        select id, max(cos_sim) as cos_sim
+        from (${nearestToAny(
+          queryVectors,
+          (qvec) => sql`
+            select id, 1 - (embedding <=> ${qvec}::vector) as cos_sim
+            from knowledge_entries
+            where ${filters} and embedding is not null and ${currentVector()}
+              and 1 - (embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
+            order by embedding <=> ${qvec}::vector
+            limit ${CANDIDATES}`,
+        )}) near
+        group by id
+        order by cos_sim desc, id
+        limit ${CANDIDATES}
+      ) best
     ),
     lex as (
       select id,
-             row_number() over (order by ${ftsRank(sql`search_tsv`, sql`search_tsv_en`, query)} desc) as rnk,
-             ${ftsRank(sql`search_tsv`, sql`search_tsv_en`, query)} as fts_rank
+             row_number() over (order by ${ftsRank(sql`search_tsv`, sql`search_tsv_en`, keywords.words)} desc) as rnk,
+             ${ftsRank(sql`search_tsv`, sql`search_tsv_en`, keywords.words)} as fts_rank
       from knowledge_entries
-      where ${filters} and ${ftsMatch(sql`search_tsv`, sql`search_tsv_en`, query)}
-      order by ${ftsRank(sql`search_tsv`, sql`search_tsv_en`, query)} desc
+      where ${filters} and ${ftsMatch(sql`search_tsv`, sql`search_tsv_en`, keywords.words)}
+      order by ${ftsRank(sql`search_tsv`, sql`search_tsv_en`, keywords.words)} desc
       limit ${CANDIDATES}
     ),
     fuzzy as (
       select id,
-             row_number() over (order by word_similarity(${query}, search_text) desc) as rnk,
-             word_similarity(${query}, search_text) as trgm_sim
+             row_number() over (order by ${fuzzyScore(keywords.fuzzy, sql`search_text`)} desc) as rnk,
+             ${fuzzyScore(keywords.fuzzy, sql`search_text`)} as trgm_sim
       from knowledge_entries
-      where ${filters} and ${query} <% search_text
-      order by word_similarity(${query}, search_text) desc
+      where ${filters} and ${fuzzyMatch(keywords.fuzzy, sql`search_text`)}
+      order by ${fuzzyScore(keywords.fuzzy, sql`search_text`)} desc
       limit ${CANDIDATES}
     ),
     ${fusedCte(

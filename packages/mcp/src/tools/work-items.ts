@@ -23,6 +23,7 @@ import {
   externalWorkItemScope,
   workItemScope,
   type CitedCode,
+  type RawWorkItem,
 } from "@tachy/core/work-items";
 import { searchKnowledge } from "@tachy/core/knowledge";
 import { resolveCurrentUserId, userDisplayName } from "@tachy/core/access";
@@ -48,7 +49,11 @@ import {
 } from "@tachy/core/compliance";
 import { readForModel } from "@tachy/core/flows";
 import { searchReferenceDocs } from "@tachy/core/reference";
-import { embedQueryLiteral } from "@tachy/core/search";
+import {
+  embedQueryLiteral,
+  exactTerms,
+  queryWindows,
+} from "@tachy/core/search";
 import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
 import { NO_MATCHES, forAgent, out } from "../results";
@@ -63,8 +68,8 @@ import {
   workItemFacts,
 } from "../context";
 
-/** How much of the first incoming message goes into the search query. */
-const QUERY_LEAD_CHARS = 1000;
+/** How much of the first incoming message a ticket's opening holds. */
+const OPENING_LEAD_CHARS = 1000;
 
 const MAX_CITED_CODE = 5;
 
@@ -100,11 +105,12 @@ tool(
     const view = await readForModel(resolved, raw, {
       customerId: item.customerId,
     });
-    const code = await codePointers(
-      ticketQuery(raw.title, view.kept.messages),
-      undefined,
+    const repoSlugs = indexedRepoSlugs(
       await resolveProjectContext({ workItemId: item.id }),
     );
+    const code = repoSlugs.length
+      ? await codePointers(await ticketSearch(view.kept), repoSlugs)
+      : [];
     return out({
       work_item_id: item.id,
       source_project_id: item.sourceProjectId,
@@ -190,20 +196,58 @@ tool(
   },
 );
 
-/**
- * What a ticket is searched by: its title and the lead of its first incoming
- * message. A whole first message overruns the embedding window, which drops
- * the tail, and the lead carries the symptom.
- */
-function ticketQuery(
-  title: string | undefined,
-  messages: { direction: string; bodyText: string }[],
-): string {
-  const firstIncoming = (
-    messages.find((m) => m.direction === "incoming")?.bodyText ?? ""
-  ).slice(0, QUERY_LEAD_CHARS);
-  return [title, firstIncoming].filter(Boolean).join(" ");
+/** A ticket's searches, built once and run on several surfaces. */
+interface TicketSearch {
+  /**
+   * The title and the lead of the first incoming message: what the keyword
+   * legs read when the ticket quotes no exact term.
+   */
+  query: string;
+  /** One per window of the whole thread. */
+  queryVectors: string[];
+  exactTerms: string[];
 }
+
+/** The title and the lead of the first incoming message, where the symptom is. */
+function ticketOpening(item: RawWorkItem): string {
+  const firstIncoming = (
+    item.messages.find((m) => m.direction === "incoming")?.bodyText ?? ""
+  ).slice(0, OPENING_LEAD_CHARS);
+  return [item.title, firstIncoming].filter(Boolean).join(" ");
+}
+
+/**
+ * What a ticket is searched by: the whole thread as the agent reads it, with
+ * quoted chains, signatures and auto-replies taken out, so a problem stated in
+ * a later message or an internal note is found too. It is embedded window by
+ * window, one request each: the embedder runs a request as one batch, and
+ * every other search waits behind it.
+ */
+async function ticketSearch(item: RawWorkItem): Promise<TicketSearch> {
+  const thread = [
+    item.title,
+    ...compactWorkItem(item).turns.map((turn) => turn.text),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const windows = queryWindows(thread);
+  const queryVectors: string[] = [];
+  for (const window of windows)
+    queryVectors.push(await embedQueryLiteral(window));
+  return {
+    query: ticketOpening(item) || (windows[0] ?? ""),
+    queryVectors,
+    exactTerms: exactTerms(thread),
+  };
+}
+
+const indexedRepoSlugs = (context: ProjectContext[]): string[] => [
+  ...new Set(
+    context.flatMap((project) =>
+      project.repos.filter((r) => r.indexed_commit).map((r) => r.slug),
+    ),
+  ),
+];
 
 const MAX_CODE_POINTERS = 5;
 
@@ -212,22 +256,12 @@ const MAX_CODE_POINTERS = 5;
  * found: path, lines and the names defined there, never the code itself, so
  * the agent reads them or searches further rather than answering from them.
  */
-async function codePointers(
-  query: string,
-  queryVector: string | undefined,
-  context: ProjectContext[],
-) {
-  const repoSlugs = [
-    ...new Set(
-      context.flatMap((project) =>
-        project.repos.filter((r) => r.indexed_commit).map((r) => r.slug),
-      ),
-    ),
-  ];
-  if (!repoSlugs.length || !query.trim()) return [];
-  const hits = await searchCode(query, {
+async function codePointers(search: TicketSearch, repoSlugs: string[]) {
+  if (!repoSlugs.length || !search.query.trim()) return [];
+  const hits = await searchCode(search.query, {
     repoSlugs,
-    queryVector,
+    queryVectors: search.queryVectors,
+    exactTerms: search.exactTerms,
     limit: MAX_CODE_POINTERS,
   });
   return hits
@@ -266,37 +300,35 @@ tool(
       customerId: item.customerId,
     });
 
-    const query = ticketQuery(raw.title, view.kept.messages);
+    const search = await ticketSearch(view.kept);
     const productId = item.productId ?? undefined;
-    // Embedded once for both searches.
-    const queryVector = query.trim()
-      ? await embedQueryLiteral(query)
-      : undefined;
     // The ticket's own customer lifts their history without excluding anyone
     // else's: the tiebreaker search_knowledge gives an explicit `customer`.
     const boostCustomerId = item.customerId ?? undefined;
     const boostUnitId = item.customerUnitId ?? undefined;
     const [similar, reference] = await Promise.all([
-      searchKnowledge(query, {
+      searchKnowledge(search.query, {
         productId,
         limit,
         includeUnscoped: true,
-        queryVector,
+        queryVectors: search.queryVectors,
+        exactTerms: search.exactTerms,
         boostCustomerId,
         boostUnitId,
       }),
-      searchReferenceDocs(query, {
+      searchReferenceDocs(search.query, {
         productId,
         limit,
         includeUnscoped: true,
-        queryVector,
+        queryVectors: search.queryVectors,
+        exactTerms: search.exactTerms,
         boostCustomerId,
       }),
     ]);
     const retrievalMap = new TokenMap();
     const { item: workItem, ...compaction } = withCompaction(view.item);
     const context = await resolveProjectContext({ workItemId: item.id });
-    const code = await codePointers(query, queryVector, context);
+    const code = await codePointers(search, indexedRepoSlugs(context));
     return out({
       work_item: workItem,
       ...compaction,
