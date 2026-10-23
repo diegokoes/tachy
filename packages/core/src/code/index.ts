@@ -47,11 +47,14 @@ export {
   resolveVersion,
   codeChangesBetween,
   codeDiff,
+  codeHistory,
   codeReleasesContaining,
+  MAX_HISTORY_COMMITS,
 } from "./versions";
 export type {
   ResolvedVersion,
   CodeChanges,
+  CodeHistory,
   CodeDiff,
   CodeDiffRange,
   ReleasesContaining,
