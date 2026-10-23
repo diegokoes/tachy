@@ -5,6 +5,7 @@ import {
   mentionOptions,
   mentionWord,
   parseMentionWord,
+  reposNamedIn,
   takeTypedMentions,
   withMentions,
   withoutMentionBeingTyped,
@@ -117,5 +118,46 @@ describe("mention words", () => {
     expect(
       withMentions([docs], [docs, { kind: "bucket", key: "docs" }]),
     ).toEqual([docs, { kind: "bucket", key: "docs" }]);
+  });
+});
+
+describe("reposNamedIn", () => {
+  const SLUGS = ["addon-acme", "addon-north", "billing-api", "ledger-service"];
+
+  it("names a repo by a part no other repo has", () => {
+    expect(reposNamedIn("what does the acme addon do?", SLUGS)).toEqual([
+      "addon-acme",
+    ]);
+    expect(reposNamedIn("ACME: why is the arrival stuck", SLUGS)).toEqual([
+      "addon-acme",
+    ]);
+  });
+
+  it("names a repo by its whole slug, joined or not", () => {
+    expect(reposNamedIn("see addon-acme and ledger-service.", SLUGS)).toEqual([
+      "addon-acme",
+      "ledger-service",
+    ]);
+  });
+
+  it("does not name one by a part several repos share or a generic word", () => {
+    expect(reposNamedIn("which addon handles this?", SLUGS)).toEqual([]);
+    expect(reposNamedIn("the api returns 500", SLUGS)).toEqual([]);
+  });
+
+  it("ignores parts too short or numeric to name anything", () => {
+    expect(reposNamedIn("ui and v2", ["ui-kit", "svc-2"])).toEqual([]);
+  });
+
+  it("leaves @ words to the typed mentions", () => {
+    expect(reposNamedIn("@addon-acme what does it do", SLUGS)).toEqual([]);
+    expect(reposNamedIn("@repo.addon-acme and billing", SLUGS)).toEqual([
+      "billing-api",
+    ]);
+  });
+
+  it("names nothing in an empty line or with no repos", () => {
+    expect(reposNamedIn("", SLUGS)).toEqual([]);
+    expect(reposNamedIn("the acme addon", [])).toEqual([]);
   });
 });

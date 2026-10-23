@@ -90,6 +90,7 @@
     mentionOptions,
     mentionWord,
     parseMentionWord,
+    reposNamedIn,
     takeTypedMentions,
     withMentions,
     withoutMentionBeingTyped,
@@ -335,6 +336,25 @@
   $effect(() => {
     if (mentionCtx) ensureMentionables();
   });
+
+  // Typing starts the fetch once, so a repo named in the line can be offered.
+  $effect(() => {
+    if (chat.input.trim() && !mentionables.error) ensureMentionables();
+  });
+
+  /** Repos the line names in prose, attached on send unless dismissed. */
+  const namedRepos = $derived(
+    mentionables.list
+      ? reposNamedIn(
+          chat.input,
+          mentionables.list.repos.map((r) => r.slug),
+        ).filter(
+          (slug) =>
+            !chat.dismissedRepos.includes(slug) &&
+            !chat.mentions.some((m) => m.kind === "repo" && m.key === slug),
+        )
+      : [],
+  );
 
   const mentionMenu = $derived.by(
     (): { options: MenuOption[]; crumb: MenuCrumb } | null => {
@@ -675,7 +695,12 @@
     // puts one in the composer - would go out as plain text without this.
     if (message.startsWith("/") && !commands)
       commands = await getCommands().catch(() => null);
+    const named = namedRepos.map((slug) => ({
+      kind: "repo" as const,
+      key: slug,
+    }));
     const typed = await takeMentions(message);
+    chat.mentions = withMentions(chat.mentions, named);
     // Read before the input clears, which clears the lookup it comes from.
     const ticketArgsTyped = ticketLineArgs(typed);
     chat.input = "";
@@ -1177,7 +1202,7 @@
   </div>
 
   <div class="dock" bind:this={dockEl}>
-    {#if chat.uploads.length || chat.artifact || chat.model || chat.debug || chat.mode || chat.mentions.length || draftWaiting}
+    {#if chat.uploads.length || chat.artifact || chat.model || chat.debug || chat.mode || chat.mentions.length || namedRepos.length || draftWaiting}
       <div class="attachments">
         {#if chat.mode}
           <span class="attach model-chip">
@@ -1203,6 +1228,22 @@
               aria-label="Detach {mention.kind} {mention.key}"
               use:tip={`Detach ${mention.kind} ${mention.key}`}
               onclick={() => chat.mentions.splice(i, 1)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/each}
+        {#each namedRepos as slug (slug)}
+          <span
+            class="attach named-chip"
+            use:tip={`Named in your message: attached when you send`}
+          >
+            <Icon name={MENTION_ICONS.repo} size="1em" />
+            {slug}
+            <button
+              class="chip-x"
+              aria-label="Do not attach repo {slug}"
+              use:tip={`Do not attach ${slug}`}
+              onclick={() => chat.dismissedRepos.push(slug)}
               ><Icon name="close" size="1em" weight={7} /></button
             >
           </span>
@@ -1689,6 +1730,12 @@
   .artifact-chip,
   .model-chip {
     color: var(--accent);
+  }
+  .named-chip {
+    color: var(--accent);
+    opacity: 0.6;
+    text-decoration: underline dashed;
+    text-underline-offset: 0.25em;
   }
   .chip-x {
     display: inline-flex;
