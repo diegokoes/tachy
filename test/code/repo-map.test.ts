@@ -71,13 +71,15 @@ describe("drawRepoTree", () => {
       ...area("masterData", 120),
       ...area("reporting", 80),
       ...area("manufacturing", 70),
-      ...Array.from({ length: 100 }, (_, i) =>
+      ...Array.from({ length: 200 }, (_, i) =>
         area(`small_area_with_long_name_${i}`, 2),
       ).flat(),
     ]);
     expect(text).toContain(
-      "src/screens/ (470 files): masterData/, reporting/, manufacturing/, small_area_with_long_name_0/, small_area_with_long_name_1/, small_area_with_long_name_10/ +97 more",
+      "src/screens/ (670 files): masterData/, reporting/, manufacturing/, small_area_with_long_name_0/,",
     );
+    expect(text).toMatch(/small_area_with_long_name_\d+\/ \+\d+ more$/m);
+    expect(text.length).toBeLessThanOrEqual(MAX_MAP_CHARS);
   });
 
   it("keeps a large repo inside the budget, deep folders folded with their counts", () => {
