@@ -88,6 +88,8 @@ export const chat = $state({
   modeOfLastTurn: undefined as ChatModeName | undefined,
   /** Repos, buckets and projects attached with `@`, kept until removed. */
   mentions: [] as Mention[],
+  /** Repos the message named that the user would not have attached. */
+  dismissedRepos: [] as string[],
 });
 
 /** What a clear takes away. */
@@ -101,6 +103,7 @@ type Cleared = Pick<
   | "mode"
   | "modeOfLastTurn"
   | "mentions"
+  | "dismissedRepos"
 >;
 
 /** The last clear, kept until the next turn so it can be undone. */
@@ -108,8 +111,16 @@ let cleared = $state.raw<Cleared | null>(null);
 
 /** Empties the conversation and keeps what it held for `restoreChat`. */
 export function clearChat() {
-  const { entries, sessionId, turnId, model, debug, mode, modeOfLastTurn } =
-    chat;
+  const {
+    entries,
+    sessionId,
+    turnId,
+    model,
+    debug,
+    mode,
+    modeOfLastTurn,
+    dismissedRepos,
+  } = chat;
   cleared = {
     entries,
     sessionId,
@@ -119,6 +130,7 @@ export function clearChat() {
     mode,
     modeOfLastTurn,
     mentions: chat.mentions,
+    dismissedRepos,
   };
   chat.entries = [];
   chat.sessionId = undefined;
@@ -128,6 +140,7 @@ export function clearChat() {
   chat.mode = undefined;
   chat.modeOfLastTurn = undefined;
   chat.mentions = [];
+  chat.dismissedRepos = [];
 }
 
 export const canRestore = () => cleared !== null;
