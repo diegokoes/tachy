@@ -35,7 +35,7 @@ import {
   symptomsField,
   tagsField,
 } from "../fields";
-import { componentIntoFilter, resolveScopeIds } from "../context";
+import { codeNextFor, componentIntoFilter, resolveScopeIds } from "../context";
 
 tool(
   "search_knowledge",
@@ -83,7 +83,9 @@ tool(
       fixedVersion: fixed_version,
       limit,
     });
-    return searchOut(hits, "search_knowledge");
+    return searchOut(hits, "search_knowledge", {
+      next: await codeNextFor(productId, hits),
+    });
   },
 );
 

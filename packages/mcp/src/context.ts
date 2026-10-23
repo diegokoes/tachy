@@ -35,7 +35,9 @@ import {
   type ArchiveMember,
   type StoredFile,
 } from "@tachy/core/files";
+import { listRepos } from "@tachy/core/code";
 import { openSource } from "./extract";
+import { searchCodeNext } from "./results";
 
 /**
  * Tool results have a size ceiling that a whole transcript exceeds, so turns
@@ -320,6 +322,23 @@ export async function resolveScopeIds(opts: {
       : undefined,
     teamId: opts.team_slug ? await getTeamIdBySlug(opts.team_slug) : undefined,
   };
+}
+
+/**
+ * The `next` toward code search for an archive search with no hit better than
+ * weak, when repos with an index are linked in its scope; undefined otherwise.
+ */
+export async function codeNextFor(
+  productId: string | undefined,
+  hits: Record<string, unknown>[],
+): Promise<string | undefined> {
+  if (hits.some((hit) => hit.grade !== "weak")) return undefined;
+  const indexed = (await listRepos({ productId })).filter(
+    (repo) => repo.chunk_count > 0,
+  );
+  return indexed.length
+    ? searchCodeNext(indexed.map((repo) => repo.slug))
+    : undefined;
 }
 
 export async function componentIntoFilter(

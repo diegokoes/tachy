@@ -43,6 +43,7 @@ import {
 import { mcpActor, requireCanEdit, referenceDocScope } from "../permissions";
 import { memberField, structuredField, textWindowFields } from "../fields";
 import {
+  codeNextFor,
   componentIntoFilter,
   resolveScopeIds,
   loadContextSources,
@@ -313,20 +314,20 @@ tool(
       product_slug,
       team_slug,
     });
-    return searchOut(
-      await searchReferenceDocs(query, {
-        productId,
-        teamId,
-        includeUnscoped: true,
-        ...(await componentIntoFilter(productId, component, tags)),
-        boostCustomerId: customer
-          ? await getCustomerIdBySlug(customer)
-          : undefined,
-        docVersion: doc_version,
-        limit,
-      }),
-      "search_reference",
-    );
+    const hits = await searchReferenceDocs(query, {
+      productId,
+      teamId,
+      includeUnscoped: true,
+      ...(await componentIntoFilter(productId, component, tags)),
+      boostCustomerId: customer
+        ? await getCustomerIdBySlug(customer)
+        : undefined,
+      docVersion: doc_version,
+      limit,
+    });
+    return searchOut(hits, "search_reference", {
+      next: await codeNextFor(productId, hits),
+    });
   },
 );
 
