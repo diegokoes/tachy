@@ -233,12 +233,6 @@
       onclick={rescan}>rescan</Button
     >
   {/if}
-  <Button
-    variant="ghost"
-    size="sm"
-    icon="overview"
-    onclick={() => navigate(wikiPath(scope))}>overview</Button
-  >
 {/snippet}
 
 <WikiLayout {scope}>

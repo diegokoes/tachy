@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  libraryTab,
+  libraryTabPath,
+} from "../../packages/web/src/library/tabs";
+import {
   libraryItemPath,
   movedWikiPath,
   wikiPath,
@@ -50,5 +54,21 @@ describe("wiki paths", () => {
       libraryItemPath({ kind: "reference", docId: "d1", scope: "tqx" }),
     ).toBe("/library/docs/d1");
     expect(libraryItemPath({ scope: "tqx" })).toBeNull();
+  });
+});
+
+describe("library tabs", () => {
+  it("knows which tab a path is under", () => {
+    expect(libraryTab("/library")).toBe("all");
+    expect(libraryTab("/library/entries/e1")).toBe("all");
+    expect(libraryTab("/wiki/tqx")).toBe("wiki");
+    expect(libraryTab("/wiki/tqx/glossary")).toBe("wiki");
+    expect(libraryTab("/wiki/tqx/gaps")).toBe("gaps");
+  });
+
+  it("sends the wiki tabs to the wiki in view", () => {
+    expect(libraryTabPath("all", "tqx")).toBe("/library");
+    expect(libraryTabPath("wiki", "tqx")).toBe("/wiki/tqx");
+    expect(libraryTabPath("gaps", "general")).toBe("/wiki/general/gaps");
   });
 });
