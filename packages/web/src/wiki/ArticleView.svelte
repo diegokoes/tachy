@@ -357,12 +357,12 @@
      never moves. Two lines; a longer title is cut rather than let grow. */
   .pin-slot {
     display: flex;
-    align-items: flex-end;
-    height: calc(2 * 1.3em + var(--pad-2));
+    align-items: flex-start;
+    height: calc(2 * 1.3em);
     font-size: var(--fs-md);
   }
   .pinned {
-    margin: 0 0 var(--pad-2);
+    margin: 0;
     font-weight: 700;
     line-height: 1.3;
     display: -webkit-box;
