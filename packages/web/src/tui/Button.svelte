@@ -23,6 +23,8 @@
     children,
     "aria-label": ariaLabel,
     "aria-pressed": ariaPressed,
+    "aria-expanded": ariaExpanded,
+    "aria-haspopup": ariaHaspopup,
   }: {
     variant?: "default" | "primary" | "ghost" | "danger" | "ok";
     /** Semantic action color, independent of the button's chrome. */
@@ -48,6 +50,8 @@
     children?: Snippet;
     "aria-label"?: string;
     "aria-pressed"?: boolean;
+    "aria-expanded"?: boolean;
+    "aria-haspopup"?: "menu" | "listbox" | "dialog";
   } = $props();
 
   // A mark with no words beside it shows its title as a tip, which hover, focus
@@ -64,6 +68,8 @@
   {form}
   aria-label={ariaLabel ?? (bare ? title : undefined)}
   aria-pressed={ariaPressed}
+  aria-expanded={ariaExpanded}
+  aria-haspopup={ariaHaspopup}
   aria-busy={busy || undefined}
   disabled={disabled || busy}
   {onclick}

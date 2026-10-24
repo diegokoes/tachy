@@ -72,6 +72,7 @@ import {
   FunnelPlus,
   FunnelX,
   Ghost,
+  Gauge,
   Gavel,
   Gift,
   GitBranch,
@@ -99,6 +100,7 @@ import {
   LogOut,
   Maximize2,
   Megaphone,
+  Menu,
   MessageSquare,
   MessageSquareQuote,
   MessagesSquare,
@@ -231,6 +233,8 @@ export const ICONS = {
 
   // Navigation
   back: ArrowLeft,
+  /** Opens the list of places a corner menu goes to. */
+  menu: Menu,
   next: ArrowRight,
   /** A chart taken out of its tile to the whole window. */
   enlarge: Maximize2,
@@ -318,6 +322,8 @@ export const ICONS = {
   guidance: Signpost,
   structure: Layers,
   users: UserRoundGroup,
+  /** What the agent costs: turns, tokens, tools, by whom. */
+  usage: Gauge,
   workers: Terminal,
   /** One execution of a job, queued, running or finished. */
   runs: ListStart,
