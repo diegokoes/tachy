@@ -51,8 +51,11 @@ describe("seed", () => {
     const bookkeeping = new Set(["schema_meta", "chat_uploads", "test_runs"]);
     // Worker processes write themselves; a seeded one would show as a dead worker.
     const live = new Set(["job_workers"]);
+    // Written when a ticket is opened, from its messages; nothing reads it whole.
+    const derived = new Set(["work_item_query_vectors"]);
     for (const table of await tables()) {
-      if (bookkeeping.has(table) || live.has(table)) continue;
+      if (bookkeeping.has(table) || live.has(table) || derived.has(table))
+        continue;
       const [{ n }] = await sql.unsafe<{ n: string }[]>(
         `select count(*)::text as n from ${table}`,
       );
