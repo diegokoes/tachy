@@ -237,6 +237,12 @@ describe("places", () => {
     expect(router.path).toBe("/console/integrations/repos");
   });
 
+  it("goes to the usage page, which has an overview and no sections", () => {
+    expect(byId("console:usage")?.label).toBe("usage overview");
+    byId("console:usage")!.run();
+    expect(router.path).toBe("/console/usage");
+  });
+
   it("leaves out a page that only opens its first section", () => {
     expect(byId("console:flows")).toBeUndefined();
     expect(byId("console:flows/forms")?.trail).toEqual(["console", "flows"]);

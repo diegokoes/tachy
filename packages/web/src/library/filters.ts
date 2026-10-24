@@ -184,12 +184,16 @@ export function applyExtras(
 }
 
 /**
- * A product and component to open the list already narrowed to, handed over by
- * a page elsewhere - the wiki's coverage tree - that wants to show "everything
- * recorded under this part". The router carries paths only, so it travels
+ * What to open the list already narrowed to, handed over by a page elsewhere:
+ * the wiki's coverage tree ("everything recorded under this part"), or the
+ * review backlog (the drafts). The router carries paths only, so it travels
  * here; taken once, so the next visit opens unfiltered as usual.
  */
-export type ScopePreset = { product: string; component?: string };
+export type ScopePreset = {
+  product?: string;
+  component?: string;
+  status?: string;
+};
 
 let preset: ScopePreset | null = null;
 

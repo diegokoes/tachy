@@ -8,12 +8,7 @@
   import type { KnowledgeRow } from "../knowledge/rows";
   import type { ReferenceRow } from "../reference/rows";
   import type { ComponentRow, ProductRow } from "@tachy/contract";
-  import {
-    navigate,
-    openSection,
-    segment,
-    segments,
-  } from "../shell/router.svelte";
+  import { navigate, segment, segments } from "../shell/router.svelte";
   import { keep, recall } from "../shell/kept";
   import { setSubnav } from "../shell/subnav.svelte";
   import { pushScope } from "../keys/keys.svelte";
@@ -52,6 +47,8 @@
   import EntryDetail from "../knowledge/EntryDetail.svelte";
   import DocDetail from "../reference/DocDetail.svelte";
   import { movedWikiPath, ORG_WIDE, wikiPath } from "../wiki/paths";
+  import { landingScope, loadWikis, wikis } from "../wiki/wikis.svelte";
+  import { LIBRARY_TABS, libraryTabPath } from "./tabs";
   import EntryForm from "../knowledge/EntryForm.svelte";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
 
@@ -103,19 +100,23 @@
     navigate("/library", { replace: true });
   });
 
-  // No tabs: the library is one list, and the wiki opens from its row. The
-  // subnav is registered for that row, which the detail views and forms put
-  // their actions in.
+  // The wiki shares these tabs; the detail views and forms put their own
+  // actions in the row beside them.
   $effect(() =>
     setSubnav({
-      items: [],
-      active: "",
-      onpick: () => {},
+      items: LIBRARY_TABS,
+      active: "all",
+      onpick: (tab) => void openTab(tab),
       // Only over a list. A detail view claims the row for itself, and a
       // create screen has nothing to create from.
       actions: listing ? listActions : undefined,
     }),
   );
+
+  async function openTab(tab: string) {
+    if (tab !== "all" && !wikis.loaded) await loadWikis();
+    navigate(libraryTabPath(tab, landingScope()));
+  }
   /** Which form the create screen shows - in the URL, so it deep-links. */
   const newKind = $derived(param === "doc" ? "doc" : "entry");
   const NEW_KINDS = [
@@ -434,6 +435,7 @@
 
   /** Opens narrowed to what another page asked for; see `presetScope`. */
   async function applyPreset(preset: ScopePreset) {
+    if (preset.status) status = preset.status;
     const id = products.find((x) => x.slug === preset.product)?.id as
       string | undefined;
     if (!id) return;
@@ -525,12 +527,6 @@
       onclick={() => navigate("/library/new/entry")}>new</Button
     >
   {/if}
-  <Button
-    variant="ghost"
-    size="sm"
-    icon="wiki"
-    onclick={() => openSection("wiki")}>wiki</Button
-  >
 {/snippet}
 
 {#snippet kindToggle()}
