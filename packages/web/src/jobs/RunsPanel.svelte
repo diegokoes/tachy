@@ -351,6 +351,7 @@
   {loading}
   rowClass={(r) => (isActive(r.status) ? "active" : undefined)}
   emptyTitle={rows.length ? "no runs match" : "no runs yet"}
+  emptyArt={rows.length ? "noMatch" : "empty"}
 />
 
 {#if more}
