@@ -792,8 +792,13 @@
   rowKey={(r) => r.slug}
   loading={customers.loading}
   error={customers.error}
-  emptyTitle={`no ${t("customers")} yet`}
-  emptyDetail="attributed by requester email domain: list domains"
+  emptyTitle={customers.data.length
+    ? `no ${t("customers")} match the filter`
+    : `no ${t("customers")} yet`}
+  emptyArt={customers.data.length ? "noMatch" : "empty"}
+  emptyDetail={customers.data.length
+    ? undefined
+    : "attributed by requester email domain: list domains"}
   addLabel={`add ${t("customer")}`}
   noun={t("customer")}
   editTitle={(r) => r.name}

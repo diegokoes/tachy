@@ -14,6 +14,7 @@
     type Column,
     type Draft,
   } from "./table";
+  import type { AsciiArt } from "./ascii";
 
   let {
     columns,
@@ -23,6 +24,7 @@
     error = null,
     emptyTitle = "nothing here yet",
     emptyDetail,
+    emptyArt = "empty",
     canEdit = () => true,
     canDelete = () => true,
     canCreate = true,
@@ -48,6 +50,8 @@
     error?: string | null;
     emptyTitle?: string;
     emptyDetail?: string;
+    /** "noMatch" while a filter hides every row. */
+    emptyArt?: AsciiArt;
     canEdit?: (row: T) => boolean;
     canDelete?: (row: T) => boolean;
     canCreate?: boolean;
@@ -235,6 +239,7 @@
   {error}
   {emptyTitle}
   {emptyDetail}
+  {emptyArt}
   {rowClass}
   onrowclick={onopen ?? (onsave ? startEdit : undefined)}
   canOpen={canEdit}

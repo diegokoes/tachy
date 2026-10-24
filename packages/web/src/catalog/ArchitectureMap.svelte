@@ -349,6 +349,7 @@
   />
 {:else if !graph.nodes.length}
   <EmptyState
+    art="noMatch"
     title="nothing matches"
     detail="clear the filters to see the whole catalogue"
   />

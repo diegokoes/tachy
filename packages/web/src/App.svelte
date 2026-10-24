@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
+  import { fade } from "svelte/transition";
   import ChatView from "./chat/ChatView.svelte";
   import LibraryView from "./library/LibraryView.svelte";
   import BoardView from "./work-items/BoardView.svelte";
@@ -16,7 +17,14 @@
   import { isSection, navItems, tabOf } from "./shell/nav";
   import { jellyPress } from "./motion/motion";
   import StarField from "./motion/StarField.svelte";
+  import TypeLine from "./motion/TypeLine.svelte";
   import Wordmark from "./motion/Wordmark.svelte";
+  import { reducedMotion } from "./motion/gsap";
+  import {
+    claimFirstVisit,
+    RECESS_TYPING_MS,
+    recessLine,
+  } from "./motion/recess";
   import { loadTheme, themeState } from "./theme/theme.svelte";
   import { applyOrgDefaults } from "./theme/defaults";
   import { loadFonts } from "./theme/fonts.svelte";
@@ -45,7 +53,11 @@
   const view = $derived(section("chat"));
 
   const sub = $derived(subnav());
+  const hasSubnav = $derived(sub !== null);
   const acts = $derived(sub ? (topActions() ?? sub.actions) : undefined);
+
+  /** Typed over the tabs on a section's first visit; null once it is typed. */
+  let recessTyping = $state<string | null>(null);
 
   let wizardSkipped = $state(localStorage.getItem("tachy-skip-wizard") === "1");
   const showWizard = $derived(session.bootstrapped === false && !wizardSkipped);
@@ -183,6 +195,17 @@
       cancelAnimationFrame(first);
       cancelAnimationFrame(second);
     };
+  });
+
+  $effect(() => {
+    const tab = tabOf(view);
+    const section = nav.find((item) => item.key === tab);
+    // Presence only, so picking a tab types nothing. The incoming view's
+    // effect has registered its bar by the time this one runs.
+    const bar = hasSubnav ? untrack(() => sub) : null;
+    if (!section || !bar || reducedMotion() || !claimFirstVisit(tab)) return;
+    recessTyping = recessLine(section, bar);
+    return () => (recessTyping = null);
   });
 
   $effect(() => setScrollport(mainEl ?? null));
@@ -351,15 +374,35 @@
         >
           <path d={carveOutline} />
         </svg>
-        <div class="subnav" class:settling bind:this={subEl}>
+        <div
+          class="subnav"
+          class:settling
+          class:typing={recessTyping !== null}
+          bind:this={subEl}
+        >
           <Tabs
             items={sub.items}
             active={sub.active}
             hotkeys="shift"
             anchor="--tab-sub"
             labels={themeState.navLabels}
-            onpick={sub.onpick}
+            onpick={(key) => {
+              recessTyping = null;
+              sub.onpick(key);
+            }}
           />
+          {#if recessTyping}
+            <span class="typed" aria-hidden="true" out:fade={{ duration: 160 }}>
+              {#key recessTyping}
+                <TypeLine
+                  text={recessTyping}
+                  caret={false}
+                  withinMs={RECESS_TYPING_MS}
+                  ondone={() => (recessTyping = null)}
+                />
+              {/key}
+            </span>
+          {/if}
         </div>
         {#if acts}
           <div class="top-acts">{@render acts()}</div>
@@ -724,6 +767,11 @@
     text-transform: uppercase;
     letter-spacing: var(--label-spacing);
   }
+  /* A ghost draws no edge, so its padding is only spacing, which the corner
+     beside a long tab bar cannot spare. */
+  .top-acts :global(.btn.ghost) {
+    padding-inline: var(--pad-2);
+  }
 
   /* The rule fills a full-width bar; a hugging pill has no edge to run to. */
   .subnav :global(.rule) {
@@ -733,6 +781,27 @@
      lands on the incoming section's tab instead of travelling to it. */
   .subnav.settling :global(.tabs::before) {
     transition: none;
+  }
+
+  /* Transparent, not hidden: the tabs keep the width the recess is cut to and
+     stay clickable under the line typing over them. They drop out at once and
+     fade back in. */
+  .subnav :global(.tabs) {
+    transition: opacity 160ms ease-out;
+  }
+  .subnav.typing :global(.tabs) {
+    opacity: 0;
+    transition: none;
+  }
+  .typed {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    color: var(--muted);
+    font-family: var(--font-mono);
   }
 
   /* Content clears the recess floor, less the padding the Panel already
