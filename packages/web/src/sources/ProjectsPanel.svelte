@@ -12,6 +12,7 @@
     Chip,
     CrudTable,
     DeleteButton,
+    Field,
     FilterBar,
     Note,
     Select,
@@ -260,7 +261,7 @@
       edit: "select",
       info: "single-customer projects only. overrides email-domain attribution. empty: many customers",
       options: [
-        { value: "", label: "(none, serves many)" },
+        { value: "", label: "none" },
         ...customers.data.map((cu) => ({ value: cu.slug, label: cu.name })),
       ],
     },
@@ -515,22 +516,26 @@
 
         {#if canEditProject(project) && project.product_slug}
           <div class="arow add">
-            <input
-              aria-label="area prefix"
-              bind:value={areaForm.prefix}
-              onkeydown={(e) => e.key === "Enter" && addArea(project)}
-            />
-            <Select
-              bind:value={areaForm.component}
-              aria-label="component"
-              options={[
-                { value: "", label: "component…" },
-                ...(components[project.product_slug] ?? []).map((c) => ({
-                  value: c.slug,
-                  label: `${c.name} (${c.slug})`,
-                })),
-              ]}
-            />
+            <Field label="area prefix">
+              <input
+                aria-label="area prefix"
+                bind:value={areaForm.prefix}
+                onkeydown={(e) => e.key === "Enter" && addArea(project)}
+              />
+            </Field>
+            <Field label="component">
+              <Select
+                bind:value={areaForm.component}
+                aria-label="component"
+                options={[
+                  { value: "", label: "none" },
+                  ...(components[project.product_slug] ?? []).map((c) => ({
+                    value: c.slug,
+                    label: `${c.name} (${c.slug})`,
+                  })),
+                ]}
+              />
+            </Field>
             <Button
               variant="ghost"
               tone="ok"
@@ -671,9 +676,13 @@
   }
   .arow.add {
     margin-top: var(--pad-2);
+    align-items: end;
   }
-  .arow.add input {
+  .arow.add :global(.field) {
     min-width: 12rem;
+  }
+  .arow.add :global(.field .asel) {
+    flex: 1;
   }
   .wrow {
     display: flex;

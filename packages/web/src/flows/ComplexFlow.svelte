@@ -357,15 +357,18 @@
 
 <header class="bar">
   {@render lead()}
-  <span class="pick wide">
-    <Select
-      value={flowId}
-      options={flowOptions}
-      searchable
-      placeholder="flow"
-      aria-label="flow"
-      onchange={(v) => (flowId = String(v ?? ""))}
-    />
+  <span class="field">
+    <span class="k">flow</span>
+    <span class="pick wide">
+      <Select
+        value={flowId}
+        options={flowOptions}
+        searchable
+        placeholder="none"
+        aria-label="flow"
+        onchange={(v) => (flowId = String(v ?? ""))}
+      />
+    </span>
   </span>
   {#if draft && !listError}
     {@const edited = draft}
@@ -495,7 +498,7 @@
       deps={connection ? { connection } : {}}
       value={testItem}
       label="item to run on"
-      placeholder="none: run without an item"
+      placeholder="none"
       onchange={(v) => (testItem = v)}
     />
     <span class="dry">

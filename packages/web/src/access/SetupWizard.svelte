@@ -243,7 +243,6 @@
                 <input
                   bind:value={products[i].name}
                   disabled={!teamName.trim()}
-                  placeholder={i === 0 ? `first ${wizardTerms.product}` : ""}
                 />
                 <span class="slug"
                   >{product.name ? slugify(product.name) : ""}</span

@@ -251,7 +251,6 @@
             <Row label="clone URL">
               <input
                 bind:value={url}
-                placeholder="https://…"
                 aria-label="clone URL"
                 spellcheck="false"
               />

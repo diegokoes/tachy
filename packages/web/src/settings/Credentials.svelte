@@ -56,7 +56,6 @@
             aria-label="{keyLabel(name)}{from ? ', set' : ''}"
             class:bad
             bind:value={drafts[name]}
-            placeholder={from ? "" : "paste a key"}
           />
           {#if from && !draft}
             <span class="dots" class:shared={!mine.has(name)} aria-hidden="true"

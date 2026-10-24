@@ -95,7 +95,7 @@
   });
 
   const leadOptions = $derived([
-    { value: "", label: "- no lead page -" },
+    { value: "", label: "none" },
     ...articles.map((a) => ({ value: a.slug as string, label: a.title })),
   ]);
 
@@ -435,31 +435,41 @@
     {#if isCurator() && editing !== null}
       <div class="catform">
         <div class="row">
-          <input
-            aria-label="section name"
-            placeholder="Portal"
-            bind:value={form.name}
-            oninput={() => {
-              if (!slugTouched) form.slug = slugify(form.name);
-            }}
-          />
-          <input
-            aria-label="section slug"
-            placeholder="portal"
-            bind:value={form.slug}
-            oninput={() => (slugTouched = true)}
-          />
-          <Select
-            bind:value={form.parent}
-            aria-label="parent section"
-            options={parentOptions}
-          />
-          <input
-            aria-label="order"
-            type="number"
-            class="ord"
-            bind:value={form.ordinal}
-          />
+          <label class="pair">
+            <span class="lbl">name</span>
+            <input
+              aria-label="section name"
+              bind:value={form.name}
+              oninput={() => {
+                if (!slugTouched) form.slug = slugify(form.name);
+              }}
+            />
+          </label>
+          <label class="pair">
+            <span class="lbl">slug</span>
+            <input
+              aria-label="section slug"
+              bind:value={form.slug}
+              oninput={() => (slugTouched = true)}
+            />
+          </label>
+          <span class="pair">
+            <span class="lbl">inside</span>
+            <Select
+              bind:value={form.parent}
+              aria-label="parent section"
+              options={parentOptions}
+            />
+          </span>
+          <label class="pair">
+            <span class="lbl">order</span>
+            <input
+              aria-label="order"
+              type="number"
+              class="ord"
+              bind:value={form.ordinal}
+            />
+          </label>
         </div>
         <div class="row">
           <span class="lbl">lead page</span>
@@ -776,6 +786,12 @@
     align-items: center;
     gap: 0.4rem;
     flex-wrap: wrap;
+  }
+  /* A label wraps with its control, never away from it. */
+  .pair {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
   }
   .catform .lbl,
   .comps .lbl {

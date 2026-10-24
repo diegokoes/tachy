@@ -70,6 +70,7 @@ import {
 } from "./repos";
 import {
   DEFAULT_CODE_EXTENSIONS,
+  DEFAULT_MAX_FILE_KB,
   type IndexPreview,
   type PreviewDir,
 } from "@tachy/contract";
@@ -78,7 +79,6 @@ import { fileIconOf } from "./file-icons";
 const EXCLUDED_DIR_RE =
   /(^|\/)(node_modules|vendor|dist|build|out|target|bin|obj|third_party|\.git|coverage|__pycache__|packages\/generated)(\/|$)/;
 
-const DEFAULT_MAX_FILE_KB = 200;
 const PROGRESS_EVERY_FILES = 50;
 
 const LANG_BY_EXT: Record<string, string> = {

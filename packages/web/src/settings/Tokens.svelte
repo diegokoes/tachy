@@ -3,7 +3,7 @@
   import type { ApiTokenRow } from "@tachy/contract";
   import { api } from "../api";
   import { fmtDate } from "../dates.svelte";
-  import { Button, DeleteButton, Note, Select } from "../tui";
+  import { BarField, Button, DeleteButton, Note, Select } from "../tui";
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";
   import {
@@ -105,17 +105,16 @@
   {/each}
   <Row label="new token">
     <div class="mint">
-      <input
-        aria-label="token name"
-        placeholder="what it is for"
-        maxlength="100"
-        bind:value={name}
-      />
-      <Select
-        bind:value={lifetime}
-        options={LIFETIME_OPTIONS}
-        aria-label="token lifetime"
-      />
+      <BarField label="name">
+        <input aria-label="token name" maxlength="100" bind:value={name} />
+      </BarField>
+      <BarField label="lifetime">
+        <Select
+          bind:value={lifetime}
+          options={LIFETIME_OPTIONS}
+          aria-label="token lifetime"
+        />
+      </BarField>
       <Button
         variant="ghost"
         size="sm"
@@ -132,7 +131,7 @@
 <style>
   .mint {
     display: flex;
-    align-items: center;
+    align-items: end;
     gap: var(--pad-2);
   }
   .secret {

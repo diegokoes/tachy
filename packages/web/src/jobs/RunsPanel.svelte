@@ -328,7 +328,7 @@
       { value: "manual", label: "a person" },
       { value: "event", label: "an event" },
     ]}
-    placeholder="started by"
+    placeholder="anyone"
     clearable
     keepOpen
     active={!!trigger}

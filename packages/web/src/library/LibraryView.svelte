@@ -26,10 +26,11 @@
   import { errText } from "../resource.svelte";
   import { componentOptions } from "../catalog/componentOptions";
   import {
+    BarField,
     Button,
-    CaretInput,
     EmptyState,
     Note,
+    SearchBox,
     Select,
     Spinner,
   } from "../tui";
@@ -379,23 +380,6 @@
       }
   }
 
-  /**
-   * A control never reads narrower than the cap naming it - the caps are what
-   * the row is scanned by. Measured rather than guessed at in `ch`: the cap is
-   * a different size and tracking from the control under it.
-   */
-  function capFloor(node: HTMLElement) {
-    const cap = node.querySelector<HTMLElement>(".cap");
-    if (!cap) return;
-    const apply = () => {
-      node.style.minWidth = `${Math.ceil(cap.offsetWidth * 1.25)}px`;
-    };
-    apply();
-    const observer = new ResizeObserver(apply);
-    observer.observe(cap);
-    return { destroy: () => observer.disconnect() };
-  }
-
   /** A status carried over from a type that does not have it matches nothing. */
   function onTypeChange() {
     const offered: readonly string[] = showDocFilters ? DOC_STATUSES : STATUSES;
@@ -600,28 +584,17 @@
        narrowed by (environment, confidence, clarity, pattern, hidden fix,
        versions, tags) is one `+` away and remembered per browser. -->
   <div class="bar">
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <span
-      class="box"
-      onpointerdown={(e) => {
-        if (e.target !== e.currentTarget) return;
-        e.preventDefault();
-        searchEl?.focus();
+    <SearchBox
+      bind:el={searchEl}
+      aria-label="search symptoms, error codes, root causes, docs"
+      bind:value={search}
+      onkeydown={(e) => {
+        if (e.key === "Enter") {
+          clearTimeout(timer);
+          run();
+        }
       }}
     >
-      <CaretInput
-        bind:el={searchEl}
-        icon="search"
-        hint="search"
-        aria-label="search symptoms, error codes, root causes, docs"
-        bind:value={search}
-        onkeydown={(e) => {
-          if (e.key === "Enter") {
-            clearTimeout(timer);
-            run();
-          }
-        }}
-      />
       <!-- Reset keeps its place whether or not it is there, so add never
            moves under the pointer. -->
       <span class="slot" class:off={!activeFilters}>
@@ -643,10 +616,9 @@
           onremove={removeFilter}
         />
       {/if}
-    </span>
+    </SearchBox>
 
-    <span class="field" use:capFloor>
-      <span class="cap">type</span>
+    <BarField label="type">
       <Select
         bind:value={type}
         active={!!type}
@@ -657,11 +629,10 @@
         options={TYPES}
         onchange={onTypeChange}
       />
-    </span>
+    </BarField>
     <!-- product and component scope entries AND docs, so they stay visible
          whatever the type. -->
-    <span class="field" use:capFloor>
-      <span class="cap">{t("product")}</span>
+    <BarField label={t("product")}>
       <Select
         bind:value={productId}
         active={!!productId}
@@ -673,9 +644,8 @@
         options={products.map((p) => ({ value: p.id, label: p.name }))}
         onchange={(v) => onProductChange(String(v))}
       />
-    </span>
-    <span class="field" use:capFloor>
-      <span class="cap">component</span>
+    </BarField>
+    <BarField label="component">
       <Select
         bind:value={component}
         active={!!component}
@@ -691,10 +661,9 @@
           void loadFacets();
         }}
       />
-    </span>
+    </BarField>
 
-    <span class="field" use:capFloor>
-      <span class="cap">status</span>
+    <BarField label="status">
       <Select
         bind:value={status}
         active={!!status}
@@ -704,7 +673,7 @@
         clearable
         options={showDocFilters ? DOC_STATUSES : STATUSES}
       />
-    </span>
+    </BarField>
 
     {#if showEntryFilters}
       {#each shown as key (key)}
@@ -721,8 +690,7 @@
               removeFilter(key);
             }}
           >
-            <span class="field" use:capFloor>
-              <span class="cap">{def.label}</span>
+            <BarField label={def.label}>
               {#if def.kind === "tags"}
                 <TagFilter
                   value={extras[key] ?? ""}
@@ -752,7 +720,7 @@
                   onchange={(v) => setExtra(key, String(v))}
                 />
               {/if}
-            </span>
+            </BarField>
           </span>
         {/if}
       {/each}
@@ -852,22 +820,9 @@
     background: var(--panel-bg);
   }
   /* Half the bar: the filters take the other half, then the rows below. */
-  .box {
+  .bar :global(.searchbox) {
     flex: 0 1 50%;
     min-width: 16rem;
-    min-height: var(--control-h);
-    display: flex;
-    align-items: stretch;
-    gap: var(--pad-1);
-    padding-left: var(--pad-3);
-    border: 1px solid var(--border-bare);
-    border-radius: var(--radius-control);
-    background: var(--panel-bg);
-    cursor: text;
-  }
-  .box:has(:global(input:focus-visible)) {
-    border-color: var(--accent);
-    box-shadow: inset 0 0 0 1px var(--accent);
   }
   .slot {
     display: flex;
@@ -875,35 +830,16 @@
   .slot.off {
     visibility: hidden;
   }
-  .box :global(.menu) {
+  .bar :global(.searchbox .menu) {
     display: flex;
   }
-  .box :global(.btn) {
+  .bar :global(.searchbox .btn) {
     min-height: 0;
   }
   /* Cased in CSS, not in the copy - a screen reader still hears a word. */
   .lbl {
     text-transform: uppercase;
     letter-spacing: var(--label-spacing);
-  }
-
-  .field {
-    display: inline-flex;
-    flex-direction: column;
-    gap: var(--pad-1);
-  }
-  /* Its own width, not the column's, so `capFloor` can measure the text and
-     the auto margins can centre it over the control. */
-  .cap {
-    width: max-content;
-    max-width: 100%;
-    margin-inline: auto;
-    font-size: var(--fs-xs);
-    line-height: 1;
-    letter-spacing: var(--label-spacing);
-    text-transform: uppercase;
-    text-align: center;
-    color: var(--muted);
   }
 
   /* An added filter travels with its remove button, so the pair wraps as

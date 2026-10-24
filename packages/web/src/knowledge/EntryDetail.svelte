@@ -20,7 +20,7 @@
   import { isCurator, canCurateScope } from "../access/session.svelte";
   import { pushScope } from "../keys/keys.svelte";
   import { setTopActions } from "../shell/subnav.svelte";
-  import { Badge, Button, Chip, Icon } from "../tui";
+  import { Badge, Button, Chip, Field, Icon, SearchBox } from "../tui";
 
   let {
     id,
@@ -390,16 +390,16 @@
 
             {#if deprecating}
               <div class="deprecate-form">
-                <textarea
-                  rows="2"
-                  bind:value={deprecateReason}
-                  placeholder="why is this outdated? (recorded as feedback)"
-                ></textarea>
-                <input
-                  placeholder="search for the replacement entry (optional)"
-                  bind:value={supersedeQuery}
-                  oninput={searchSupersede}
-                />
+                <Field label="why it is outdated" info="recorded as feedback">
+                  <textarea rows="2" bind:value={deprecateReason}></textarea>
+                </Field>
+                <Field label="replaced by" info="optional">
+                  <SearchBox
+                    bind:value={supersedeQuery}
+                    aria-label="find the entry that replaces it"
+                    oninput={searchSupersede}
+                  />
+                </Field>
                 {#if supersedeResults.length}
                   <ul class="supersede-results">
                     {#each supersedeResults as candidate (candidate.id)}
@@ -645,8 +645,7 @@
     flex-direction: column;
     gap: var(--pad-2);
   }
-  .deprecate-form textarea,
-  .deprecate-form input {
+  .deprecate-form textarea {
     font: inherit;
     color: var(--text);
   }

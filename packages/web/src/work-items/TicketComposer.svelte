@@ -7,7 +7,17 @@
     ReviewFinding,
   } from "@tachy/contract";
   import { pushScope } from "../keys/keys.svelte";
-  import { Badge, Button, Chevron, Icon, Note, Select, tip } from "../tui";
+  import {
+    Badge,
+    BarField,
+    Button,
+    Chevron,
+    Icon,
+    InfoMark,
+    Note,
+    Select,
+    tip,
+  } from "../tui";
   import { typeColor, typeIcon } from "./ado-icons";
   import {
     az,
@@ -35,6 +45,7 @@
   import {
     arrange,
     fieldForName,
+    helpOf,
     isBody,
     labelOf,
     missingRequired,
@@ -53,6 +64,9 @@
       project: ComposerProject,
     ) => void;
   } = $props();
+
+  /** The template last applied, while the form still offers it. */
+  let appliedTemplate = $state("");
 
   $effect(() => {
     ensureProjects();
@@ -211,6 +225,7 @@
 {#snippet label(field: FieldSpec)}
   {@const origin = composer.origins[field.reference_name]}
   {@const flagged = findingsFor.get(field.reference_name)}
+  {@const help = helpOf(field)}
   <span class="label">
     <label for={`f-${field.reference_name}`}>{labelOf(form, field)}</label>
     {#if field.required}<span class="req" aria-label="required">*</span>{/if}
@@ -220,7 +235,7 @@
         <Icon name="review" size="0.9em" />{flagged}
       </button>
     {/if}
-    {#if field.help_text}<span class="help" use:tip={field.help_text}
+    {#if help}<span class="help" use:tip={help}
         ><Icon name="info" size="0.9em" /></span
       >{/if}
   </span>
@@ -249,48 +264,64 @@
 <section class="view" aria-label="new Azure DevOps work item" bind:this={root}>
   <header class="bar">
     <div class="where">
-      <Select
-        value={composer.project?.id ?? ""}
-        placeholder="project"
-        searchable
-        options={(az.projects ?? []).map((p) => ({
-          value: p.id,
-          label: p.name,
-        }))}
-        aria-label="project"
-        onchange={(v) => {
-          const picked = az.projects?.find((x) => x.id === v);
-          if (picked && picked.id !== composer.project?.id) setProject(picked);
-        }}
-      />
-      {#if composer.project}
-        {#if composer.type}
-          <span
-            class="glyph"
-            style:color={typeColor(composer.type.color) ?? undefined}
-          >
-            <Icon name={typeIcon(composer.type.icon)} size="1.05em" />
-          </span>
-        {/if}
+      <BarField label="project">
         <Select
-          value={composer.type?.name ?? ""}
-          placeholder="type"
-          options={types.map((t) => ({ value: t.name, label: t.name }))}
-          aria-label="work item type"
+          value={composer.project?.id ?? ""}
+          placeholder="none"
+          searchable
+          options={(az.projects ?? []).map((p) => ({
+            value: p.id,
+            label: p.name,
+          }))}
+          aria-label="project"
           onchange={(v) => {
-            const t = types.find((x) => x.name === v);
-            if (t && t.name !== composer.type?.name) setType(t);
+            const picked = az.projects?.find((x) => x.id === v);
+            if (picked && picked.id !== composer.project?.id)
+              setProject(picked);
           }}
         />
+      </BarField>
+      {#if composer.project}
+        <BarField label="type">
+          <span class="typed">
+            {#if composer.type}
+              <span
+                class="glyph"
+                style:color={typeColor(composer.type.color) ?? undefined}
+              >
+                <Icon name={typeIcon(composer.type.icon)} size="1.05em" />
+              </span>
+            {/if}
+            <Select
+              value={composer.type?.name ?? ""}
+              placeholder="none"
+              options={types.map((t) => ({ value: t.name, label: t.name }))}
+              aria-label="work item type"
+              onchange={(v) => {
+                const t = types.find((x) => x.name === v);
+                if (t && t.name !== composer.type?.name) setType(t);
+              }}
+            />
+          </span>
+        </BarField>
       {/if}
       {#if form?.templates.length}
-        <Select
-          value=""
-          placeholder="template"
-          options={form.templates.map((t) => ({ value: t.id, label: t.name }))}
-          aria-label="apply a team template"
-          onchange={(v) => v && applyTemplate(String(v))}
-        />
+        <BarField label="template">
+          <Select
+            value={appliedTemplate}
+            placeholder="none"
+            options={form.templates.map((t) => ({
+              value: t.id,
+              label: t.name,
+            }))}
+            aria-label="apply a team template"
+            onchange={(v) => {
+              if (!v) return;
+              appliedTemplate = String(v);
+              void applyTemplate(appliedTemplate);
+            }}
+          />
+        </BarField>
       {/if}
     </div>
 
@@ -433,6 +464,9 @@
           <span class="label">
             <label for="f-title">{composer.type.name} title</label>
             <span class="req" aria-label="required">*</span>
+            <InfoMark label="about the title"
+              >one line a developer understands at a glance</InfoMark
+            >
             {#if findingsFor.get(TITLE)}
               <button class="flag" onclick={() => (side = "review")}
                 ><Icon name="review" size="0.9em" />{findingsFor.get(
@@ -445,7 +479,6 @@
             id="f-title"
             class:invalid={rejected.has(TITLE)}
             bind:value={composer.title}
-            placeholder="one line a developer understands at a glance"
           />
         </div>
         {#if composer.loading && !form}
@@ -551,7 +584,7 @@
     flex: none;
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: end;
     justify-content: space-between;
     gap: var(--pad-2) var(--pad-4);
     padding-bottom: var(--pad-2);
@@ -563,6 +596,15 @@
     align-items: center;
     gap: var(--pad-2);
     min-width: 0;
+  }
+  /* On the controls' line, under their caps. */
+  .where {
+    align-items: end;
+  }
+  .typed {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-1);
   }
   .rule {
     width: 1px;

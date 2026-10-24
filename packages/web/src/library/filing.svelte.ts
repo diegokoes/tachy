@@ -46,7 +46,7 @@ export class Filing {
   ]);
   componentChoices = $derived(componentOptions(this.components));
   customerOptions = $derived([
-    { value: "", label: "none (general)" },
+    { value: "", label: "none" },
     ...this.customers.map((c) => ({ value: c.slug, label: c.name })),
   ]);
   unitOptions = $derived([
