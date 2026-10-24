@@ -29,6 +29,7 @@ export { default as Tooltip } from "./Tooltip.svelte";
 export { default as Waffle, type WaffleItem } from "./Waffle.svelte";
 export { default as WaffleBars } from "./WaffleBars.svelte";
 export { default as Radar } from "./Radar.svelte";
+export { radarFits } from "./radar";
 export { default as Figures, type FigureItem } from "./Figures.svelte";
 export { default as Units } from "./Units.svelte";
 export { default as LineChart } from "./LineChart.svelte";
@@ -94,9 +95,11 @@ export {
   toneVar,
   type Stacked,
 } from "./scale";
-export { G, RAMP } from "./glyphs";
+export { EMPTY, G, RAMP } from "./glyphs";
+export { default as Lamp } from "./Lamp.svelte";
+export type { Lamp as LampState, LampLevel } from "./lamp";
 export { compact, usd, dayOfMonth, keepUnits } from "./figures";
-export { toneOf, isActive, type Tone } from "./tone";
+export { toneOf, lampOf, isActive, type Tone } from "./tone";
 export { ICONS, type IconName } from "./icons";
 export {
   blankDraft,

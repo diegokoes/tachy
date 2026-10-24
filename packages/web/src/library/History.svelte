@@ -9,7 +9,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../api";
-  import { Badge, Button, Chip, Time } from "../tui";
+  import { EMPTY, Badge, Button, Chip, Time } from "../tui";
 
   /**
    * Edit history for one library item. `base` is the collection route
@@ -91,8 +91,8 @@
   }
 
   function show(value: unknown): string {
-    if (value == null) return "-";
-    if (Array.isArray(value)) return value.join(", ") || "-";
+    if (value == null) return EMPTY;
+    if (Array.isArray(value)) return value.join(", ") || EMPTY;
     return typeof value === "object"
       ? JSON.stringify(value, null, 2)
       : String(value);

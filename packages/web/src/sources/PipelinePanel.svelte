@@ -2,6 +2,8 @@
   import { onMount } from "svelte";
   import { fmtDate } from "../dates.svelte";
   import {
+    radarFits,
+    EMPTY,
     Bars,
     DataTable,
     Legend,
@@ -20,7 +22,8 @@
   import { activity } from "../admin/activity.svelte";
   import { pct, type Count } from "../admin/overview";
   import Detail from "../admin/Detail.svelte";
-  import { ago, col, seriesStats, signed, TILE_DAYS } from "../admin/detail";
+  import { col, seriesStats, signed, TILE_DAYS } from "../admin/detail";
+  import { ago } from "../dates.svelte";
   import { band, FRESHNESS_STATES, freshnessGroups } from "./freshness";
   import { freshness } from "./freshness.svelte";
   import Overview from "../admin/Overview.svelte";
@@ -110,7 +113,7 @@
       end: true,
     }),
     col<Connection>("last", "last refusal", (c) =>
-      c.last_auth_failure ? fmtDate(c.last_auth_failure) : "–",
+      c.last_auth_failure ? fmtDate(c.last_auth_failure) : EMPTY,
     ),
   ];
   const connectionFigures = $derived<Count[]>([
@@ -153,7 +156,7 @@
       label: "busiest day",
       text: dayStats.peak
         ? `${dayStats.peak.label} · ${compact(dayStats.peak.value)}`
-        : "–",
+        : EMPTY,
     },
     { key: "change", label: "vs earlier half", text: signed(dayStats.change) },
     {
@@ -262,7 +265,7 @@
 </script>
 
 {#snippet sourcesChart()}
-  {#if bySource.length >= 3}
+  {#if radarFits(bySource.length)}
     <Radar
       axes={bySource.map((b) => ({ key: b.key, label: b.label }))}
       series={[

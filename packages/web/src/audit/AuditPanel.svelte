@@ -3,7 +3,7 @@
   import { AUDIT_ACTIONS, MAX_PAGE, type AuditEventRow } from "@tachy/contract";
   import { api } from "../api";
   import { fmtDateTime } from "../dates.svelte";
-  import { Button, DataTable, Select, type Column } from "../tui";
+  import { EMPTY, Button, DataTable, Select, type Column } from "../tui";
   import { detailText } from "./rows";
 
   let action = $state("");
@@ -16,7 +16,8 @@
   // One flexible column for what happened to what: the dialog has a fixed
   // width, and a detail column of its own pushed the table past it.
   const subject = (event: AuditEventRow) =>
-    [event.target, detailText(event.detail)].filter(Boolean).join(" · ") || "-";
+    [event.target, detailText(event.detail)].filter(Boolean).join(" · ") ||
+    EMPTY;
 
   const columns: Column<AuditEventRow>[] = [
     {
@@ -43,7 +44,7 @@
       key: "address",
       label: "from",
       width: "8rem",
-      value: (e) => e.address ?? "-",
+      value: (e) => e.address ?? EMPTY,
     },
   ];
 

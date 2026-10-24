@@ -216,7 +216,7 @@
       </div>
 
       <div class="col">
-        <Group label="project" icon="integrations">
+        <Group label="project">
           <Rows>
             <Row label="project">
               <Select
@@ -246,7 +246,7 @@
           </Rows>
         </Group>
 
-        <Group label="repository" icon="repo">
+        <Group label="repository">
           <Rows>
             <Row label="clone URL">
               <input

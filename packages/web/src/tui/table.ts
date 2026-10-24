@@ -1,5 +1,6 @@
 import type { Snippet } from "svelte";
 import type { IconName } from "./icons";
+import { EMPTY } from "./glyphs";
 
 export type Opt = { value: string | number; label: string };
 
@@ -13,6 +14,9 @@ export type Column<T> = {
   /** A CSS width for <col>. Fixed tracks are what keep rows from resizing. */
   width?: string;
   align?: "start" | "end";
+  /** "ui" for display names and prose; a plain value is set in mono, for
+   *  identifiers and numbers read against the row above. */
+  face?: "ui";
   /**
    * Plain display value; ignored when `cell` is given. On an editable column
    * this also seeds the record form, so it returns the stored form: the
@@ -70,7 +74,7 @@ export function cellText<T>(c: Column<T>, row: T): string {
   const value = c.value
     ? c.value(row)
     : (row as Record<string, unknown>)[c.key];
-  return value == null || value === "" ? "-" : String(value);
+  return value == null || value === "" ? EMPTY : String(value);
 }
 
 /** Seeds the record form from a row. See the note on `Column.value`. */

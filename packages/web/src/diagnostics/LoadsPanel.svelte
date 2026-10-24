@@ -4,8 +4,10 @@
   import { api } from "../api";
   import { errText } from "../resource.svelte";
   import {
+    Lamp,
+    lampOf,
+    EMPTY,
     Bars,
-    Badge,
     Button,
     Checkbox,
     GroupHead,
@@ -13,7 +15,6 @@
     Select,
     Time,
     isActive,
-    toneOf,
     type Bar,
   } from "../tui";
   import { endpointP95, loadSummary, type TestRun } from "./loadRuns";
@@ -158,7 +159,7 @@
     <span
       ><b
         >{summary.passRate === null
-          ? "–"
+          ? EMPTY
           : pct(summary.passed, summary.judged)}</b
       >
       passed{summary.judged < summary.runs
@@ -185,7 +186,7 @@
             >{run.image_sha ?? "unknown build"}</span
           ></td
         >
-        <td><Badge tone={toneOf(run.status)}>{run.status}</Badge></td>
+        <td><Lamp lamp={lampOf(run.status)} word={run.status} /></td>
         <td class="dim">{latencies(run)}</td>
         <td class="acts">
           {#if run.output_tail}

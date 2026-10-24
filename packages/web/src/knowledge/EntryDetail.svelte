@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { statusTone, type StatusAction } from "../library/status";
+  import { statusLamp, type StatusAction } from "../library/status";
   import { patchLibraryItem } from "../library/edit";
   import { createSequence } from "../resource.svelte";
   import { api } from "../api";
@@ -20,7 +20,7 @@
   import { isCurator, canCurateScope } from "../access/session.svelte";
   import { pushScope } from "../keys/keys.svelte";
   import { setTopActions } from "../shell/subnav.svelte";
-  import { Badge, Button, Chip, Field, Icon, SearchBox } from "../tui";
+  import { Lamp, Badge, Button, Chip, Field, Icon, SearchBox } from "../tui";
 
   let {
     id,
@@ -325,8 +325,7 @@
                         : undefined}
                     />
                   {:else}
-                    <Badge tone={statusTone(entry.status)}>{entry.status}</Badge
-                    >
+                    <Lamp lamp={statusLamp(entry.status)} word={entry.status} />
                   {/if}
                 </span>
                 <span class="when">

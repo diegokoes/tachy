@@ -771,7 +771,7 @@
         </Group>
       {/each}
 
-      <Group label="guidance" icon="guidance">
+      <Group label="guidance">
         <textarea
           class="guidance"
           rows="4"

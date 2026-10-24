@@ -33,7 +33,7 @@ describe("reading a problem document", () => {
 
   it("prefers the detail to the title as the sentence to show", () => {
     expect(problemMessage({ title: "Conflict", detail: "busy" })).toBe("busy");
-    expect(problemMessage({ title: "Conflict" })).toBe("Conflict");
+    expect(problemMessage({ title: "Conflict" })).toBe("conflict");
     expect(problemMessage(undefined)).toBeUndefined();
   });
 

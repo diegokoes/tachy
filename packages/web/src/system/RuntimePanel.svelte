@@ -3,7 +3,7 @@
   import { onDestroy, onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { Badge, Button, GroupHead, Note, Time } from "../tui";
+  import { Button, GroupHead, Lamp, Note, Time } from "../tui";
   import type { SystemInfo } from "./rows";
   import { system as shared } from "./systemState.svelte";
 
@@ -63,9 +63,13 @@
       <tr>
         <td>readiness</td>
         <td
-          ><Badge tone={runtime.readiness.ready ? "ok" : "danger"}
-            >{runtime.readiness.ready ? "ready" : "not ready"}</Badge
-          ></td
+          ><Lamp
+            lamp={{
+              level: "on",
+              tone: runtime.readiness.ready ? "ok" : "danger",
+            }}
+            word={runtime.readiness.ready ? "ready" : "not ready"}
+          /></td
         >
         <td class="muted"
           >database {runtime.readiness.database ? "up" : "down"} · schema {runtime
@@ -89,9 +93,12 @@
       <tr>
         <td>maintenance</td>
         <td>
-          <Badge tone={runtime.refusingChats ? "warn" : "muted"}
-            >{runtime.refusingChats ? "chats paused" : "off"}</Badge
-          >
+          <Lamp
+            lamp={runtime.refusingChats
+              ? { level: "on", tone: "warn" }
+              : { level: "off", tone: "muted" }}
+            word={runtime.refusingChats ? "chats paused" : "off"}
+          />
         </td>
         <td>
           {#if isGlobalAdmin()}
@@ -117,7 +124,7 @@
     <tbody>
       <tr>
         <td>chat slots</td>
-        <td>{runtime.turns.slotsUsed} / {runtime.turns.slotCap}</td>
+        <td>{runtime.turns.slotsUsed} of {runtime.turns.slotCap}</td>
         <td class="muted"
           >running {runtime.turns.running} · queued {runtime.turns.queued} · refused
           since boot
@@ -174,7 +181,7 @@
         <tr>
           <td>Postgres connections</td>
           <td
-            >{runtime.postgres.byProcess.reduce((n, p) => n + p.n, 0)} / {runtime
+            >{runtime.postgres.byProcess.reduce((n, p) => n + p.n, 0)} of {runtime
               .postgres.max}</td
           >
           <td class="muted"
