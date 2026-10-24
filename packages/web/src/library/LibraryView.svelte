@@ -28,6 +28,7 @@
   import {
     BarField,
     Button,
+    Choice,
     EmptyState,
     Note,
     SearchBox,
@@ -117,6 +118,10 @@
   );
   /** Which form the create screen shows - in the URL, so it deep-links. */
   const newKind = $derived(param === "doc" ? "doc" : "entry");
+  const NEW_KINDS = [
+    { value: "entry", label: "entry" },
+    { value: "doc", label: "doc" },
+  ] as const;
 
   /** The search and its scope, as the library was left. */
   const left = recall("library.search", {
@@ -529,24 +534,12 @@
 {/snippet}
 
 {#snippet kindToggle()}
-  <span class="toggle">
-    <Button
-      variant={newKind === "entry" ? "primary" : "ghost"}
-      square
-      icon="knowledge"
-      title="knowledge entry"
-      aria-label="knowledge entry"
-      onclick={() => navigate("/library/new/entry")}
-    />
-    <Button
-      variant={newKind === "doc" ? "primary" : "ghost"}
-      square
-      icon="refDoc"
-      title="reference doc"
-      aria-label="reference doc"
-      onclick={() => navigate("/library/new/doc")}
-    />
-  </span>
+  <Choice
+    options={NEW_KINDS}
+    value={newKind}
+    label="new library item"
+    onpick={(picked) => navigate(`/library/new/${picked}`)}
+  />
 {/snippet}
 
 {#if kind === "wiki"}
@@ -787,11 +780,6 @@
 {/if}
 
 <style>
-  .toggle {
-    display: inline-flex;
-    gap: var(--pad-1);
-  }
-
   /* Pinned: the list scrolls under it, so the query and its filters stay on
      screen. It needs its own ground over the opaque cards. Bottom-aligned: a
      cap is one line, a tag box is not. */

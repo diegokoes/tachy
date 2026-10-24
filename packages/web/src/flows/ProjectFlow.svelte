@@ -17,7 +17,7 @@
   import { api } from "../api";
   import { setPageActions } from "../admin/pageActions.svelte";
   import { keep, recall } from "../shell/kept";
-  import Choice from "../settings/Choice.svelte";
+  import Choice from "../tui/Choice.svelte";
   import Group from "../settings/Group.svelte";
   import Row from "../settings/Row.svelte";
   import Rows from "../settings/Rows.svelte";
