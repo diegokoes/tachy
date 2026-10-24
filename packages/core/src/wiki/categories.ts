@@ -40,7 +40,7 @@ export interface WikiCategoryPatch {
 function assertCategorySlug(slug: string): void {
   if (!SLUG_RE.test(slug))
     throw badInput(
-      `invalid category slug '${slug}': lowercase letters, digits and hyphens only`,
+      `invalid section slug '${slug}': lowercase letters, digits and hyphens only`,
     );
 }
 
@@ -90,7 +90,7 @@ export async function getWikiCategory(
   slug: string,
 ): Promise<WikiCategoryRow> {
   const [row] = await categoryRows(productId, slug);
-  if (!row) throw notFound(`no wiki category '${slug}' in this wiki`);
+  if (!row) throw notFound(`no wiki section '${slug}' in this wiki`);
   return row;
 }
 

@@ -534,7 +534,7 @@
 
         {#if toc.uncategorised.length}
           <div class="loose">
-            <h4>uncategorised ({toc.uncategorised.length})</h4>
+            <h4>in no section ({toc.uncategorised.length})</h4>
             <span class="arts">
               {#each toc.uncategorised as ref, i (ref.id)}
                 {#if i > 0}<span class="dot">·</span>{/if}
@@ -567,7 +567,7 @@
               <li>
                 <span class="cname">{n.name}</span>
                 <span class="counts">
-                  {n.subtree.entries} lessons · {n.subtree.docs} docs · {n
+                  {n.subtree.entries} entries · {n.subtree.docs} docs · {n
                     .subtree.articles} articles
                 </span>
               </li>

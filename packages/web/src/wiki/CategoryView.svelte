@@ -79,7 +79,7 @@
 
       {#if node.children.length}
         <section>
-          <h3>subcategories</h3>
+          <h3>subsections</h3>
           <ul>
             {#each node.children as child (child.id)}
               <li>
@@ -113,7 +113,7 @@
         {/if}
       </section>
     {:else if toc}
-      <p class="muted">no category '{slug}' in this wiki</p>
+      <p class="muted">no section '{slug}' in this wiki</p>
     {:else}
       <p class="muted">loading…</p>
     {/if}

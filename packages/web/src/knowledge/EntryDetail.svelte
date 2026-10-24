@@ -344,18 +344,15 @@
               {#if entry.affected_version || entry.fixed_version}
                 <div class="versions">
                   {#if entry.affected_version}
-                    <span class="affected">{entry.affected_version}</span>
+                    <span class="affected"
+                      >affected {entry.affected_version}</span
+                    >
                   {/if}
                   {#if entry.affected_version && entry.fixed_version}
-                    <Icon
-                      name="versionArrow"
-                      size="1.1em"
-                      weight={7}
-                      label="fixed in"
-                    />
+                    <span class="sep" aria-hidden="true">·</span>
                   {/if}
                   {#if entry.fixed_version}
-                    <span class="fixed">{entry.fixed_version}</span>
+                    <span class="fixed">fixed {entry.fixed_version}</span>
                   {/if}
                 </div>
               {/if}
@@ -615,6 +612,9 @@
   }
   .fixed {
     color: var(--ok);
+  }
+  .sep {
+    color: var(--muted);
   }
 
   /* Below the reading measure the three tracks stop fitting side by side. */

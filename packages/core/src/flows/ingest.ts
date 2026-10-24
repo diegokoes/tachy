@@ -88,7 +88,7 @@ export async function getIngestConfig(
   const [row] = await sql<{ config: Record<string, unknown> | null }[]>`
     select config from source_connections where slug = ${connectionSlug}
   `;
-  if (!row) throw notFound(`source connection '${connectionSlug}' not found`);
+  if (!row) throw notFound(`source '${connectionSlug}' not found`);
   return ingestConfig(row.config);
 }
 
@@ -103,7 +103,7 @@ export async function setIngestConfig(
     where slug = ${connectionSlug}
     returning config -> ${CONFIG_KEY} as ingest
   `;
-  if (!row) throw notFound(`source connection '${connectionSlug}' not found`);
+  if (!row) throw notFound(`source '${connectionSlug}' not found`);
   return row.ingest as IngestConfig;
 }
 

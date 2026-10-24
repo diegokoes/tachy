@@ -249,7 +249,7 @@ export const sourceProjects = new Hono()
       const [conn] = await sql`
       select config from source_connections where slug = ${c.req.param("slug")!}
     `;
-      if (!conn) throw notFound(`unknown source connection`);
+      if (!conn) throw notFound(`unknown source`);
       const { client } = await adoClientFor(c, c.req.param("slug")!);
       const defaults = workItemDefaults(conn.config, project, type);
       return c.json(await workItemSchema(client, project, type, defaults));

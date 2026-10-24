@@ -215,7 +215,7 @@
     },
     {
       key: "tickets",
-      label: "stored tickets",
+      label: "stored items",
       text: compact(sources.work_items),
       to: "tickets",
     },
@@ -224,13 +224,6 @@
       key: "files",
       label: "files",
       text: compact(repos.files),
-      to: "repos",
-      of: "repos",
-    },
-    {
-      key: "chunks",
-      label: "chunks",
-      text: compact(repos.chunks),
       to: "repos",
       of: "repos",
     },

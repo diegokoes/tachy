@@ -18,7 +18,7 @@ export async function adoClientFor(
     select id, source_type, slug, base_url, config
     from source_connections where slug = ${slug}
   `;
-  if (!conn) throw notFound(`unknown source connection: ${slug}`);
+  if (!conn) throw notFound(`unknown source: ${slug}`);
   if (conn.source_type !== "azure-devops")
     throw new Error(`'${slug}' is a ${conn.source_type} connection`);
   const token = await resolveCredential(

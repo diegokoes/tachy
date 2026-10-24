@@ -477,7 +477,7 @@
       {
         key: "redaction",
         label: "PII redaction",
-        value: settings.redaction_global.value ? "on" : "per connection",
+        value: settings.redaction_global.value ? "on" : "per source",
         tone: settings.redaction_global.value ? "ok" : undefined,
       },
       {

@@ -71,7 +71,7 @@ async function getConnection(slug: string): Promise<ConnectionRow> {
     select id, source_type, base_url, slug, config
     from source_connections where slug = ${slug}
   `;
-  if (!conn) throw badInput(`unknown source connection: ${slug}`);
+  if (!conn) throw badInput(`unknown source: ${slug}`);
   return conn;
 }
 

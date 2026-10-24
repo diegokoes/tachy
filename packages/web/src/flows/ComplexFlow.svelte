@@ -339,7 +339,7 @@
       onclick={(e) =>
         (testAnchor = testAnchor
           ? null
-          : ((e?.currentTarget as HTMLElement) ?? null))}>test run</Button
+          : ((e?.currentTarget as HTMLElement) ?? null))}>test</Button
     >
     <Button
       variant="ghost"
@@ -489,7 +489,7 @@
   <div
     class="menu test"
     role="dialog"
-    aria-label="test run"
+    aria-label="test"
     use:float={{ anchor: testAnchor, placement: "below-end", gap: 4 }}
   >
     <span class="k">item</span>

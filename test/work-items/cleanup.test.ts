@@ -130,7 +130,7 @@ describe("previewing a cleanup of stored tickets", () => {
     ).rejects.toThrow(/at least one of/);
     await expect(
       previewStoredItems({ connection: "no-such-connection" }),
-    ).rejects.toThrow(/unknown source connection/);
+    ).rejects.toThrow(/unknown source/);
     await expect(previewStoredItems({ team: "no-such-team" })).rejects.toThrow(
       /unknown team/,
     );

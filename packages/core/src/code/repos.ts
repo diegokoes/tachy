@@ -70,7 +70,7 @@ export async function linkRepo(input: RepoInput) {
   if (sourceSlug) {
     const [conn] =
       await sql`select slug from source_connections where slug = ${sourceSlug}`;
-    if (!conn) throw badInput(`unknown source connection: ${sourceSlug}`);
+    if (!conn) throw badInput(`unknown source: ${sourceSlug}`);
   }
 
   let componentId: string | null = null;

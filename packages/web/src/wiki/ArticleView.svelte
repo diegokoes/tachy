@@ -307,7 +307,7 @@
 
       <footer class="cats">
         {#if article.categories?.length}
-          <span class="lbl">categories:</span>
+          <span class="lbl">sections:</span>
           {#each article.categories as category, i (category.id)}
             {#if i > 0}<span class="sep">|</span>{/if}
             <a
@@ -319,7 +319,7 @@
             >
           {/each}
         {:else}
-          <span class="muted">filed under no category yet</span>
+          <span class="muted">in no section yet</span>
         {/if}
       </footer>
     </article>

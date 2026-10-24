@@ -118,7 +118,7 @@ describe("listStoredItems", () => {
     expect(await titles({}, { query: "31" })).toEqual(["31"]);
     expect(await titles({ statuses: ["2"] }, { query: "jam" })).toEqual(["31"]);
     await expect(listStoredItems({ connection: "nope" })).rejects.toThrow(
-      /unknown source connection/,
+      /unknown source/,
     );
   });
 

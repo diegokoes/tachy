@@ -114,7 +114,7 @@
     bind:value={query}
     shown={items.length}
     {total}
-    label="search stored tickets"
+    label="search stored items"
   />
   <Select
     bind:value={connection}
@@ -133,7 +133,7 @@
   rowKey={(item) => item.id}
   {loading}
   {error}
-  emptyTitle="no stored tickets"
+  emptyTitle="no stored items"
   emptyDetail="a ticket or work item is stored when it is fetched in chat, by a flow or by a sync"
   onrowclick={(item) => navigate(`/console/integrations/tickets/${item.id}`)}
 />

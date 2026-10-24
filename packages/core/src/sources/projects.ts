@@ -226,7 +226,7 @@ export async function addSourceProject(
     await sql`select id from source_connections where slug = ${input.sourceSlug}`;
   if (!conn)
     throw badInput(
-      `unknown source connection '${input.sourceSlug}'. call list_source_connections first`,
+      `unknown source '${input.sourceSlug}'. call list_source_connections first`,
     );
   if (!input.externalKey.trim()) throw badInput("external_key is required");
   const scope = await resolveScope(input.productSlug, input.teamSlug);
