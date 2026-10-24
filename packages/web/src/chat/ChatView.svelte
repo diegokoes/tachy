@@ -265,13 +265,13 @@
   const modelCtx = $derived(parseModel(chat.input, offeredModels));
 
   /**
-   * `/name` picks a command or mode; `/artifact <query>`, `/az …`, a ticket
+   * `/name` picks a command or mode; `/recipe <query>`, `/az …`, a ticket
    * line and `/model …` pick arguments; an `@` word anywhere picks a source.
    */
   const cmdCtx = $derived.by(() => {
     const name = chat.input.match(/^\/([a-z0-9-]*)$/);
     if (name) return { mode: "command" as const, query: name[1] };
-    const arg = chat.input.match(/^\/artifact[ \t]+([^\n]*)$/);
+    const arg = chat.input.match(/^\/(?:recipe|artifact)[ \t]+([^\n]*)$/);
     if (arg) return { mode: "artifact" as const, query: arg[1] };
     if (azCtx) return { mode: "options" as const, query: azCtx.query };
     if (ticketCtx) return { mode: "options" as const, query: ticketCtx.id };
@@ -1293,8 +1293,8 @@
             {chat.artifact.title}
             <button
               class="chip-x"
-              aria-label="detach artifact"
-              use:tip={"detach artifact"}
+              aria-label="detach recipe"
+              use:tip={"detach recipe"}
               onclick={() => (chat.artifact = undefined)}
               ><Icon name="close" size="1em" weight={7} /></button
             >

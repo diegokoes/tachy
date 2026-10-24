@@ -36,11 +36,14 @@
     | { kind: "artifact"; artifact: CommandArtifactMeta }
     | { kind: "option"; value: string };
 
-  /** Client-side command: it attaches an artifact instead of prompting the agent. */
+  /**
+   * Client-side command: it attaches an artifact, called a recipe where people
+   * read it, instead of prompting the agent. `/artifact` still works typed.
+   */
   export const ARTIFACT_COMMAND: BuiltinCommandMeta = {
-    name: "artifact",
-    args: "<artifact>",
-    description: "attach an artifact to the next message",
+    name: "recipe",
+    args: "recipe",
+    description: "attach a recipe to the next message",
   };
 
   /** Client-side too: it changes what the conversation's turns run on. */
@@ -224,7 +227,7 @@
     {#if mode === "artifact"}
       <div class="cmd-crumb">
         <span class="cmd-cmd">/{ARTIFACT_COMMAND.name}</span>
-        <span class="cmd-param">artifact</span>
+        <span class="cmd-param">recipe</span>
         <span class="cmd-desc">{ARTIFACT_COMMAND.description}</span>
       </div>
     {:else if mode === "options" && crumb}
@@ -266,7 +269,7 @@
       <div class="cmd-none">
         {mode === "options"
           ? (crumb?.empty ?? "nothing matches")
-          : "no artifact matches"}
+          : "no recipe matches"}
       </div>
     {/if}
   </div>
