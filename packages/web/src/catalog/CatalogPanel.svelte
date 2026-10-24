@@ -5,6 +5,7 @@
   import { createResource } from "../resource.svelte";
   import { navigate } from "../shell/router.svelte";
   import {
+    radarFits,
     EMPTY,
     Bars,
     Columns,
@@ -334,18 +335,22 @@
 </script>
 
 {#snippet statusChart()}
-  <Radar
-    axes={statuses.map((x) => ({ key: x.key, label: x.label, tone: x.tone }))}
-    series={[
-      {
-        key: "entries",
-        label: "entries",
-        tone: "accent",
-        values: statuses.map((x) => x.value),
-      },
-    ]}
-    format={compact}
-  />
+  {#if radarFits(statuses.length)}
+    <Radar
+      axes={statuses.map((x) => ({ key: x.key, label: x.label, tone: x.tone }))}
+      series={[
+        {
+          key: "entries",
+          label: "entries",
+          tone: "accent",
+          values: statuses.map((x) => x.value),
+        },
+      ]}
+      format={compact}
+    />
+  {:else}
+    <Bars rows={statuses} format={compact} />
+  {/if}
 {/snippet}
 {#snippet statusTable()}
   <DataTable columns={statusColumns} rows={statuses} rowKey={(x) => x.key} />

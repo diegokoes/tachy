@@ -6,6 +6,7 @@
   import { isGlobalAdmin } from "./session.svelte";
   import { t } from "../terms";
   import {
+    radarFits,
     EMPTY,
     Bars,
     Cells,
@@ -444,17 +445,21 @@
 </script>
 
 {#snippet rolesChart()}
-  <Radar
-    axes={roles.map((x) => ({ key: x.key, label: x.label, tone: x.tone }))}
-    series={[
-      {
-        key: "users",
-        label: "users",
-        tone: "accent",
-        values: roles.map((x) => x.value),
-      },
-    ]}
-  />
+  {#if radarFits(roles.length)}
+    <Radar
+      axes={roles.map((x) => ({ key: x.key, label: x.label, tone: x.tone }))}
+      series={[
+        {
+          key: "users",
+          label: "users",
+          tone: "accent",
+          values: roles.map((x) => x.value),
+        },
+      ]}
+    />
+  {:else}
+    <Bars rows={roles} />
+  {/if}
 {/snippet}
 {#snippet rolesTable()}
   <DataTable columns={roleColumns} rows={roles} rowKey={(r) => r.key} />
