@@ -35,7 +35,7 @@
     /** The dialog's accessible name, and the label drawn in the titlebar. */
     title?: string;
     confirmLabel?: string;
-    /** The bar is icon-only, so a confirm that isn't a save must say so. */
+    /** Drawn beside the word; a confirm that is not a save carries its own. */
     confirmIcon?: IconName;
     cancelLabel?: string;
     /** Sits at the far left of the bar, away from the two it must not be. */
@@ -205,15 +205,12 @@
             <Button
               variant="ghost"
               tone="danger"
-              square
               icon={destructive.icon ?? "delete"}
               morph
-              title={destructive.label}
-              aria-label={destructive.label}
               busy={destructive.busy}
               disabled={destructive.disabled}
-              onclick={destructive.onclick}
-            />
+              onclick={destructive.onclick}>{destructive.label}</Button
+            >
           {/if}
         </div>
 
@@ -235,14 +232,11 @@
           {#if onConfirm}
             <Button
               variant={danger ? "danger" : "primary"}
-              square
               icon={confirmIcon}
-              title={confirmLabel}
-              aria-label={confirmLabel}
               {busy}
               {disabled}
-              onclick={onConfirm}
-            />
+              onclick={onConfirm}>{confirmLabel}</Button
+            >
           {/if}
         </div>
       </div>
