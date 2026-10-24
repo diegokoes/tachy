@@ -22,6 +22,7 @@ import {
   transcriptOnTicket,
   externalWorkItemScope,
   workItemScope,
+  ticketQueryVectors,
   type CitedCode,
   type RawWorkItem,
 } from "@tachy/core/work-items";
@@ -50,11 +51,7 @@ import {
 } from "@tachy/core/compliance";
 import { readForModel } from "@tachy/core/flows";
 import { searchReferenceDocs } from "@tachy/core/reference";
-import {
-  embedQueryLiteral,
-  exactTerms,
-  queryWindows,
-} from "@tachy/core/search";
+import { exactTerms, queryWindows } from "@tachy/core/search";
 import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
 import { NO_MATCHES, forAgent, out } from "../results";
@@ -112,7 +109,7 @@ tool(
     const unmappedProductId = item.componentSlug ? null : item.productId;
     const search =
       repoSlugs.length || unmappedProductId
-        ? await ticketSearch(view.kept)
+        ? await ticketSearch(item.id, view.kept)
         : null;
     const [code, suggestion] = search
       ? await Promise.all([
@@ -229,11 +226,13 @@ function ticketOpening(item: RawWorkItem): string {
 /**
  * What a ticket is searched by: the whole thread as the agent reads it, with
  * quoted chains, signatures and auto-replies taken out, so a problem stated in
- * a later message or an internal note is found too. Its windows are embedded
- * one request each: the embedder runs a request as one batch, and every other
- * search waits behind it.
+ * a later message or an internal note is found too. A window embedded at an
+ * earlier open of the ticket is not embedded again.
  */
-async function ticketSearch(item: RawWorkItem): Promise<TicketSearch> {
+async function ticketSearch(
+  workItemId: string,
+  item: RawWorkItem,
+): Promise<TicketSearch> {
   const [firstTurn = "", ...laterTurns] = compactWorkItem(item).turns.map(
     (turn) => turn.text,
   );
@@ -243,12 +242,9 @@ async function ticketSearch(item: RawWorkItem): Promise<TicketSearch> {
   ];
   const thread = messages.join("\n\n");
   const windows = queryWindows(messages);
-  const queryVectors: string[] = [];
-  for (const window of windows)
-    queryVectors.push(await embedQueryLiteral(window));
   return {
     query: ticketOpening(item) || (windows[0] ?? ""),
-    queryVectors,
+    queryVectors: await ticketQueryVectors(workItemId, windows),
     exactTerms: exactTerms(thread),
   };
 }
@@ -338,7 +334,7 @@ tool(
       customerId: item.customerId,
     });
 
-    const search = await ticketSearch(view.kept);
+    const search = await ticketSearch(item.id, view.kept);
     const productId = item.productId ?? undefined;
     // The ticket's own customer lifts their history without excluding anyone
     // else's: the tiebreaker search_knowledge gives an explicit `customer`.
