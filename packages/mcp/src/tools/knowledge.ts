@@ -244,7 +244,7 @@ tool(
         ? []
         : await nearDuplicateEntries(prepared, DUPLICATE_FLOOR);
     if (duplicates.length)
-      return out({
+      return outScrubbed({
         saved: false,
         possible_duplicates: duplicates,
         next: DUPLICATE_NEXT,
