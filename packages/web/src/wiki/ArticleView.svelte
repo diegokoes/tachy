@@ -233,7 +233,7 @@
     <Note tone="danger">{error}</Note>
   {:else if missing}
     <EmptyState
-      icon="file"
+      art="wiki"
       title={slug === MAIN_PAGE_SLUG
         ? "no main page yet"
         : `no article '${slug}' yet`}

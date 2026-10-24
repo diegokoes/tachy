@@ -611,6 +611,7 @@
   emptyTitle={projects.data.length
     ? "no projects match the filter"
     : "no projects registered yet"}
+  emptyArt={projects.data.length ? "noMatch" : "empty"}
   canEdit={canEditProject}
   canDelete={canEditProject}
   canCreate={canAdd}
