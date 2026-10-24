@@ -133,7 +133,7 @@ describe("wiki categories", () => {
     const productId = await tpdProductId();
     await expect(
       addWikiCategory({ productId: productId, slug: "Not A Slug", name: "x" }),
-    ).rejects.toThrow(/invalid category slug/);
+    ).rejects.toThrow(/invalid section slug/);
   });
 });
 

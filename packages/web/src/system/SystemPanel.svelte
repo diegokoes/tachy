@@ -118,7 +118,7 @@
                 />
                 {system.settings.redaction_global.value
                   ? "on: LLM boundary"
-                  : "off: per-connection opt-in"}
+                  : "off: per-source opt-in"}
               </span>
             </label>
           </td>

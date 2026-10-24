@@ -136,8 +136,8 @@
       variant="ghost"
       square
       icon="logout"
-      title="log out"
-      aria-label="log out"
+      title="sign out"
+      aria-label="sign out"
       onclick={logout}
     />
   {/if}

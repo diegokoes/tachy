@@ -293,7 +293,7 @@
     </span>
   </Group>
 
-  <Group label="try it" icon="run">
+  <Group label="test" icon="run">
     <span class="pick">
       <OptionSelect
         source="work_items"

@@ -75,11 +75,11 @@
   const HEADS: Record<WikiGapKind, { title: string; detail: string }> = {
     unwritten: {
       title: "written about nowhere",
-      detail: "lessons with no covering article",
+      detail: "entries with no covering article",
     },
     outgrown: {
       title: "outgrown",
-      detail: "newer lessons on these components, not cited",
+      detail: "newer entries on these components, not cited",
     },
     stale: {
       title: "stale sources",
@@ -94,8 +94,8 @@
       detail: "written, and waiting for someone to approve them",
     },
     uncategorised: {
-      title: "uncategorised",
-      detail: "no category; unreachable from contents",
+      title: "in no section",
+      detail: "unreachable from contents",
     },
   };
 
@@ -200,7 +200,7 @@
       case "outgrown": {
         const bits = [
           evidence.entries
-            ? `${evidence.entries} ${evidence.entries === 1 ? "lesson" : "lessons"}`
+            ? `${evidence.entries} ${evidence.entries === 1 ? "entry" : "entries"}`
             : "",
           evidence.docs
             ? `${evidence.docs} ${evidence.docs === 1 ? "doc" : "docs"}`
@@ -250,7 +250,7 @@
     {#if scope === ORG_WIDE}
       <Note tone="muted">
         the org-wide wiki has no components: only stale sources, wanted pages,
-        drafts and uncategorised articles are checked
+        drafts and articles in no section are checked
       </Note>
     {/if}
 

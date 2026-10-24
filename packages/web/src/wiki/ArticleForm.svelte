@@ -439,7 +439,7 @@
   </div>
 
   <div class="cats">
-    <span class="lbl">categories</span>
+    <span class="lbl">sections</span>
     {#if laidOut.length}
       <div class="picker">
         {#each laidOut as { cat, depth } (cat.id)}
@@ -453,9 +453,7 @@
         {/each}
       </div>
     {:else}
-      <span class="muted sm">
-        no categories in this wiki yet. the article lands in uncategorised
-      </span>
+      <span class="muted sm"> no sections in this wiki yet </span>
     {/if}
   </div>
 

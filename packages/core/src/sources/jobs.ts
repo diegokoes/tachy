@@ -7,8 +7,7 @@ export function defineSourceJobs() {
   defineJob({
     kind: "source.sync",
     title: "sync source",
-    description:
-      "pulls work items changed since the connection's last clean sync",
+    description: "pulls work items changed since the source's last clean sync",
     params: z.object({ connection: z.string().min(1) }),
     connection: "any",
     queue: "sync",

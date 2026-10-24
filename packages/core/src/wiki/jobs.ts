@@ -8,7 +8,7 @@ export function defineWikiJobs() {
     kind: "wiki.gaps",
     title: "find wiki gaps",
     description:
-      "rescans every wiki for components and lessons that no article covers yet",
+      "rescans every wiki for components and entries that no article covers yet",
     params: z.object({}),
     defaultSchedule: "7 * * * *",
     outcome: (o) =>

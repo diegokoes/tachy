@@ -482,11 +482,11 @@
   rowKey={(r) => r.slug}
   loading={connections.loading}
   error={connections.error}
-  emptyTitle="no source connections yet"
+  emptyTitle="no sources yet"
   canEdit={() => admin}
   canDelete={() => admin}
   canCreate={admin}
-  addLabel="add connection"
+  addLabel="add source"
   noun="connection"
   editTitle={(r) => r.slug}
   formExtra={probeExtra}

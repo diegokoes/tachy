@@ -556,7 +556,7 @@
     size="sm"
     icon="run"
     disabled={dirty || !raw || !isCurator()}
-    onclick={tryIt}>try it</Button
+    onclick={tryIt}>test</Button
   >
   <Button
     variant="ghost"

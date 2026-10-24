@@ -90,7 +90,7 @@ export function registerBuiltinFlowActions(): void {
     key: "item.fetch",
     title: "read ticket",
     description:
-      "fetches the item fresh from its source and stores it. messages the connection's ingest rules skip are left out",
+      "fetches the item fresh from its source and stores it. messages the source's ingest rules skip are left out",
     category: "read",
     writes: false,
     params: z.object({}),
@@ -456,8 +456,7 @@ export function registerBuiltinFlowActions(): void {
           ${params.connection ? sql`and slug = ${params.connection}` : sql``}
         order by slug limit 1
       `;
-      if (!adoConnection)
-        throw badInput("no Azure DevOps connection to follow on");
+      if (!adoConnection) throw badInput("no Azure DevOps source to follow on");
       const { kept } = applyIngest(
         await readStoredRaw(item.id),
         await getIngestConfig(item.connection),
