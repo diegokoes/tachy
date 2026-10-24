@@ -46,7 +46,7 @@
   /** Client-side too: it changes what the conversation's turns run on. */
   export const MODEL_COMMAND: BuiltinCommandMeta = {
     name: "model",
-    args: "<model> [effort]",
+    args: "model effort",
     description: "run this conversation on another model",
   };
 
