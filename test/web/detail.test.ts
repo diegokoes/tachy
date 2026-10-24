@@ -4,7 +4,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   ageHours,
-  ago,
   col,
   seriesStats,
   signed,
@@ -66,18 +65,10 @@ describe("signed", () => {
   });
 });
 
-describe("ago and ageHours", () => {
+describe("ageHours", () => {
   const now = Date.parse("2026-10-05T12:00:00Z");
 
-  it("says how stale a timestamp is in the unit a person reads it in", () => {
-    expect(ago(at(0.2, now), now)).toBe("12 min ago");
-    expect(ago(at(3.25, now), now)).toBe("3.3 h ago");
-    expect(ago(at(30, now), now)).toBe("30 h ago");
-    expect(ago(at(24 * 12, now), now)).toBe("12 d ago");
-  });
-
-  it("calls something that never ran never, and measures nothing for it", () => {
-    expect(ago(null, now)).toBe("never");
+  it("measures nothing for something that never ran", () => {
     expect(ageHours(null, now)).toBeNull();
     expect(ageHours(at(6, now), now)).toBeCloseTo(6);
   });

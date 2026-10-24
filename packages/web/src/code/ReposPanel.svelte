@@ -4,6 +4,7 @@
   import { api } from "../api";
   import { canCurateScope, isGlobalAdmin } from "../access/session.svelte";
   import { createResource, errText } from "../resource.svelte";
+  import { ago } from "../dates.svelte";
   import {
     EMPTY,
     Badge,
@@ -64,14 +65,6 @@
     working(r.index_status) ||
     r.lines.some((l) => working(l.index_status));
   const busyIndex = $derived(repos.data.some(busyRepo) || queuedAll);
-
-  const freshness = (repo: Repo) => {
-    if (!repo.last_indexed_at) return "never";
-    const days = Math.floor(
-      (Date.now() - new Date(repo.last_indexed_at).getTime()) / 86_400_000,
-    );
-    return days === 0 ? "today" : `${days}d ago`;
-  };
 
   async function reload() {
     await Promise.all([repos.reload(), projects.reload(), products.reload()]);
@@ -253,7 +246,7 @@
 
 {#snippet freshnessCell(repo: Repo)}
   <span class="fresh">
-    {freshness(repo)}
+    {ago(repo.last_indexed_at)}
     {#if repo.file_count}
       <span class="counts"
         >{repo.file_count} files / {repo.chunk_count} chunks</span
