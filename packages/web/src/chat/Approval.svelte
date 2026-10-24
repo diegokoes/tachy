@@ -3,6 +3,7 @@
   import { shatter } from "../motion/motion";
   import { Button, Field, Panel } from "../tui";
   import ApprovalField from "./ApprovalField.svelte";
+  import { approvalTitle } from "./approvalTitle";
   import { api } from "../api";
   import { parseUploadRef, uploadPreviewPath } from "@tachy/contract";
   import type { WorkItemSchema } from "@tachy/contract";
@@ -152,7 +153,7 @@
 
 <div class="wrap">
   <Panel
-    title={entry.tool}
+    title={approvalTitle(entry.tool, entry.input)}
     tone={entry.status === "denied"
       ? "danger"
       : entry.status === "approved"
