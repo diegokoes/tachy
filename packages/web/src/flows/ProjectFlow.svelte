@@ -520,14 +520,14 @@
                   <span class="order">
                     <button
                       class="tiny"
-                      aria-label={`Move ${label} up`}
+                      aria-label={`move ${label} up`}
                       disabled={i === 0}
                       onclick={() => moveInView(block, ref, -1)}
                       ><Icon name="moveUp" size="0.85em" /></button
                     >
                     <button
                       class="tiny"
-                      aria-label={`Move ${label} down`}
+                      aria-label={`move ${label} down`}
                       disabled={i === block.refs.length - 1}
                       onclick={() => moveInView(block, ref, 1)}
                       ><Icon name="moveDown" size="0.85em" /></button
@@ -537,7 +537,7 @@
                 <span class="ref">{ref}</span>
               {/snippet}
               <Choice
-                label={`How ${label} shows on a read item`}
+                label={`how ${label} shows on a read item`}
                 options={viewPlaceOptions(block.key !== "rest")}
                 value={viewConfig.fields?.[ref]?.show ?? ""}
                 onpick={(picked) => setViewShow(ref, picked || undefined)}
@@ -577,7 +577,7 @@
       options={projectOptions}
       searchable
       placeholder="project"
-      aria-label="Project"
+      aria-label="project"
       onchange={(v) => (projectId = String(v ?? ""))}
     />
   </span>
@@ -587,12 +587,12 @@
         value={type}
         options={typeOptions}
         searchable
-        aria-label="Type"
+        aria-label="type"
         onchange={(v) => (type = String(v ?? ""))}
       />
     </span>
     <Choice
-      label="Fields for creating an item or reading one"
+      label="fields for creating an item or reading one"
       options={MODES}
       value={mode}
       onpick={(picked) => (mode = picked)}
@@ -607,7 +607,7 @@
   {:else if ingestConnection}
     <IngestFlow connection={ingestConnection} />
   {:else if !projectOptions.length}
-    <Note>No registered projects your teams own.</Note>
+    <Note>no registered projects your teams own</Note>
   {:else if loadError}
     <Note tone="danger">{loadError}</Note>
   {:else if project}
@@ -627,21 +627,21 @@
             </button>
             <button
               class="tiny"
-              aria-label={`Move ${name} earlier`}
+              aria-label={`move ${name} earlier`}
               disabled={i === 0}
               onclick={() => moveType(name, -1)}
               ><Icon name="moveUp" size="0.85em" /></button
             >
             <button
               class="tiny"
-              aria-label={`Move ${name} later`}
+              aria-label={`move ${name} later`}
               disabled={i === offered.length - 1}
               onclick={() => moveType(name, 1)}
               ><Icon name="moveDown" size="0.85em" /></button
             >
             <button
               class="tiny"
-              aria-label={`Stop offering ${name}`}
+              aria-label={`stop offering ${name}`}
               disabled={offered.length === 1}
               onclick={() => toggleType(name)}
               ><Icon name="close" size="0.85em" /></button
@@ -687,14 +687,14 @@
                     <span class="order">
                       <button
                         class="tiny"
-                        aria-label={`Move ${label} up`}
+                        aria-label={`move ${label} up`}
                         disabled={i === 0}
                         onclick={() => move(block, ref, -1)}
                         ><Icon name="moveUp" size="0.85em" /></button
                       >
                       <button
                         class="tiny"
-                        aria-label={`Move ${label} down`}
+                        aria-label={`move ${label} down`}
                         disabled={i === block.fields.length - 1}
                         onclick={() => move(block, ref, 1)}
                         ><Icon name="moveDown" size="0.85em" /></button
@@ -706,8 +706,8 @@
                       <button
                         class="tiny"
                         aria-label={hasSource(ref)
-                          ? `Back to ${sourceName}'s value`
-                          : "Clear the default"}
+                          ? `back to ${sourceName}'s value`
+                          : "clear the default"}
                         use:tip={hasSource(ref)
                           ? `back to ${sourceName}'s value`
                           : "clear the default"}
@@ -719,7 +719,7 @@
                     {/if}
                   </span>
                   <Choice
-                    label={`Where ${label} shows`}
+                    label={`where ${label} shows`}
                     options={placeOptions(ref)}
                     value={(typeConfig.fields?.[ref]?.show ?? "") as Place}
                     onpick={(v) =>
@@ -736,7 +736,7 @@
                         value={cur}
                         options={personOptions(cur)}
                         searchable
-                        aria-label={`Default for ${label}`}
+                        aria-label={`default for ${label}`}
                         onchange={(v) => setDefault(ref, v)}
                       />
                       <button
@@ -752,7 +752,7 @@
                     <FieldInput
                       id={`def-${ref}`}
                       spec={field}
-                      label={`Default for ${label}`}
+                      label={`default for ${label}`}
                       value={startsAs(ref) ?? null}
                       form={raw}
                       onchange={(v) => setDefault(ref, v)}
@@ -769,7 +769,7 @@
         <textarea
           class="guidance"
           rows="4"
-          aria-label={`Guidance for tachy's review of a ${type}`}
+          aria-label={`guidance for tachy's review of a ${type}`}
           value={typeConfig.guidance ?? ""}
           oninput={(e) =>
             setTc({

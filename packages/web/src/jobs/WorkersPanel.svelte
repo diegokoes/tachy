@@ -94,7 +94,7 @@
     rowKey={(w) => w.id}
     loading={live.loading && !live.data.workers.length}
     rowClass={(w) => (w.alive ? undefined : "gone")}
-    emptyTitle="No worker is running."
+    emptyTitle="no worker is running"
   />
 </div>
 

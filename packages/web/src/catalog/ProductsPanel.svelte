@@ -60,7 +60,7 @@
       options: teamOptions,
       required: true,
       initial: teams.data[0]?.slug,
-      info: `Owner. Source projects move with it.`,
+      info: "owner. source projects move with it",
     },
     {
       key: "aliases",
@@ -100,8 +100,8 @@
   rowKey={(r) => r.slug}
   loading={products.loading}
   error={products.error}
-  emptyTitle={`No ${t("products")} yet.`}
-  emptyDetail={`Scopes components, labels, knowledge entries.`}
+  emptyTitle={`no ${t("products")} yet`}
+  emptyDetail="scopes components, labels, knowledge entries"
   canEdit={mayEdit}
   canDelete={mayEdit}
   canCreate={teams.data.length > 0}

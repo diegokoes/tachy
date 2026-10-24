@@ -62,15 +62,14 @@
 {#if error}<Note tone="danger">{error}</Note>{/if}
 
 {#if !visible}
-  <Note
-    >TACHY_STATUS_DIR not mounted. Written by tachy-backup, tachy-watch.</Note
+  <Note>TACHY_STATUS_DIR not mounted. written by tachy-backup, tachy-watch</Note
   >
 {:else if status}
   <GroupHead label="backups" />
   <table>
     <tbody>
       <tr>
-        <td>Newest backup</td>
+        <td>newest backup</td>
         <td
           ><Badge tone={status.backup?.ok ? "ok" : "danger"}
             >{status.backup
@@ -87,7 +86,7 @@
         >
       </tr>
       <tr>
-        <td>Restore test</td>
+        <td>restore test</td>
         <td
           ><Badge tone={status.restore?.ok ? "ok" : "danger"}
             >{status.restore
@@ -107,14 +106,14 @@
       </tr>
       {#each Object.entries(status.downloads?.people ?? {}) as [name, person] (name)}
         <tr
-          ><td>Downloaded by {name}</td><td>{ago(person.last_download)}</td><td
+          ><td>downloaded by {name}</td><td>{ago(person.last_download)}</td><td
             class="muted">{person.file}</td
           ></tr
         >
       {:else}
         <tr
-          ><td>Laptop downloads</td><td>none recorded</td><td class="muted"
-            >run Get-TachyBackup</td
+          ><td>laptop downloads</td><td>none recorded</td><td class="muted"
+            >run <code>Get-TachyBackup</code></td
           ></tr
         >
       {/each}
@@ -152,7 +151,7 @@
           ><td class="muted">throttling {status.host.thermal}</td></tr
         >
         <tr
-          ><td>Power</td><td>{status.host.power ?? "?"}</td><td class="muted"
+          ><td>power</td><td>{status.host.power ?? "?"}</td><td class="muted"
           ></td></tr
         >
         <tr

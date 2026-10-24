@@ -103,8 +103,8 @@
   );
 
   function fieldName(ref: string) {
-    if (ref === TITLE) return "Title";
-    if (ref === "general") return "Overall";
+    if (ref === TITLE) return "title";
+    if (ref === "general") return "overall";
     return form?.labels[ref] ?? specs.get(ref)?.name ?? ref;
   }
 
@@ -246,7 +246,7 @@
   </div>
 {/snippet}
 
-<section class="view" aria-label="New Azure DevOps work item" bind:this={root}>
+<section class="view" aria-label="new Azure DevOps work item" bind:this={root}>
   <header class="bar">
     <div class="where">
       <Select
@@ -257,7 +257,7 @@
           value: p.id,
           label: p.name,
         }))}
-        aria-label="Project"
+        aria-label="project"
         onchange={(v) => {
           const picked = az.projects?.find((x) => x.id === v);
           if (picked && picked.id !== composer.project?.id) setProject(picked);
@@ -276,7 +276,7 @@
           value={composer.type?.name ?? ""}
           placeholder="type"
           options={types.map((t) => ({ value: t.name, label: t.name }))}
-          aria-label="Work item type"
+          aria-label="work item type"
           onchange={(v) => {
             const t = types.find((x) => x.name === v);
             if (t && t.name !== composer.type?.name) setType(t);
@@ -288,7 +288,7 @@
           value=""
           placeholder="template"
           options={form.templates.map((t) => ({ value: t.id, label: t.name }))}
-          aria-label="Apply a team template"
+          aria-label="apply a team template"
           onchange={(v) => v && applyTemplate(String(v))}
         />
       {/if}
@@ -329,14 +329,14 @@
         variant={discardArmed ? "danger" : "ghost"}
         icon={discardArmed ? "confirm" : "delete"}
         morph
-        aria-label="Discard the draft"
+        aria-label="discard the draft"
         title={discardArmed ? "click again to discard" : "discard the draft"}
         onclick={discard}
       />
       <Button
         variant="ghost"
         icon="close"
-        aria-label="Close (the draft is kept)"
+        aria-label="close (the draft is kept)"
         title="close · the draft is kept"
         onclick={closeComposer}
       />
@@ -359,7 +359,7 @@
         <span class="bad">{composer.error}</span>
       {:else if composer.validation?.ok}
         <span class="good"
-          ><Icon name="success" size="1em" /> Azure DevOps accepts it as it is.</span
+          ><Icon name="success" size="1em" /> Azure DevOps accepts it as it is</span
         >
       {:else if composer.validation}
         <span class="bad">{composer.validation.message}</span>
@@ -373,12 +373,12 @@
     {:else if !composer.project}
       {#if az.projects && !az.projects.length}
         <Note tone="warn">
-          None of your teams has an Azure DevOps project registered. A team
-          admin registers one under console › integrations › projects.
+          none of your teams has an Azure DevOps project registered. a team
+          admin registers one under console › integrations › projects
         </Note>
       {:else}
         <div class="pick">
-          <p class="dim">Pick the project this goes into.</p>
+          <p class="dim">pick the project this goes into</p>
           <div class="cards">
             {#each az.projects ?? [] as project (project.id)}
               <button class="card" onclick={() => setProject(project)}>
@@ -394,7 +394,7 @@
     {:else if !composer.type}
       {@const projectId = composer.project.id}
       <div class="pick">
-        <p class="dim">What are you raising?</p>
+        <p class="dim">what are you raising?</p>
         {#if typesFailed(projectId)}
           <Note tone="danger">
             {typesNote(projectId)}

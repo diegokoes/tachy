@@ -89,7 +89,7 @@ async function customerIdOrRepoHint(customer: string): Promise<string> {
       .filter((slug) => slug.toLowerCase().includes(word));
     if (!slugs.length) throw err;
     throw badInput(
-      `${(err as Error).message} Repos whose slug holds '${customer}': ${slugs.join(", ")} - if one of them was meant, pass it as repo to search_code, read_code_file or list_code_tree.`,
+      `${(err as Error).message} repos whose slug holds '${customer}': ${slugs.join(", ")} - if one of them was meant, pass it as repo to search_code, read_code_file or list_code_tree`,
     );
   }
 }

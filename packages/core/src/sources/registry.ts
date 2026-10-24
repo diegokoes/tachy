@@ -71,7 +71,7 @@ async function getConnection(slug: string): Promise<ConnectionRow> {
     select id, source_type, base_url, slug, config
     from source_connections where slug = ${slug}
   `;
-  if (!conn) throw badInput(`Unknown source connection: ${slug}`);
+  if (!conn) throw badInput(`unknown source connection: ${slug}`);
   return conn;
 }
 
@@ -79,7 +79,7 @@ function built(conn: ConnectionRow, token: string | undefined): ResolvedSource {
   const factory = factories.get(conn.source_type);
   if (!factory)
     throw badInput(
-      `No adapter registered for source type: ${conn.source_type}`,
+      `no adapter registered for source type: ${conn.source_type}`,
     );
   return {
     conn: {

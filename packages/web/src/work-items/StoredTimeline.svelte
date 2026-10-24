@@ -68,8 +68,8 @@
 
   {#if !item.fetched_at}
     <Note>
-      Only a listing has carried this item, so its messages are not stored.
-      Fetching it in chat or by a flow reads it whole.
+      only a listing has carried this item, so its messages are not stored.
+      fetching it in chat or by a flow reads it whole
     </Note>
   {/if}
 

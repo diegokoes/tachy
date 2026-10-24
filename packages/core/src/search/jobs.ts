@@ -9,9 +9,9 @@ import { backfillReferenceEmbeddings } from "../reference/reference";
 export function defineSearchJobs() {
   defineJob({
     kind: "embeddings.backfill",
-    title: "Rebuild missing embeddings",
+    title: "rebuild missing embeddings",
     description:
-      "Embeds knowledge entries, reference chunks, code chunks and bucket chunks that have no vector, or one made by another embedding model. Run it after a model change; it picks up where an interrupted run stopped. With 'all', re-embeds everything.",
+      "embeds knowledge entries, reference chunks, code chunks and bucket chunks that have no vector, or one made by another embedding model. run it after a model change; it picks up where an interrupted run stopped. with 'all', re-embeds everything",
     params: z.object({ all: z.boolean().default(false) }),
     queue: "embed",
     subject: (p) => (p.all ? "everything" : null),

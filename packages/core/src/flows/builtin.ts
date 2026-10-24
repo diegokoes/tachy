@@ -88,9 +88,9 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "item.fetch",
-    title: "Read ticket",
+    title: "read ticket",
     description:
-      "Fetches the item fresh from its source and stores it. Messages the connection's ingest rules skip are left out.",
+      "fetches the item fresh from its source and stores it. messages the connection's ingest rules skip are left out",
     category: "read",
     writes: false,
     params: z.object({}),
@@ -140,9 +140,9 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "knowledge.search",
-    title: "Search knowledge",
+    title: "search knowledge",
     description:
-      "Past resolutions for the item's product and team, its customer's first.",
+      "past resolutions for the item's product and team, its customer's first",
     category: "search",
     writes: false,
     params: z.object({ query, limit }),
@@ -168,8 +168,8 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "code.search",
-    title: "Search code",
-    description: "Indexed repositories, narrowed to the item's product.",
+    title: "search code",
+    description: "indexed repositories, narrowed to the item's product",
     category: "search",
     writes: false,
     params: z.object({
@@ -178,7 +178,7 @@ export function registerBuiltinFlowActions(): void {
         .string()
         .optional()
         .meta(options("repos"))
-        .describe("One repository instead of the product's."),
+        .describe("one repository instead of the product's"),
       limit,
     }),
     output: hits,
@@ -201,8 +201,8 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "reference.search",
-    title: "Search reference docs",
-    description: "Approved docs and wiki articles for the item's product.",
+    title: "search reference docs",
+    description: "approved docs and wiki articles for the item's product",
     category: "search",
     writes: false,
     params: z.object({ query, limit }),
@@ -224,9 +224,9 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "bucket.search",
-    title: "Search bucket",
+    title: "search bucket",
     description:
-      "One bucket of pushed documents, such as a product's public knowledge base. Only buckets shared with the flow's owner.",
+      "one bucket of pushed documents, such as a product's public knowledge base. only buckets shared with the flow's owner",
     category: "search",
     writes: false,
     params: z.object({
@@ -251,8 +251,8 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "customer.profile",
-    title: "Customer profile",
-    description: "What tachy knows about the item's customer.",
+    title: "customer profile",
+    description: "what tachy knows about the item's customer",
     category: "read",
     writes: false,
     params: z.object({}),
@@ -274,9 +274,9 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "customer.properties",
-    title: "Customer properties",
+    title: "customer properties",
     description:
-      "Picked values of the item's customer: tachy's facts and the source's company fields. Redacted when redaction is on.",
+      "picked values of the item's customer: tachy's facts and the source's company fields. redacted when redaction is on",
     category: "read",
     writes: false,
     params: z.object({
@@ -330,9 +330,8 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "item.add_tags",
-    title: "Add tags",
-    description:
-      "Adds tags to the item in its source, keeping the ones it has.",
+    title: "add tags",
+    description: "adds tags to the item in its source, keeping the ones it has",
     category: "update",
     writes: true,
     params: z.object({ tags }),
@@ -342,9 +341,9 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "item.remove_tags",
-    title: "Remove tags",
+    title: "remove tags",
     description:
-      "Takes tags off the item in its source; ones it lacks are fine.",
+      "takes tags off the item in its source; ones it lacks are fine",
     category: "update",
     writes: true,
     params: z.object({ tags }),
@@ -354,9 +353,9 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "item.set_field",
-    title: "Set field",
+    title: "set field",
     description:
-      "Sets one of the ticket's fields in its source: status, priority, type, group, agent or a custom field.",
+      "sets one of the ticket's fields in its source: status, priority, type, group, agent or a custom field",
     category: "update",
     source: "freshdesk",
     writes: true,
@@ -372,7 +371,7 @@ export function registerBuiltinFlowActions(): void {
             "x-free": true,
           }),
         )
-        .describe("A choice, or text such as {{steps.<id>.json.priority}}."),
+        .describe("a choice, or text such as {{steps.<id>.json.priority}}"),
     }),
     output: z.object({ field: z.string(), value: z.string() }),
     async run(ctx, params) {
@@ -389,22 +388,22 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "notify",
-    title: "Notify",
+    title: "notify",
     description:
-      "A notice in tachy's changes menu, for the flow's owner or the item's team.",
+      "a notice in tachy's changes menu, for the flow's owner or the item's team",
     category: "create",
     writes: true,
     params: z.object({
       to: z
         .enum(["owner", "team"])
         .default("owner")
-        .describe("owner is whoever saved the flow last."),
+        .describe("owner is whoever saved the flow last"),
       title: z.string().min(1).default("{{item.title}}"),
-      body: z.string().default("").describe("Takes {{steps.<id>.text}}."),
+      body: z.string().default("").describe("takes {{steps.<id>.text}}"),
       once_per_item: z
         .boolean()
         .default(true)
-        .describe("Off notifies again on every run."),
+        .describe("off notifies again on every run"),
     }),
     output: z.object({ sent: z.number(), skipped: z.number() }),
     async run(ctx, params) {
@@ -436,9 +435,9 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "item.follow_linked",
-    title: "Follow linked ADO items",
+    title: "follow linked ADO items",
     description:
-      "The flow's owner follows the Azure DevOps items the stored ticket names (Read ticket first to store its messages), and is notified in tachy when someone else changes one.",
+      "the flow's owner follows the Azure DevOps items the stored ticket names (read ticket first to store its messages), and is notified in tachy when someone else changes one",
     category: "update",
     writes: true,
     params: z.object({
@@ -446,7 +445,7 @@ export function registerBuiltinFlowActions(): void {
         .string()
         .default("")
         .meta({ ...options("ado.connections"), title: "ADO connection" })
-        .describe("Empty: the first Azure DevOps connection."),
+        .describe("empty: the first Azure DevOps connection"),
     }),
     output: z.object({ followed: z.array(z.string()) }),
     async run(ctx, params) {
@@ -480,8 +479,8 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "item.post_note",
-    title: "Post note",
-    description: "A note on the item in its source, private unless said.",
+    title: "post note",
+    description: "a note on the item in its source, private unless said",
     category: "update",
     source: "freshdesk",
     writes: true,
@@ -489,8 +488,8 @@ export function registerBuiltinFlowActions(): void {
       title: z
         .string()
         .default("")
-        .describe("The note's heading. Empty: the flow's name."),
-      body: z.string().min(1).describe("The note. Takes {{steps.<id>.text}}."),
+        .describe("the note's heading. empty: the flow's name"),
+      body: z.string().min(1).describe("the note. takes {{steps.<id>.text}}"),
       private: z.boolean().default(true),
     }),
     output: z.object({ posted: z.boolean() }),
@@ -517,9 +516,9 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "ado.create_item",
-    title: "Create ADO item",
+    title: "create ADO item",
     description:
-      "Starts from the project's form as the team set it up, then these fields. Linked to the item as tracked by.",
+      "starts from the project's form as the team set it up, then these fields. linked to the item as tracked by",
     category: "create",
     source: "azure-devops",
     writes: true,
@@ -528,7 +527,7 @@ export function registerBuiltinFlowActions(): void {
         .string()
         .uuid()
         .meta(options("ado.projects"))
-        .describe("A registered ADO project."),
+        .describe("a registered ADO project"),
       type: z
         .string()
         .min(1)
@@ -538,7 +537,7 @@ export function registerBuiltinFlowActions(): void {
         .record(z.string(), z.unknown())
         .default({})
         .meta({ "x-form": "ado", "x-depends-on": ["project", "type"] })
-        .describe("By reference name, e.g. System.Description."),
+        .describe("by reference name, e.g. System.Description"),
       tags: z.array(z.string()).optional(),
     }),
     output: z.object({
@@ -583,8 +582,8 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "item.set_customer",
-    title: "Set customer",
-    description: "Attributes the item to a customer in tachy.",
+    title: "set customer",
+    description: "attributes the item to a customer in tachy",
     category: "update",
     writes: true,
     params: z.object({
@@ -603,8 +602,8 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "job.enqueue",
-    title: "Start job",
-    description: "Queues a job as part of the run, with its own parameters.",
+    title: "start job",
+    description: "queues a job as part of the run, with its own parameters",
     category: "create",
     writes: true,
     params: z.object({

@@ -18,7 +18,7 @@
     class="switch"
     role="switch"
     aria-checked={complex}
-    aria-label="Flow mode: complex"
+    aria-label="flow mode: complex"
     onclick={() => (mode = complex ? "project" : "complex")}
   >
     <span class="side" class:on={!complex}>project</span>

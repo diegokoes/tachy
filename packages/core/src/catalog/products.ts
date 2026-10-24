@@ -11,11 +11,11 @@ export async function getProductIdBySlug(slug: string): Promise<string> {
   `;
   if (!rows.length)
     throw badInput(
-      `Unknown product '${slug}'. Call list_products or add_product first.`,
+      `unknown product '${slug}'. call list_products or add_product first`,
     );
   if (rows.length > 1)
     throw badInput(
-      `Ambiguous product '${slug}': exists in multiple teams; use a unique alias or rename one of the products.`,
+      `ambiguous product '${slug}': exists in multiple teams; use a unique alias or rename one of the products`,
     );
   return rows[0].id;
 }
@@ -38,7 +38,7 @@ export async function addProduct(
   const [team] = await sql`select id from teams where slug = ${teamSlug}`;
   if (!team)
     throw badInput(
-      `Unknown team '${teamSlug}'. Call list_teams or add_team first.`,
+      `unknown team '${teamSlug}'. call list_teams or add_team first`,
     );
   const [row] = await sql`
     insert into products (team_id, slug, name, aliases) values (${team.id}, ${slug}, ${name}, ${aliases ?? []})
@@ -59,13 +59,13 @@ export async function updateProduct(
 ) {
   const [current] =
     await sql`select id, team_id, name, aliases, slug from products where id = ${productId}`;
-  if (!current) throw notFound(`Product '${productId}' not found`);
+  if (!current) throw notFound(`product '${productId}' not found`);
 
   let teamId = current.team_id as string;
   if (patch.teamSlug) {
     const [team] =
       await sql`select id from teams where slug = ${patch.teamSlug}`;
-    if (!team) throw badInput(`Unknown team '${patch.teamSlug}'.`);
+    if (!team) throw badInput(`unknown team '${patch.teamSlug}'`);
     teamId = team.id as string;
   }
   const moving = teamId !== current.team_id;
@@ -102,7 +102,7 @@ export async function updateProduct(
 export async function deleteProduct(productId: string) {
   const [current] =
     await sql`select id, slug from products where id = ${productId}`;
-  if (!current) throw notFound(`Product '${productId}' not found`);
+  if (!current) throw notFound(`product '${productId}' not found`);
   const [refs] = await sql`
     select
       (select count(*)::int from knowledge_entries where product_id = ${productId}) as entries,

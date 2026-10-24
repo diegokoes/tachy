@@ -66,7 +66,7 @@ export async function applyBindings(
     const value = await factValue(customer.id, kind, server.slug);
     if (value === null)
       throw badInput(
-        `${customer.slug} has no '${kind}' fact to fill ${argument}. Set it with set_customer_fact (kind '${kind}', label '${server.slug}' or empty) once the user confirms the value, or pass ${argument} yourself.`,
+        `${customer.slug} has no '${kind}' fact to fill ${argument}. set it with set_customer_fact (kind '${kind}', label '${server.slug}' or empty) once the user confirms the value, or pass ${argument} yourself`,
       );
     forwarded[argument] = value;
   }
@@ -110,7 +110,7 @@ export async function closeConnections(): Promise<void> {
 function budgetSpent(server: McpServerRow, resetsAt: Date | null): Error {
   const until = resetsAt ? ` until ${resetsAt.toISOString()}` : "";
   return unavailable(
-    `${server.name} has no call budget left${until}. Tell the user, and do not call its tools again before then.`,
+    `${server.name} has no call budget left${until}. tell the user, and do not call its tools again before then`,
   );
 }
 
@@ -120,10 +120,10 @@ function tokenRefused(
 ): Error {
   if (server.credential_mode === "personal")
     return forbidden(
-      `${server.name} refused your token. Tell the user to save a new one under Settings › agent.`,
+      `${server.name} refused your token. tell the user to save a new one under settings › agent`,
     );
   return forbidden(
-    `${server.name} refused the shared token '${credential.key.replace(/^shared:/, "")}'. Tell the user to ask an admin to check the server's token pool.`,
+    `${server.name} refused the shared token '${credential.key.replace(/^shared:/, "")}'. tell the user to ask an admin to check the server's token pool`,
   );
 }
 
@@ -178,7 +178,7 @@ export async function callServerTool(
     }
   }
   throw unavailable(
-    `${server.name} is rate limiting tachy's calls. Tell the user to try again in a few minutes, and do not retry now.`,
+    `${server.name} is rate limiting tachy's calls. tell the user to try again in a few minutes, and do not retry now`,
   );
 }
 

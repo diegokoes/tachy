@@ -132,7 +132,7 @@ describe("previewing a cleanup of stored tickets", () => {
       previewStoredItems({ connection: "no-such-connection" }),
     ).rejects.toThrow(/unknown source connection/);
     await expect(previewStoredItems({ team: "no-such-team" })).rejects.toThrow(
-      /Unknown team/,
+      /unknown team/,
     );
     await expect(
       previewStoredItems({ changedBefore: "last tuesday" }),

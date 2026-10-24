@@ -51,15 +51,14 @@
     {
       group: "control",
       title: "if / else",
-      description:
-        "Two branches: one when the condition matches, one when not.",
+      description: "two branches: one when the condition matches, one when not",
       source: null,
       pick: { kind: "if" },
     },
     {
       group: "control",
       title: "only if",
-      description: "Stops the run here unless the condition matches.",
+      description: "stops the run here unless the condition matches",
       source: null,
       pick: { kind: "filter" },
     },
@@ -191,7 +190,7 @@
 <div
   class="palette"
   role="dialog"
-  aria-label="Add a step"
+  aria-label="add a step"
   bind:this={panel}
   use:float={{ anchor, placement: "beside", gap: 8 }}
 >
@@ -199,7 +198,7 @@
     bind:this={input}
     bind:value={query}
     class="q"
-    aria-label="Search the steps"
+    aria-label="search the steps"
     autocomplete="off"
     {onkeydown}
   />

@@ -492,8 +492,8 @@
       class="edge-tab"
       class:active={open || !!chat.artifact}
       onclick={toggle}
-      use:tip={`Artifacts (${keyLabel(hotkey)})`}
-      aria-label="Artifacts"
+      use:tip={`artifacts (${keyLabel(hotkey)})`}
+      aria-label="artifacts"
       aria-expanded={open}
     >
       <!-- The frame is a drawn shape, not the button's own border: clip-path
@@ -545,7 +545,7 @@
       {#if loading && items.length === 0}
         <p class="muted">loading…</p>
       {:else if items.length === 0 && !error}
-        <p class="muted empty">No artifacts yet</p>
+        <p class="muted empty">no artifacts yet</p>
       {/if}
       {#each grouped as group (group.scope)}
         <div class="scope-head">

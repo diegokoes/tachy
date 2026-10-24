@@ -298,7 +298,7 @@ export async function resolveReadCommit(
     const resolved = await resolveVersion(repoSlug, opts.version);
     if (!resolved.tag)
       throw notFound(
-        `Repo '${repoSlug}' has no release tag for ${resolved.version}; read the '${resolved.line.ref}' line instead`,
+        `repo '${repoSlug}' has no release tag for ${resolved.version}; read the '${resolved.line.ref}' line instead`,
       );
     return { ref: resolved.tag, commit: resolved.commit!, lineId: null };
   }
@@ -312,7 +312,7 @@ export async function resolveReadCommit(
       (await resolveRef(repoSlug, `refs/tags/${ref}`));
     if (!commit)
       throw notFound(
-        `Repo '${repoSlug}' has no branch or tag '${ref}' fetched`,
+        `repo '${repoSlug}' has no branch or tag '${ref}' fetched`,
       );
     return { ref, commit, lineId: null };
   }
@@ -321,7 +321,7 @@ export async function resolveReadCommit(
   const commit = line.indexing_commit ?? line.indexed_commit;
   if (!commit)
     throw badInput(
-      `Repo '${repoSlug}' line '${line.ref}' has not been indexed yet`,
+      `repo '${repoSlug}' line '${line.ref}' has not been indexed yet`,
     );
   return { ref: line.ref, commit, lineId: line.id };
 }

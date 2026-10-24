@@ -42,13 +42,13 @@ export async function addSourceConnection(input: SourceConnectionInput) {
 export async function deleteSourceConnection(slug: string) {
   const [conn] =
     await sql`select id, source_type from source_connections where slug = ${slug}`;
-  if (!conn) throw notFound(`Source connection '${slug}' not found`);
+  if (!conn) throw notFound(`source connection '${slug}' not found`);
   const [{ count }] = await sql`
     select count(*)::int as count from work_items where source_connection_id = ${conn.id}
   `;
   if (count > 0)
     throw badInput(
-      `Source connection '${slug}' still has ${count} ingested work item(s). Delete those first; removing the connection cascades to them.`,
+      `source connection '${slug}' still has ${count} ingested work item(s). delete those first; removing the connection cascades to them`,
     );
   await sql`delete from credentials where name = ${`${conn.source_type}_token:${slug}`}`;
   await sql`delete from source_connections where id = ${conn.id}`;

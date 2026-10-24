@@ -254,7 +254,7 @@
       width: "12rem",
       edit: "text",
       required: true,
-      info: `${INFO.slug} Names the stored credential; immutable.`,
+      info: `${INFO.slug} names the stored credential; immutable`,
       derive: (d) =>
         uniqueSlug(
           suggestSlug(typeOf(d), String(d.host ?? "")),
@@ -295,7 +295,7 @@
       label: "PII redaction",
       width: "8rem",
       edit: "checkbox",
-      info: "Scrub PII from this source before the model.",
+      info: "scrub PII from this source before the model",
       value: (r) => redactionOn(r),
       cell: lockCell,
       span: "full",
@@ -307,7 +307,7 @@
       formOnly: true,
       edit: "checkbox",
       visible: (d) => Boolean(d.redaction),
-      info: "Send this source's images to the model although redaction is on. A picture cannot be scrubbed.",
+      info: "send this source's images to the model although redaction is on. a picture cannot be scrubbed",
       value: (r) => imagesAllowed(r),
       span: "full",
     },
@@ -426,7 +426,7 @@
     </p>
     {#if probe.groupsNote}
       <Note tone="warn">
-        Can't list {SPEC[connection.source_type as SourceType]?.groupLabel ??
+        can't list {SPEC[connection.source_type as SourceType]?.groupLabel ??
           "group"}s. type the key in yourself when registering.
         <span class="reason">{probe.groupsNote}</span>
       </Note>
@@ -434,7 +434,7 @@
     {#if probe.groups?.length}
       <p class="dim">
         {SPEC[connection.source_type as SourceType]?.groupLabel ?? "group"}s
-        this token can see. Click one to register it.
+        this token can see. click one to register it
       </p>
       <div class="chips">
         {#each probe.groups as group (group.key)}
@@ -482,7 +482,7 @@
   rowKey={(r) => r.slug}
   loading={connections.loading}
   error={connections.error}
-  emptyTitle="No source connections yet."
+  emptyTitle="no source connections yet"
   canEdit={() => admin}
   canDelete={() => admin}
   canCreate={admin}
@@ -514,12 +514,12 @@
     {#if claimError}<Note tone="danger">{claimError}</Note>{/if}
     <Subject verb="registering" name={open.key} />
     <div class="claim">
-      <Field label="name" info="How it reads in lists here.">
+      <Field label="name" info="how it reads in lists here">
         <input aria-label="name" bind:value={open.name} />
       </Field>
       <Field
         label={t("product")}
-        info={`The ${t("product")} its items ingest into, which also lets it own wikis, repos and area rules. None makes it a ticket target only.`}
+        info={`the ${t("product")} its items ingest into, which also lets it own wikis, repos and area rules. none makes it a ticket target only`}
       >
         <Select
           value={open.product}
@@ -532,7 +532,7 @@
         <Field
           label={t("team")}
           required
-          info={`The ${t("team")} whose members create work items here.`}
+          info={`the ${t("team")} whose members create work items here`}
         >
           <Select
             value={open.team}
@@ -543,7 +543,8 @@
         </Field>
         {#if !teamOptions.length}
           <Note tone="warn">
-            You can't curate any {t("team")}s yet. Create one under Org first.
+            you can't curate any {t("team")}s yet. create one under console ›
+            structure first
           </Note>
         {/if}
       {/if}

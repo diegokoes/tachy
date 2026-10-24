@@ -6,9 +6,9 @@ import { embedBucketChunks } from "./search";
 export function defineBucketJobs() {
   defineJob({
     kind: "bucket.embed",
-    title: "Embed bucket documents",
+    title: "embed bucket documents",
     description:
-      "Embeds the chunks that pushed batches left without vectors. Queued by the ingest route; text search works before it runs.",
+      "embeds the chunks that pushed batches left without vectors. queued by the ingest route; text search works before it runs",
     params: z.object({ bucket_id: z.uuid() }),
     queue: "embed",
     dedupeKey: (p) => p.bucket_id,

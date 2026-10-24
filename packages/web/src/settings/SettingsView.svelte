@@ -35,7 +35,7 @@
 
   const ORG_DEFAULTS: Section = {
     label: "org defaults",
-    hint: "What a person sees until they pick their own.",
+    hint: "what a person sees until they pick their own",
     view: OrgDefaults,
   };
 
@@ -52,14 +52,14 @@
       left: [
         {
           label: "runtime",
-          hint: "Each setting follows your team, then your org, until you pick your own.",
+          hint: "each setting follows your team, then your org, until you pick your own",
           view: Agent,
         },
       ],
       right: [
         {
           label: "keys",
-          hint: "Stored encrypted. A shared key answers until you paste your own.",
+          hint: "stored encrypted. a shared key answers until you paste your own",
           view: Credentials,
         },
         {

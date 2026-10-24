@@ -612,8 +612,8 @@
       <CaretInput
         bind:el={searchEl}
         icon="search"
-        hint="Search"
-        aria-label="Search symptoms, error codes, root causes, docs"
+        hint="search"
+        aria-label="search symptoms, error codes, root causes, docs"
         bind:value={search}
         onkeydown={(e) => {
           if (e.key === "Enter") {
@@ -651,7 +651,7 @@
         bind:value={type}
         active={!!type}
         keepOpen
-        aria-label="Type"
+        aria-label="type"
         placeholder="any"
         clearable
         options={TYPES}
@@ -681,7 +681,7 @@
         active={!!component}
         keepOpen
         searchable
-        aria-label="Component"
+        aria-label="component"
         disabled={!productId || components.length === 0}
         placeholder="any"
         clearable
@@ -699,7 +699,7 @@
         bind:value={status}
         active={!!status}
         keepOpen
-        aria-label="Status"
+        aria-label="status"
         placeholder="any"
         clearable
         options={showDocFilters ? DOC_STATUSES : STATUSES}
@@ -807,11 +807,11 @@
                 ? "wiki"
                 : "library"}
           title={mode === "search"
-            ? `No matches for “${search}”.`
-            : "The library is empty."}
+            ? `no matches for “${search}”`
+            : "the library is empty"}
           detail={mode === "search"
-            ? "Searches summaries, symptoms, signals, root causes, tags, doc bodies."
-            : "Analyze a ticket in chat, or add an entry."}
+            ? "searches summaries, symptoms, signals, root causes, tags, doc bodies"
+            : "analyze a ticket in chat, or add an entry"}
         />
       </li>
     {/if}

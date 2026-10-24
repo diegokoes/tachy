@@ -119,8 +119,8 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
           action: "notify",
           params: {
             to: "team",
-            title: "First response due: {{item.title}}",
-            body: "#{{item.external_id}} is due by {{item.raw.fr_due_by}} and has no agent reply.",
+            title: "first response due: {{item.title}}",
+            body: "#{{item.external_id}} is due by {{item.raw.fr_due_by}} and has no agent reply",
           },
         },
       ],

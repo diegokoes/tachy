@@ -133,7 +133,7 @@ describe("customers", () => {
 
   it("getCustomerIdBySlug throws a clear error for an unknown slug", async () => {
     await expect(getCustomerIdBySlug("nope")).rejects.toThrow(
-      /Unknown customer 'nope'/,
+      /unknown customer 'nope'/,
     );
   });
 
@@ -262,7 +262,7 @@ describe("customer resolution by slug or alias", () => {
   it("refuses an alias two customers both claim rather than guessing", async () => {
     await addCustomer({ name: "One", slug: "one", aliases: ["shared"] });
     await addCustomer({ name: "Two", slug: "two", aliases: ["shared"] });
-    await expect(resolveCustomer("shared")).rejects.toThrow(/Ambiguous/);
+    await expect(resolveCustomer("shared")).rejects.toThrow(/ambiguous/);
   });
 
   it("names the nearest customers on a miss", async () => {

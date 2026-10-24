@@ -235,11 +235,11 @@
     <EmptyState
       icon="file"
       title={slug === MAIN_PAGE_SLUG
-        ? "No main page yet."
-        : `No article '${slug}' yet.`}
+        ? "no main page yet"
+        : `no article '${slug}' yet`}
       detail={slug === MAIN_PAGE_SLUG
-        ? "Landing page: product summary, entry points."
-        : "Linked but not written."}
+        ? "landing page: product summary, entry points"
+        : "linked but not written"}
     >
       {#if isCurator()}
         <Button
@@ -289,7 +289,7 @@
           {article.built.changed === 1 ? "source has" : "sources have"} changed since
           this was written{article.built.changedTitles.length
             ? `: ${article.built.changedTitles.join(" · ")}`
-            : "."}
+            : ""}
         </Note>
       {/if}
 
@@ -319,7 +319,7 @@
             >
           {/each}
         {:else}
-          <span class="muted">Filed under no category yet.</span>
+          <span class="muted">filed under no category yet</span>
         {/if}
       </footer>
     </article>

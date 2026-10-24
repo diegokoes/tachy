@@ -35,7 +35,7 @@ describe("resolution_patterns", () => {
         resolutionPattern: "made-up-slug",
       }),
     ).rejects.toThrow(
-      /Unknown resolution_pattern 'made-up-slug'.*list_resolution_patterns/,
+      /unknown resolution_pattern 'made-up-slug'.*list_resolution_patterns/,
     );
   });
 

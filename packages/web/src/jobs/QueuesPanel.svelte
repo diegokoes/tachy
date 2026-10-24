@@ -70,8 +70,8 @@
     <Note tone="danger">
       {unserved.map((q) => q.name).join(", ")}
       {unserved.length === 1 ? "has" : "have"} runs waiting and no live worker serving
-      {unserved.length === 1 ? "it" : "them"}. Check that the worker services
-      are up, or that TACHY_WORKER_QUEUES leaves none out.
+      {unserved.length === 1 ? "it" : "them"}. check that the worker services
+      are up, or that TACHY_WORKER_QUEUES leaves none out
     </Note>
   {/if}
 
@@ -81,7 +81,7 @@
     rowKey={(q) => q.name}
     loading={live.loading && !live.data.queues.length}
     rowClass={(q) => (q.queued && !q.workers ? "unserved" : undefined)}
-    emptyTitle="No queues."
+    emptyTitle="no queues"
   />
 </div>
 

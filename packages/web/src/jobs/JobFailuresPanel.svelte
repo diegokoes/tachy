@@ -41,8 +41,8 @@
 {/snippet}
 
 <Note>
-  Failed or timed out in the last {jobs.data.days} days. Each run's log is in
-  <button class="link" onclick={() => showSection("runs")}>runs</button>.
+  last {jobs.data.days} days · each run's log is in
+  <button class="link" onclick={() => showSection("runs")}>runs</button>
 </Note>
 
 <DataTable
@@ -51,8 +51,8 @@
   rowKey={(f) => `${f.definition_id ?? f.kind}:${f.name}`}
   loading={jobs.loading}
   error={jobs.error}
-  emptyTitle="Nothing failed."
-  emptyDetail={`No failed or timed-out runs in the last ${jobs.data.days} days.`}
+  emptyTitle="nothing failed"
+  emptyDetail={`no failed or timed-out runs in the last ${jobs.data.days} days`}
 />
 
 <style>

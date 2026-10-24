@@ -83,7 +83,7 @@ export async function createBucket(
 ): Promise<BucketWithToken> {
   if (!SLUG_RE.test(input.slug))
     throw badInput(
-      `Invalid bucket slug '${input.slug}': lowercase letters, digits and hyphens only.`,
+      `invalid bucket slug '${input.slug}': lowercase letters, digits and hyphens only`,
     );
   const minted = newToken();
   await sql.begin(async (tx) => {

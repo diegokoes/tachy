@@ -95,7 +95,7 @@
 </div>
 
 {#if !product}
-  <Note>Pick a {t("product")} to see its labels.</Note>
+  <Note>pick a {t("product")} to see its labels</Note>
 {:else}
   <CrudTable
     hoist={sectionHoist("labels")}
@@ -104,7 +104,7 @@
     rowKey={(r) => r.slug}
     loading={labels.loading}
     error={labels.error}
-    emptyTitle="No labels for this {t('product')} yet."
+    emptyTitle="no labels for this {t('product')} yet"
     addLabel="add label"
     noun="label"
     editTitle={(r) => r.slug}
@@ -148,7 +148,7 @@
   >
     {#snippet message(impact, to)}
       <p>
-        Renaming <strong>{target.slug}</strong> to <strong>{to}</strong>
+        renaming <strong>{target.slug}</strong> to <strong>{to}</strong>
         rewrites
         {impact.entries} entries{#if impact.docs != null}
           and {impact.docs} docs{/if}.

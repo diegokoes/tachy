@@ -87,7 +87,7 @@
         </span>
         <button
           class="drop"
-          aria-label={`Leave ${labelOf(form, field)} to the form`}
+          aria-label={`leave ${labelOf(form, field)} to the form`}
           onclick={() => drop(field.reference_name)}
           ><Icon name="close" size="0.85em" /></button
         >
@@ -97,7 +97,7 @@
       value=""
       options={addable}
       searchable
-      aria-label="Add a field"
+      aria-label="add a field"
       onchange={(v) => v && set(String(v), "")}
     />
   </div>

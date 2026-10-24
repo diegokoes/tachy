@@ -211,7 +211,7 @@
       <input
         class="custom"
         placeholder="other…"
-        aria-label={`Another ${label}`}
+        aria-label={`another ${label}`}
         bind:value={custom}
         onkeydown={(e) =>
           e.key === "Enter" && (e.preventDefault(), addCustom())}

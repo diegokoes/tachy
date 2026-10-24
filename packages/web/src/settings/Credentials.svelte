@@ -33,8 +33,8 @@
 
 {#if creds && !creds.vault_enabled && isGlobalAdmin()}
   <Note tone="warn">
-    Credential storage disabled. Set <code>TACHY_SECRET_KEY</code> (32 bytes
-    base64) for per-user keys. Until then: <code>.env</code>.
+    credential storage disabled. set <code>TACHY_SECRET_KEY</code> (32 bytes
+    base64) for per-user keys. until then: <code>.env</code>
   </Note>
 {:else if creds && !creds.vault_enabled}
   <Note
@@ -90,13 +90,13 @@
           <Origin of={origin(from, "key")} />
           {#if name === "anthropic_oauth_token"}
             <InfoMark label="how to get a Claude subscription token">
-              Run <code>claude setup-token</code> and paste the
-              <code>{OAUTH_PREFIX}…</code> value it prints.
+              run <code>claude setup-token</code> and paste the
+              <code>{OAUTH_PREFIX}…</code> value it prints
             </InfoMark>
           {:else if name === "anthropic_api_key"}
             <InfoMark label="what an Anthropic API key looks like">
-              Starts with <code>{API_KEY_EXAMPLE}…</code>, from
-              console.anthropic.com.
+              starts with <code>{API_KEY_EXAMPLE}…</code>, from
+              console.anthropic.com
             </InfoMark>
           {/if}
         {/snippet}
