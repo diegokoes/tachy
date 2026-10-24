@@ -249,28 +249,23 @@
         <Button
           variant="ghost"
           size="sm"
-          aria-label={raw ? "back to fields" : "edit raw JSON"}
-          onclick={toggleRaw}>{raw ? "fields" : "{ }"}</Button
-        >
+          square
+          icon="json"
+          aria-pressed={raw}
+          title={raw ? "back to fields" : "raw input"}
+          onclick={toggleRaw}
+        />
         <Button
           variant="ghost"
-          square
           tone="ok"
           icon="approve"
           disabled={rawBad}
-          title={rawBad ? "fix the JSON first" : "approve"}
-          aria-label="approve"
           onclick={() => ondecide(true)}
-        />
-        <Button
-          variant="ghost"
-          square
-          tone="danger"
-          icon="reject"
-          title={denying ? "confirm deny" : "deny"}
-          aria-label="deny"
-          onclick={deny}
-        />
+          >{rawBad ? "fix the JSON first" : "approve"}</Button
+        >
+        <Button variant="ghost" tone="danger" icon="reject" onclick={deny}
+          >{denying ? "confirm deny" : "deny"}</Button
+        >
       </div>
     {/if}
   </Panel>
