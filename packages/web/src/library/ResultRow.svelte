@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Lamp, Chip } from "../tui";
+  import { Chip, Icon, Lamp } from "../tui";
   import { statusLamp } from "./status";
   import { fill, type Item } from "./items";
 
@@ -60,7 +60,11 @@
     <span class="foot">
       <span class="tags">
         {#if item.customer}
-          <Chip tone="accent">{item.customer}</Chip>
+          <Chip tone="accent"
+            ><span class="who"
+              ><Icon name="customer" size="0.9em" />{item.customer}</span
+            ></Chip
+          >
         {/if}
         {#each item.tags as tag}<Chip>{tag}</Chip>{/each}
       </span>
@@ -228,5 +232,10 @@
 
   .state {
     letter-spacing: var(--label-spacing);
+  }
+  .who {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
   }
 </style>

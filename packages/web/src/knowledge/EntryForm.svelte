@@ -317,10 +317,15 @@
     padding-bottom: var(--pad-2);
     border-bottom: var(--panel-line);
   }
+  /* The entry page's reading width: a form as wide as the window strings
+     short fields across a line the eye has to travel. */
   .entry-form {
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
+    width: 100%;
+    max-width: 48rem;
+    margin-inline: auto;
   }
   input,
   textarea {
