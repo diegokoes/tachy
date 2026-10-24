@@ -79,7 +79,7 @@
 
       {#if node.children.length}
         <section>
-          <h3>Subcategories</h3>
+          <h3>subsections</h3>
           <ul>
             {#each node.children as child (child.id)}
               <li>
@@ -96,7 +96,7 @@
       {/if}
 
       <section>
-        <h3>Articles</h3>
+        <h3>articles</h3>
         {#if node.articles.length}
           <ul>
             {#each node.articles as article (article.id)}
@@ -109,11 +109,11 @@
             {/each}
           </ul>
         {:else}
-          <p class="muted">Nothing filed here yet.</p>
+          <p class="muted">nothing filed here yet</p>
         {/if}
       </section>
     {:else if toc}
-      <p class="muted">No category '{slug}' in this wiki.</p>
+      <p class="muted">no section '{slug}' in this wiki</p>
     {:else}
       <p class="muted">loading…</p>
     {/if}

@@ -154,7 +154,7 @@ export const repos = new Hono()
   .get("/file-icons/:file", async (c) => {
     const file = c.req.param("file");
     const path = file.endsWith(".svg") ? fileIconPath(file.slice(0, -4)) : null;
-    if (!path) throw notFound(`No file icon '${file}'`);
+    if (!path) throw notFound(`no file icon '${file}'`);
     return c.body(new Uint8Array(await readFile(path)), 200, {
       "Content-Type": "image/svg+xml",
       "X-Content-Type-Options": "nosniff",

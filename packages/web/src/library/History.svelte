@@ -142,7 +142,7 @@
                   </Button>
                 {/if}
               {:else}
-                <p class="muted sm">Loading…</p>
+                <p class="muted sm">loading…</p>
               {/if}
             </div>
           {/if}
@@ -151,8 +151,8 @@
     </ul>
   {:else}
     <p class="muted">
-      No history recorded. This item predates version tracking. The next edit
-      starts it.
+      no history recorded. this item predates version tracking. the next edit
+      starts it
     </p>
   {/if}
 </section>

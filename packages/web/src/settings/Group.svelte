@@ -1,16 +1,20 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { G, Icon, type IconName } from "../tui";
+  import { G, Icon, InfoMark, type IconName } from "../tui";
 
   let {
     label,
     hint,
+    info,
     icon,
     action,
     children,
   }: {
     label: string;
+    /** A state the section is in, under its heading; never an explanation. */
     hint?: string;
+    /** What the section is for, behind an info mark after its label. */
+    info?: string;
     /** Drawn in the marker's place. */
     icon?: IconName;
     /** Set at the right end of the rule: a reset, a small verb. */
@@ -32,6 +36,7 @@ the end of the rule so their controls end under it.
       >{#if icon}<Icon name={icon} size="1em" />{:else}{G.marker}{/if}</span
     >
     <span class="lbl">{label}</span>
+    {#if info}<InfoMark label="about {label}">{info}</InfoMark>{/if}
     <span class="rule" aria-hidden="true"></span>
     {#if action}<span class="act">{@render action()}</span>{/if}
   </h2>

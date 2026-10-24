@@ -14,7 +14,7 @@ async function customerIdOf(slug: string): Promise<string> {
   const [row] = await sql<{ id: string }[]>`
     select id from customers where slug = ${slug}
   `;
-  if (!row) throw badInput(`Unknown customer '${slug}'.`);
+  if (!row) throw badInput(`unknown customer '${slug}'`);
   return row.id;
 }
 
@@ -89,7 +89,7 @@ export async function resolveUnit(
     id: customerId,
   });
   throw badInput(
-    `Unknown unit '${slugOrAlias}' for this customer.${hint} Call list_customer_units, or add_customer_unit first.`,
+    `unknown unit '${slugOrAlias}' for this customer.${hint} call list_customer_units, or add_customer_unit first`,
   );
 }
 
@@ -107,7 +107,7 @@ async function assertNoCycle(
 export async function addCustomerUnit(input: CustomerUnitInput) {
   if (!UNIT_SLUG_RE.test(input.slug))
     throw badInput(
-      `Invalid unit slug '${input.slug}': letters, digits, dot, dash and underscore only.`,
+      `invalid unit slug '${input.slug}': letters, digits, dot, dash and underscore only`,
     );
   const customerId = await customerIdOf(input.customerSlug);
   const parentId = input.parentSlug
@@ -239,7 +239,7 @@ export async function resolveUnitFacts(
   const [unit] = await sql`
     select customer_id from customer_units where id = ${unitId}
   `;
-  if (!unit) throw notFound(`Unknown customer unit '${unitId}'`);
+  if (!unit) throw notFound(`unknown customer unit '${unitId}'`);
 
   return sql<ResolvedFact[]>`
     with recursive chain as (

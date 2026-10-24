@@ -11,7 +11,7 @@ import { callerScope } from "./authz";
 export function asNoToken(slug: string, e: unknown): unknown {
   if (!(e instanceof Error) || !e.message.startsWith("Missing")) return e;
   return badInput(
-    `No token for '${slug}'. Add yours under Settings › agent, or ask an app admin to set one on the source.`,
+    `no token for '${slug}'. add yours under settings › agent, or ask an app admin to set one on the source`,
   );
 }
 

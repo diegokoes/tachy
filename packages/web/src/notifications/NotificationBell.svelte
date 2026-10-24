@@ -61,7 +61,7 @@
     tone={unreadIds.length ? "accent" : undefined}
     aria-label={unreadIds.length
       ? `${unreadIds.length} changes and notices`
-      : "Changes and notices"}
+      : "changes and notices"}
     title="changes on items you follow, notices from flows"
     onclick={() => (shown = !shown)}
   />
@@ -69,7 +69,7 @@
     <div
       class="menu"
       role="dialog"
-      aria-label="Changes and notices"
+      aria-label="changes and notices"
       tabindex="-1"
       {onkeydown}
     >
@@ -88,8 +88,8 @@
         </button>
       {:else}
         <p class="note">
-          Nothing new. Changes others make to items you follow, and notices from
-          flows, show here.
+          nothing new. changes others make to items you follow, and notices from
+          flows, show here
         </p>
       {/each}
       {#if unreadIds.length}

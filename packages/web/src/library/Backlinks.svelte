@@ -68,7 +68,7 @@
 
 {#if inbound.length}
   <section class="backlinks">
-    <h3>Linked from</h3>
+    <h3>linked from</h3>
     <ul>
       {#each inbound as link (link.id)}
         <li>

@@ -1,13 +1,13 @@
 import { SETTINGS_TABS } from "./tabs";
 
-/** A run of text, or the "Settings › <tab>" in it with the tab's path. */
+/** A run of text, or the "settings › <tab>" in it with the tab's path. */
 export type PointerPart = { text: string; href?: string };
 
-const POINTER = /Settings › (\w+)/g;
+const POINTER = /settings › (\w+)/gi;
 const TAB_KEYS = new Set(SETTINGS_TABS.map((t) => t.key));
 
 /**
- * Splits a message at each "Settings › <tab>" naming a real settings tab, so
+ * Splits a message at each "settings › <tab>" naming a real settings tab, so
  * the place it sends the reader to can be a link. Other text, and a name no
  * tab carries, stay plain.
  */

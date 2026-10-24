@@ -149,7 +149,7 @@ describe("component-anchored knowledge entries", () => {
         issueSummary: "x",
         component: "made-up",
       }),
-    ).rejects.toThrow(/Unknown component/);
+    ).rejects.toThrow(/unknown component/);
     await expect(
       saveKnowledgeEntry({ issueSummary: "x", component: "lc" }),
     ).rejects.toThrow(/requires a product/);

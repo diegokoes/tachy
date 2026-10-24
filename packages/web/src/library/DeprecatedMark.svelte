@@ -25,7 +25,7 @@
     <div class="warning">
       <p>
         <Icon name="deprecate" size="1.1em" weight={7} />
-        <span><strong>Outdated</strong>: not current advice.</span>
+        <span><strong>outdated</strong>: not current advice</span>
       </p>
       {#if onReplacement}
         <Button

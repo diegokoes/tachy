@@ -40,7 +40,7 @@ export interface WikiCategoryPatch {
 function assertCategorySlug(slug: string): void {
   if (!SLUG_RE.test(slug))
     throw badInput(
-      `Invalid category slug '${slug}': lowercase letters, digits and hyphens only.`,
+      `invalid section slug '${slug}': lowercase letters, digits and hyphens only`,
     );
 }
 
@@ -90,7 +90,7 @@ export async function getWikiCategory(
   slug: string,
 ): Promise<WikiCategoryRow> {
   const [row] = await categoryRows(productId, slug);
-  if (!row) throw notFound(`No wiki category '${slug}' in this wiki`);
+  if (!row) throw notFound(`no wiki section '${slug}' in this wiki`);
   return row;
 }
 
@@ -209,7 +209,7 @@ export async function setCategoryComponents(
       select id from components
       where product_id = ${productId} and slug = ${slug}
     `;
-    if (!component) throw notFound(`No component '${slug}' in this product`);
+    if (!component) throw notFound(`no component '${slug}' in this product`);
     ids.push(component.id);
   }
   await sql.begin(async (tx) => {
@@ -423,7 +423,7 @@ export async function findArticle(productId: string | null, slug: string) {
     order by d.slug = ${slug} desc
     limit 1
   `;
-  if (!row) throw notFound(`No wiki article '${slug}' in this wiki`);
+  if (!row) throw notFound(`no wiki article '${slug}' in this wiki`);
   return row;
 }
 
@@ -518,7 +518,7 @@ export async function draftSources(
     select id from components
     where product_id = ${productId} and slug = ${componentSlug}
   `;
-  if (!root) throw notFound(`No component '${componentSlug}' in this product`);
+  if (!root) throw notFound(`no component '${componentSlug}' in this product`);
 
   const rows = await sql`
     with recursive subtree as (

@@ -1,5 +1,5 @@
 /**
- * The "Summarise ticket" flow step, with the model call stubbed: what it reads,
+ * The "summarise ticket" flow step, with the model call stubbed: what it reads,
  * what it posts and replaces, and what stops it before a model is reached.
  */
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";

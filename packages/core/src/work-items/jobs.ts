@@ -6,9 +6,9 @@ import { checkFollows } from "./follows";
 export function defineWorkItemJobs() {
   defineJob({
     kind: "work_items.follows",
-    title: "Check followed items",
+    title: "check followed items",
     description:
-      "Reads the items people follow on the board, each with the follower's own token, and notes what others changed.",
+      "reads the items people follow on the board, each with the follower's own token, and notes what others changed",
     params: z.object({}),
     defaultSchedule: "*/10 * * * *",
     queue: "sync",

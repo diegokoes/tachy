@@ -52,7 +52,7 @@ export async function resolveVersion(
     (l) => l.version_label && releaseMinor(l.version_label) === minor,
   );
   const line = onMinor ?? repo.lines[0];
-  if (!line) throw notFound(`Repo '${slug}' has no tracked line`);
+  if (!line) throw notFound(`repo '${slug}' has no tracked line`);
 
   let tag: string | null = null;
   let commit: string | null = null;
@@ -131,20 +131,20 @@ export async function codeChangesBetween(
   const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
   const from = await resolveVersion(slug, fromVersion);
   if (!from.tag)
-    throw notFound(`Repo '${slug}' has no release tag for ${from.version}`);
+    throw notFound(`repo '${slug}' has no release tag for ${from.version}`);
 
   let toRev: string;
   if (toVersion) {
     const to = await resolveVersion(slug, toVersion);
     if (!to.tag)
-      throw notFound(`Repo '${slug}' has no release tag for ${to.version}`);
+      throw notFound(`repo '${slug}' has no release tag for ${to.version}`);
     toRev = to.tag;
   } else {
     toRev = from.line.ref;
   }
   const toRef = toVersion ? `refs/tags/${toRev}` : `refs/heads/${toRev}`;
   if (!(await resolveRef(slug, toRef)))
-    throw notFound(`Repo '${slug}' has no '${toRev}' fetched yet; reindex it`);
+    throw notFound(`repo '${slug}' has no '${toRev}' fetched yet; reindex it`);
 
   const commits = await logBetween(slug, `refs/tags/${from.tag}`, toRef, {
     path: opts.path,
@@ -245,7 +245,7 @@ export async function resolveRevision(
     (await resolveRef(slug, `refs/tags/${revision}`));
   if (byRef) return byRef;
   throw notFound(
-    `Repo '${slug}' has no commit, release, branch or tag '${revision}' fetched`,
+    `repo '${slug}' has no commit, release, branch or tag '${revision}' fetched`,
   );
 }
 
@@ -338,7 +338,7 @@ export async function codeReleasesContaining(
 ): Promise<ReleasesContaining> {
   const repo = await getRepoBySlug(slug);
   const sha = await resolveCommit(slug, commit);
-  if (!sha) throw notFound(`Repo '${slug}' has no commit '${commit}' fetched`);
+  if (!sha) throw notFound(`repo '${slug}' has no commit '${commit}' fetched`);
   const releases = await releasesContaining(slug, sha);
   const firstPerMinor = new Map<string, string>();
   for (const tag of releases) {

@@ -132,7 +132,7 @@ async function resolvePatternDescription(
   `;
   if (!pattern) {
     throw badInput(
-      `Unknown resolution_pattern '${slug}'. Call list_resolution_patterns to see existing ones, or add_resolution_pattern first.`,
+      `unknown resolution_pattern '${slug}'. call list_resolution_patterns to see existing ones, or add_resolution_pattern first`,
     );
   }
   return pattern.description;
@@ -528,7 +528,7 @@ export async function getKnowledgeEntry(id: string) {
     left join customer_units un on un.id = e.customer_unit_id
     where e.id = ${id}
   `;
-  if (!row) throw notFound(`Knowledge entry '${id}' not found`);
+  if (!row) throw notFound(`knowledge entry '${id}' not found`);
   return row;
 }
 
@@ -673,7 +673,7 @@ export async function updateKnowledgeEntry(
   >`
     select ${REVISION_COLUMNS}, version from knowledge_entries where id = ${id}
   `;
-  if (!current) throw notFound(`Knowledge entry '${id}' not found`);
+  if (!current) throw notFound(`knowledge entry '${id}' not found`);
   assertExpectedVersion(current.version, patch.expectedVersion);
 
   const { componentId, productArea, customerId, customerUnitId } =

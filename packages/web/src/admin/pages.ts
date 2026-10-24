@@ -58,9 +58,9 @@ export type ConsoleSection = {
 export function consoleSections(): Record<string, ConsoleSection[]> {
   const admin = isGlobalAdmin();
   return {
-    flows: [{ key: "forms", label: "ticket forms", fill: true }],
+    flows: [{ key: "forms", label: "flows", fill: true }],
     integrations: [
-      { key: "sources", label: "sources", n: "sources", add: "add connection" },
+      { key: "sources", label: "sources", n: "sources", add: "add source" },
       {
         key: "projects",
         label: "projects",
@@ -68,7 +68,7 @@ export function consoleSections(): Record<string, ConsoleSection[]> {
         n: "projects",
         add: "register project",
       },
-      { key: "tickets", label: "stored tickets", n: "tickets" },
+      { key: "tickets", label: "stored items", n: "tickets" },
       {
         key: "repos",
         label: "repos",

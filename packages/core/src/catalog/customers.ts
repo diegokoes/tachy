@@ -58,7 +58,7 @@ export async function updateCustomer(
 ) {
   const [current] =
     await sql`select id, name, aliases, email_domains, notes from customers where slug = ${slug}`;
-  if (!current) throw notFound(`Customer '${slug}' not found`);
+  if (!current) throw notFound(`customer '${slug}' not found`);
   const [row] = await sql`
     update customers set
       name          = ${patch.name ?? current.name},
@@ -73,7 +73,7 @@ export async function updateCustomer(
 
 export async function deleteCustomer(slug: string) {
   const [current] = await sql`select id from customers where slug = ${slug}`;
-  if (!current) throw notFound(`Customer '${slug}' not found`);
+  if (!current) throw notFound(`customer '${slug}' not found`);
   const [ref] =
     await sql`select count(*)::int as n from work_items where customer_id = ${current.id}`;
   if (ref.n > 0)
@@ -146,14 +146,14 @@ export async function resolveCustomer(
     return rows[0] as ResolvedCustomer;
   if (rows.length > 1)
     throw badInput(
-      `Ambiguous customer '${slugOrAlias}': alias of ${rows
+      `ambiguous customer '${slugOrAlias}': alias of ${rows
         .map((r) => `'${r.slug}'`)
-        .join(" and ")}. Use the slug itself.`,
+        .join(" and ")}. use the slug itself`,
     );
 
   const hint = await nearestSlugsHint("customers", slugOrAlias);
   throw badInput(
-    `Unknown customer '${slugOrAlias}'.${hint} Call list_customers, or add_customer first.`,
+    `unknown customer '${slugOrAlias}'.${hint} call list_customers, or add_customer first`,
   );
 }
 
@@ -271,7 +271,7 @@ export async function setCustomerFact(input: CustomerFactInput) {
 export async function deleteCustomerFact(id: string) {
   const [row] =
     await sql`delete from customer_facts where id = ${id} returning id`;
-  if (!row) throw notFound(`Customer fact '${id}' not found`);
+  if (!row) throw notFound(`customer fact '${id}' not found`);
   return { deleted: true, id };
 }
 

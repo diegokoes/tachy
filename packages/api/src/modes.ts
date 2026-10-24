@@ -20,7 +20,7 @@ export const CHAT_MODE_LIST: ChatMode[] = [
   {
     name: "analyze",
     args: "[ticket-id]",
-    description: "Turn tickets into knowledge entries for review",
+    description: "turn tickets into knowledge entries for review",
     expand: (args) =>
       [
         "Run INGEST MODE as defined in your instructions for every ticket the user names.",
@@ -32,7 +32,7 @@ export const CHAT_MODE_LIST: ChatMode[] = [
   {
     name: "code",
     args: "",
-    description: "Answer from the linked codebases",
+    description: "answer from the linked codebases",
     expand: () =>
       [
         "Run CODE CONSULTATION MODE as defined in your instructions.",

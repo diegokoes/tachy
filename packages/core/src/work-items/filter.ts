@@ -58,8 +58,7 @@ export async function resolveItemFilter(
     const [connection] = await sql<{ id: string }[]>`
       select id from source_connections where slug = ${filter.connection}
     `;
-    if (!connection)
-      throw badInput(`unknown source connection '${filter.connection}'`);
+    if (!connection) throw badInput(`unknown source '${filter.connection}'`);
     resolved.connectionId = connection.id;
   }
   if (filter.statuses?.length)

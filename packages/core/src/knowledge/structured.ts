@@ -66,7 +66,7 @@ export function parseStructured(value: unknown): Structured {
     const issues = parsed.error.issues
       .map((i) => `${i.path.join(".") || "structured"}: ${i.message}`)
       .join("; ");
-    throw badInput(`Invalid structured field: ${issues}`);
+    throw badInput(`invalid structured field: ${issues}`);
   }
   return parsed.data;
 }

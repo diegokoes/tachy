@@ -117,7 +117,7 @@ export async function startTestRun(input: {
   const target = loadTargets().find((t) => t.name === input.target);
   if (!target)
     throw badInput(
-      `unknown target '${input.target}'. Targets come from TACHY_LOAD_TARGETS.`,
+      `unknown target '${input.target}'. targets come from TACHY_LOAD_TARGETS`,
     );
   const heavy = "devOnly" in rules && rules.devOnly;
   if (heavy && !target.dev)
@@ -173,9 +173,9 @@ const TAIL = 8_000;
 export function defineLoadTestJobs() {
   defineJob({
     kind: "load.test",
-    title: "Load test",
+    title: "load test",
     description:
-      "Runs one k6 script from load/ against a configured target. Started from the admin page, never by a schedule.",
+      "runs one k6 script from load/ against a configured target. started from the admin page, never by a schedule",
     params: z.object({ test_run_id: z.string().uuid() }),
     queue: "testing",
     timeout: "45m",

@@ -1073,7 +1073,7 @@
   class="chat bare"
   class:empty
   role="region"
-  aria-label="Chat"
+  aria-label="chat"
   ondragenter={(e) => {
     e.preventDefault();
     dragDepth++;
@@ -1116,7 +1116,7 @@
                 size="sm"
                 square
                 icon="flows"
-                title="Walk me through it"
+                title="walk me through it"
                 onclick={() =>
                   startTurn("walk me through it", WALKTHROUGH_COMMAND)}
               />
@@ -1166,7 +1166,7 @@
           <div class="turn">
             <span class="who err">{G.marker}busy</span>
             <div class="body err">
-              {#if entry.stopped}stopped. send your message again.{:else}{entry.text}
+              {#if entry.stopped}stopped. send your message again{:else}{entry.text}
                 <Button size="sm" onclick={() => stopRunning(entry)}
                   >stop it</Button
                 >{/if}
@@ -1212,8 +1212,8 @@
             {chat.mode} mode
             <button
               class="chip-x"
-              aria-label="Leave {chat.mode} mode"
-              use:tip={`Leave ${chat.mode} mode`}
+              aria-label="leave {chat.mode} mode"
+              use:tip={`leave ${chat.mode} mode`}
               onclick={() => (chat.mode = undefined)}
               ><Icon name="close" size="1em" weight={7} /></button
             >
@@ -1225,8 +1225,8 @@
             {mention.key}
             <button
               class="chip-x"
-              aria-label="Detach {mention.kind} {mention.key}"
-              use:tip={`Detach ${mention.kind} ${mention.key}`}
+              aria-label="detach {mention.kind} {mention.key}"
+              use:tip={`detach ${mention.kind} ${mention.key}`}
               onclick={() => chat.mentions.splice(i, 1)}
               ><Icon name="close" size="1em" weight={7} /></button
             >
@@ -1235,14 +1235,14 @@
         {#each namedRepos as slug (slug)}
           <span
             class="attach named-chip"
-            use:tip={`Named in your message: attached when you send`}
+            use:tip={"named in your message: attached when you send"}
           >
             <Icon name={MENTION_ICONS.repo} size="1em" />
             {slug}
             <button
               class="chip-x"
-              aria-label="Do not attach repo {slug}"
-              use:tip={`Do not attach ${slug}`}
+              aria-label="do not attach repo {slug}"
+              use:tip={`do not attach ${slug}`}
               onclick={() => chat.dismissedRepos.push(slug)}
               ><Icon name="close" size="1em" weight={7} /></button
             >
@@ -1256,8 +1256,8 @@
               : ""}
             <button
               class="chip-x"
-              aria-label="Back to your settings model"
-              use:tip={"Back to your settings model"}
+              aria-label="back to your settings model"
+              use:tip={"back to your settings model"}
               onclick={() => (chat.model = undefined)}
               ><Icon name="close" size="1em" weight={7} /></button
             >
@@ -1269,8 +1269,8 @@
             debug
             <button
               class="chip-x"
-              aria-label="Switch debug off"
-              use:tip={"Switch debug off"}
+              aria-label="switch debug off"
+              use:tip={"switch debug off"}
               onclick={() => (chat.debug = false)}
               ><Icon name="close" size="1em" weight={7} /></button
             >
@@ -1293,8 +1293,8 @@
             {chat.artifact.title}
             <button
               class="chip-x"
-              aria-label="Detach artifact"
-              use:tip={"Detach artifact"}
+              aria-label="detach artifact"
+              use:tip={"detach artifact"}
               onclick={() => (chat.artifact = undefined)}
               ><Icon name="close" size="1em" weight={7} /></button
             >
@@ -1307,8 +1307,8 @@
             {upload.filename}
             <button
               class="chip-x"
-              aria-label="Remove attachment"
-              use:tip={"Remove attachment"}
+              aria-label="remove attachment"
+              use:tip={"remove attachment"}
               onclick={() => chat.uploads.splice(i, 1)}
               ><Icon name="close" size="1em" weight={7} /></button
             >
@@ -1335,14 +1335,14 @@
           onpick={pickCommand}
         />
       {/if}
-      <label class="upload" use:tip={"Attach a document"}>
-        <Icon name="attach" label="Attach a document" />
+      <label class="upload" use:tip={"attach a document"}>
+        <Icon name="attach" label="attach a document" />
         <input type="file" accept={CHAT_UPLOAD_ACCEPT} onchange={onFile} />
       </label>
       <span class="field">
         <textarea
           bind:this={composerEl}
-          aria-label="Message the assistant, / for commands"
+          aria-label="message the assistant, / for commands"
           bind:value={chat.input}
           rows="2"
           onscroll={restSync}
@@ -1366,8 +1366,8 @@
               icon="clear"
               iconSize="1.25em"
               disabled={chat.busy}
-              aria-label="Clear the conversation"
-              title="Clear the conversation"
+              aria-label="clear the conversation"
+              title="clear the conversation"
               onclick={onClear}
             />
           {/if}
@@ -1378,8 +1378,8 @@
               variant="ghost"
               icon="stop"
               iconSize="1.25em"
-              aria-label="Stop"
-              title="Stop (/stop)"
+              aria-label="stop"
+              title="stop (/stop)"
               onclick={stopClick}
             />
           {:else if chat.input.trim()}
@@ -1387,8 +1387,8 @@
               variant="ghost"
               icon="send"
               iconSize="1.25em"
-              aria-label="Send"
-              title="Send"
+              aria-label="send"
+              title="send"
               onclick={sendClick}
             />
           {/if}

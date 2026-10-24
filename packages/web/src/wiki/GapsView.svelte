@@ -8,7 +8,7 @@
   import { navigate } from "../shell/router.svelte";
   import { isCurator } from "../access/session.svelte";
   import { setTopActions } from "../shell/subnav.svelte";
-  import { Button, EmptyState, Note, Time } from "../tui";
+  import { Button, EmptyState, InfoMark, Note, Time } from "../tui";
   import type { WikiGap, WikiGaps } from "./rows";
   import CoverageTree from "./CoverageTree.svelte";
   import WikiLayout from "./WikiLayout.svelte";
@@ -74,28 +74,28 @@
 
   const HEADS: Record<WikiGapKind, { title: string; detail: string }> = {
     unwritten: {
-      title: "Written about nowhere",
-      detail: "Lessons with no covering article.",
+      title: "written about nowhere",
+      detail: "entries with no covering article",
     },
     outgrown: {
-      title: "Outgrown",
-      detail: "Newer lessons on these components, not cited.",
+      title: "outgrown",
+      detail: "newer entries on these components, not cited",
     },
     stale: {
-      title: "Stale sources",
-      detail: "Sources changed since written.",
+      title: "stale sources",
+      detail: "sources changed since written",
     },
     wanted: {
-      title: "Wanted pages",
-      detail: "Linked to from an article, and never written.",
+      title: "wanted pages",
+      detail: "linked to from an article, and never written",
     },
     draft: {
-      title: "Drafts",
-      detail: "Written, and waiting for someone to approve them.",
+      title: "drafts",
+      detail: "written, and waiting for someone to approve them",
     },
     uncategorised: {
-      title: "Uncategorised",
-      detail: "No category; unreachable from contents.",
+      title: "in no section",
+      detail: "unreachable from contents",
     },
   };
 
@@ -200,7 +200,7 @@
       case "outgrown": {
         const bits = [
           evidence.entries
-            ? `${evidence.entries} ${evidence.entries === 1 ? "lesson" : "lessons"}`
+            ? `${evidence.entries} ${evidence.entries === 1 ? "entry" : "entries"}`
             : "",
           evidence.docs
             ? `${evidence.docs} ${evidence.docs === 1 ? "doc" : "docs"}`
@@ -243,15 +243,14 @@
 
 <WikiLayout {scope}>
   <div class="gaps">
-    <h2>Gaps</h2>
+    <h2>gaps</h2>
 
     {#if error}<Note tone="danger">{error}</Note>{/if}
 
     {#if scope === ORG_WIDE}
       <Note tone="muted">
-        The org-wide wiki has no components, so coverage-based gaps (uncovered
-        lessons and outgrown articles) are not computed here - only stale
-        sources, wanted pages, drafts and uncategorised articles.
+        the org-wide wiki has no components: only stale sources, wanted pages,
+        drafts and articles in no section are checked
       </Note>
     {/if}
 
@@ -259,8 +258,12 @@
       {#if groups.length}
         {#each groups as { kind, gaps } (kind)}
           <section>
-            <h3>{HEADS[kind].title} <span class="n">{gaps.length}</span></h3>
-            <p class="detail">{HEADS[kind].detail}</p>
+            <h3>
+              {HEADS[kind].title} <span class="n">{gaps.length}</span>
+              <InfoMark label="about {HEADS[kind].title}"
+                >{HEADS[kind].detail}</InfoMark
+              >
+            </h3>
             <ul>
               {#each gaps as gap (gap.id)}
                 <li>
@@ -345,8 +348,7 @@
       {:else}
         <EmptyState
           icon="success"
-          title="Nothing missing that the sweep can see."
-          detail="Checks: uncovered lessons, outdated articles, stale sources, wanted pages, drafts, uncategorised."
+          title="nothing missing that the sweep can see"
         />
       {/if}
 
@@ -373,20 +375,17 @@
     margin-top: var(--pad-4);
   }
   h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-1);
     font-size: var(--fs-sm);
-    margin: 0;
+    margin: 0 0 var(--pad-2);
     text-transform: uppercase;
     letter-spacing: var(--label-spacing);
   }
   h3 .n {
     color: var(--warn);
     font-variant-numeric: tabular-nums;
-    margin-left: var(--pad-1);
-  }
-  .detail {
-    margin: var(--pad-1) 0 var(--pad-2);
-    color: var(--muted);
-    font-size: var(--fs-sm);
   }
   ul {
     list-style: none;
