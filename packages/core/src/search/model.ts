@@ -136,6 +136,7 @@ const MDENSEON: EmbeddingModelSpec = {
   semFloor: 0.41,
   semCeil: 0.6,
   codeSemFloor: 0.4,
+  duplicateFloor: 0.88,
 };
 
 /**

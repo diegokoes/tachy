@@ -6,6 +6,7 @@ import {
 } from "@tachy/core/knowledge";
 import { saveReferenceDoc, searchReferenceDocs } from "@tachy/core/reference";
 import {
+  DUPLICATE_FLOOR,
   EMBEDDING_SPEC,
   embedQueryLiteral,
   exactTerms,
@@ -228,7 +229,7 @@ describe("near-copies of an entry", () => {
     return Number(similarity);
   }
 
-  it("score above related entries that are a different lesson", async () => {
+  it("score at the duplicate floor or above, and related entries of another lesson under it", async () => {
     let lowestSame = 1;
     let highestDifferent = 0;
     for (const { of, same, different } of DUPLICATES) {
@@ -238,10 +239,9 @@ describe("near-copies of an entry", () => {
         await similarityTo(of, different),
       );
     }
-    process.stdout.write(
-      `duplicate separation: lowest same ${lowestSame.toFixed(3)}, highest different ${highestDifferent.toFixed(3)}\n`,
-    );
-    expect(lowestSame).toBeGreaterThan(highestDifferent);
+    expect(DUPLICATE_FLOOR).toBeDefined();
+    expect(lowestSame).toBeGreaterThanOrEqual(DUPLICATE_FLOOR!);
+    expect(highestDifferent).toBeLessThan(DUPLICATE_FLOOR!);
   });
 });
 
