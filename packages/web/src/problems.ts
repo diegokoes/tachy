@@ -30,6 +30,7 @@ export async function readError(response: Response): Promise<ApiError> {
   const problem = readProblem(parsedOrUndefined(text));
   const message =
     problemMessage(problem) ??
-    (response.statusText || `request failed (${response.status})`);
+    (response.statusText.toLowerCase() ||
+      `request failed (${response.status})`);
   return new ApiError(response.status, message, problem);
 }
