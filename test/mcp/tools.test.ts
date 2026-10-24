@@ -205,6 +205,28 @@ describe("knowledge round trip", () => {
     });
     expect(unrelated.json).toMatchObject({ saved: true });
   });
+
+  it("scrubs the near-copies it hands back under redaction", async () => {
+    const entry = {
+      product_slug: "tpd",
+      status: "approved",
+      issue_summary:
+        "Exports for anna.berger@example.com stall once the queue holds 500 jobs",
+      resolution: "Raise the export worker's queue limit.",
+    };
+    expect((await call("save_knowledge_entry", entry)).json).toMatchObject({
+      saved: true,
+    });
+    process.env.TACHY_REDACT = "true";
+    try {
+      const again = await call("save_knowledge_entry", entry);
+      expect(again.json).toMatchObject({ saved: false });
+      expect(again.text).not.toContain("anna.berger@example.com");
+      expect(again.text).toMatch(/\[EMAIL_1\]/);
+    } finally {
+      delete process.env.TACHY_REDACT;
+    }
+  });
 });
 
 describe("customer round trip", () => {
