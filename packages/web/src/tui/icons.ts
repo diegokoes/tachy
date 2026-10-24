@@ -99,6 +99,7 @@ import {
   LogOut,
   Maximize2,
   Megaphone,
+  Menu,
   MessageSquare,
   MessageSquareQuote,
   MessagesSquare,
@@ -231,6 +232,8 @@ export const ICONS = {
 
   // Navigation
   back: ArrowLeft,
+  /** Opens the list of places a corner menu goes to. */
+  menu: Menu,
   next: ArrowRight,
   /** A chart taken out of its tile to the whole window. */
   enlarge: Maximize2,
