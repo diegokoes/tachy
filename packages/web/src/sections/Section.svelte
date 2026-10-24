@@ -11,14 +11,13 @@
 
 <script lang="ts">
   import { onMount, untrack, type Component } from "svelte";
-  import { Button, G, Icon, RAMP } from "../tui";
+  import { Button, G, RAMP } from "../tui";
   import type { Spy } from "./spy.svelte";
 
   let {
     spy,
     section,
     label,
-    icon,
     view,
     eager = false,
     actions = [],
@@ -26,7 +25,6 @@
     spy: Spy;
     section: string;
     label: string;
-    icon?: IconName;
     view: Component;
     /** Mount without waiting to be scrolled near. */
     eager?: boolean;
@@ -52,9 +50,7 @@ refresh, and these sections grow for as long as their tables are loading.
 -->
 <section bind:this={el} id="admin-{section}" aria-labelledby="head-{section}">
   <h2 class="head" bind:this={head} id="head-{section}">
-    <span class="mark" aria-hidden="true"
-      >{#if icon}<Icon name={icon} size="1em" />{:else}{G.marker}{/if}</span
-    >
+    <span class="mark" aria-hidden="true">{G.marker}</span>
     <span class="lbl">{label}</span>
     <span class="rule" aria-hidden="true"></span>
     {#each actions as action (action.label)}

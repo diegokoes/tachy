@@ -90,6 +90,7 @@
   const columns: Column<McpServerRow>[] = $derived([
     {
       key: "name",
+      face: "ui",
       label: "server",
       width: "14rem",
       edit: "text",

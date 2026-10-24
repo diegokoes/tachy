@@ -4,7 +4,11 @@
   import { api } from "../api";
   import { canCurateScope, isGlobalAdmin } from "../access/session.svelte";
   import { createResource, errText } from "../resource.svelte";
+  import { ago } from "../dates.svelte";
   import {
+    Lamp,
+    lampOf,
+    EMPTY,
     Badge,
     Button,
     CrudTable,
@@ -14,6 +18,7 @@
     Note,
     type Column,
   } from "../tui";
+  import { indexLamp } from "./status";
   import type { Product } from "../catalog/rows";
   import type { Repo } from "./rows";
   import type { SourceProject } from "../sources/rows";
@@ -63,14 +68,6 @@
     working(r.index_status) ||
     r.lines.some((l) => working(l.index_status));
   const busyIndex = $derived(repos.data.some(busyRepo) || queuedAll);
-
-  const freshness = (repo: Repo) => {
-    if (!repo.last_indexed_at) return "never";
-    const days = Math.floor(
-      (Date.now() - new Date(repo.last_indexed_at).getTime()) / 86_400_000,
-    );
-    return days === 0 ? "today" : `${days}d ago`;
-  };
 
   async function reload() {
     await Promise.all([repos.reload(), projects.reload(), products.reload()]);
@@ -186,7 +183,7 @@
 </script>
 
 {#snippet projectCell(repo: Repo)}
-  <span class:dim={!repo.project_key}>{repo.project_key ?? "-"}</span>
+  <span class:dim={!repo.project_key}>{repo.project_key ?? EMPTY}</span>
 {/snippet}
 
 {#snippet repoCell(repo: Repo)}
@@ -197,10 +194,7 @@
 {/snippet}
 
 {#snippet statusBadge(status: string)}
-  <Badge
-    tone={status === "ready" ? "ok" : status === "error" ? "danger" : "muted"}
-    >{status}</Badge
-  >
+  <Lamp lamp={indexLamp(status)} word={status} />
 {/snippet}
 
 {#snippet indexCell(repo: Repo)}
@@ -234,7 +228,7 @@
     {@const run = repo.active_run}
     <span class="run">
       {#if run.status === "queued"}
-        <Badge tone="muted">queued</Badge>
+        <Lamp lamp={lampOf("queued")} word="queued" />
       {:else}
         <Meter value={run.progress ?? 0} width={8} label="index progress" />
         <span class="sm"
@@ -252,10 +246,10 @@
 
 {#snippet freshnessCell(repo: Repo)}
   <span class="fresh">
-    {freshness(repo)}
+    {ago(repo.last_indexed_at)}
     {#if repo.file_count}
       <span class="counts"
-        >{repo.file_count} files / {repo.chunk_count} chunks</span
+        >{repo.file_count} files · {repo.chunk_count} chunks</span
       >
     {/if}
   </span>

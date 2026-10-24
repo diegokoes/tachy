@@ -191,7 +191,7 @@
     <Note>only an app admin changes how this source's tickets read</Note>
   {/if}
 
-  <Group label="skip messages" icon="eyeClosed">
+  <Group label="skip messages">
     <div class="rules">
       {#each rules as rule, i (rule.id)}
         <div class="rule" class:off={!rule.enabled}>
@@ -233,7 +233,7 @@
     </div>
   </Group>
 
-  <Group label="ticket fields" icon="fileTypes">
+  <Group label="ticket fields">
     <Rows>
       <Row label="sent">
         <Choice
@@ -256,7 +256,7 @@
     {/if}
   </Group>
 
-  <Group label="guidance" icon="guidance">
+  <Group label="guidance">
     {#if groupsError}<Note tone="danger">{groupsError}</Note>{/if}
     {#each guidedGroups as key (key)}
       <div class="guide">
@@ -293,7 +293,7 @@
     </span>
   </Group>
 
-  <Group label="test" icon="run">
+  <Group label="test">
     <span class="pick">
       <OptionSelect
         source="work_items"

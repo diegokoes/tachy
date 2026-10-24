@@ -1,5 +1,6 @@
 <script lang="ts">
   import { session, type Me } from "../access/session.svelte";
+  import { EMPTY } from "../tui";
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";
 
@@ -15,10 +16,10 @@
 
 {#if me}
   <Rows>
-    <Row label="email"><span class="val">{me.email ?? "-"}</span></Row>
-    <Row label="name"><span class="val">{me.name ?? "-"}</span></Row>
+    <Row label="email"><span class="val">{me.email ?? EMPTY}</span></Row>
+    <Row label="name"><span class="val">{me.name ?? EMPTY}</span></Row>
     <Row label="role"><span class="val">{me.role}</span></Row>
-    <Row label="teams"><span class="val">{teams || "-"}</span></Row>
+    <Row label="teams"><span class="val">{teams || EMPTY}</span></Row>
     <Row label="signed in with"><span class="val">{VIA[me.via]}</span></Row>
   </Rows>
 {/if}

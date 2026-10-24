@@ -81,7 +81,9 @@
           {#each columns as column}
             <td class={column.align === "end" ? "end" : ""}>
               {#if column.cell}{@render column.cell(row)}
-              {:else}<span class="v">{cellText(column, row)}</span>{/if}
+              {:else}<span class="v" class:ui={column.face === "ui"}
+                  >{cellText(column, row)}</span
+                >{/if}
             </td>
           {/each}
         </tr>
@@ -169,6 +171,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .v.ui {
+    font-family: var(--font-ui);
   }
 
   tr.none > td {

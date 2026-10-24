@@ -10,6 +10,7 @@ import {
   type Moment,
 } from "@tachy/contract";
 import { api } from "./api";
+import { EMPTY } from "./tui/glyphs";
 
 const STORAGE_KEY = "tachy-date-format";
 
@@ -69,10 +70,29 @@ export async function setDatePart<P extends keyof DateFormat>(
 /** A timestamp as the plain day it names. Times are noise in a list of records. */
 export const fmtDate = (d?: Moment) => formatDay(d, dateFormat);
 
-/** Date and time, or "-" when there is none. */
-export const fmtDateTime = (d?: Moment) => formatDateTime(d, dateFormat) || "-";
+/** Date and time, or the empty mark when there is none. */
+export const fmtDateTime = (d?: Moment) =>
+  formatDateTime(d, dateFormat) || EMPTY;
 
 export const fmtTime = (d?: Moment) => formatTime(d, dateFormat);
+
+const MINUTE_MS = 60_000;
+const HOUR_MINUTES = 60;
+const HOURS_SHOWN_BELOW = 48;
+
+/** "12 min", "5 h", "3 d": a stretch of time in its largest whole unit. */
+export function span(ms: number): string {
+  const min = Math.max(0, Math.round(ms / MINUTE_MS));
+  if (min < HOUR_MINUTES) return `${min} min`;
+  const h = Math.round(min / HOUR_MINUTES);
+  return h < HOURS_SHOWN_BELOW ? `${h} h` : `${Math.round(h / 24)} d`;
+}
+
+/** "12 min ago", "3 h ago", "21 d ago"; "never" when there is no time. */
+export function ago(iso: string | null | undefined, now = Date.now()): string {
+  const atMs = iso ? Date.parse(iso) : NaN;
+  return Number.isFinite(atMs) ? `${span(now - atMs)} ago` : "never";
+}
 
 /** The hover text for a timestamp: the full moment, and that it is UTC. */
 export const utcTip = (d?: Moment) => {

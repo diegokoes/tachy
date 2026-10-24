@@ -37,6 +37,7 @@
   const columns: Column<Product>[] = $derived([
     {
       key: "name",
+      face: "ui",
       label: t("product"),
       width: "16rem",
       edit: "text",

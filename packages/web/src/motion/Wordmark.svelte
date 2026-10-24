@@ -2,6 +2,19 @@
   import { onMount } from "svelte";
   import { reducedMotion } from "./gsap";
 
+  let {
+    scale = 1,
+    lit = false,
+    align = "start",
+  }: {
+    /** Times the size it has at the left of the top row. */
+    scale?: number;
+    /** In the accent rather than wallpaper ink, where the mark is the subject. */
+    lit?: boolean;
+    /** Where the letters sit in the box: at its left, or across its middle. */
+    align?: "start" | "center";
+  } = $props();
+
   /** A field of particles sampled from the text itself, at the left of the top
    *  row. Wallpaper weight, so it does not compete with the nav beside it. */
   const TEXT = "TACHY";
@@ -70,7 +83,7 @@
       if ("letterSpacing" in ctx)
         ctx.letterSpacing = `${(h * 0.05).toFixed(1)}px`;
       ctx.textBaseline = "alphabetic";
-      ctx.textAlign = "left";
+      ctx.textAlign = align === "center" ? "center" : "left";
       ctx.fillStyle = "#fff";
 
       // Centre on the glyphs drawn, not on the font's line box: the box carries
@@ -80,7 +93,11 @@
       const capTop = metrics.actualBoundingBoxAscent;
       const capBottom = metrics.actualBoundingBoxDescent;
       const capHeight = capTop + capBottom || h * 0.6;
-      ctx.fillText(TEXT, 1, (h + capHeight) / 2 - capBottom);
+      ctx.fillText(
+        TEXT,
+        align === "center" ? w / 2 : 1,
+        (h + capHeight) / 2 - capBottom,
+      );
 
       // Step from the cap height so density holds at any size, then read the
       // glyphs back and keep one particle per inked sample.
@@ -104,7 +121,7 @@
     function draw() {
       if (!surface || !ctx) return;
       const ink = getComputedStyle(document.documentElement)
-        .getPropertyValue("--wordmark-ink")
+        .getPropertyValue(lit ? "--accent" : "--wordmark-ink")
         .trim();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, surface.width / dpr, surface.height / dpr);
@@ -202,7 +219,7 @@
   });
 </script>
 
-<div class="wordmark" bind:this={box} aria-hidden="true">
+<div class="wordmark" style:--scale={scale} bind:this={box} aria-hidden="true">
   <canvas bind:this={canvas}></canvas>
 </div>
 
@@ -210,8 +227,8 @@
   /* Sized, not positioned: App places it at the left of the top row, on the
      window's left edge, where it can receive the pointer. */
   .wordmark {
-    width: 11rem;
-    height: 2.9rem;
+    width: calc(11rem * var(--scale));
+    height: calc(2.9rem * var(--scale));
     user-select: none;
   }
   canvas {

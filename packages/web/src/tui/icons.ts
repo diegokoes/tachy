@@ -30,6 +30,7 @@ import {
   Bot,
   Braces,
   Bug,
+  Building2,
   CalendarClock,
   CalendarCog,
   CalendarSync,
@@ -352,6 +353,8 @@ export const ICONS = {
   user: UserRound,
   team: UserRoundGroup,
   global: Globe,
+  /** A customer's install, on a library item that describes one. */
+  customer: Building2,
 
   // Marks
   alert: TriangleAlert,

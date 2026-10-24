@@ -13,6 +13,7 @@
     DeleteButton,
     Field,
     FilterBar,
+    GroupHead,
     Note,
     Select,
     type Column,
@@ -306,6 +307,7 @@
   const columns: Column<Customer>[] = $derived([
     {
       key: "name",
+      face: "ui",
       label: t("customer"),
       width: "16rem",
       edit: "text",
@@ -339,7 +341,7 @@
       info: INFO.aliases.customer,
       value: (r) => (r.aliases ?? []).join(", "),
     },
-    { key: "notes", label: "notes", edit: "textarea" },
+    { key: "notes", face: "ui", label: "notes", edit: "textarea" },
   ]);
 
   onMount(() => {
@@ -407,7 +409,7 @@
   {#if error}<Note tone="danger">{error}</Note>{/if}
   <div class="profile">
     <div class="block wide">
-      <span class="dim">estate</span>
+      <GroupHead label="estate" />
       {#each unitTree(units[customer.slug] ?? []) as { unit, depth } (unit.id)}
         <div class="frow" style="--depth: {depth}">
           <span class="indent"></span>
@@ -555,7 +557,7 @@
     </div>
 
     <div class="block wide">
-      <span class="dim">specifics</span>
+      <GroupHead label="specifics" />
       {#if (units[customer.slug] ?? []).length}
         <div class="frow">
           <span class="dim sm">showing</span>
@@ -694,7 +696,7 @@
     </div>
 
     <div class="block">
-      <span class="dim">components they run</span>
+      <GroupHead label="components they run" />
       <div class="chips">
         {#each profile?.components ?? [] as component (component.product_slug + component.slug)}
           <Chip
@@ -749,7 +751,7 @@
     </div>
 
     <div class="block">
-      <span class="dim">their records</span>
+      <GroupHead label="their records" />
       <div class="chips">
         {#each profile?.repos ?? [] as repo (repo.slug)}
           <Chip>{repo.slug}</Chip>
