@@ -379,8 +379,8 @@
     <Spinner />
   {:else if !repo || !draft}
     <Note>
-      No repo named {slug}.
-      <button class="link" onclick={() => navigate(LIST)}>All repos</button>
+      no repo named {slug}.
+      <button class="link" onclick={() => navigate(LIST)}>all repos</button>
     </Note>
   {:else}
     {@const edited = draft}
@@ -627,7 +627,7 @@
       <div class="col">
         <Group label="files" icon="folder">
           {#if !canEdit}
-            <p class="quiet">Only editors of this repo see its files.</p>
+            <p class="quiet">only editors of this repo see its files</p>
           {:else if previewError && !preview}
             <p class="quiet">
               <span class="bad">{previewError}</span>
@@ -674,8 +674,8 @@
             label="file types"
             icon="fileTypes"
             hint={edited.extensions
-              ? "Found in this repo. This repo's own set is on."
-              : "Found in this repo. The built-in set is on."}
+              ? "found in this repo. this repo's own set is on"
+              : "found in this repo. the built-in set is on"}
           >
             {#snippet action()}
               {#if edited.extensions}

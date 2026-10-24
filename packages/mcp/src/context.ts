@@ -405,7 +405,7 @@ export async function loadContextSources(input: {
   for (const url of input.urls ?? []) {
     const response = await fetchUntrustedUrl("ingest_context", url);
     if (!response.ok)
-      throw badInput(`Failed to fetch ${url}: HTTP ${response.status}`);
+      throw badInput(`failed to fetch ${url}: HTTP ${response.status}`);
     const raw = await response.text();
     const contentType = response.headers.get("content-type") ?? "";
     sources.push({

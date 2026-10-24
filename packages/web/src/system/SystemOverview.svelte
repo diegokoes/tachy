@@ -327,7 +327,7 @@
         title: readiness.schema,
         detail:
           readiness.schema === "mismatch"
-            ? "The database schema does not match what this build expects. Apply db/schema.sql before relying on anything new."
+            ? "the database schema does not match what this build expects. apply db/schema.sql before relying on anything new"
             : undefined,
       },
       {
@@ -348,7 +348,7 @@
               .join(" · ") || "nothing stored"
           : "disabled",
         detail: vault.by_key.some((k) => !k.current)
-          ? "Some credentials are still sealed with an older key. Run npm run sync rotate-key."
+          ? "some credentials are still sealed with an older key. run npm run sync rotate-key"
           : undefined,
       });
     for (const [name, check] of Object.entries(

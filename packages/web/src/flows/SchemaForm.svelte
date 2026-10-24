@@ -101,7 +101,7 @@
       label={titleOf(name, property)}
       required={required.has(name)}
       info={infoOf(property) ??
-        (property["x-free"] ? "pick or type one, Enter adds it" : undefined)}
+        (property["x-free"] ? "pick or type one, enter adds it" : undefined)}
       plain
     >
       <OptionList
@@ -218,7 +218,7 @@
               value=""
               options={variableOptions}
               searchable
-              aria-label={`Insert a value into ${name}`}
+              aria-label={`insert a value into ${name}`}
               onchange={(v) => {
                 if (v) set(name, `${text(name)}${v}`);
               }}

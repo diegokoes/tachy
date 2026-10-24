@@ -100,7 +100,7 @@ describe("draft sources", () => {
   it("refuses an unknown component rather than returning nothing", async () => {
     const productId = await tree();
     await expect(draftSources(productId, "nope")).rejects.toThrow(
-      /No component/,
+      /no component/,
     );
   });
 });

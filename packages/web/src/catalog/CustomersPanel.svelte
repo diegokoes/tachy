@@ -496,9 +496,7 @@
         {/if}
       {/each}
       {#if !(units[customer.slug] ?? []).length}
-        <span class="dim sm">
-          Not broken down. Every fact below is true of the whole account.
-        </span>
+        <span class="dim sm"> not broken down </span>
       {/if}
       <div class="frow add">
         <input
@@ -596,7 +594,7 @@
           </div>
         {/each}
         {#if !(resolved[`${customer.slug}:${viewUnit[customer.slug]}`] ?? []).length}
-          <span class="dim sm">Nothing applies to this unit yet.</span>
+          <span class="dim sm">nothing applies to this unit yet</span>
         {/if}
       {:else}
         {#each facts[customer.slug] ?? [] as fact (fact.id)}
@@ -611,10 +609,7 @@
           </div>
         {/each}
         {#if !(facts[customer.slug] ?? []).length}
-          <span class="dim sm">
-            Nothing recorded. An answer for them is only as good as what is
-            here.
-          </span>
+          <span class="dim sm"> nothing recorded yet </span>
         {/if}
       {/if}
       <div class="frow add">
@@ -702,8 +697,7 @@
       </datalist>
       {#if kinds.length}
         <span class="dim sm">
-          already in use: {kinds.map((k) => k.kind).join(", ")}. Reuse one
-          rather than coining a near-duplicate.
+          already in use: {kinds.map((k) => k.kind).join(", ")}
         </span>
       {/if}
     </div>
@@ -770,8 +764,8 @@
         {/each}
         {#if !(profile?.repos ?? []).length && !(profile?.projects ?? []).length}
           <span class="dim sm">
-            no repo or project is filed under them. Set those on the repo and
-            project rows.
+            no repo or project is filed under them; set those on the repo and
+            project rows
           </span>
         {/if}
       </div>
@@ -801,8 +795,8 @@
   rowKey={(r) => r.slug}
   loading={customers.loading}
   error={customers.error}
-  emptyTitle={`No ${t("customers")} yet.`}
-  emptyDetail={`Attributed by requester email domain. List domains.`}
+  emptyTitle={`no ${t("customers")} yet`}
+  emptyDetail="attributed by requester email domain: list domains"
   addLabel={`add ${t("customer")}`}
   noun={t("customer")}
   editTitle={(r) => r.name}

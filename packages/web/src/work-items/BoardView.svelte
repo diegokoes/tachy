@@ -111,8 +111,8 @@
   <Spinner />
 {:else if !az.projects.length}
   <EmptyState
-    title="No Azure DevOps project yet."
-    detail="An admin registers a team's projects under console › integrations."
+    title="no Azure DevOps project yet"
+    detail="an admin registers a team's projects under console › integrations"
   />
 {:else if composing}
   <TicketComposer oncreated={created} />

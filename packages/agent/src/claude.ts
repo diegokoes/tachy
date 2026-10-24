@@ -71,21 +71,21 @@ export function explainFailure(raw: string): {
   if (/session limit/i.test(raw))
     return {
       kind: "rate_limit",
-      message: `Your Claude subscription has hit its usage limit${
+      message: `your Claude subscription has hit its usage limit${
         resets ? `, which resets ${resets}` : ""
-      }. The turn was not lost - send it again once the limit resets.`,
+      }. the turn was not lost; send it again once the limit resets`,
     };
   if (/not logged in|run \/login/i.test(raw))
     return {
       kind: "no_credential",
       message:
-        "No Claude credential is set for your account. Add one under Settings › agent.",
+        "no Claude credential is set for your account. add one under settings › agent",
     };
   if (/invalid api key|fix external api key/i.test(raw))
     return {
       kind: "bad_credential",
       message:
-        "Your saved Claude credential was rejected. It may be expired, revoked, or saved in the wrong field - re-add it under Settings › agent.",
+        "your saved Claude credential was rejected. it may be expired, revoked, or saved in the wrong field; re-add it under settings › agent",
     };
   return { kind: "other", message: raw };
 }

@@ -193,7 +193,7 @@
     </div>
 
     {#if output.columns.length === 0}
-      <p class="lede">No columns yet. Add the first one.</p>
+      <p class="lede">no columns yet</p>
     {/if}
 
     <ol class="cols">
@@ -205,7 +205,7 @@
             <Field
               label="heading"
               required
-              info={keys[i] ? `Exports under the key ${keys[i]}.` : undefined}
+              info={keys[i] ? `exported under the key ${keys[i]}` : undefined}
             >
               <input
                 value={col.label ?? col.key}

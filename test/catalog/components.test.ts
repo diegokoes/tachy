@@ -83,7 +83,7 @@ describe("components", () => {
         name: "X",
         parentSlug: "does-not-exist",
       }),
-    ).rejects.toThrow(/Unknown parent component/);
+    ).rejects.toThrow(/unknown parent component/);
   });
 
   it("upserts on (product_id, slug) instead of duplicating", async () => {

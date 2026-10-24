@@ -306,10 +306,10 @@ describe("gap lifecycle", () => {
     await lessons(productId, "coding", 3);
     const [gap] = await gaps(productId);
     await expect(dismissWikiGap(null, gap.id, null)).rejects.toThrow(
-      /No open gap/,
+      /no open gap/,
     );
     await expect(dismissWikiGap(productId, "nope", null)).rejects.toThrow(
-      /No open gap/,
+      /no open gap/,
     );
   });
 

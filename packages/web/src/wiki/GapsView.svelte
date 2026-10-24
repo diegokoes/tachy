@@ -74,28 +74,28 @@
 
   const HEADS: Record<WikiGapKind, { title: string; detail: string }> = {
     unwritten: {
-      title: "Written about nowhere",
-      detail: "Lessons with no covering article.",
+      title: "written about nowhere",
+      detail: "lessons with no covering article",
     },
     outgrown: {
-      title: "Outgrown",
-      detail: "Newer lessons on these components, not cited.",
+      title: "outgrown",
+      detail: "newer lessons on these components, not cited",
     },
     stale: {
-      title: "Stale sources",
-      detail: "Sources changed since written.",
+      title: "stale sources",
+      detail: "sources changed since written",
     },
     wanted: {
-      title: "Wanted pages",
-      detail: "Linked to from an article, and never written.",
+      title: "wanted pages",
+      detail: "linked to from an article, and never written",
     },
     draft: {
-      title: "Drafts",
-      detail: "Written, and waiting for someone to approve them.",
+      title: "drafts",
+      detail: "written, and waiting for someone to approve them",
     },
     uncategorised: {
-      title: "Uncategorised",
-      detail: "No category; unreachable from contents.",
+      title: "uncategorised",
+      detail: "no category; unreachable from contents",
     },
   };
 
@@ -243,15 +243,15 @@
 
 <WikiLayout {scope}>
   <div class="gaps">
-    <h2>Gaps</h2>
+    <h2>gaps</h2>
 
     {#if error}<Note tone="danger">{error}</Note>{/if}
 
     {#if scope === ORG_WIDE}
       <Note tone="muted">
-        The org-wide wiki has no components, so coverage-based gaps (uncovered
+        the org-wide wiki has no components, so coverage-based gaps (uncovered
         lessons and outgrown articles) are not computed here - only stale
-        sources, wanted pages, drafts and uncategorised articles.
+        sources, wanted pages, drafts and uncategorised articles
       </Note>
     {/if}
 
@@ -345,8 +345,8 @@
       {:else}
         <EmptyState
           icon="success"
-          title="Nothing missing that the sweep can see."
-          detail="Checks: uncovered lessons, outdated articles, stale sources, wanted pages, drafts, uncategorised."
+          title="nothing missing that the sweep can see"
+          detail="checks: uncovered lessons, outdated articles, stale sources, wanted pages, drafts, uncategorised"
         />
       {/if}
 

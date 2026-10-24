@@ -32,7 +32,7 @@ async function resolveAdoClient(sourceSlug: string): Promise<{
   const { conn } = await resolveSource(sourceSlug);
   if (conn.sourceType !== "azure-devops")
     throw badInput(
-      `Source '${sourceSlug}' is type '${conn.sourceType}' - this tool needs an azure-devops connection (see list_source_connections)`,
+      `source '${sourceSlug}' is type '${conn.sourceType}' - this tool needs an azure-devops connection (see list_source_connections)`,
     );
   return {
     conn,

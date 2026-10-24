@@ -72,7 +72,7 @@
 
 {#if issued}
   <Note tone="warn">
-    Copy the token for {issued.name} now. It won't be shown again.
+    copy the token for {issued.name} now. it won't be shown again
   </Note>
   <div class="secret">
     <code>{issued.token}</code>

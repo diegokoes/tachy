@@ -70,7 +70,7 @@ export async function linkRepo(input: RepoInput) {
   if (sourceSlug) {
     const [conn] =
       await sql`select slug from source_connections where slug = ${sourceSlug}`;
-    if (!conn) throw badInput(`Unknown source connection: ${sourceSlug}`);
+    if (!conn) throw badInput(`unknown source connection: ${sourceSlug}`);
   }
 
   let componentId: string | null = null;
@@ -236,13 +236,13 @@ export async function reposInProject(project: string): Promise<RepoRow[]> {
     order by r.slug
   `;
   if (!rows.length)
-    throw notFound(`No linked repo belongs to a project '${project}'`);
+    throw notFound(`no linked repo belongs to a project '${project}'`);
   return rows;
 }
 
 export async function getRepoBySlug(slug: string): Promise<RepoRow> {
   const [row] = await sql<RepoRow[]>`${repoSelect()} where r.slug = ${slug}`;
-  if (!row) throw notFound(`Repo '${slug}' not found`);
+  if (!row) throw notFound(`repo '${slug}' not found`);
   return row;
 }
 
@@ -255,7 +255,7 @@ export async function repoScope(slug: string): Promise<EntryScope> {
     left join source_projects sp on sp.id = r.source_project_id
     where r.slug = ${slug}
   `;
-  if (!row) throw notFound(`Repo '${slug}' not found`);
+  if (!row) throw notFound(`repo '${slug}' not found`);
   return { productId: row.product_id, teamId: row.team_id };
 }
 
@@ -323,7 +323,7 @@ export async function recountLine(lineId: string): Promise<void> {
 
 export async function deleteRepo(slug: string): Promise<void> {
   const [row] = await sql`delete from repos where slug = ${slug} returning id`;
-  if (!row) throw notFound(`Repo '${slug}' not found`);
+  if (!row) throw notFound(`repo '${slug}' not found`);
   await removeClone(slug);
 }
 

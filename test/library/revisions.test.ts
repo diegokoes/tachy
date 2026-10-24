@@ -64,7 +64,7 @@ describe("library revisions", () => {
         resolution: "nope",
         expectedVersion: 99,
       }),
-    ).rejects.toThrow(/Version conflict/);
+    ).rejects.toThrow(/version conflict/);
     const revs = await listRevisions({ entryId: saved.id });
     expect(revs).toHaveLength(1);
   });

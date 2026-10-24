@@ -121,7 +121,7 @@ export function assertExpectedVersion(
   expected: number | null | undefined,
 ): void {
   if (expected != null && current !== expected)
-    throw conflict(`Version conflict: expected ${expected}, found ${current}`);
+    throw conflict(`version conflict: expected ${expected}, found ${current}`);
 }
 
 /**
@@ -133,7 +133,7 @@ export function assertUpdated<T>(
   what: string,
 ): asserts row is T {
   if (!row)
-    throw conflict(`Version conflict: ${what} was updated concurrently`);
+    throw conflict(`version conflict: ${what} was updated concurrently`);
 }
 
 /**
@@ -198,7 +198,7 @@ export async function getRevision(
     left join users u on u.id = r.user_id
     where ${targetWhere(target)} and r.version = ${version}
   `;
-  if (!row) throw notFound(`No revision ${version} for this library item`);
+  if (!row) throw notFound(`no revision ${version} for this library item`);
   return row as RevisionRow & { snapshot: Record<string, unknown> };
 }
 

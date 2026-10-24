@@ -413,8 +413,8 @@
       label="slug"
       required
       info={editing
-        ? "The article's address. Renaming it rewrites [[links]] to it, and the old address keeps working."
-        : "The article's address, and what [[links]] to it use."}
+        ? "the article's address. renaming it rewrites [[links]] to it, and the old address keeps working"
+        : "the article's address, and what [[links]] to it use"}
     >
       <input bind:value={slug} oninput={() => (slugTouched = true)} required />
     </Field>
@@ -424,7 +424,7 @@
     {#if hasComponents}
       <Field
         label="about"
-        info="Product part covered. Used by coverage and gap sweep."
+        info="product part covered. used by coverage and gap sweep"
       >
         <AsciiSelect
           bind:value={component}
@@ -454,7 +454,7 @@
       </div>
     {:else}
       <span class="muted sm">
-        No categories in this wiki yet. The article lands in Uncategorised.
+        no categories in this wiki yet. the article lands in uncategorised
       </span>
     {/if}
   </div>

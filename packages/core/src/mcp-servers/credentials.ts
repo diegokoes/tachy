@@ -46,7 +46,7 @@ export async function poolTokens(slug: string): Promise<ServerCredential[]> {
 function assertLabel(label: string): void {
   if (!POOL_LABEL_RE.test(label))
     throw badInput(
-      `Invalid label '${label}': lowercase letters, digits and hyphens only.`,
+      `invalid label '${label}': lowercase letters, digits and hyphens only`,
     );
 }
 

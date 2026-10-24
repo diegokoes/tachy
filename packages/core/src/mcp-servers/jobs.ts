@@ -35,9 +35,9 @@ async function refreshSharedServers(): Promise<Record<string, unknown>> {
 export function defineMcpServerJobs() {
   defineJob({
     kind: REFRESH_KIND,
-    title: "Refresh linked MCP servers' tools",
+    title: "refresh linked MCP servers' tools",
     description:
-      "Asks every enabled shared-pool MCP server for its tool list and stores it, so a new or changed tool shows in the console and a tool that turned destructive stops being offered. Clears spent rate windows.",
+      "asks every enabled shared-pool MCP server for its tool list and stores it, so a new or changed tool shows in the console and a tool that turned destructive stops being offered. clears spent rate windows",
     params: z.object({}),
     defaultSchedule: "30 4 * * *",
     dedupeKey: () => REFRESH_KIND,

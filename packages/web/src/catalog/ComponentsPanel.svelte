@@ -108,7 +108,7 @@
       edit: "select",
       required: true,
       only: "create",
-      info: "Which product this component belongs to. Fixed once created.",
+      info: "which product this component belongs to. fixed once created",
       options: picked.products,
       initial: filters.product || undefined,
     },
@@ -420,7 +420,7 @@
   >
     {#snippet message(impact, to)}
       <p>
-        Renaming <strong>{target.slug}</strong> to <strong>{to}</strong>
+        renaming <strong>{target.slug}</strong> to <strong>{to}</strong>
         rewrites
         {impact.entries} knowledge {impact.entries === 1 ? "entry" : "entries"}.
       </p>

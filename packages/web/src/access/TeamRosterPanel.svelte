@@ -75,8 +75,8 @@
   rowKey={(tm) => tm.slug}
   loading={teams.loading}
   error={teams.error ?? memberships.error}
-  emptyTitle={`No ${t("teams")} yet.`}
-  emptyDetail={`Add them under structure.`}
+  emptyTitle={`no ${t("teams")} yet`}
+  emptyDetail="add them under structure"
 />
 
 <style>

@@ -6,9 +6,9 @@ import { syncSource } from "./sync";
 export function defineSourceJobs() {
   defineJob({
     kind: "source.sync",
-    title: "Sync source",
+    title: "sync source",
     description:
-      "Pulls work items changed since the connection's last clean sync.",
+      "pulls work items changed since the connection's last clean sync",
     params: z.object({ connection: z.string().min(1) }),
     connection: "any",
     queue: "sync",

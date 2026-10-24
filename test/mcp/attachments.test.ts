@@ -242,7 +242,7 @@ describe("reading a ticket's file", () => {
     for (const [path, message] of [
       ["attachment:files-conn/tk-1/999", /lists no file '999'/],
       ["attachment:listing-conn/tk-1/900", /cannot be opened from here/],
-      ["attachment:no-such-conn/tk-1/900", /Unknown source connection/],
+      ["attachment:no-such-conn/tk-1/900", /unknown source connection/],
     ] as const) {
       const refused = await call("read_file", { path });
       expect(refused.isError, path).toBe(true);

@@ -35,7 +35,7 @@ lists are read by looking for one row, not by leafing through.
       bind:el
       bind:value
       icon="search"
-      hint="Search"
+      hint="search"
       aria-label={label}
     />
   </span>

@@ -99,13 +99,13 @@
       <Select
         value={source}
         options={connections.map((c) => ({ value: c.slug, label: c.slug }))}
-        aria-label="Source"
+        aria-label="source"
         onchange={(v) => (source = String(v))}
       />
       <input
         class="id"
         placeholder="ticket id"
-        aria-label="Ticket id"
+        aria-label="ticket id"
         bind:value={externalId}
       />
       <Button
@@ -114,7 +114,7 @@
         icon="plus"
         type="submit"
         {busy}
-        aria-label="Add as context"
+        aria-label="add as context"
         title="add as context"
       />
     </form>

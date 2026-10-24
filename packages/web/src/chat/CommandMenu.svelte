@@ -40,28 +40,28 @@
   export const ARTIFACT_COMMAND: BuiltinCommandMeta = {
     name: "artifact",
     args: "<artifact>",
-    description: "Attach an artifact to the next message",
+    description: "attach an artifact to the next message",
   };
 
   /** Client-side too: it changes what the conversation's turns run on. */
   export const MODEL_COMMAND: BuiltinCommandMeta = {
     name: "model",
     args: "<model> [effort]",
-    description: "Run this conversation on another model",
+    description: "run this conversation on another model",
   };
 
   /** Client-side, and offered to an app admin only. */
   export const DEBUG_COMMAND: BuiltinCommandMeta = {
     name: "debug",
     args: "",
-    description: "Show what each turn sends to the agent",
+    description: "show what each turn sends to the agent",
   };
 
   /** Client-side, and the only command there is while a turn runs. */
   export const STOP_COMMAND: BuiltinCommandMeta = {
     name: "stop",
     args: "",
-    description: "Stop the turn that is running",
+    description: "stop the turn that is running",
   };
 
   export function matchArtifacts(
@@ -220,7 +220,7 @@
 </script>
 
 {#if items.length || mode !== "command"}
-  <div class="cmd-menu" role="listbox" aria-label="Commands">
+  <div class="cmd-menu" role="listbox" aria-label="commands">
     {#if mode === "artifact"}
       <div class="cmd-crumb">
         <span class="cmd-cmd">/{ARTIFACT_COMMAND.name}</span>

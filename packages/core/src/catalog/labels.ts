@@ -32,7 +32,7 @@ export async function updateLabel(
     where product_id = ${productId} and slug = ${slug}
     returning id, slug, description
   `;
-  if (!row) throw notFound(`Label '${slug}' not found for this product`);
+  if (!row) throw notFound(`label '${slug}' not found for this product`);
   return row;
 }
 
@@ -52,6 +52,6 @@ export async function deleteLabel(productId: string, slug: string) {
   const [row] = await sql`
     delete from labels where product_id = ${productId} and slug = ${slug} returning slug
   `;
-  if (!row) throw notFound(`Label '${slug}' not found for this product`);
+  if (!row) throw notFound(`label '${slug}' not found for this product`);
   return { deleted: true, slug };
 }

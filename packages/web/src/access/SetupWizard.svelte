@@ -163,7 +163,7 @@
 
       <div class="body">
         {#if STEPS[step] === "account"}
-          <h2>Your app admin account</h2>
+          <h2>your app admin account</h2>
           <div class="grid">
             <Field label="email" required error={emailErr}>
               <input type="email" autocomplete="username" bind:value={email} />
@@ -189,7 +189,7 @@
               label="setup code"
               required
               error={setupCodeErr}
-              info="The server writes it to its log when it starts, as the event setup_code. With Docker: docker compose logs api."
+              info="the server writes it to its log when it starts, as the event setup_code. with Docker: docker compose logs api"
             >
               <input
                 autocomplete="off"
@@ -199,7 +199,7 @@
             </Field>
           </div>
         {:else if STEPS[step] === "workspace"}
-          <h2>Your workspace</h2>
+          <h2>your workspace</h2>
           <div class="cards">
             <button
               class="card"
@@ -226,7 +226,7 @@
             <Field
               label={wizardTerms.team}
               info={teamName
-                ? `Its machine id will be ${slugify(teamName)}.`
+                ? `its machine id will be ${slugify(teamName)}`
                 : undefined}
             >
               <input bind:value={teamName} />
@@ -272,22 +272,22 @@
             </div>
           </div>
         {:else if STEPS[step] === "agent"}
-          <h2>Global agent config</h2>
+          <h2>global agent config</h2>
           <div class="grid">
             <Field label="model">
               <input bind:value={agentModel} />
             </Field>
             <Field
               label="api key or token"
-              info="API key (console.anthropic.com) or subscription token (claude setup-token). Stored encrypted."
+              info="API key (console.anthropic.com) or subscription token (claude setup-token). stored encrypted"
             >
               <input type="password" autocomplete="off" bind:value={agentKey} />
             </Field>
             {#if agentKeyIsOAuth}
               <Note tone="accent">
-                Claude <strong>subscription token</strong>. Saved as your own
+                Claude <strong>subscription token</strong>. saved as your own
                 key, under this admin account; everyone else sets theirs in
-                Settings › agent.
+                settings › agent
               </Note>
             {/if}
             <Field label="effort">
@@ -304,8 +304,8 @@
             >
           </label>
         {:else}
-          <h2>Ready</h2>
-          <p class="done"><TypeLine text="tachy is set up. Opening…" /></p>
+          <h2>ready</h2>
+          <p class="done"><TypeLine text="tachy is set up. opening…" /></p>
         {/if}
       </div>
 

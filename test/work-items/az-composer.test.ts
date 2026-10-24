@@ -784,7 +784,7 @@ describe("/api/compose", () => {
     const response = await peek(memberCookie, "42");
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({
-      detail: expect.stringContaining("Settings › agent"),
+      detail: expect.stringContaining("settings › agent"),
     });
   });
 });

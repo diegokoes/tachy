@@ -363,7 +363,7 @@
       options={flowOptions}
       searchable
       placeholder="flow"
-      aria-label="Flow"
+      aria-label="flow"
       onchange={(v) => (flowId = String(v ?? ""))}
     />
   </span>
@@ -371,7 +371,7 @@
     {@const edited = draft}
     <label class="field">
       <span class="k">name</span>
-      <input class="name" bind:value={edited.name} aria-label="Flow name" />
+      <input class="name" bind:value={edited.name} aria-label="flow name" />
     </label>
     <span class="field">
       <span class="k">team</span>
@@ -380,7 +380,7 @@
           value={edited.team ?? ""}
           options={teamOptions}
           searchable
-          aria-label="Team"
+          aria-label="team"
           onchange={(v) => (edited.team = String(v ?? "") || null)}
         />
       </span>
@@ -391,7 +391,7 @@
         class="calls"
         inputmode="numeric"
         bind:value={edited.modelCalls}
-        aria-label="Model calls a day"
+        aria-label="model calls a day"
       />
       {#if edited.id}<span class="k">{callsToday} used</span>{/if}
     </label>
@@ -486,7 +486,7 @@
   <div
     class="menu test"
     role="dialog"
-    aria-label="Test run"
+    aria-label="test run"
     use:float={{ anchor: testAnchor, placement: "below-end", gap: 4 }}
   >
     <span class="k">item</span>
@@ -494,14 +494,14 @@
       source="work_items"
       deps={connection ? { connection } : {}}
       value={testItem}
-      label="Item to run on"
+      label="item to run on"
       placeholder="none: run without an item"
       onchange={(v) => (testItem = v)}
     />
     <span class="dry">
       <Checkbox
         checked={testDry}
-        ariaLabel="Dry run"
+        ariaLabel="dry run"
         onchange={(v) => (testDry = v)}
       />
       dry run: writes say what they would do

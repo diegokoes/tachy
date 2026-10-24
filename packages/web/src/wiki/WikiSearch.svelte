@@ -76,7 +76,7 @@
       onkeydown={onKeydown}
     />
     {#if query.trim() && hits.length === 0}
-      <p class="empty">Nothing here matches.</p>
+      <p class="empty">nothing here matches</p>
     {/if}
     {#if hits.length}
       <ul>

@@ -4,7 +4,10 @@
 
 <div class="launcher">
   <p class="lede">
-    <TypeLine text="Ask anything, or type / for commands." caret={false} />
+    <TypeLine
+      text="ask anything · / for commands · @ for sources"
+      caret={false}
+    />
   </p>
 </div>
 

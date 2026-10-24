@@ -133,7 +133,7 @@ describe("wiki categories", () => {
     const productId = await tpdProductId();
     await expect(
       addWikiCategory({ productId: productId, slug: "Not A Slug", name: "x" }),
-    ).rejects.toThrow(/Invalid category slug/);
+    ).rejects.toThrow(/invalid category slug/);
   });
 });
 
@@ -154,7 +154,7 @@ describe("wiki articles", () => {
   it("refuses reserved and malformed slugs", async () => {
     await expect(article("toc")).rejects.toThrow(/reserved/);
     await expect(article("c")).rejects.toThrow(/reserved/);
-    await expect(article("Not A Slug")).rejects.toThrow(/Invalid article slug/);
+    await expect(article("Not A Slug")).rejects.toThrow(/invalid article slug/);
   });
 
   it("needs a slug at all", async () => {

@@ -159,7 +159,7 @@
       <Select
         value={openTrigger.kind}
         options={KINDS}
-        aria-label="Trigger kind"
+        aria-label="trigger kind"
         onchange={(k) =>
           setTrigger({
             id: openTrigger.id,
@@ -178,13 +178,13 @@
         label="connection"
         required={openTrigger.kind === "item.synced"}
         info={openTrigger.kind === "schedule"
-          ? "With one, the flow runs once per recent item of it that passes the condition; without, once on its own."
+          ? "with one, the flow runs once per recent item of it that passes the condition; without, once on its own"
           : undefined}
       >
         <OptionSelect
           source="connections"
           value={asText(openTrigger.params.connection)}
-          label="Connection"
+          label="source"
           onchange={(v) => setParam(openTrigger, "connection", v)}
         />
       </Field>
@@ -287,7 +287,7 @@
     {#if action?.description}<Note>{action.description}</Note>{/if}
     {#if openStep.kind === "action" && !action}
       <Note tone="danger"
-        >'{openStep.action}' is not in the library any more.</Note
+        >'{openStep.action}' is not in the library any more</Note
       >
     {/if}
     <Field

@@ -6,9 +6,9 @@ import { sweepWikiGaps } from "./gaps";
 export function defineWikiJobs() {
   defineJob({
     kind: "wiki.gaps",
-    title: "Find wiki gaps",
+    title: "find wiki gaps",
     description:
-      "Rescans every wiki for components and lessons that no article covers yet.",
+      "rescans every wiki for components and lessons that no article covers yet",
     params: z.object({}),
     defaultSchedule: "7 * * * *",
     outcome: (o) =>
