@@ -4,6 +4,7 @@
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
   import { navigate } from "../shell/router.svelte";
+  import { presetScope } from "../library/filters";
   import {
     radarFits,
     EMPTY,
@@ -259,6 +260,11 @@
   const approved = $derived(knowledge.by_status.approved ?? 0);
   const share = (n: number, of: number) =>
     of ? Math.round((n / of) * 100) : 0;
+  function openDrafts() {
+    presetScope({ status: "draft" });
+    navigate("/library");
+  }
+
   const backlogFigures = $derived<FigureItem[]>([
     {
       key: "drafts",
@@ -266,6 +272,7 @@
       label: "drafts waiting > 30 d",
       note: `${oldDrafts} of ${draftTotal} drafts`,
       tone: "warn",
+      onclick: openDrafts,
     },
     {
       key: "untouched",

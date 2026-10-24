@@ -312,12 +312,6 @@
       onclick={() => navigate(wikiPath(scope, "new"))}>article</Button
     >
   {/if}
-  <Button
-    variant="ghost"
-    size="sm"
-    icon="gaps"
-    onclick={() => navigate(wikiPath(scope, "gaps"))}>gaps</Button
-  >
 {/snippet}
 
 {#snippet article(ref: WikiArticleRef)}

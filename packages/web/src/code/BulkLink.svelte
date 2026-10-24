@@ -4,18 +4,9 @@
   import { gsap, reducedMotion } from "../motion/gsap";
   import { toast } from "../notifications/notify.svelte";
   import { createResource, errText } from "../resource.svelte";
-  import { navigate } from "../shell/router.svelte";
   import { canCurateScope } from "../access/session.svelte";
   import { slugify, uniqueSlug } from "../slug";
-  import {
-    Button,
-    Icon,
-    Note,
-    Scrollbar,
-    SearchBox,
-    Select,
-    tip,
-  } from "../tui";
+  import { Button, Note, Scrollbar, SearchBox, Select } from "../tui";
   import Orbit from "./Orbit.svelte";
   import type { Repo } from "./rows";
   import type { SourceProject } from "../sources/rows";
@@ -368,11 +359,6 @@
     });
   }
 
-  function leave() {
-    flight?.kill();
-    navigate("/console/integrations/repos");
-  }
-
   onMount(() => {
     void repos.reload();
     void projects.reload();
@@ -391,7 +377,7 @@
       },
     );
     gsap.fromTo(
-      stage.querySelectorAll(".pick, .close"),
+      stage.querySelectorAll(".pick"),
       { opacity: 0 },
       { opacity: 1, duration: 0.5, delay: 0.55, clearProps: "opacity" },
     );
@@ -401,15 +387,6 @@
 </script>
 
 <div class="stage" bind:this={stage}>
-  <button
-    class="close"
-    onclick={leave}
-    aria-label="back to repos"
-    use:tip={"back to repos"}
-  >
-    <Icon name="close" size="1.4em" weight={6} />
-  </button>
-
   <div class="scroller" bind:this={scroller} bind:clientHeight={viewH}>
     <div class="inner">
       <div class="top" bind:clientHeight={topH}>
@@ -546,23 +523,6 @@
     flex: 1 1 0;
     min-height: 0;
     display: flex;
-  }
-
-  .close {
-    position: absolute;
-    top: var(--pad-3);
-    right: var(--pad-4);
-    z-index: 2;
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    padding: var(--pad-2);
-    line-height: 0;
-  }
-  .close:hover,
-  .close:focus-visible {
-    color: var(--text);
   }
 
   /* Laid over the edge rather than beside it: the bar only exists once the

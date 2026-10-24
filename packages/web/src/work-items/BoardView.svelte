@@ -96,7 +96,7 @@
   <div class="top">
     {#if project && itemId}
       <Button size="sm" variant="ghost" icon="back" onclick={backToList}
-        >back</Button
+        >{project.name}</Button
       >
     {/if}
     {#if project}

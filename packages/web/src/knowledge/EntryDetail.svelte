@@ -261,7 +261,7 @@
 
 <!-- Rendered by App into the carved row beside the subnav, not here. -->
 {#snippet readActions()}
-  <Button size="sm" icon="back" onclick={onClose}>back</Button>
+  <Button size="sm" icon="back" onclick={onClose}>library</Button>
   {#if canEdit}
     <Button
       size="sm"
