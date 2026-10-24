@@ -227,6 +227,7 @@
     type="button"
     class="trigger"
     class:active
+    class:blank={label === ""}
     bind:this={trigger}
     {disabled}
     role="combobox"
@@ -324,6 +325,11 @@
     border-radius: var(--radius-control);
     cursor: pointer;
     text-align: left;
+  }
+  /* Nothing picked and no word for it, as a list that takes typed values can
+     be: still as wide as a control, not a lone ▼. */
+  .trigger.blank {
+    min-width: 8rem;
   }
   .trigger.active {
     border-color: var(--accent);
