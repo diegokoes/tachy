@@ -89,6 +89,7 @@
     { key: "kind", label: "read-only", width: "7rem", cell: kindCell },
     {
       key: "description",
+      face: "ui",
       label: "description",
       cell: descriptionCell,
       head: descriptionHead,

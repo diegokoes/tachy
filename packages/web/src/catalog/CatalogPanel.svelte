@@ -5,6 +5,7 @@
   import { createResource } from "../resource.svelte";
   import { navigate } from "../shell/router.svelte";
   import {
+    EMPTY,
     Bars,
     Columns,
     DataTable,
@@ -115,7 +116,7 @@
       (x) =>
         knowledge.entries
           ? `${Math.round((x.value / knowledge.entries) * 100)}%`
-          : "–",
+          : EMPTY,
       { end: true },
     ),
   ];
@@ -213,7 +214,7 @@
       label: "busiest day",
       text: readStats.peak
         ? `${readStats.peak.label} · ${compact(readStats.peak.value)}`
-        : "–",
+        : EMPTY,
     },
     {
       key: "fixes",

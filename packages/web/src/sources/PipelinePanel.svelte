@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { fmtDate } from "../dates.svelte";
   import {
+    EMPTY,
     Bars,
     DataTable,
     Legend,
@@ -110,7 +111,7 @@
       end: true,
     }),
     col<Connection>("last", "last refusal", (c) =>
-      c.last_auth_failure ? fmtDate(c.last_auth_failure) : "–",
+      c.last_auth_failure ? fmtDate(c.last_auth_failure) : EMPTY,
     ),
   ];
   const connectionFigures = $derived<Count[]>([
@@ -153,7 +154,7 @@
       label: "busiest day",
       text: dayStats.peak
         ? `${dayStats.peak.label} · ${compact(dayStats.peak.value)}`
-        : "–",
+        : EMPTY,
     },
     { key: "change", label: "vs earlier half", text: signed(dayStats.change) },
     {

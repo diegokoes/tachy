@@ -5,6 +5,7 @@
   import { canCurateScope, isGlobalAdmin } from "../access/session.svelte";
   import { createResource, errText } from "../resource.svelte";
   import {
+    EMPTY,
     Badge,
     Button,
     CrudTable,
@@ -186,7 +187,7 @@
 </script>
 
 {#snippet projectCell(repo: Repo)}
-  <span class:dim={!repo.project_key}>{repo.project_key ?? "-"}</span>
+  <span class:dim={!repo.project_key}>{repo.project_key ?? EMPTY}</span>
 {/snippet}
 
 {#snippet repoCell(repo: Repo)}

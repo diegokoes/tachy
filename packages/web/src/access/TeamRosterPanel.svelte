@@ -32,7 +32,7 @@
   const headless = $derived(rows.filter((tm) => !admins(tm).length));
 
   const columns: Column<Team>[] = $derived([
-    { key: "name", label: t("team"), width: "14rem" },
+    { key: "name", face: "ui", label: t("team"), width: "14rem" },
     { key: "admins", label: roleLabel("team", "admin"), cell: adminsCell },
     {
       key: "members",

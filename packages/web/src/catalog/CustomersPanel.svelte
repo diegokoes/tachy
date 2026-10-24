@@ -307,6 +307,7 @@
   const columns: Column<Customer>[] = $derived([
     {
       key: "name",
+      face: "ui",
       label: t("customer"),
       width: "16rem",
       edit: "text",
@@ -340,7 +341,7 @@
       info: INFO.aliases.customer,
       value: (r) => (r.aliases ?? []).join(", "),
     },
-    { key: "notes", label: "notes", edit: "textarea" },
+    { key: "notes", face: "ui", label: "notes", edit: "textarea" },
   ]);
 
   onMount(() => {

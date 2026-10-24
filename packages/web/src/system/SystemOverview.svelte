@@ -6,6 +6,7 @@
   import { navigate } from "../shell/router.svelte";
   import { errText } from "../resource.svelte";
   import {
+    EMPTY,
     Badge,
     Bars,
     Button,
@@ -95,9 +96,9 @@
     hostResult: Result | undefined,
     overdue: number,
   ): { text: string; tone: Tone } => {
-    if (!status) return { text: "–", tone: "muted" };
+    if (!status) return { text: EMPTY, tone: "muted" };
     if (!hostResult?.at) return { text: "none", tone: "danger" };
-    const text = age(hostResult.at, now) ?? "–";
+    const text = age(hostResult.at, now) ?? EMPTY;
     if (hostResult.ok === false) return { text, tone: "danger" };
     return {
       text,
@@ -113,7 +114,7 @@
   });
 
   const runState = (): { text: string; tone: Tone } => {
-    if (!runtime) return { text: "–", tone: "muted" };
+    if (!runtime) return { text: EMPTY, tone: "muted" };
     if (runtime.draining) return { text: "draining", tone: "warn" };
     if (!runtime.readiness.ready) return { text: "not ready", tone: "danger" };
     return runtime.refusingChats
@@ -122,7 +123,7 @@
   };
   const tallyText = (counted: number) => {
     if (tally) return `${tally.passing}/${counted}`;
-    return probes.running ? "…" : "–";
+    return probes.running ? "…" : EMPTY;
   };
   const tallyTone = (): Tone => {
     if (!tally) return "muted";
@@ -172,7 +173,7 @@
         text:
           runtime?.uptimeSeconds !== undefined
             ? span(runtime.uptimeSeconds * 1000)
-            : "–",
+            : EMPTY,
       },
       {
         key: "checks",
@@ -185,7 +186,9 @@
         key: "loads",
         label: "load tests",
         text:
-          summary.passRate === null ? "–" : pct(summary.passed, summary.judged),
+          summary.passRate === null
+            ? EMPTY
+            : pct(summary.passed, summary.judged),
         tone: passTone(summary.passRate),
         to: "loads",
       },
@@ -194,7 +197,7 @@
       {
         key: "disk",
         label: "disk",
-        text: disk === null ? "–" : `${disk}%`,
+        text: disk === null ? EMPTY : `${disk}%`,
         tone: disk === null ? ("muted" as Tone) : load(disk / 100),
         to: "host",
       },
@@ -214,7 +217,7 @@
     const mem = runtime.memory;
     const memShare = mem?.maxBytes ? mem.currentBytes / mem.maxBytes : null;
     const loop = runtime.eventLoopP99Ms;
-    let memCenter = "–";
+    let memCenter = EMPTY;
     if (memShare !== null) memCenter = `${Math.round(memShare * 100)}%`;
     else if (mem) memCenter = bytes(mem.currentBytes);
     let memSub = "unknown";
@@ -249,7 +252,7 @@
           : "unavailable",
         value: postgres ? ratio(pgUsed, postgres.max) : 0,
         tone: postgres ? load(ratio(pgUsed, postgres.max)) : "muted",
-        center: postgres ? pct(pgUsed, postgres.max) : "–",
+        center: postgres ? pct(pgUsed, postgres.max) : EMPTY,
         sub: postgres ? `${pgUsed}/${postgres.max}` : "unknown",
       },
       {
@@ -410,7 +413,7 @@
         label: "embedding queue",
         value: runtime.embed
           ? String(runtime.embed.queries + runtime.embed.passages)
-          : "–",
+          : EMPTY,
         detail: embedState(runtime.embed),
       },
     ];
@@ -553,7 +556,7 @@
     col<Backup>(
       "size",
       "dump",
-      (b) => (b.dump_bytes ? bytes(b.dump_bytes) : "–"),
+      (b) => (b.dump_bytes ? bytes(b.dump_bytes) : EMPTY),
       { end: true },
     ),
     col<Backup>("error", "error", (b) => b.error ?? b.problems ?? ""),
@@ -590,7 +593,7 @@
     ),
     col<LoadRun>("target", "target", (t) => t.target),
     col<LoadRun>("status", "status", (t) => t.status),
-    col<LoadRun>("p95", "p95 ms", (t) => Math.round(runP95(t) ?? 0) || "–", {
+    col<LoadRun>("p95", "p95 ms", (t) => Math.round(runP95(t) ?? 0) || EMPTY, {
       end: true,
     }),
   ];
@@ -601,7 +604,7 @@
       key: "pass",
       label: "pass rate",
       text:
-        summary.passRate === null ? "–" : pct(summary.passed, summary.judged),
+        summary.passRate === null ? EMPTY : pct(summary.passed, summary.judged),
     },
   ]);
 
@@ -621,7 +624,7 @@
       label: "largest",
       text: storage[0]
         ? `${storage[0].label} · ${pct(storage[0].value, storageTotal)}`
-        : "–",
+        : EMPTY,
     },
   ]);
 

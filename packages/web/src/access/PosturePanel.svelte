@@ -6,6 +6,7 @@
   import { isGlobalAdmin } from "./session.svelte";
   import { t } from "../terms";
   import {
+    EMPTY,
     Bars,
     Cells,
     Columns,
@@ -276,7 +277,7 @@
   type Day = (typeof tools.per_day)[number];
   type Role = (typeof roles)[number];
 
-  const share = (n: number, of: number) => (of ? pct(n, of) : "–");
+  const share = (n: number, of: number) => (of ? pct(n, of) : EMPTY);
 
   const roleColumns: Column<Role>[] = [
     col<Role>("role", "role", (r) => r.title ?? r.label),
@@ -436,7 +437,7 @@
       label: "busiest day",
       text: callStats.peak
         ? `${callStats.peak.label} · ${compact(callStats.peak.value)}`
-        : "–",
+        : EMPTY,
     },
     { key: "change", label: "vs earlier half", text: signed(callStats.change) },
   ]);

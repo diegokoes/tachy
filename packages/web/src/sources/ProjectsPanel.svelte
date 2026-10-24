@@ -227,6 +227,7 @@
     },
     {
       key: "name",
+      face: "ui",
       label: "name",
       formOnly: true,
       edit: "text",

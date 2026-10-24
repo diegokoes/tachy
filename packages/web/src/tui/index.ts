@@ -94,7 +94,7 @@ export {
   toneVar,
   type Stacked,
 } from "./scale";
-export { G, RAMP } from "./glyphs";
+export { EMPTY, G, RAMP } from "./glyphs";
 export { compact, usd, dayOfMonth, keepUnits } from "./figures";
 export { toneOf, isActive, type Tone } from "./tone";
 export { ICONS, type IconName } from "./icons";
