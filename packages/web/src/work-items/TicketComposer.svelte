@@ -9,7 +9,15 @@
   import { pushScope } from "../keys/keys.svelte";
   import { Badge, Button, Chevron, Icon, Note, Select, tip } from "../tui";
   import { typeColor, typeIcon } from "./ado-icons";
-  import { az, ensureProjects, ensureTypes, typesOf } from "./az.svelte";
+  import {
+    az,
+    ensureProjects,
+    ensureTypes,
+    retryTypes,
+    typesFailed,
+    typesNote,
+    typesOf,
+  } from "./az.svelte";
   import {
     applyTemplate,
     askReview,
@@ -366,7 +374,7 @@
       {#if az.projects && !az.projects.length}
         <Note tone="warn">
           None of your teams has an Azure DevOps project registered. A team
-          admin registers one under Admin › integrations › projects.
+          admin registers one under console › integrations › projects.
         </Note>
       {:else}
         <div class="pick">
@@ -384,8 +392,22 @@
         </div>
       {/if}
     {:else if !composer.type}
+      {@const projectId = composer.project.id}
       <div class="pick">
         <p class="dim">What are you raising?</p>
+        {#if typesFailed(projectId)}
+          <Note tone="danger">
+            {typesNote(projectId)}
+            {#snippet action()}
+              <Button
+                size="sm"
+                variant="ghost"
+                icon="refresh"
+                onclick={() => retryTypes(projectId)}>retry</Button
+              >
+            {/snippet}
+          </Note>
+        {/if}
         <div class="cards">
           {#each types as type (type.name)}
             <button class="card type" onclick={() => setType(type)}>
