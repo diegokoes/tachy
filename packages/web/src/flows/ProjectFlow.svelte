@@ -210,7 +210,7 @@
   type Block = {
     key: string;
     title: string;
-    hint?: string;
+    info?: string;
     fields: FieldSpec[];
   };
   const blocks = $derived.by<Block[]>(() => {
@@ -227,7 +227,7 @@
       ...effective.groups.map((g, i) => ({
         key: `g${i}`,
         title: g.label ?? "header",
-        hint:
+        info:
           g.label === "also required"
             ? "nothing fills them, so they stay on screen whatever is set"
             : undefined,
@@ -236,13 +236,13 @@
       {
         key: "folded",
         title: "folded away",
-        hint: "under more fields",
+        info: "under more fields",
         fields: effective.hidden,
       },
       {
         key: "out",
         title: "left out",
-        hint: "never shown; a default is still sent",
+        info: "never shown; a default is still sent",
         fields: raw.fields.filter(
           (f) =>
             f.reference_name !== TITLE &&
@@ -408,7 +408,7 @@
   type ViewBlock = {
     key: string;
     title: string;
-    hint?: string;
+    info?: string;
     refs: string[];
   };
   const viewBlocks = $derived.by<ViewBlock[]>(() => {
@@ -437,7 +437,7 @@
       {
         key: "rest",
         title: `not on ${sourceName}'s form`,
-        hint: "shown only when pinned or always shown",
+        info: "shown only when pinned or always shown",
         refs: rest,
       },
     ];
@@ -510,7 +510,7 @@
     <Note>reading {project?.name}'s {type} form…</Note>
   {:else}
     {#each viewBlocks as block (block.key)}
-      <Group label={block.title} hint={block.hint}>
+      <Group label={block.title} info={block.info}>
         <Rows>
           {#each block.refs as ref, i (ref)}
             {@const label = readForm.fields[ref]?.name ?? ref}
@@ -678,7 +678,7 @@
       <Note>reading {project.name}'s {type} form…</Note>
     {:else}
       {#each blocks as block (block.key)}
-        <Group label={block.title} hint={block.hint}>
+        <Group label={block.title} info={block.info}>
           <Rows>
             {#each block.fields as field, i (field.reference_name)}
               {@const ref = field.reference_name}
