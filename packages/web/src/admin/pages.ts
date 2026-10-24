@@ -17,6 +17,7 @@ export const CONSOLE_PAGES: ConsolePage[] = [
   { key: "integrations", label: "integrations", icon: "integrations" },
   { key: "structure", label: "structure", icon: "structure" },
   { key: "access", label: "users", icon: "users" },
+  { key: "usage", label: "usage", icon: "usage" },
   { key: "flows", label: "flows", icon: "flows", overview: false },
   { key: "workers", label: "jobs", icon: "workers" },
   { key: "system", label: "system", icon: "system" },
@@ -59,6 +60,7 @@ export function consoleSections(): Record<string, ConsoleSection[]> {
   const admin = isGlobalAdmin();
   return {
     flows: [{ key: "forms", label: "flows", fill: true }],
+    usage: [],
     integrations: [
       { key: "sources", label: "sources", n: "sources", add: "add source" },
       {

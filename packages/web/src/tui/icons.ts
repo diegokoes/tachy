@@ -72,6 +72,7 @@ import {
   FunnelPlus,
   FunnelX,
   Ghost,
+  Gauge,
   Gavel,
   Gift,
   GitBranch,
@@ -321,6 +322,8 @@ export const ICONS = {
   guidance: Signpost,
   structure: Layers,
   users: UserRoundGroup,
+  /** What the agent costs: turns, tokens, tools, by whom. */
+  usage: Gauge,
   workers: Terminal,
   /** One execution of a job, queued, running or finished. */
   runs: ListStart,

@@ -18,6 +18,7 @@
   import PipelinePanel from "../sources/PipelinePanel.svelte";
   import CatalogPanel from "../catalog/CatalogPanel.svelte";
   import PosturePanel from "../access/PosturePanel.svelte";
+  import UsageOverview from "../analytics/UsageOverview.svelte";
   import SourcesPanel from "../sources/SourcesPanel.svelte";
   import ProjectsPanel from "../sources/ProjectsPanel.svelte";
   import ReposPanel from "../code/ReposPanel.svelte";
@@ -71,6 +72,7 @@
     Record<string, { view: Component; detail?: Component }>
   > = {
     flows: { forms: { view: FlowsPanel } },
+    usage: {},
     integrations: {
       sources: { view: SourcesPanel },
       projects: { view: ProjectsPanel },
@@ -126,6 +128,7 @@
     integrations: PipelinePanel,
     structure: CatalogPanel,
     access: PosturePanel,
+    usage: UsageOverview,
     workers: JobsOverview,
     system: SystemOverview,
   });
