@@ -1,59 +1,65 @@
 <script lang="ts">
-  import { Modal, Button } from "../tui";
+  import { Modal } from "../tui";
   import { portal } from "../tui/portal";
   import { confetti } from "../motion/motion";
   import {
     notifyState,
-    unread,
+    unreadReplies,
     dismissToast,
     markNotificationsRead,
   } from "./notify.svelte";
 
-  // One celebration at a time: the oldest unread reply. Acknowledging it lets
-  // the next surface.
-  const celebration = $derived(
-    unread().find((n) => n.kind === "report_reply") ?? null,
+  // Every unread reply in one dialog: acknowledging reads them all, so a
+  // second reply never waits behind the first.
+  const replies = $derived(unreadReplies());
+  const title = $derived(
+    replies.length === 1
+      ? (replies[0].title ?? "an admin replied")
+      : `${replies.length} replies to your reports`,
   );
 
   let burstEl = $state<HTMLElement>();
   let landed = $state(false);
-  let lastFired = "";
+  let celebrated = false;
 
   $effect(() => {
-    if (!celebration) landed = false;
+    if (replies.length) return;
+    landed = false;
+    celebrated = false;
   });
 
-  // Fire the confetti once per celebration, once its dialog has unfolded.
+  // Once per dialog, after it has unfolded.
   $effect(() => {
-    if (celebration && burstEl && landed && celebration.id !== lastFired) {
-      lastFired = celebration.id;
-      confetti(burstEl, 44);
-    }
+    if (!replies.length || !burstEl || !landed || celebrated) return;
+    celebrated = true;
+    confetti(burstEl, 44);
   });
 
   function acknowledge() {
-    if (celebration) void markNotificationsRead([celebration.id]);
+    void markNotificationsRead(replies.map((reply) => reply.id));
   }
 </script>
 
-{#if celebration}
+{#if replies.length}
   <Modal
-    title={celebration.title ?? "an admin replied"}
+    {title}
     onConfirm={acknowledge}
     onCancel={acknowledge}
     confirmLabel="thank you"
     confirmIcon="success"
     cancelLabel="close"
-    width="30rem"
+    width="36rem"
     onOpened={() => (landed = true)}
   >
     <div class="celebrate" bind:this={burstEl}>
-      {#if celebration.body_text}
-        <p class="reply">{celebration.body_text}</p>
-      {/if}
-      <Button variant="primary" full icon="success" onclick={acknowledge}>
-        thank you for reporting it
-      </Button>
+      {#each replies as reply (reply.id)}
+        <section class="one">
+          {#if replies.length > 1 && reply.title}
+            <h3>{reply.title}</h3>
+          {/if}
+          {#if reply.body_text}<p class="reply">{reply.body_text}</p>{/if}
+        </section>
+      {/each}
     </div>
   </Modal>
 {/if}
@@ -76,6 +82,16 @@
     gap: var(--pad-4);
     min-height: 8rem;
     overflow: visible;
+  }
+  .one {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pad-1);
+  }
+  h3 {
+    margin: 0;
+    font-size: var(--fs-sm);
+    color: var(--muted);
   }
   .reply {
     margin: 0;
