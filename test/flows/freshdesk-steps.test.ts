@@ -20,7 +20,12 @@ import { registerAgentFlowActions } from "../../packages/agent/src/flow-actions"
 import { FLOW_TEMPLATES } from "../../packages/web/src/flows/templates";
 import { resetData, sql } from "../database";
 
-afterAll(() => sql.end());
+// `resetData()` keeps source_connections, and a worker slot's schema outlives
+// the file: an azure-devops connection left here reaches the next file's tickets.
+afterAll(async () => {
+  await sql`delete from source_connections where slug in ('fd-fields', 'fd-plain', 'fd-linked', 'ado-linked')`;
+  await sql.end();
+});
 
 const HOUR_MS = 3_600_000;
 

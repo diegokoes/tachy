@@ -171,6 +171,62 @@ describe("knowledge round trip", () => {
     expect(got.text).toMatch(/approved/);
     expect(got.text).toMatch(/exponential backoff/);
   });
+
+  it("hands back a near-copy instead of saving it, until confirm_new", async () => {
+    const entry = {
+      product_slug: "tpd",
+      status: "approved",
+      issue_summary: "Label renderer drops the last row on long batches",
+      symptoms: ["last row missing"],
+      root_cause: "the renderer paginates before the final flush",
+      resolution: "flush before paginating",
+    };
+    const first = await call("save_knowledge_entry", entry);
+    const firstId = (first.json as { id: string }).id;
+
+    const again = await call("save_knowledge_entry", entry);
+    expect(again.json).toMatchObject({
+      saved: false,
+      possible_duplicates: [{ id: firstId, status: "approved" }],
+      next: expect.stringContaining("confirm_new"),
+    });
+
+    const confirmed = await call("save_knowledge_entry", {
+      ...entry,
+      confirm_new: true,
+    });
+    expect(confirmed.json).toMatchObject({ saved: true });
+    expect((confirmed.json as { id: string }).id).not.toBe(firstId);
+
+    const unrelated = await call("save_knowledge_entry", {
+      product_slug: "tpd",
+      issue_summary: "Ink cartridge rattles in transit",
+      resolution: "Pack the cartridge with more padding.",
+    });
+    expect(unrelated.json).toMatchObject({ saved: true });
+  });
+
+  it("scrubs the near-copies it hands back under redaction", async () => {
+    const entry = {
+      product_slug: "tpd",
+      status: "approved",
+      issue_summary:
+        "Exports for anna.berger@example.com stall once the queue holds 500 jobs",
+      resolution: "Raise the export worker's queue limit.",
+    };
+    expect((await call("save_knowledge_entry", entry)).json).toMatchObject({
+      saved: true,
+    });
+    process.env.TACHY_REDACT = "true";
+    try {
+      const again = await call("save_knowledge_entry", entry);
+      expect(again.json).toMatchObject({ saved: false });
+      expect(again.text).not.toContain("anna.berger@example.com");
+      expect(again.text).toMatch(/\[EMAIL_1\]/);
+    } finally {
+      delete process.env.TACHY_REDACT;
+    }
+  });
 });
 
 describe("customer round trip", () => {

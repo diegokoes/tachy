@@ -82,11 +82,25 @@ registerSource("fake-code-notes", () => ({
   },
 }));
 
-/** Tickets in the "Portal Tickets" project, by id: one about the code, one not. */
-const TICKETS: Record<string, { title: string; body: string }> = {
+/**
+ * Tickets in the "Portal Tickets" project, by id: one about the code, one that
+ * names it only in a later message, and one not about it.
+ */
+const TICKETS: Record<
+  string,
+  { title: string; body: string; replies?: string[] }
+> = {
   "t-login": {
     title: "Users land on the wrong page after login",
     body: "loginRedirectTarget sends a signed-in session to /dashboard instead of /home.",
+  },
+  "t-late": {
+    title: "Question after the portal rollout",
+    body: "Hello, our team has a question about the portal since the rollout last week. Could you call us back?",
+    replies: [
+      "Thanks for reaching out. Could you describe what you see, with a screenshot if you have one?",
+      "Our developer traced it: loginRedirectTarget returns the wrong page for a signed-in session.",
+    ],
   },
   "t-ink": {
     title: "Ink cartridge rattles in transit",
@@ -98,20 +112,18 @@ registerSource("fake-code-tickets", () => ({
   type: "fake-code-tickets",
   capabilities: { postNote: false, incrementalSync: false },
   async fetchItem(id: string) {
-    const { title, body } = TICKETS[id];
+    const { title, body, replies = [] } = TICKETS[id];
     return {
       externalId: id,
       kind: "ticket" as const,
       title,
       groupKey: "Portal Tickets",
-      messages: [
-        {
-          externalId: `${id}-1`,
-          direction: "incoming" as const,
-          visibility: "public" as const,
-          bodyText: body,
-        },
-      ],
+      messages: [body, ...replies].map((bodyText, i) => ({
+        externalId: `${id}-${i + 1}`,
+        direction: i % 2 ? ("outgoing" as const) : ("incoming" as const),
+        visibility: "public" as const,
+        bodyText,
+      })),
       raw: {},
     };
   },
@@ -471,6 +483,14 @@ describe("the tools", () => {
         external_id: "t-login",
       });
       expect((fetched.json as { code: { path: string }[] }).code[0].path).toBe(
+        "src/login.ts",
+      );
+
+      const late = await call("get_context", {
+        source: "code-tickets",
+        external_id: "t-late",
+      });
+      expect((late.json as { code: { path: string }[] }).code[0].path).toBe(
         "src/login.ts",
       );
 

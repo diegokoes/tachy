@@ -11,3 +11,4 @@ export * from "./summary";
 export * from "./analysis-note";
 export { workItemScope, externalWorkItemScope } from "./scope";
 export * from "./follows";
+export * from "./query-vectors";

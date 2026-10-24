@@ -19,9 +19,13 @@ import {
   ftsMatch,
   ftsRank,
   fusedCte,
+  fuzzyMatch,
+  fuzzyScore,
+  nearestToAny,
   withSearchSession,
 } from "../search/rank";
 import { SEM_FLOOR, withRelevance } from "../search/relevance";
+import { keywordInputs } from "../search/terms";
 import { notFound, badInput } from "../infra/errors";
 import {
   assertExpectedVersion,
@@ -465,8 +469,14 @@ export interface ReferenceSearchOptions {
   customerId?: string;
   docVersion?: string;
   limit?: number;
-  /** Pre-embedded query, so a caller searching two surfaces embeds once. */
-  queryVector?: string;
+  /**
+   * The query pre-embedded, one vector per window of a long one; a doc scores
+   * by the window nearest any of its chunks. A caller searching two surfaces
+   * embeds once.
+   */
+  queryVectors?: string[];
+  /** The exact terms of a long query, which the keyword legs read instead. */
+  exactTerms?: string[];
   /** Rank this customer's docs first without excluding the general ones. */
   boostCustomerId?: string;
   /**
@@ -483,7 +493,10 @@ export async function searchReferenceDocs(
 ) {
   const limit = clampLimit(opts.limit, 6);
   if (!query.trim()) return [];
-  const qvec = opts.queryVector ?? (await embedQueryLiteral(query));
+  const queryVectors = opts.queryVectors?.length
+    ? opts.queryVectors
+    : [await embedQueryLiteral(query)];
+  const keywords = keywordInputs(query, opts.exactTerms);
 
   const inProduct = (id: string) =>
     opts.includeUnscoped
@@ -510,14 +523,18 @@ export async function searchReferenceDocs(
     -- The vector leg is chunk-level and keyed back to the doc, so a long
     -- runbook is judged by its best passage rather than its average.
     chunk_hits as (
-      select c.doc_id, c.chunk_text, c.page,
-             1 - (c.embedding <=> ${qvec}::vector) as cos_sim
-      from reference_doc_chunks c
-      join reference_docs d on d.id = c.doc_id
-      where ${filters} and c.embedding is not null and ${currentVector("c")}
-        and 1 - (c.embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
-      order by c.embedding <=> ${qvec}::vector
-      limit ${CANDIDATES}
+      ${nearestToAny(
+        queryVectors,
+        (qvec) => sql`
+          select c.doc_id, c.chunk_text, c.page,
+                 1 - (c.embedding <=> ${qvec}::vector) as cos_sim
+          from reference_doc_chunks c
+          join reference_docs d on d.id = c.doc_id
+          where ${filters} and c.embedding is not null and ${currentVector("c")}
+            and 1 - (c.embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
+          order by c.embedding <=> ${qvec}::vector
+          limit ${CANDIDATES}`,
+      )}
     ),
     best_chunk as (
       select distinct on (doc_id) doc_id as id, chunk_text as snippet, page, cos_sim
@@ -527,23 +544,25 @@ export async function searchReferenceDocs(
     vec as (
       select id, row_number() over (order by cos_sim desc) as rnk, cos_sim
       from best_chunk
+      order by cos_sim desc
+      limit ${CANDIDATES}
     ),
     lex as (
       select d.id,
-             row_number() over (order by ${ftsRank(sql`d.search_tsv`, sql`d.search_tsv_en`, query)} desc) as rnk,
-             ${ftsRank(sql`d.search_tsv`, sql`d.search_tsv_en`, query)} as fts_rank
+             row_number() over (order by ${ftsRank(sql`d.search_tsv`, sql`d.search_tsv_en`, keywords.words)} desc) as rnk,
+             ${ftsRank(sql`d.search_tsv`, sql`d.search_tsv_en`, keywords.words)} as fts_rank
       from reference_docs d
-      where ${filters} and ${ftsMatch(sql`d.search_tsv`, sql`d.search_tsv_en`, query)}
-      order by ${ftsRank(sql`d.search_tsv`, sql`d.search_tsv_en`, query)} desc
+      where ${filters} and ${ftsMatch(sql`d.search_tsv`, sql`d.search_tsv_en`, keywords.words)}
+      order by ${ftsRank(sql`d.search_tsv`, sql`d.search_tsv_en`, keywords.words)} desc
       limit ${CANDIDATES}
     ),
     fuzzy as (
       select d.id,
-             row_number() over (order by word_similarity(${query}, d.search_text) desc) as rnk,
-             word_similarity(${query}, d.search_text) as trgm_sim
+             row_number() over (order by ${fuzzyScore(keywords.fuzzy, sql`d.search_text`)} desc) as rnk,
+             ${fuzzyScore(keywords.fuzzy, sql`d.search_text`)} as trgm_sim
       from reference_docs d
-      where ${filters} and ${query} <% d.search_text
-      order by word_similarity(${query}, d.search_text) desc
+      where ${filters} and ${fuzzyMatch(keywords.fuzzy, sql`d.search_text`)}
+      order by ${fuzzyScore(keywords.fuzzy, sql`d.search_text`)} desc
       limit ${CANDIDATES}
     ),
     ${fusedCte(
