@@ -71,6 +71,7 @@ export { default as Caret, caretSide } from "./Caret.svelte";
 export { default as CaretHost } from "./CaretHost.svelte";
 export { default as CaretInput } from "./CaretInput.svelte";
 export { default as SearchBox } from "./SearchBox.svelte";
+export { default as Choice } from "./Choice.svelte";
 export { default as BarField } from "./BarField.svelte";
 export { default as NoMatch } from "./NoMatch.svelte";
 export { default as Spinner } from "./Spinner.svelte";

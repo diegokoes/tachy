@@ -5,7 +5,7 @@
     type ConditionOp,
     type FlowOption,
   } from "@tachy/contract";
-  import Choice from "../settings/Choice.svelte";
+  import Choice from "../tui/Choice.svelte";
   import { Icon, Select } from "../tui";
   import ConditionEditor from "./ConditionEditor.svelte";
   import OptionSelect from "./OptionSelect.svelte";
