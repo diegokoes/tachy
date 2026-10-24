@@ -171,6 +171,40 @@ describe("knowledge round trip", () => {
     expect(got.text).toMatch(/approved/);
     expect(got.text).toMatch(/exponential backoff/);
   });
+
+  it("hands back a near-copy instead of saving it, until confirm_new", async () => {
+    const entry = {
+      product_slug: "tpd",
+      status: "approved",
+      issue_summary: "Label renderer drops the last row on long batches",
+      symptoms: ["last row missing"],
+      root_cause: "the renderer paginates before the final flush",
+      resolution: "flush before paginating",
+    };
+    const first = await call("save_knowledge_entry", entry);
+    const firstId = (first.json as { id: string }).id;
+
+    const again = await call("save_knowledge_entry", entry);
+    expect(again.json).toMatchObject({
+      saved: false,
+      possible_duplicates: [{ id: firstId, status: "approved" }],
+      next: expect.stringContaining("confirm_new"),
+    });
+
+    const confirmed = await call("save_knowledge_entry", {
+      ...entry,
+      confirm_new: true,
+    });
+    expect(confirmed.json).toMatchObject({ saved: true });
+    expect((confirmed.json as { id: string }).id).not.toBe(firstId);
+
+    const unrelated = await call("save_knowledge_entry", {
+      product_slug: "tpd",
+      issue_summary: "Ink cartridge rattles in transit",
+      resolution: "Pack the cartridge with more padding.",
+    });
+    expect(unrelated.json).toMatchObject({ saved: true });
+  });
 });
 
 describe("customer round trip", () => {

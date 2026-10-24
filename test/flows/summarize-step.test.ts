@@ -157,6 +157,27 @@ describe("agent.summarize_item", () => {
     expect(advisory.meta).toMatchObject({ flow_id: expect.any(String) });
   });
 
+  it("writes the summary in English, quoting errors as they appear", async () => {
+    const step = flowAction("agent.summarize_item");
+    await step.run(await context(), step.params.parse({}));
+    const [advisory] = vi.mocked(runAdvisory).mock.calls[0];
+    const system = advisory.system.replace(/\s+/g, " ");
+    expect(system).toContain("Write in English");
+    expect(system).toContain("quote error messages as they appear");
+  });
+
+  it("answers a flow step in English unless its instruction asks otherwise", async () => {
+    const step = flowAction("agent.ask");
+    await step.run(
+      await context(),
+      step.params.parse({ prompt: "What does the customer report?" }),
+    );
+    const [advisory] = vi.mocked(runAdvisory).mock.calls[0];
+    expect(advisory.system.replace(/\s+/g, " ")).toContain(
+      "Answer in English unless the instruction asks for another language.",
+    );
+  });
+
   it("summarises without the messages the connection's rules skip", async () => {
     thread.push({
       externalId: "analysis",

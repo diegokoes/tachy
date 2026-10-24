@@ -21,9 +21,13 @@ import {
   ftsMatch,
   ftsRank,
   fusedCte,
+  fuzzyMatch,
+  fuzzyScore,
+  nearestToAny,
   withSearchSession,
 } from "../search/rank";
 import { SEM_FLOOR, withRelevance } from "../search/relevance";
+import { keywordInputs } from "../search/terms";
 import { notFound, badInput } from "../infra/errors";
 import { parseStructured } from "./structured";
 import {
@@ -167,6 +171,13 @@ function buildEmbedText(
     .trim();
 }
 
+export async function saveKnowledgeEntry(input: KnowledgeInput) {
+  return insertKnowledgeEntry(await prepareKnowledgeEntry(input));
+}
+
+/** A new entry with its scope, component and vector resolved, not yet stored. */
+export type PreparedEntry = Awaited<ReturnType<typeof prepareKnowledgeEntry>>;
+
 /**
  * Product, team and version default from the work item; the customer does
  * not. Most lessons learned on one customer's ticket are true of the product,
@@ -174,7 +185,7 @@ function buildEmbedText(
  * cite it as theirs. The unit is inherited once a stated customer matches the
  * ticket's.
  */
-export async function saveKnowledgeEntry(input: KnowledgeInput) {
+export async function prepareKnowledgeEntry(input: KnowledgeInput) {
   let productId = input.productId ?? null;
   let teamId = input.teamId ?? null;
   let affectedVersion = input.affectedVersion ?? null;
@@ -213,7 +224,35 @@ export async function saveKnowledgeEntry(input: KnowledgeInput) {
   );
   const text = buildEmbedText(input, patternDescription, productArea);
   const embedding = text ? toVectorLiteral(await embedPassage(text)) : null;
+  return {
+    input,
+    productId,
+    teamId,
+    affectedVersion,
+    customerId,
+    customerUnitId,
+    componentId,
+    productArea,
+    confidence,
+    structured,
+    embedding,
+  };
+}
 
+export async function insertKnowledgeEntry(prepared: PreparedEntry) {
+  const {
+    input,
+    productId,
+    teamId,
+    affectedVersion,
+    customerId,
+    customerUnitId,
+    componentId,
+    productArea,
+    confidence,
+    structured,
+    embedding,
+  } = prepared;
   return sql.begin(async (tx) => {
     const [row] = await tx<RevisedRow[]>`
       insert into knowledge_entries
@@ -250,6 +289,49 @@ export async function saveKnowledgeEntry(input: KnowledgeInput) {
     );
     return { id: row.id, status: row.status };
   });
+}
+
+/** Near-copies offered at most for one new entry. */
+const MAX_NEAR_DUPLICATES = 3;
+
+export interface NearDuplicate {
+  id: string;
+  issue_summary: string | null;
+  status: string;
+  superseded_by: string | null;
+  /** Cosine between the two entries' vectors, 0 to 1. */
+  similarity: number;
+}
+
+/**
+ * Stored entries that hold nearly the lesson `prepared` does, at `floor` or
+ * above, closest first: in its product, or in none, and rejected or archived
+ * ones left out. An entry with no text to embed has none.
+ */
+export async function nearDuplicateEntries(
+  prepared: PreparedEntry,
+  floor: number,
+): Promise<NearDuplicate[]> {
+  if (!prepared.embedding) return [];
+  const inScope = prepared.productId
+    ? sql`and (product_id = ${prepared.productId} or product_id is null)`
+    : sql``;
+  const rows = await withSearchSession(
+    (tx) => tx`
+      select id, issue_summary, status, superseded_by,
+             1 - (embedding <=> ${prepared.embedding}::vector) as similarity
+      from knowledge_entries
+      where status in ('draft', 'approved', 'deprecated')
+        and embedding is not null and ${currentVector()} ${inScope}
+        and 1 - (embedding <=> ${prepared.embedding}::vector) >= ${floor}
+      order by embedding <=> ${prepared.embedding}::vector
+      limit ${MAX_NEAR_DUPLICATES}
+    `,
+  );
+  return (rows as unknown as NearDuplicate[]).map((row) => ({
+    ...row,
+    similarity: Number(Number(row.similarity).toFixed(3)),
+  }));
 }
 
 /**
@@ -315,8 +397,14 @@ export interface SearchOptions extends KnowledgeFilters {
    */
   includeUnscoped?: boolean;
   limit?: number;
-  /** Pre-embedded query, so a caller searching two surfaces embeds once. */
-  queryVector?: string;
+  /**
+   * The query pre-embedded, one vector per window of a long one; an entry
+   * scores by the window nearest it. A caller searching two surfaces embeds
+   * once.
+   */
+  queryVectors?: string[];
+  /** The exact terms of a long query, which the keyword legs read instead. */
+  exactTerms?: string[];
   /**
    * Rank this customer's entries above equally-relevant general ones, without
    * excluding anything. Distinct from `customerId`, which narrows to them - the
@@ -333,7 +421,10 @@ export interface SearchOptions extends KnowledgeFilters {
 export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
   const limit = clampLimit(opts.limit, 8);
   if (!query.trim()) return [];
-  const qvec = opts.queryVector ?? (await embedQueryLiteral(query));
+  const queryVectors = opts.queryVectors?.length
+    ? opts.queryVectors
+    : [await embedQueryLiteral(query)];
+  const keywords = keywordInputs(query, opts.exactTerms);
 
   // Deprecated entries are included: a flagged stale lesson beats the model
   // re-deriving it. Consumers warn on status='deprecated'.
@@ -358,31 +449,40 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
     -- Each leg generates its own candidates through its own index, so a query
     -- that matches nothing on every leg returns nothing at all.
     vec as (
-      select id,
-             row_number() over (order by embedding <=> ${qvec}::vector) as rnk,
-             1 - (embedding <=> ${qvec}::vector) as cos_sim
-      from knowledge_entries
-      where ${filters} and embedding is not null and ${currentVector()}
-        and 1 - (embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
-      order by embedding <=> ${qvec}::vector
-      limit ${CANDIDATES}
+      select id, row_number() over (order by cos_sim desc, id) as rnk, cos_sim
+      from (
+        select id, max(cos_sim) as cos_sim
+        from (${nearestToAny(
+          queryVectors,
+          (qvec) => sql`
+            select id, 1 - (embedding <=> ${qvec}::vector) as cos_sim
+            from knowledge_entries
+            where ${filters} and embedding is not null and ${currentVector()}
+              and 1 - (embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
+            order by embedding <=> ${qvec}::vector
+            limit ${CANDIDATES}`,
+        )}) near
+        group by id
+        order by cos_sim desc, id
+        limit ${CANDIDATES}
+      ) best
     ),
     lex as (
       select id,
-             row_number() over (order by ${ftsRank(sql`search_tsv`, sql`search_tsv_en`, query)} desc) as rnk,
-             ${ftsRank(sql`search_tsv`, sql`search_tsv_en`, query)} as fts_rank
+             row_number() over (order by ${ftsRank(sql`search_tsv`, sql`search_tsv_en`, keywords.words)} desc) as rnk,
+             ${ftsRank(sql`search_tsv`, sql`search_tsv_en`, keywords.words)} as fts_rank
       from knowledge_entries
-      where ${filters} and ${ftsMatch(sql`search_tsv`, sql`search_tsv_en`, query)}
-      order by ${ftsRank(sql`search_tsv`, sql`search_tsv_en`, query)} desc
+      where ${filters} and ${ftsMatch(sql`search_tsv`, sql`search_tsv_en`, keywords.words)}
+      order by ${ftsRank(sql`search_tsv`, sql`search_tsv_en`, keywords.words)} desc
       limit ${CANDIDATES}
     ),
     fuzzy as (
       select id,
-             row_number() over (order by word_similarity(${query}, search_text) desc) as rnk,
-             word_similarity(${query}, search_text) as trgm_sim
+             row_number() over (order by ${fuzzyScore(keywords.fuzzy, sql`search_text`)} desc) as rnk,
+             ${fuzzyScore(keywords.fuzzy, sql`search_text`)} as trgm_sim
       from knowledge_entries
-      where ${filters} and ${query} <% search_text
-      order by word_similarity(${query}, search_text) desc
+      where ${filters} and ${fuzzyMatch(keywords.fuzzy, sql`search_text`)}
+      order by ${fuzzyScore(keywords.fuzzy, sql`search_text`)} desc
       limit ${CANDIDATES}
     ),
     ${fusedCte(
