@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { keepUnits } from "./figures";
   import { toneVar } from "./scale";
   import type { Tone } from "./tone";
 
@@ -24,18 +25,21 @@ against one another: the figure, what it is, out of what.
   {#each items as item (item.key)}
     <div class="one" style="--tone-color: {toneVar(item.tone ?? 'accent')}">
       <span class="v">{item.value}</span>
-      <span class="l">{item.label}</span>
+      <span class="l">{keepUnits(item.label)}</span>
       {#if item.note}<span class="n">{item.note}</span>{/if}
     </div>
   {/each}
 </div>
 
 <style>
+  /* Sized by its tile, not its figures, so a short tile can drop the notes
+     instead of pushing the figures up over its header. */
   .figures {
+    container-type: size;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-content: center;
-    gap: var(--pad-5, var(--pad-4)) var(--pad-4);
+    align-content: safe center;
+    gap: var(--pad-3) var(--pad-4);
     width: 100%;
     height: 100%;
     min-height: 0;
@@ -64,5 +68,10 @@ against one another: the figure, what it is, out of what.
     font-family: var(--font-mono);
     font-size: var(--fs-xs);
     color: var(--muted);
+  }
+  @container (max-height: 11rem) {
+    .n {
+      display: none;
+    }
   }
 </style>

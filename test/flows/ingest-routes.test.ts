@@ -142,6 +142,23 @@ describe("ingest routes", () => {
     expect(audit.detail).toMatchObject({ part: "ingest", skip_rules: 1 });
   });
 
+  it("answers a source with no token as bad input that names it", async () => {
+    registerSource("fake-env-token", () => {
+      throw new Error("Missing FAKE token. Set FAKE_TOKEN in your env.");
+    });
+    await addSourceConnection({
+      sourceType: "fake-env-token",
+      slug: "fd-no-token",
+      baseUrl: "https://example.invalid",
+    });
+    const response = await app.request(
+      "/api/flows/options/source.groups?connection=fd-no-token",
+      { headers: { cookie: rootCookie } },
+    );
+    expect(response.status).toBe(400);
+    expect(await response.text()).toContain("No token for 'fd-no-token'");
+  });
+
   it("refuses a rule that does not parse", async () => {
     const response = await request(rootCookie, "", {
       method: "PUT",

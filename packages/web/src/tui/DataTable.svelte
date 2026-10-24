@@ -87,7 +87,7 @@
         </tr>
       {/each}
 
-      {#if !rows.length}
+      {#if !rows.length && !error}
         <tr class="none">
           <td colspan={columns.length}>
             {#if loading}

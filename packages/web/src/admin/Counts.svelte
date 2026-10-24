@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { RAMP } from "../tui";
+  import { keepUnits, RAMP } from "../tui";
   import { groupCounts, showSection, type Count } from "./overview";
 
   let {
@@ -26,7 +26,7 @@
       >{counter.text ?? (counter.value ?? 0).toLocaleString()}</span
     >
   {/if}
-  <span class="lbl">{counter.label}</span>
+  <span class="lbl">{keepUnits(counter.label)}</span>
 {/snippet}
 
 {#snippet part(counter: Count)}
@@ -35,7 +35,7 @@
       ? RAMP[0].repeat(2)
       : (counter.text ?? (counter.value ?? 0).toLocaleString())}</span
   >
-  <span class="pl">{counter.label}</span>
+  <span class="pl">{keepUnits(counter.label)}</span>
 {/snippet}
 
 {#snippet parts(list: Count[])}
@@ -102,9 +102,11 @@
     min-width: 0;
   }
 
+  /* At least as wide as its figure, so a narrow window wraps labels rather
+     than cutting numbers. */
   .group {
     flex: var(--w) 1 0;
-    min-width: 0;
+    min-width: min-content;
     display: flex;
     align-items: stretch;
   }
@@ -125,7 +127,7 @@
     display: flex;
     align-items: flex-start;
     gap: var(--pad-3);
-    min-width: 0;
+    min-width: min-content;
     padding: var(--pad-1) var(--pad-2);
     margin-left: calc(var(--pad-2) * -1);
     border: none;
@@ -150,7 +152,7 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--pad-1);
-    min-width: 0;
+    min-width: min-content;
   }
   .cell.go,
   .part.go {
@@ -164,12 +166,9 @@
   }
 
   .n {
-    max-width: 100%;
     font-family: var(--font-mono);
     font-size: var(--fs-fig);
     line-height: 1.1;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
   .accent {
@@ -193,15 +192,17 @@
     user-select: none;
   }
 
-  .lbl {
-    max-width: 100%;
+  .lbl,
+  .pl {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
     font-size: var(--fs-xs);
     letter-spacing: var(--label-spacing);
     text-transform: uppercase;
     color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .parts {
@@ -232,15 +233,6 @@
     font-family: var(--font-mono);
     font-size: var(--fs-sm);
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-  .pl {
-    font-size: var(--fs-xs);
-    letter-spacing: var(--label-spacing);
-    text-transform: uppercase;
-    color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
