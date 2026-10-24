@@ -10,6 +10,8 @@ import {
   EMBEDDING_SPEC,
   embedQueryLiteral,
   exactTerms,
+  fuzzyMatch,
+  nearestToAny,
   queryWindows,
   relevance,
   SEM_FLOOR,
@@ -212,6 +214,56 @@ describe("a whole ticket", () => {
   });
 });
 
+describe("exact terms", () => {
+  /** Each row's keyword-leg signals, by fixture key. */
+  const signalsOf = (rows: Record<string, unknown>[]) =>
+    new Map(
+      [...idByKey].map(([key, id]) => {
+        const row = rows.find((r) => r.id === id);
+        return [
+          key,
+          { fts: Number(row?.fts_rank ?? 0), trgm: Number(row?.trgm_sim ?? 0) },
+        ];
+      }),
+    );
+
+  it("match an entry for any one of several terms, on the keyword and the fuzzy leg", async () => {
+    const signals = signalsOf(
+      await searchKnowledge("a long ticket about the plant", {
+        exactTerms: ["LC_TIMEOUT", "PDF_EMPTY"],
+      }),
+    );
+    for (const key of ["lc-template-cache", "export-empty-pdf"]) {
+      expect(signals.get(key)!.fts, key).toBeGreaterThan(0);
+      expect(signals.get(key)!.trgm, key).toBeGreaterThan(0);
+    }
+    for (const key of ["printer-023", "scanner-pairing", "cert-expiry"])
+      expect(signals.get(key)!.fts, key).toBe(0);
+  });
+
+  it("match a quoted message with an 'or' in it as a phrase", async () => {
+    const signals = signalsOf(
+      await searchKnowledge("a long ticket about the plant", {
+        exactTerms: ['"in the template, or split the label"'],
+      }),
+    );
+    expect(signals.get("printer-023")!.fts).toBeGreaterThan(0);
+    expect(signals.get("lc-template-cache")!.fts).toBe(0);
+  });
+
+  it("match a doc for any one of several terms", async () => {
+    const signals = signalsOf(
+      await searchReferenceDocs("a long ticket about the plant", {
+        exactTerms: ['"dead-letter topic"', '"template revision"'],
+      }),
+    );
+    for (const key of ["deploy-runbook", "arch-overview"]) {
+      expect(signals.get(key)!.fts, key).toBeGreaterThan(0);
+      expect(signals.get(key)!.trgm, key).toBeGreaterThan(0);
+    }
+  });
+});
+
 describe("near-copies of an entry", () => {
   /** Cosine between a stored entry and one prepared from `entry`, in SQL. */
   async function similarityTo(
@@ -328,5 +380,43 @@ describe("index usage", () => {
     );
     await sql`reset enable_seqscan`;
     expect(plan).toContain("knowledge_trgm_idx");
+  });
+
+  /** The plan of `fragment` as the search composes it, seqscan off. */
+  const planOfFragment = (fragment: ReturnType<typeof nearestToAny>) =>
+    sql.begin(async (tx) => {
+      await tx`set local enable_seqscan = off`;
+      return JSON.stringify(await tx`explain (format json) ${fragment}`);
+    });
+
+  const occurrences = (text: string, part: string) =>
+    text.split(part).length - 1;
+
+  it("keeps the HNSW index for every window of a long query", async () => {
+    const vectors = await Promise.all(
+      ["scanner offline", "empty invoice export", "agents disconnect"].map(
+        embedQueryLiteral,
+      ),
+    );
+    const plan = await planOfFragment(
+      nearestToAny(
+        vectors,
+        (qvec) => sql`
+          select id from knowledge_entries where embedding is not null
+          order by embedding <=> ${qvec}::vector limit 50`,
+      ),
+    );
+    expect(occurrences(plan, "knowledge_embedding_idx")).toBe(vectors.length);
+  });
+
+  it("keeps the trigram index for several exact terms", async () => {
+    const plan = await planOfFragment(
+      sql`select id from knowledge_entries where ${fuzzyMatch(
+        ["LC_TIMEOUT", "PDF_EMPTY", "TLS_CERT_EXPIRED"],
+        sql`search_text`,
+      )}`,
+    );
+    expect(plan).toContain("BitmapOr");
+    expect(occurrences(plan, "knowledge_trgm_idx")).toBe(3);
   });
 });
