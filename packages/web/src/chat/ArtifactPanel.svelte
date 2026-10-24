@@ -492,8 +492,8 @@
       class="edge-tab"
       class:active={open || !!chat.artifact}
       onclick={toggle}
-      use:tip={`artifacts (${keyLabel(hotkey)})`}
-      aria-label="artifacts"
+      use:tip={`recipes (${keyLabel(hotkey)})`}
+      aria-label="recipes"
       aria-expanded={open}
     >
       <!-- The frame is a drawn shape, not the button's own border: clip-path
@@ -521,7 +521,7 @@
   <!-- The same window every other dialog draws: shared scrim, titlebar
        actions on the right, no heading and no scanlines. -->
   <Modal
-    title="artifacts"
+    title="recipes"
     width="46rem"
     cancelLabel="close"
     bind:element={pickerEl}
@@ -534,8 +534,8 @@
         tone="ok"
         square
         icon="plus"
-        title="new artifact"
-        aria-label="new artifact"
+        title="new recipe"
+        aria-label="new recipe"
         onclick={openCreate}
       />
     {/snippet}
@@ -545,7 +545,7 @@
       {#if loading && items.length === 0}
         <p class="muted">loading…</p>
       {:else if items.length === 0 && !error}
-        <p class="muted empty">no artifacts yet</p>
+        <p class="muted empty">no recipes yet</p>
       {/if}
       {#each grouped as group (group.scope)}
         <div class="scope-head">
@@ -618,7 +618,7 @@
 
 {#if editorOpen}
   <Modal
-    title={editorMode === "create" ? "new artifact" : "edit artifact"}
+    title={editorMode === "create" ? "new recipe" : "edit recipe"}
     width="60rem"
     confirmLabel="save"
     confirmIcon={editorMode === "create" ? "create" : "save"}

@@ -1,5 +1,6 @@
 export interface Subcommand {
   name: string;
+  /** What follows the command, in words, for the menu; never parsed. */
   args: string;
   description: string;
   /** Handled by the web app itself, with no agent turn at all. */
@@ -9,6 +10,7 @@ export interface Subcommand {
 
 export interface BuiltinCommand {
   name: string;
+  /** What follows the command, in words, for the menu; never parsed. */
   args: string;
   description: string;
   expand: (args: string) => string;
@@ -31,7 +33,7 @@ const argsLine = (args: string) =>
 export const BUILTIN_COMMANDS: BuiltinCommand[] = [
   {
     name: "compact",
-    args: "<source> <ticket-id> [--no-note]",
+    args: "source ticket",
     description: "rebuild a repetitive ticket as a de-duplicated script",
     expand: (args) =>
       [
@@ -43,7 +45,7 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
   },
   {
     name: "summary",
-    args: "<source> <ticket-id>",
+    args: "source ticket",
     description: "post a summary of a ticket onto it as a private note",
     // Self-contained, so the steps are paid for on the click, not every turn.
     expand: (args) =>
@@ -57,13 +59,13 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
   group("az", "Azure DevOps work items", [
     {
       name: "new",
-      args: "[project] [type]",
+      args: "project type",
       description: "compose a work item with the project's own fields",
       client: true,
     },
     {
       name: "explain",
-      args: "<id>",
+      args: "item",
       description: "explain a work item: what, why, where it stands, what next",
       // Self-contained: this is paid only when someone types it, where a mode
       // in prompt.md is paid on every message.
@@ -91,7 +93,7 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
   },
   {
     name: "ingest-wiki",
-    args: "<source> <project> [wiki] [page-path]",
+    args: "source project wiki page",
     description: "pull Azure DevOps wiki pages into reference docs",
     hidden: true,
     expand: (args) =>
@@ -102,7 +104,7 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
   },
   {
     name: "wiki-draft",
-    args: "<product> [component=<slug>] [article=<slug>]",
+    args: "product component article",
     description: "write or refresh a wiki article from recorded knowledge",
     hidden: true,
     expand: (args) =>
@@ -127,7 +129,7 @@ function group(
   const names = subcommands.map((s) => s.name).join(", ");
   return {
     name,
-    args: `<${subcommands.map((s) => s.name).join("|")}> ...`,
+    args: subcommands.map((s) => s.name).join(" · "),
     description,
     subcommands,
     expand: (args) => {
