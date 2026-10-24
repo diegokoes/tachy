@@ -19,7 +19,7 @@
   } from "../theme/theme.svelte";
   import { Button, Icon, tip } from "../tui";
   import AccentModal from "./AccentModal.svelte";
-  import Choice from "./Choice.svelte";
+  import Choice from "../tui/Choice.svelte";
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";
 

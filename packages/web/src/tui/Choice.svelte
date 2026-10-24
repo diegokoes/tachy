@@ -1,6 +1,8 @@
 <script lang="ts" generics="T extends string | number">
   import { gsap, reducedMotion } from "../motion/gsap";
-  import { Icon, tip, type IconName } from "../tui";
+  import Icon from "./Icon.svelte";
+  import type { IconName } from "./icons";
+  import { tip } from "./tip.svelte";
 
   let {
     options,
