@@ -105,8 +105,8 @@ export const reports = new Hono()
           kind: "report_reply",
           title:
             report.type === "bug"
-              ? "An admin replied to your bug report"
-              : "An admin replied to your feature request",
+              ? "an admin replied to your bug report"
+              : "an admin replied to your feature request",
           body: message.body_text,
           ref: { report_id: id },
         });

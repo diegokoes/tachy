@@ -39,6 +39,10 @@ export function dismissToast(id: number): void {
 export const unread = (): NotificationRow[] =>
   notifyState.items.filter((n) => !n.read_at);
 
+/** Admins' replies to the reader's reports that have not been acknowledged. */
+export const unreadReplies = (): NotificationRow[] =>
+  unread().filter((n) => n.kind === "report_reply");
+
 /** Changes on items the reader follows, and flow notices, newest first. */
 export const itemChanges = (): NotificationRow[] =>
   notifyState.items.filter(
