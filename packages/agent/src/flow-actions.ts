@@ -34,32 +34,30 @@ unless the instruction asks for another language.`;
 export function registerAgentFlowActions(): void {
   defineFlowAction({
     key: "agent.ask",
-    title: "Ask tachy",
+    title: "ask tachy",
     description:
-      "One prompt to the model, with the material you give it. Uses the flow owner's model credential.",
+      "one prompt to the model, with the material you give it. uses the flow owner's model credential",
     category: "agent",
     writes: false,
     params: z.object({
       prompt: z
         .string()
         .min(1)
-        .describe("What to do, e.g. summarise the thread for a developer."),
+        .describe("what to do, e.g. summarise the thread for a developer"),
       material: z
         .string()
         .default("")
         .meta({ title: "context" })
-        .describe("What it works from, e.g. {{steps.fetch.text}}."),
+        .describe("what it works from, e.g. {{steps.fetch.text}}"),
       answer: z
         .enum(["text", "json"])
         .default("text")
-        .describe(
-          "json asks for one JSON object, readable as steps.<id>.json.",
-        ),
+        .describe("json asks for one JSON object, readable as steps.<id>.json"),
       tier: z
         .enum(["cheap", "caller"])
         .default("caller")
         .meta({ title: "model" })
-        .describe("cheap for a quick yes or no, caller for the owner's model."),
+        .describe("cheap for a quick yes or no, caller for the owner's model"),
     }),
     output: z.object({
       text: z.string(),
@@ -97,16 +95,16 @@ export function registerAgentFlowActions(): void {
 
   defineFlowAction({
     key: "agent.summarize_item",
-    title: "Summarise ticket",
+    title: "summarise ticket",
     description:
-      "Reads the ticket fresh, writes a summary (problem, status, timeline, what was tried) and posts it as a private note, replacing the previous summary. Uses the flow owner's model credential.",
+      "reads the ticket fresh, writes a summary (problem, status, timeline, what was tried) and posts it as a private note, replacing the previous summary. uses the flow owner's model credential",
     category: "agent",
     writes: true,
     params: z.object({
       post: z
         .boolean()
         .default(true)
-        .describe("Off keeps the summary in the run, as steps.<id>.text."),
+        .describe("off keeps the summary in the run, as steps.<id>.text"),
     }),
     output: z.object({
       text: z.string(),

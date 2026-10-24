@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from "svelte";
-  import type { IndexPreview } from "@tachy/contract";
+  import { DEFAULT_MAX_FILE_KB, type IndexPreview } from "@tachy/contract";
   import { api } from "../api";
   import { csv } from "../tui/fields";
   import { ComponentCache } from "../library/filing.svelte";
@@ -20,6 +20,7 @@
     DeleteButton,
     ErrorMark,
     Icon,
+    InfoMark,
     Meter,
     Note,
     Select,
@@ -379,8 +380,8 @@
     <Spinner />
   {:else if !repo || !draft}
     <Note>
-      No repo named {slug}.
-      <button class="link" onclick={() => navigate(LIST)}>All repos</button>
+      no repo named {slug}.
+      <button class="link" onclick={() => navigate(LIST)}>all repos</button>
     </Note>
   {:else}
     {@const edited = draft}
@@ -606,7 +607,7 @@
                   class="kb"
                   type="number"
                   min="1"
-                  placeholder="200"
+                  placeholder={String(DEFAULT_MAX_FILE_KB)}
                   bind:value={edited.max_file_kb}
                   disabled={!canEdit}
                   aria-label="max file size in KB"
@@ -627,7 +628,7 @@
       <div class="col">
         <Group label="files" icon="folder">
           {#if !canEdit}
-            <p class="quiet">Only editors of this repo see its files.</p>
+            <p class="quiet">only editors of this repo see its files</p>
           {:else if previewError && !preview}
             <p class="quiet">
               <span class="bad">{previewError}</span>
@@ -655,9 +656,13 @@
             />
             <Rows>
               <Row label="patterns">
+                {#snippet mark()}
+                  <InfoMark label="about patterns"
+                    >paths or globs to leave out, comma-separated</InfoMark
+                  >
+                {/snippet}
                 <input
                   value={patternText}
-                  placeholder="scripts/**/*.json"
                   aria-label="exclude patterns"
                   spellcheck="false"
                   onfocus={startTyping}
@@ -674,8 +679,8 @@
             label="file types"
             icon="fileTypes"
             hint={edited.extensions
-              ? "Found in this repo. This repo's own set is on."
-              : "Found in this repo. The built-in set is on."}
+              ? "found in this repo. this repo's own set is on"
+              : "found in this repo. the built-in set is on"}
           >
             {#snippet action()}
               {#if edited.extensions}

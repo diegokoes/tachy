@@ -5,6 +5,13 @@ export const AREA = "System.AreaPath";
 export const ITERATION = "System.IterationPath";
 export const TAGS = "System.Tags";
 
+/** How the tags field is written, for where ADO gives it no help text. */
+const TAGS_HELP = "tags, separated by ;";
+
+/** What the info mark beside a field's label says, if anything. */
+export const helpOf = (field: FieldSpec): string =>
+  field.help_text || (field.reference_name === TAGS ? TAGS_HELP : "");
+
 /**
  * Fields ADO fills in itself or that describe an item's life after creation.
  * Several are not flagged read-only in the field list, so the flag alone would

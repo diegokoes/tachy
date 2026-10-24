@@ -35,8 +35,8 @@
 >
   {#if !groups.length}
     <p class="quiet">
-      Nothing outstanding. Fetch projects when registering one to check for any
-      that were never picked up.
+      nothing outstanding. fetch projects when registering one to check for any
+      that were never picked up
     </p>
   {:else}
     <ul class="groups">

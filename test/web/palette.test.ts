@@ -310,7 +310,7 @@ describe("places", () => {
     ] as unknown as typeof wikis.rows;
     wikis.loaded = true;
 
-    expect(byId("wiki:general")?.label).toBe("General (org-wide)");
+    expect(byId("wiki:general")?.label).toBe("general (org-wide)");
     const gaps = byId("wiki-gaps:billing")!;
     expect(gaps.trail).toEqual(["wiki", "Billing"]);
     gaps.run();

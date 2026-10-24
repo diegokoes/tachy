@@ -122,7 +122,7 @@
       label: "headers",
       formOnly: true,
       edit: "textarea",
-      info: `Name: value, one per line. ${TOKEN_PLACEHOLDER}: the token.`,
+      info: `name: value, one per line. ${TOKEN_PLACEHOLDER}: the token`,
       initial: `Authorization: Bearer ${TOKEN_PLACEHOLDER}`,
       value: (row) => formatPairs(httpConfig(row)?.headers, ": "),
       visible: isHttp,
@@ -134,7 +134,7 @@
       formOnly: true,
       edit: "select",
       options: () => commandOptions,
-      info: "Programs listed in TACHY_MCP_STDIO_COMMANDS.",
+      info: "programs listed in TACHY_MCP_STDIO_COMMANDS",
       value: (row) => stdioConfig(row)?.command ?? "",
       visible: (d) => !isHttp(d),
       group: "connection",
@@ -144,7 +144,7 @@
       label: "arguments",
       formOnly: true,
       edit: "textarea",
-      info: `One per line. ${TEMPLATE_INFO}`,
+      info: `one per line. ${TEMPLATE_INFO}`,
       value: (row) => formatLines(stdioConfig(row)?.args),
       visible: (d) => !isHttp(d),
       group: "connection",
@@ -164,7 +164,7 @@
       label: "files",
       formOnly: true,
       edit: "textarea",
-      info: `Each file starts with a '--- path' line. ${TEMPLATE_INFO}`,
+      info: `each file starts with a '--- path' line. ${TEMPLATE_INFO}`,
       value: (row) => formatFiles(stdioConfig(row)?.files),
       visible: (d) => !isHttp(d),
       group: "connection",
@@ -179,7 +179,7 @@
         { value: "personal", label: "personal" },
       ],
       initial: "shared",
-      info: "Shared: a pool kept here. Personal: each person's own, saved in Settings › agent.",
+      info: "shared: a pool kept here. personal: each person's own, saved in settings › agent",
       group: "access",
     },
     {
@@ -193,7 +193,7 @@
       label: "rate budget",
       formOnly: true,
       edit: "text",
-      info: "seconds/calls per token, comma-separated.",
+      info: "seconds/calls per token, comma-separated",
       value: (row) => formatWindows(row.rate_windows),
       group: "limits",
     },
@@ -202,7 +202,7 @@
       label: "rate-limit codes",
       formOnly: true,
       edit: "text",
-      info: "JSON-RPC codes, comma-separated. HTTP 429 always counts.",
+      info: "JSON-RPC codes, comma-separated. HTTP 429 always counts",
       value: (row) => formatCodes(row.rate_limit_codes),
       group: "limits",
     },
@@ -227,7 +227,7 @@
       label: `${t("customer")} bindings`,
       formOnly: true,
       edit: "textarea",
-      info: `argument = fact kind, one per line. The agent passes a ${t("customer")}; the argument is filled from its fact.`,
+      info: `argument = fact kind, one per line. the agent passes a ${t("customer")}; the argument is filled from its fact`,
       value: (row) => formatPairs(row.argument_bindings, " = "),
       group: "agent",
     },
@@ -236,7 +236,7 @@
       label: "note for the agent",
       formOnly: true,
       edit: "textarea",
-      info: "Appended to every tool's description.",
+      info: "appended to every tool's description",
       group: "agent",
     },
     {
@@ -244,7 +244,7 @@
       label: "redaction",
       formOnly: true,
       edit: "checkbox",
-      info: "Scrub emails, phone numbers and secrets from answers.",
+      info: "scrub emails, phone numbers and secrets from answers",
       group: "agent",
     },
     {
@@ -386,7 +386,7 @@
         <span>{team.name}</span>
       </label>
     {/each}
-    <Note>None ticked: everyone.</Note>
+    <Note>none ticked: everyone</Note>
     {#if mode === "edit" && row && probes[row.slug]}
       {@const probe = probes[row.slug]}
       {#if probe.ok}
@@ -415,8 +415,8 @@
   rowKey={(server) => server.slug}
   loading={listing.loading}
   error={listing.error ?? teams.error}
-  emptyTitle="No MCP servers linked yet."
-  emptyDetail="Its read-only tools join the agent's."
+  emptyTitle="no MCP servers linked yet"
+  emptyDetail="its read-only tools join the agent's"
   addLabel="link server"
   noun="MCP server"
   width="48rem"

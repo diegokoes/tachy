@@ -4,7 +4,7 @@
   import { clearOrgDefaults, saveOrgDefaults } from "../theme/defaults";
   import { FAMILIES } from "../theme/fonts.svelte";
   import { orgAppearance } from "../theme/org.svelte";
-  import { Button, Note } from "../tui";
+  import { Button, InfoMark, Note } from "../tui";
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";
 
@@ -56,7 +56,12 @@
     {/snippet}
   </Row>
 
-  <Row label="publish" hint="mode, text size, nav, accent, fonts, dates">
+  <Row label="publish">
+    {#snippet mark()}
+      <InfoMark label="about publish"
+        >mode, text size, nav labels, accent, fonts and dates</InfoMark
+      >
+    {/snippet}
     <Button icon="save" {busy} onclick={() => run(saveOrgDefaults)}>
       save mine as defaults
     </Button>

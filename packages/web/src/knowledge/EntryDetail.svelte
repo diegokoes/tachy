@@ -20,7 +20,7 @@
   import { isCurator, canCurateScope } from "../access/session.svelte";
   import { pushScope } from "../keys/keys.svelte";
   import { setTopActions } from "../shell/subnav.svelte";
-  import { Badge, Button, Chip, Icon } from "../tui";
+  import { Badge, Button, Chip, Field, Icon, SearchBox } from "../tui";
 
   let {
     id,
@@ -344,18 +344,15 @@
               {#if entry.affected_version || entry.fixed_version}
                 <div class="versions">
                   {#if entry.affected_version}
-                    <span class="affected">{entry.affected_version}</span>
+                    <span class="affected"
+                      >affected {entry.affected_version}</span
+                    >
                   {/if}
                   {#if entry.affected_version && entry.fixed_version}
-                    <Icon
-                      name="versionArrow"
-                      size="1.1em"
-                      weight={7}
-                      label="fixed in"
-                    />
+                    <span class="sep" aria-hidden="true">·</span>
                   {/if}
                   {#if entry.fixed_version}
-                    <span class="fixed">{entry.fixed_version}</span>
+                    <span class="fixed">fixed {entry.fixed_version}</span>
                   {/if}
                 </div>
               {/if}
@@ -390,16 +387,16 @@
 
             {#if deprecating}
               <div class="deprecate-form">
-                <textarea
-                  rows="2"
-                  bind:value={deprecateReason}
-                  placeholder="why is this outdated? (recorded as feedback)"
-                ></textarea>
-                <input
-                  placeholder="search for the replacement entry (optional)"
-                  bind:value={supersedeQuery}
-                  oninput={searchSupersede}
-                />
+                <Field label="why it is outdated" info="recorded as feedback">
+                  <textarea rows="2" bind:value={deprecateReason}></textarea>
+                </Field>
+                <Field label="replaced by" info="optional">
+                  <SearchBox
+                    bind:value={supersedeQuery}
+                    aria-label="find the entry that replaces it"
+                    oninput={searchSupersede}
+                  />
+                </Field>
                 {#if supersedeResults.length}
                   <ul class="supersede-results">
                     {#each supersedeResults as candidate (candidate.id)}
@@ -459,7 +456,7 @@
              wrapper, not an interactive element of its own -->
           {#if entry.root_cause}
             <section>
-              <h3>Root cause</h3>
+              <h3>root cause</h3>
               <div
                 class="md prose"
                 onclick={links.onClick}
@@ -471,7 +468,7 @@
           {/if}
           {#if entry.resolution}
             <section>
-              <h3>Resolution</h3>
+              <h3>resolution</h3>
               <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
              focusable wikilink anchors this div delegates to -->
               <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
@@ -486,13 +483,13 @@
             </section>
           {/if}
 
-          {@render chips("Symptoms", entry.symptoms)}
-          {@render chips("Signals", entry.signals)}
-          {@render chips("Tags", entry.tags)}
+          {@render chips("symptoms", entry.symptoms)}
+          {@render chips("signals", entry.signals)}
+          {@render chips("tags", entry.tags)}
 
           {#if Object.keys(structured).length}
             <section>
-              <h3>Structured context</h3>
+              <h3>structured context</h3>
               <StructuredView {structured} />
             </section>
           {/if}
@@ -501,7 +498,7 @@
 
           {#if feedback.length}
             <section>
-              <h3>Feedback</h3>
+              <h3>feedback</h3>
               <ul class="fb-list">
                 {#each feedback as note}
                   <li>
@@ -520,7 +517,7 @@
       </div>
     {/if}
   {:else if !error}
-    <p class="muted">Loading…</p>
+    <p class="muted">loading…</p>
   {/if}
 </div>
 
@@ -616,6 +613,9 @@
   .fixed {
     color: var(--ok);
   }
+  .sep {
+    color: var(--muted);
+  }
 
   /* Below the reading measure the three tracks stop fitting side by side. */
   @media (max-width: 40rem) {
@@ -645,8 +645,7 @@
     flex-direction: column;
     gap: var(--pad-2);
   }
-  .deprecate-form textarea,
-  .deprecate-form input {
+  .deprecate-form textarea {
     font: inherit;
     color: var(--text);
   }

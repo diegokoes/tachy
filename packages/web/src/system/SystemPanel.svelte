@@ -66,7 +66,7 @@
 </script>
 
 {#if error}<p class="error">{error}</p>{/if}
-{#if loading}<p class="muted">Loading…</p>{/if}
+{#if loading}<p class="muted">loading…</p>{/if}
 
 {#if system}
   <fieldset class="settings" disabled={!isGlobalAdmin()}>
@@ -79,7 +79,7 @@
       >
       <tbody>
         <tr>
-          <td class="tip">Deployment profile</td>
+          <td class="tip">deployment profile</td>
           <td>
             <AsciiSelect
               value={system.settings.deployment_profile.value}
@@ -118,7 +118,7 @@
                 />
                 {system.settings.redaction_global.value
                   ? "on: LLM boundary"
-                  : "off: per-connection opt-in"}
+                  : "off: per-source opt-in"}
               </span>
             </label>
           </td>
@@ -131,12 +131,12 @@
         {#if system.settings.redaction_global.value && system.settings.redaction_images}
           {@const images = system.settings.redaction_images}
           <tr>
-            <td class="tip">Images under redaction</td>
+            <td class="tip">images under redaction</td>
             <td>
               <label class="check">
                 <Checkbox
                   checked={images.value}
-                  ariaLabel="Send images to the model under redaction"
+                  ariaLabel="send images to the model under redaction"
                   onchange={(checked) =>
                     saveSetting("redaction_images", checked)}
                 />
@@ -159,7 +159,7 @@
           </tr>
         {/if}
         <tr>
-          <td>Agent model</td>
+          <td>agent model</td>
           <td class="edit-cell">
             <input bind:value={draft.agent_model} />
             {#if draft.agent_model !== system.settings.agent_model.value}
@@ -178,7 +178,7 @@
           >
         </tr>
         <tr>
-          <td>Agent effort</td>
+          <td>agent effort</td>
           <td>
             <AsciiSelect
               value={system.settings.agent_effort.value}
@@ -193,12 +193,9 @@
           >
         </tr>
         <tr>
-          <td class="tip">Model allowlist</td>
+          <td class="tip">model allowlist</td>
           <td class="edit-cell">
-            <input
-              bind:value={draft.allowed_models}
-              placeholder="unrestricted"
-            />
+            <input bind:value={draft.allowed_models} placeholder="any model" />
             {#if draft.allowed_models !== system.settings.allowed_models.value.join(", ")}
               <Button
                 size="sm"
@@ -215,7 +212,7 @@
           >
         </tr>
         <tr>
-          <td>Organization name</td>
+          <td>organization name</td>
           <td class="edit-cell">
             <input bind:value={draft.org_name} />
             {#if draft.org_name !== (system.settings.org_name.value ?? "") && draft.org_name.trim()}
@@ -233,7 +230,7 @@
           >
         </tr>
         <tr>
-          <td class="tip">Chat slot cap</td>
+          <td class="tip">chat slot cap</td>
           <td class="edit-cell">
             <input inputmode="numeric" bind:value={draft.agent_slot_cap} />
             {#if draft.agent_slot_cap !== String(system.settings.agent_slot_cap.value) && draft.agent_slot_cap !== ""}
@@ -252,7 +249,7 @@
           >
         </tr>
         <tr>
-          <td class="tip">Chat queue length</td>
+          <td class="tip">chat queue length</td>
           <td class="edit-cell">
             <input inputmode="numeric" bind:value={draft.agent_queue_max} />
             {#if draft.agent_queue_max !== String(system.settings.agent_queue_max.value) && draft.agent_queue_max !== ""}
@@ -271,11 +268,11 @@
           >
         </tr>
         <tr>
-          <td class="tip">Timezone</td>
+          <td class="tip">timezone</td>
           <td class="edit-cell">
             <input
               bind:value={draft.org_timezone}
-              placeholder="Europe/Madrid"
+              placeholder={system.settings.org_timezone.value}
             />
             {#if draft.org_timezone.trim() && draft.org_timezone.trim() !== system.settings.org_timezone.value}
               <Button

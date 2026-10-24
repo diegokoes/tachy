@@ -196,7 +196,7 @@ export function describeTrigger(trigger: FlowTrigger): string {
     return [trigger.params.cron, trigger.params.connection]
       .filter(Boolean)
       .join(" · ");
-  return "test runs, the API";
+  return "tests and the API";
 }
 
 /** What the palette hands back: a control step or an action from the library. */

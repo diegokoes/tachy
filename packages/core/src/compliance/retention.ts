@@ -129,9 +129,9 @@ export async function sweepOrphanAssets(): Promise<number> {
 export function defineRetentionJobs() {
   defineJob({
     kind: "retention.sweep",
-    title: "Clean up old data",
+    title: "clean up old data",
     description:
-      "Deletes expired exports and uploads, old job and flow runs, old notifications, chat transcripts past their age, orphaned wiki images, and rolls old usage counters up to months without people.",
+      "deletes expired exports and uploads, old job and flow runs, old notifications, chat transcripts past their age, orphaned wiki images, and rolls old usage counters up to months without people",
     params: z.object({
       transcript_days: z.number().int().min(1).default(90),
       usage_months: z.number().int().min(1).default(13),

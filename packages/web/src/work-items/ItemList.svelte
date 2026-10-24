@@ -220,8 +220,8 @@
   rowKey={(row) => row.id}
   {loading}
   {error}
-  emptyTitle="No work item matches."
-  emptyDetail="Widen whose items, or clear the type and the search."
+  emptyTitle="no work item matches"
+  emptyDetail="widen whose items, or clear the type and the search"
   onrowclick={(row) => navigate(boardItemPath(project.id, row.id))}
 />
 
@@ -233,7 +233,7 @@
   </div>
 {:else if capped}
   <p class="note">
-    The first {total} matches are listed; narrow the search for the rest.
+    the first {total} matches are listed; narrow the search for the rest
   </p>
 {/if}
 

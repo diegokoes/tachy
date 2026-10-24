@@ -344,13 +344,13 @@
 {#if !rows.length}
   <EmptyState
     icon="structure"
-    title="No components yet."
-    detail="Open find (ctrl+k) to add the first one."
+    title="no components yet"
+    detail="open find (ctrl+k) to add the first one"
   />
 {:else if !graph.nodes.length}
   <EmptyState
-    title="Nothing matches."
-    detail="Clear the filters to see the whole catalogue."
+    title="nothing matches"
+    detail="clear the filters to see the whole catalogue"
   />
 {:else}
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->

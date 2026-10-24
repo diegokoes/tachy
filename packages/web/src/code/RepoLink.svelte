@@ -186,7 +186,7 @@
   </h2>
 
   {#if !mine.length && !myProducts.length && !projects.loading && !products.loading}
-    <Note>Nothing here you can link repos to.</Note>
+    <Note>nothing here you can link repos to</Note>
   {:else}
     <!-- The finder holds two thirds whether or not it has answered, so the
          names land in a column that never changes width under them. -->
@@ -251,7 +251,6 @@
             <Row label="clone URL">
               <input
                 bind:value={url}
-                placeholder="https://…"
                 aria-label="clone URL"
                 spellcheck="false"
               />
@@ -295,8 +294,8 @@
           </Rows>
           {#if slug}
             <p class="quiet">
-              Linked as <strong>{slug}</strong>. Folders, file types and release
-              lines are set on its page before the first index.
+              linked as <strong>{slug}</strong>. folders, file types and release
+              lines are set on its page before the first index
             </p>
           {/if}
         </Group>

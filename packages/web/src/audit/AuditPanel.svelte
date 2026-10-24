@@ -89,8 +89,8 @@
   rowKey={(e) => e.id}
   {loading}
   {error}
-  emptyTitle="Nothing recorded yet."
-  emptyDetail="Sign-ins, account and credential changes, settings and exports are listed here."
+  emptyTitle="nothing recorded yet"
+  emptyDetail="sign-ins, account and credential changes, settings and exports are listed here"
 />
 
 {#if more}

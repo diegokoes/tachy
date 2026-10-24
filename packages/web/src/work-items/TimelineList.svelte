@@ -22,7 +22,7 @@
         {#if entry.actor}<span class="dim">{entry.actor}</span>{/if}
         {#if entry.origin === "observed"}
           <span
-            use:tip={"Two reads of the item differed: it happened at or before this time."}
+            use:tip={"two reads of the item differed: it happened at or before this time"}
             ><Badge>observed</Badge></span
           >
         {/if}

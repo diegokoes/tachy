@@ -391,7 +391,7 @@
     columns={weakColumns}
     rows={stale.data.weakest}
     rowKey={(w) => w.id}
-    emptyTitle="No entry has been rated yet."
+    emptyTitle="no entry has been rated yet"
     onrowclick={(w) => navigate(`/library/entries/${w.id}`)}
   />
 {/snippet}

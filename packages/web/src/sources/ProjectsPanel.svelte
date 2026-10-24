@@ -12,6 +12,7 @@
     Chip,
     CrudTable,
     DeleteButton,
+    Field,
     FilterBar,
     Note,
     Select,
@@ -228,7 +229,7 @@
       label: "name",
       formOnly: true,
       edit: "text",
-      info: "How it reads in lists here.",
+      info: "how it reads in lists here",
     },
     {
       key: "product_slug",
@@ -236,7 +237,7 @@
       width: "11rem",
       edit: "select",
       initial: "",
-      info: `Ingest target. Also scopes wiki, repos, area rules. None: a ticket target only.`,
+      info: `ingest target. also scopes wiki, repos, area rules. none: a ticket target only`,
       options: [
         { value: "", label: "(none)" },
         ...myProducts.map((p) => ({ value: p.slug, label: p.name })),
@@ -250,7 +251,7 @@
       width: "11rem",
       edit: "select",
       initial: myTeams[0]?.slug ?? "",
-      info: `Whose members create work items here. A ${t("product")} brings its own ${t("team")}, so this only applies without one.`,
+      info: `whose members create work items here. a ${t("product")} brings its own ${t("team")}, so this only applies without one`,
       options: myTeams.map((tm) => ({ value: tm.slug, label: tm.name })),
     },
     {
@@ -258,9 +259,9 @@
       label: "customer",
       width: "10rem",
       edit: "select",
-      info: "Single-customer projects only. Overrides email-domain attribution. Empty: many customers.",
+      info: "single-customer projects only. overrides email-domain attribution. empty: many customers",
       options: [
-        { value: "", label: "(none, serves many)" },
+        { value: "", label: "none" },
         ...customers.data.map((cu) => ({ value: cu.slug, label: cu.name })),
       ],
     },
@@ -429,8 +430,8 @@
   {#if error}<Note tone="danger">{error}</Note>{/if}
   {#if !project.product_id}
     <p class="dim">
-      A ticket target only. Nothing is filed under it. Give it a {t("product")}
-      to ingest its items and attach wikis, repos and area rules.
+      a ticket target only. nothing is filed under it. give it a {t("product")}
+      to ingest its items and attach wikis, repos and area rules
     </p>
   {:else}
     <div class="detail">
@@ -468,7 +469,7 @@
             <span class="dim sm">no wikis readable with this token</span>
           {:else if !wikisOf(project).length}
             <span class="dim sm">
-              none registered. Tick the ones this {t("product")} should search.
+              none registered. tick the ones this {t("product")} should search
             </span>
           {/if}
         {:else}
@@ -489,7 +490,7 @@
             {/each}
           </div>
         {:else}
-          <span class="dim sm">none linked. Add them under repos below</span>
+          <span class="dim sm">none linked. add them under repos below</span>
         {/if}
       </div>
 
@@ -509,28 +510,32 @@
         {/each}
         {#if !(areas[project.id] ?? []).length}
           <span class="dim sm">
-            No rules. Items keep whatever component the analysis infers.
+            no rules. items keep whatever component the analysis infers
           </span>
         {/if}
 
         {#if canEditProject(project) && project.product_slug}
           <div class="arow add">
-            <input
-              aria-label="area prefix"
-              bind:value={areaForm.prefix}
-              onkeydown={(e) => e.key === "Enter" && addArea(project)}
-            />
-            <Select
-              bind:value={areaForm.component}
-              aria-label="component"
-              options={[
-                { value: "", label: "component…" },
-                ...(components[project.product_slug] ?? []).map((c) => ({
-                  value: c.slug,
-                  label: `${c.name} (${c.slug})`,
-                })),
-              ]}
-            />
+            <Field label="area prefix">
+              <input
+                aria-label="area prefix"
+                bind:value={areaForm.prefix}
+                onkeydown={(e) => e.key === "Enter" && addArea(project)}
+              />
+            </Field>
+            <Field label="component">
+              <Select
+                bind:value={areaForm.component}
+                aria-label="component"
+                options={[
+                  { value: "", label: "none" },
+                  ...(components[project.product_slug] ?? []).map((c) => ({
+                    value: c.slug,
+                    label: `${c.name} (${c.slug})`,
+                  })),
+                ]}
+              />
+            </Field>
             <Button
               variant="ghost"
               tone="ok"
@@ -602,8 +607,8 @@
   loading={projects.loading}
   error={projects.error}
   emptyTitle={projects.data.length
-    ? "No projects match the filter."
-    : "No projects registered yet."}
+    ? "no projects match the filter"
+    : "no projects registered yet"}
   canEdit={canEditProject}
   canDelete={canEditProject}
   canCreate={canAdd}
@@ -671,9 +676,13 @@
   }
   .arow.add {
     margin-top: var(--pad-2);
+    align-items: end;
   }
-  .arow.add input {
+  .arow.add :global(.field) {
     min-width: 12rem;
+  }
+  .arow.add :global(.field .asel) {
+    flex: 1;
   }
   .wrow {
     display: flex;

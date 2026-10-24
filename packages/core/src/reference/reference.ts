@@ -61,11 +61,11 @@ import { parseStructured } from "../knowledge/structured";
 export function assertArticleSlug(slug: string): void {
   if (!SLUG_RE.test(slug))
     throw badInput(
-      `Invalid article slug '${slug}': lowercase letters, digits and hyphens only.`,
+      `invalid article slug '${slug}': lowercase letters, digits and hyphens only`,
     );
   if ((WIKI_RESERVED_SLUGS as readonly string[]).includes(slug))
     throw badInput(
-      `'${slug}' is reserved by the wiki's own routes; pick another slug.`,
+      `'${slug}' is reserved by the wiki's own routes; pick another slug`,
     );
 }
 
@@ -193,7 +193,7 @@ export async function saveReferenceDoc(input: ReferenceDocInput) {
     const [row] = await sql`
       select id, product_id, team_id, tags from reference_docs where id = ${supersedes}
     `;
-    if (!row) throw notFound(`Reference doc '${supersedes}' not found`);
+    if (!row) throw notFound(`reference doc '${supersedes}' not found`);
     predecessor = row as typeof predecessor;
   }
   const productId = input.productId ?? predecessor?.product_id ?? null;
@@ -273,7 +273,7 @@ export async function getReferenceDoc(id: string) {
     left join customer_units un on un.id = d.customer_unit_id
     where d.id = ${id}
   `;
-  if (!row) throw notFound(`Reference doc '${id}' not found`);
+  if (!row) throw notFound(`reference doc '${id}' not found`);
   return row;
 }
 
@@ -351,7 +351,7 @@ export async function updateReferenceDoc(
   >`
     select ${REVISION_COLUMNS}, version from reference_docs where id = ${id}
   `;
-  if (!current) throw notFound(`Reference doc '${id}' not found`);
+  if (!current) throw notFound(`reference doc '${id}' not found`);
   assertExpectedVersion(current.version, patch.expectedVersion);
 
   const merged = {

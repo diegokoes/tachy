@@ -156,7 +156,7 @@ describe("ingest routes", () => {
       { headers: { cookie: rootCookie } },
     );
     expect(response.status).toBe(400);
-    expect(await response.text()).toContain("No token for 'fd-no-token'");
+    expect(await response.text()).toContain("no token for 'fd-no-token'");
   });
 
   it("refuses a rule that does not parse", async () => {

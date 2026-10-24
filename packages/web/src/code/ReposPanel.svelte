@@ -308,7 +308,7 @@
 </div>
 {#if queuedAll}
   <Note>
-    Every linked repo queued. <button class="link" onclick={showRuns}
+    every linked repo queued. <button class="link" onclick={showRuns}
       >runs</button
     >
   </Note>
@@ -321,7 +321,7 @@
   rowKey={(r) => r.slug}
   loading={repos.loading}
   error={repos.error}
-  emptyTitle="No repositories linked yet."
+  emptyTitle="no repositories linked yet"
   canCreate={canAdd}
   addLabel="link repository"
   noun="repo"

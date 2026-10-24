@@ -99,6 +99,7 @@ export type {
 } from "./azure-devops";
 export {
   DEFAULT_CODE_EXTENSIONS,
+  DEFAULT_MAX_FILE_KB,
   REPO_INDEX_STATUSES,
   RELEASE_TAG_RE,
   releaseMinor,

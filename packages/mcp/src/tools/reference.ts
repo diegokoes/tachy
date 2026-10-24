@@ -128,7 +128,7 @@ tool(
   }) => {
     const sources = await loadContextSources({ text, paths, urls, member });
     if (!sources.length)
-      throw badInput("Provide at least one of: text, paths, urls");
+      throw badInput("provide at least one of: text, paths, urls");
 
     const window = {
       offset,
@@ -230,7 +230,7 @@ tool(
   },
   async (args) => {
     if (!args.body === !args.body_path)
-      throw badInput("Provide exactly one of body or body_path");
+      throw badInput("provide exactly one of body or body_path");
     const { productId, teamId } = await resolveScopeIds(args);
     if (productId || teamId || !args.supersedes)
       await requireCanEdit({ productId, teamId });

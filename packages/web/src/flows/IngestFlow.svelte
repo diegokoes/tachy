@@ -188,7 +188,7 @@
 {:else}
   {#if saveError}<Note tone="danger">{saveError}</Note>{/if}
   {#if !canEdit}
-    <Note>Only an app admin changes how this connection's tickets read.</Note>
+    <Note>only an app admin changes how this source's tickets read</Note>
   {/if}
 
   <Group label="skip messages" icon="eyeClosed">
@@ -198,18 +198,18 @@
           <div class="head">
             <Checkbox
               checked={rule.enabled}
-              ariaLabel={`Rule ${rule.label || i + 1} applies`}
+              ariaLabel={`rule ${rule.label || i + 1} applies`}
               onchange={(on) => setRule(i, { enabled: on })}
             />
             <input
               class="name"
-              aria-label="Rule name"
+              aria-label="rule name"
               value={rule.label}
               oninput={(e) => setRule(i, { label: e.currentTarget.value })}
             />
             <button
               class="tiny"
-              aria-label="Remove this rule"
+              aria-label="remove this rule"
               use:tip={"remove this rule"}
               onclick={() => setRules(rules.filter((_, j) => j !== i))}
               ><Icon name="close" size="0.85em" /></button
@@ -237,7 +237,7 @@
     <Rows>
       <Row label="sent">
         <Choice
-          label="Which ticket fields are sent"
+          label="which ticket fields are sent"
           options={FIELD_MODES}
           value={fieldsMode}
           onpick={(mode) => setFields(mode, config.fields?.paths ?? [])}
@@ -250,7 +250,7 @@
         deps={{ connection }}
         free
         value={config.fields?.paths ?? []}
-        label={fieldsMode === "only" ? "Fields sent" : "Fields left out"}
+        label={fieldsMode === "only" ? "fields sent" : "fields left out"}
         onchange={(paths) => setFields(fieldsMode, paths)}
       />
     {/if}
@@ -264,7 +264,7 @@
           <span class="group-name">{groupLabel(key)}</span>
           <button
             class="tiny"
-            aria-label={`Remove the guidance for ${groupLabel(key)}`}
+            aria-label={`remove the guidance for ${groupLabel(key)}`}
             use:tip={"remove"}
             onclick={() => removeGroup(key)}
             ><Icon name="close" size="0.85em" /></button
@@ -273,7 +273,7 @@
         <textarea
           class="guidance"
           rows="3"
-          aria-label={`Guidance for ${groupLabel(key)}`}
+          aria-label={`guidance for ${groupLabel(key)}`}
           value={config.guidance?.[key] ?? ""}
           oninput={(e) => setGuidance(key, e.currentTarget.value)}></textarea>
       </div>
@@ -286,21 +286,21 @@
           searchable
           creatable
           placeholder="add a group"
-          aria-label="Add guidance for a group"
+          aria-label="add guidance for a group"
           onchange={(v) => addGroup(String(v ?? ""))}
         />
       {/key}
     </span>
   </Group>
 
-  <Group label="try it" icon="run">
+  <Group label="test" icon="run">
     <span class="pick">
       <OptionSelect
         source="work_items"
         deps={{ connection }}
         value={previewItem}
-        placeholder="pick a stored ticket"
-        label="Ticket"
+        placeholder="none"
+        label="ticket"
         onchange={(v) => (previewItem = v)}
       />
     </span>

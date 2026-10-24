@@ -67,13 +67,13 @@
     <p class="dim">reading it the way the developer picking it up would…</p>
   {:else if !review}
     <p class="dim">
-      Write it your way, then ask. tachy reads it as the developer who has to
-      pick it up, and points at what they would ask you. It never rewrites it.
+      write it your way, then ask. tachy reads it as the developer who has to
+      pick it up, and points at what they would ask you. it never rewrites it
     </p>
   {:else if !review.available}
     <Note tone="warn"
       ><PointerText
-        text="No model is set up for you. Add one under Settings › agent."
+        text="no model is set up for you. add one under settings › agent"
       /></Note
     >
   {:else}
@@ -124,7 +124,7 @@
       {/each}
     </ol>
     {#if !open.length}
-      <p class="dim">Nothing left to raise.</p>
+      <p class="dim">nothing left to raise</p>
     {/if}
   {/if}
 </aside>

@@ -1,4 +1,4 @@
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 const CRON_FIELDS = 5;
 
 const pad = (n: number) => String(n).padStart(2, "0");

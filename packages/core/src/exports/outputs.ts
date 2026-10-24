@@ -71,7 +71,7 @@ export async function getOutput(
     from generated_outputs
     where id = ${id} and ${ownedBy(userId)} and expires_at > now()
   `;
-  if (!row) throw notFound(`Output '${id}' not found or expired`);
+  if (!row) throw notFound(`output '${id}' not found or expired`);
   return row as unknown as OutputRow;
 }
 

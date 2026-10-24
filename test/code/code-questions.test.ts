@@ -342,7 +342,7 @@ describe("scope", () => {
         "qrepo-mobile",
       ]);
     await expect(reposInProject("nothing-here")).rejects.toThrow(
-      "No linked repo",
+      "no linked repo",
     );
   });
 
@@ -422,7 +422,7 @@ describe("the tools", () => {
   it("a customer filter that names a repo points at the repo", async () => {
     const named = await call("list_repos", { customer: "mobile" });
     expect(named.isError).toBe(true);
-    expect(named.text).toContain("Unknown customer 'mobile'");
+    expect(named.text).toContain("unknown customer 'mobile'");
     expect(named.text).toContain("qrepo-mobile");
 
     const unrelated = await call("search_code", {
@@ -430,7 +430,7 @@ describe("the tools", () => {
       customer: "acme",
     });
     expect(unrelated.isError).toBe(true);
-    expect(unrelated.text).toContain("Unknown customer 'acme'");
+    expect(unrelated.text).toContain("unknown customer 'acme'");
     expect(unrelated.text).not.toContain("qrepo");
   });
 

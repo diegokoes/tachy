@@ -14,7 +14,6 @@ import {
   ArrowDownWideNarrow,
   ArrowLeft,
   ArrowRight,
-  ArrowRightToLine,
   ArrowUpFromLine,
   ArrowUpNarrowWide,
   Asterisk,
@@ -228,8 +227,6 @@ export const ICONS = {
   deprecate: FileExclamationPoint,
   newVersion: ArrowUpFromLine,
   history: RotateCcwClock,
-  /** The affected → fixed version arrow. */
-  versionArrow: ArrowRightToLine,
 
   // Navigation
   back: ArrowLeft,

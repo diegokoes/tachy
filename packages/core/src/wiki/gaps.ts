@@ -420,7 +420,7 @@ export async function dismissWikiGap(
   id: string,
   userId: string | null,
 ): Promise<{ dismissed: string }> {
-  const missing = () => notFound(`No open gap '${id}' in this wiki`);
+  const missing = () => notFound(`no open gap '${id}' in this wiki`);
   if (!UUID_RE.test(id)) throw missing();
   const [row] = await sql`
     update wiki_gaps

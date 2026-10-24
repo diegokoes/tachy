@@ -3,7 +3,7 @@
   import { api } from "../api";
   import { errText } from "../resource.svelte";
   import { refreshNotifications, toast } from "../notifications/notify.svelte";
-  import { Badge, Button, Note, Icon, EmptyState } from "../tui";
+  import { Badge, Button, Note, Icon, EmptyState, Field } from "../tui";
   import { age } from "../admin/overview";
   import { census } from "../admin/census.svelte";
   import {
@@ -62,7 +62,7 @@
     try {
       await api.post(`/reports/${selected.id}/reply`, { body: reply.trim() });
       await open(selected.id);
-      toast("reply sent - the reporter will be notified", "ok");
+      toast("reply sent · the reporter is notified", "ok");
       // An admin answering their own report is the reporter it notifies.
       void refreshNotifications();
     } catch (e) {
@@ -192,10 +192,9 @@
       {#if error}<Note tone="danger">{error}</Note>{/if}
 
       <div class="reply">
-        <textarea
-          rows="3"
-          placeholder="reply to the reporter…"
-          bind:value={reply}></textarea>
+        <Field label="reply">
+          <textarea rows="3" bind:value={reply}></textarea>
+        </Field>
         <div class="actions">
           <div class="statuses">
             {#each REPORT_STATUSES as status}

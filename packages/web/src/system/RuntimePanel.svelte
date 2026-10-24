@@ -61,7 +61,7 @@
   <table>
     <tbody>
       <tr>
-        <td>Readiness</td>
+        <td>readiness</td>
         <td
           ><Badge tone={runtime.readiness.ready ? "ok" : "danger"}
             >{runtime.readiness.ready ? "ready" : "not ready"}</Badge
@@ -74,7 +74,7 @@
         >
       </tr>
       <tr>
-        <td>Release</td>
+        <td>release</td>
         <td
           >{system.env?.commit ?? "unknown"}{system.env?.env_badge
             ? ` (${system.env.env_badge})`
@@ -87,7 +87,7 @@
         </td>
       </tr>
       <tr>
-        <td>Maintenance</td>
+        <td>maintenance</td>
         <td>
           <Badge tone={runtime.refusingChats ? "warn" : "muted"}
             >{runtime.refusingChats ? "chats paused" : "off"}</Badge
@@ -116,7 +116,7 @@
     <thead><tr><th>what</th><th>now</th><th>detail</th></tr></thead>
     <tbody>
       <tr>
-        <td>Chat slots</td>
+        <td>chat slots</td>
         <td>{runtime.turns.slotsUsed} / {runtime.turns.slotCap}</td>
         <td class="muted"
           >running {runtime.turns.running} · queued {runtime.turns.queued} · refused
@@ -125,7 +125,7 @@
         >
       </tr>
       <tr>
-        <td>Approvals waiting</td>
+        <td>approvals waiting</td>
         <td>{runtime.turns.pendingApprovals}</td>
         <td class="muted"
           >{runtime.turns.oldestApprovalAgeSeconds === null
@@ -147,12 +147,12 @@
         >
       </tr>
       <tr>
-        <td>Event loop delay</td>
+        <td>event loop delay</td>
         <td>{runtime.eventLoopP99Ms} ms</td>
         <td class="muted">p99, last 60 s</td>
       </tr>
       <tr>
-        <td>Embedding queue</td>
+        <td>embedding queue</td>
         <td
           >{runtime.embed
             ? `${runtime.embed.queries} queries · ${runtime.embed.passages} passages`
@@ -192,7 +192,7 @@
     <table>
       <tbody>
         <tr
-          ><td>Single sign-on</td><td
+          ><td>single sign-on</td><td
             >{runtime.security.sso_configured
               ? "configured"
               : "not configured"}</td
@@ -203,7 +203,7 @@
           ></tr
         >
         <tr>
-          <td>Credential vault</td>
+          <td>credential vault</td>
           <td
             >{runtime.security.vault.enabled
               ? (runtime.security.vault.current_key ?? "on")
@@ -224,7 +224,7 @@
           </td>
         </tr>
         <tr
-          ><td>Accounts with a password</td><td
+          ><td>accounts with a password</td><td
             >{runtime.security.users_with_password}</td
           ><td class="muted"
             >{runtime.security.service_accounts} service account(s)</td
@@ -252,5 +252,5 @@
     (workers › jobs)</Note
   >
 {:else if !error}
-  <p class="muted">Loading…</p>
+  <p class="muted">loading…</p>
 {/if}

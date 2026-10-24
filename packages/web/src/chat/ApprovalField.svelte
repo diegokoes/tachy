@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Checkbox, Chevron, Chip, Select } from "../tui";
+  import { CaretInput, Checkbox, Chevron, Chip, Select } from "../tui";
   import { ENUM_FIELDS } from "../vocab";
   import type { FieldSpec } from "@tachy/contract";
 
@@ -135,7 +135,7 @@
       {disabled}
       aria-label={label}
       options={[
-        { value: "", label: "unset" },
+        { value: "", label: "none" },
         ...(choices ?? []).map((o) => ({ value: o, label: o })),
       ]}
       onchange={(v) => onchange(v === "" ? null : v)}
@@ -184,18 +184,20 @@
         </Chip>
       {/each}
       {#if !disabled}
-        <input
-          class="add"
-          placeholder="+ add"
-          bind:value={adding}
-          onkeydown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              commitAdd();
-            }
-          }}
-          onblur={commitAdd}
-        />
+        <span class="add">
+          <CaretInput
+            bind:value={adding}
+            icon="plus"
+            aria-label="add to {label}"
+            onkeydown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitAdd();
+              }
+            }}
+            onblur={commitAdd}
+          />
+        </span>
       {/if}
     </div>
   {:else}
@@ -271,11 +273,14 @@
   .add {
     flex: 1 1 12ch;
     min-width: 12ch;
-    border-color: transparent;
-    background: transparent;
+    display: flex;
+    min-height: var(--control-h);
+    padding: 0 var(--pad-2);
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
     font-size: var(--fs-xs);
   }
-  .add:focus {
+  .add:focus-within {
     border-color: var(--accent);
     background: var(--panel);
   }

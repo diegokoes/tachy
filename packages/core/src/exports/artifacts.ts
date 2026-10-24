@@ -102,7 +102,7 @@ export async function getArtifact(
     from artifacts
     where id = ${id} and (${visibleCondition(ctx)})
   `;
-  if (!row) throw notFound(`Artifact '${id}' not found`);
+  if (!row) throw notFound(`artifact '${id}' not found`);
   return withSpec<ArtifactRow>(row);
 }
 

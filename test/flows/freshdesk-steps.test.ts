@@ -346,7 +346,7 @@ describe("item.follow_linked", () => {
     expect(follows).toEqual([{ external_id: "42" }, { external_id: "43" }]);
   });
 
-  it("refuses a flow with no owner or an unknown ADO connection", async () => {
+  it("refuses a flow with no owner or an unknown ADO source", async () => {
     const step = flowAction("item.follow_linked");
     await expect(
       step.run(await context(linkedTicket()), step.params.parse({})),
@@ -356,7 +356,7 @@ describe("item.follow_linked", () => {
         await context(linkedTicket(), ownerId),
         step.params.parse({ connection: "nope" }),
       ),
-    ).rejects.toThrow(/no Azure DevOps connection/);
+    ).rejects.toThrow(/no Azure DevOps source/);
   });
 
   it("lists the ADO connections to follow on", async () => {

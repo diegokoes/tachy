@@ -113,7 +113,7 @@ export function validateGraph(input: unknown): FlowGraph {
     if (ids.has(trigger.id)) throw badInput(`id '${trigger.id}' is used twice`);
     ids.add(trigger.id);
     if (trigger.kind === "item.synced" && !trigger.params.connection)
-      throw badInput(`trigger '${trigger.id}' needs a connection`);
+      throw badInput(`trigger '${trigger.id}' needs a source`);
     if (trigger.kind === "schedule") {
       const cron = String(trigger.params.cron ?? "");
       const timezone = String(trigger.params.timezone ?? "UTC");
