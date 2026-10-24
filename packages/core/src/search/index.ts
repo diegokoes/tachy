@@ -6,3 +6,5 @@ export * from "./threads";
 export * from "./chunk";
 export * from "./rank";
 export * from "./relevance";
+export * from "./terms";
+export * from "./windows";

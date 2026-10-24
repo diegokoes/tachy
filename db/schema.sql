@@ -356,6 +356,18 @@ create table work_item_messages (
 
 create index work_item_messages_item_idx on work_item_messages(work_item_id, created_at);
 
+-- The query vector of each window a ticket's thread was last searched by,
+-- keyed by the window's text, so opening it again embeds only what changed.
+-- Rewritten at each open: an item keeps the windows of its latest search only.
+create table work_item_query_vectors (
+    work_item_id     uuid not null references work_items(id) on delete cascade,
+    text_sha256      text not null,
+    embedding_model  text not null,
+    embedding        vector(768) not null,
+    created_at       timestamptz not null default now(),
+    primary key (work_item_id, embedding_model, text_sha256)
+);
+
 -- What happened to an item besides its messages: a field that changed, a
 -- moment the source reports (first response, resolved), a link added. With the
 -- messages, in time order, this is the item's timeline.

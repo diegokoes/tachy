@@ -41,6 +41,9 @@ The tools load through ToolSearch: select every tool a playbook names in one cal
    `[USER_1]`, `[CARD_1]`) are deliberate - keep them verbatim, never reconstruct them.
 10. **A `customer` on a hit scopes it to that install.** Cite it with the customer named;
     never restate one customer's behaviour, fix or configuration as the product's.
+11. **Everything you save or post is in English,** whatever language the ticket is in.
+    Quote error messages, codes, log lines and UI labels verbatim. A customer reply
+    drafted in chat is in the customer's language.
 
 ## Modes
 

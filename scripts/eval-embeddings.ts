@@ -16,8 +16,10 @@ import {
   EMBEDDING_SPEC,
   SEM_FLOOR,
   SEM_CEIL,
+  DUPLICATE_FLOOR,
 } from "@tachy/core/search";
 import {
+  DUPLICATES,
   GOLDEN,
   KNOWLEDGE,
   NONSENSE,
@@ -147,6 +149,38 @@ console.log(`  top-1  ${germanTop1}/${leads}  (${pct(germanTop1 / leads)})`);
 console.log(`  MRR    ${(germanMrrSum / leads).toFixed(3)}`);
 console.log(
   `  above the suggested floor  ${germanCleared}/${leads}   lowest ${germanMin.toFixed(3)}`,
+);
+
+// Entry against entry, the distribution the duplicate floor is set on. A
+// missed near-copy costs what a save costs today, a false one a review box,
+// so the floor sits nearer the copies than the related entries.
+let lowestSame = 1;
+let highestDifferent = 0;
+console.log(
+  "\nnear-copies of an entry, and a related entry of another lesson:",
+);
+for (const { of, same, different } of DUPLICATES) {
+  const own = docs[keys.indexOf(of)];
+  const sameCos = cos(
+    await embedPassage(passageText({ key: of, ...same })),
+    own,
+  );
+  const differentCos = cos(
+    await embedPassage(passageText({ key: of, ...different })),
+    own,
+  );
+  lowestSame = Math.min(lowestSame, sameCos);
+  highestDifferent = Math.max(highestDifferent, differentCos);
+  console.log(
+    `  same ${sameCos.toFixed(3)}  different ${differentCos.toFixed(3)}  ${of}`,
+  );
+}
+const duplicateGap = lowestSame - highestDifferent;
+console.log(
+  `  lowest same ${lowestSame.toFixed(3)}, highest different ${highestDifferent.toFixed(3)}${duplicateGap <= 0 ? "   *** NO SEPARATION ***" : ""}`,
+);
+console.log(
+  `  suggested duplicateFloor = ${(Math.floor((lowestSame - duplicateGap / 4) * 100) / 100).toFixed(2)}   in use: ${DUPLICATE_FLOOR ?? "unset"}`,
 );
 
 const ok = SEM_FLOOR > noiseMax && SEM_FLOOR < semanticMin;

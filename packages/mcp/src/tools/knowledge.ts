@@ -4,7 +4,9 @@
  */
 import { z } from "zod";
 import {
-  saveKnowledgeEntry,
+  insertKnowledgeEntry,
+  nearDuplicateEntries,
+  prepareKnowledgeEntry,
   searchKnowledge,
   addFeedback,
   cloudSchema,
@@ -19,6 +21,7 @@ import {
 } from "@tachy/core/knowledge";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import { getCustomerIdBySlug } from "@tachy/core/catalog";
+import { DUPLICATE_FLOOR } from "@tachy/core/search";
 import type { KnowledgeUpdateInput } from "@tachy/core/knowledge";
 import { tool } from "../server";
 import { GRADE_NOTE, out, searchOut, outScrubbed } from "../results";
@@ -88,6 +91,10 @@ tool(
     });
   },
 );
+
+/** The way on from a save refused for a near-copy. */
+const DUPLICATE_NEXT =
+  "Not saved: an entry with nearly the same content exists. If it is the same lesson, add what this ticket adds to it with update_knowledge_entry (on a deprecated one, to its superseded_by). If it is a different case, save again with confirm_new: true. Say which in one line.";
 
 tool(
   "save_knowledge_entry",
@@ -192,6 +199,12 @@ tool(
           "Product version the fix landed in  only when actually known.",
         ),
       structured: structuredField,
+      confirm_new: z
+        .boolean()
+        .optional()
+        .describe(
+          "Only after a save came back with possible_duplicates and the user says this is a different case.",
+        ),
     },
   },
   async (args) => {
@@ -201,7 +214,7 @@ tool(
     await requireCanEdit(
       await newEntryScope({ productId, teamId, workItemId: args.work_item_id }),
     );
-    const saved = await saveKnowledgeEntry({
+    const prepared = await prepareKnowledgeEntry({
       workItemId: args.work_item_id,
       productId,
       teamId,
@@ -226,6 +239,17 @@ tool(
       fixedVersion: args.fixed_version,
       structured: args.structured,
     });
+    const duplicates =
+      DUPLICATE_FLOOR === undefined || args.confirm_new
+        ? []
+        : await nearDuplicateEntries(prepared, DUPLICATE_FLOOR);
+    if (duplicates.length)
+      return outScrubbed({
+        saved: false,
+        possible_duplicates: duplicates,
+        next: DUPLICATE_NEXT,
+      });
+    const saved = await insertKnowledgeEntry(prepared);
     return out({ saved: true, id: saved.id, status: saved.status });
   },
 );

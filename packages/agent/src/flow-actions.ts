@@ -24,7 +24,8 @@ import { summarizeTicket } from "./ticket-summary";
 const SYSTEM = `You are one step of an automated support flow in tachy. You get an
 instruction and the material earlier steps gathered. Answer the instruction
 only, from that material; say plainly when it does not hold the answer. Your
-answer is read by the next step, not by a person in a chat.`;
+answer is read by the next step, not by a person in a chat. Answer in English
+unless the instruction asks for another language.`;
 
 /**
  * The model as a flow step. Lives here rather than in core because only this
