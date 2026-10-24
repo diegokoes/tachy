@@ -109,7 +109,9 @@
     col<Connection>("auth", "auth refused", (c) => c.auth_failures, {
       end: true,
     }),
-    col<Connection>("last", "last refusal", (c) => c.last_auth_failure ?? "–"),
+    col<Connection>("last", "last refusal", (c) =>
+      c.last_auth_failure ? fmtDate(c.last_auth_failure) : "–",
+    ),
   ];
   const connectionFigures = $derived<Count[]>([
     { key: "calls", label: "calls", text: compact(calls) },

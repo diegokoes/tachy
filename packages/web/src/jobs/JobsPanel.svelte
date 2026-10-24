@@ -554,7 +554,7 @@
   {#if kind}
     {#if form.mode === "edit" || kind.description}
       <Note
-        >{#if form.mode === "edit"}<strong>{kind.title}.</strong>
+        >{#if form.mode === "edit"}<strong>{kind.title}.</strong>{" "}
         {/if}{kind.description ?? ""}</Note
       >
     {/if}
