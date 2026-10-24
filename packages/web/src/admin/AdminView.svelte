@@ -162,6 +162,7 @@
       .map(
         ({
           n,
+          icon: _icon,
           show: _show,
           present: _present,
           fill: _fill,
@@ -375,9 +376,13 @@
     border-bottom: 1px solid var(--border);
     vertical-align: top;
   }
+  /* The caps header DataTable draws, for the tables written by hand. */
   :global(.admin-tables th) {
     color: var(--muted);
-    font-weight: 500;
+    font-weight: normal;
+    font-size: var(--fs-xs);
+    letter-spacing: var(--label-spacing);
+    text-transform: uppercase;
   }
   :global(.admin-tables .tip) {
     text-decoration: underline dotted;
