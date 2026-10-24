@@ -33,7 +33,7 @@
 
   const columns: Column<UserRow>[] = $derived([
     { key: "email", label: "user", width: "20rem" },
-    { key: "display_name", label: "name", width: "14rem" },
+    { key: "display_name", face: "ui", label: "name", width: "14rem" },
     ...(seesSignIn()
       ? [
           {

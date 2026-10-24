@@ -29,6 +29,7 @@
   const columns: Column<Team>[] = $derived([
     {
       key: "name",
+      face: "ui",
       label: t("team"),
       width: "18rem",
       edit: "text",

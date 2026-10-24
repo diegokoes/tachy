@@ -1,4 +1,5 @@
 import type { Column } from "../tui";
+import { EMPTY } from "../tui/glyphs";
 
 /** Totals worth printing over a series of per-day counts. */
 export type SeriesStats = {
@@ -33,7 +34,7 @@ export function seriesStats(
 /** "+12%", "-8%", or a dash when there is nothing to compare. */
 export const signed = (fraction: number | null) =>
   fraction === null
-    ? "–"
+    ? EMPTY
     : `${fraction > 0 ? "+" : ""}${Math.round(fraction * 100)}%`;
 
 /** A column that prints a value, for the tables where nothing needs a snippet. */

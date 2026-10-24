@@ -54,7 +54,7 @@
       editable: () => false,
       action: { label: "rename…", onclick: (r) => (renaming = r) },
     },
-    { key: "description", label: "description", edit: "textarea" },
+    { key: "description", face: "ui", label: "description", edit: "textarea" },
   ];
 
   onMount(async () => {

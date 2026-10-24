@@ -11,6 +11,7 @@
   import { api } from "../api";
   import { createResource, errText } from "../resource.svelte";
   import {
+    EMPTY,
     Button,
     Checkbox,
     CrudTable,
@@ -100,6 +101,7 @@
     { key: "health", label: "last run", width: "8rem", cell: healthCell },
     {
       key: "name",
+      face: "ui",
       label: "job",
       width: "18rem",
       edit: "text",
@@ -407,7 +409,7 @@
 
 {#snippet queueCell(definition: JobDefinitionRow)}
   {@const queue = definition.queue ?? kindOf(definition.kind)?.queue}
-  <span class="mono">{queue ?? "-"}</span>
+  <span class="mono">{queue ?? EMPTY}</span>
 {/snippet}
 
 {#snippet runList(runs: JobRunRow[])}

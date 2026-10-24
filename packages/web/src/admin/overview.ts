@@ -1,4 +1,5 @@
 import { navigate, segment } from "../shell/router.svelte";
+import { EMPTY } from "../tui/glyphs";
 
 /**
  * Leave the overview for one section of the same page. The overview and the
@@ -14,7 +15,7 @@ export const ratio = (n: number, of: number) => (of ? n / of : 0);
 
 /** "83%", or a dash when there is nothing to take a share of. */
 export const pct = (n: number, of: number) =>
-  of ? `${Math.round((n / of) * 100)}%` : "–";
+  of ? `${Math.round((n / of) * 100)}%` : EMPTY;
 
 /**
  * Readiness: all of it, some of it, none of it - and muted when there is

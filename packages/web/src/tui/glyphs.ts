@@ -12,5 +12,8 @@ export const G = {
   dot: "●",
 } as const;
 
+/** What a cell or a figure shows when it has no value. */
+export const EMPTY = "–";
+
 /** Block ramp, lightest to solid - bands and textures. */
 export const RAMP = ["·", "░", "▒", "▓", "█"] as const;

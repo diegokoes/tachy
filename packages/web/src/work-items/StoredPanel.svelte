@@ -6,6 +6,7 @@
   import { navigate } from "../shell/router.svelte";
   import type { Connection } from "../sources/rows";
   import {
+    EMPTY,
     Badge,
     Button,
     DataTable,
@@ -99,7 +100,7 @@
 
 {#snippet titleCell(item: StoredItemRow)}
   <span class="titled">
-    <span class="title">{item.title ?? "-"}</span>
+    <span class="title">{item.title ?? EMPTY}</span>
     {#if !item.fetched_at}
       <span
         use:tip={"only a listing has carried it: no messages are stored until it is fetched"}

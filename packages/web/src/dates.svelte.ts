@@ -10,6 +10,7 @@ import {
   type Moment,
 } from "@tachy/contract";
 import { api } from "./api";
+import { EMPTY } from "./tui/glyphs";
 
 const STORAGE_KEY = "tachy-date-format";
 
@@ -69,8 +70,9 @@ export async function setDatePart<P extends keyof DateFormat>(
 /** A timestamp as the plain day it names. Times are noise in a list of records. */
 export const fmtDate = (d?: Moment) => formatDay(d, dateFormat);
 
-/** Date and time, or "-" when there is none. */
-export const fmtDateTime = (d?: Moment) => formatDateTime(d, dateFormat) || "-";
+/** Date and time, or the empty mark when there is none. */
+export const fmtDateTime = (d?: Moment) =>
+  formatDateTime(d, dateFormat) || EMPTY;
 
 export const fmtTime = (d?: Moment) => formatTime(d, dateFormat);
 

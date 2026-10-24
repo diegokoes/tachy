@@ -4,6 +4,7 @@
   import { api } from "../api";
   import { errText } from "../resource.svelte";
   import {
+    EMPTY,
     Bars,
     Badge,
     Button,
@@ -158,7 +159,7 @@
     <span
       ><b
         >{summary.passRate === null
-          ? "–"
+          ? EMPTY
           : pct(summary.passed, summary.judged)}</b
       >
       passed{summary.judged < summary.runs
