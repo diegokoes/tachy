@@ -39,7 +39,10 @@ lists are read by looking for one row, not by leafing through.
       aria-label={label}
     />
   </span>
-  <span class="count">{shown === total ? total : `${shown} of ${total}`}</span>
+  {#if total}
+    <span class="count">{shown === total ? total : `${shown} of ${total}`}</span
+    >
+  {/if}
 </div>
 
 <style>
