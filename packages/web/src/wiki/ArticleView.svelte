@@ -9,11 +9,11 @@
   import { scrollport } from "../shell/scrollport.svelte";
   import { isCurator } from "../access/session.svelte";
   import { setTopActions } from "../shell/subnav.svelte";
-  import { Badge, Button, EmptyState, Note } from "../tui";
+  import { Lamp, Button, EmptyState, Note } from "../tui";
   import Reads from "../library/Reads.svelte";
   import Versions from "../library/Versions.svelte";
   import { patchLibraryItem } from "../library/edit";
-  import { statusTone } from "../library/status";
+  import { statusLamp } from "../library/status";
   import { LinkTargets } from "./wikilinks.svelte";
   import type { ReferenceRow } from "../reference/rows";
   import ArticleContents from "./ArticleContents.svelte";
@@ -256,7 +256,7 @@
       <header>
         <h2 bind:this={titleEl}>{article.title}</h2>
         {#if article.status !== "approved"}
-          <Badge tone={statusTone(article.status)}>{article.status}</Badge>
+          <Lamp lamp={statusLamp(article.status)} word={article.status} />
         {/if}
         <span class="when">
           <Versions

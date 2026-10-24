@@ -6,8 +6,8 @@
   import { navigate } from "../shell/router.svelte";
   import type { Connection } from "../sources/rows";
   import {
+    Lamp,
     EMPTY,
-    Badge,
     Button,
     DataTable,
     FilterBar,
@@ -104,7 +104,7 @@
     {#if !item.fetched_at}
       <span
         use:tip={"only a listing has carried it: no messages are stored until it is fetched"}
-        ><Badge>listed</Badge></span
+        ><Lamp lamp={{ level: "half", tone: "muted" }} word="listed" /></span
       >
     {/if}
   </span>

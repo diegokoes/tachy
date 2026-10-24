@@ -8,6 +8,7 @@
   import { renderMarkdown, markBrokenLinks } from "../markdown/markdown";
   import { LinkTargets } from "./wikilinks.svelte";
   import {
+    Lamp,
     Badge,
     Button,
     Checkbox,
@@ -16,6 +17,7 @@
     Note,
     Select,
   } from "../tui";
+  import { statusLamp } from "../library/status";
   import type {
     Coverage,
     CoverageNode,
@@ -320,7 +322,10 @@
 
 {#snippet article(ref: WikiArticleRef)}
   <button class="art" onclick={() => openArticle(ref)}>{ref.title}</button>
-  {#if ref.status === "draft"}<Badge tone="accent">draft</Badge>{/if}
+  {#if ref.status === "draft"}<Lamp
+      lamp={statusLamp("draft")}
+      word="draft"
+    />{/if}
   {#if ref.stale}
     <Badge tone="warn">{ref.stale} changed</Badge>
   {/if}

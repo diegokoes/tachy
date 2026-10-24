@@ -2,7 +2,8 @@
   import { createSequence, errText } from "../resource.svelte";
   import { api } from "../api";
   import { navigate } from "../shell/router.svelte";
-  import { Badge, Note } from "../tui";
+  import { Lamp, Note } from "../tui";
+  import { statusLamp } from "../library/status";
   import type { WikiToc, WikiTocNode, WikiArticleRef } from "@tachy/contract";
   import WikiLayout from "./WikiLayout.svelte";
   import { wikiPath } from "./paths";
@@ -102,9 +103,10 @@
             {#each node.articles as article (article.id)}
               <li>
                 <button onclick={() => open(article)}>{article.title}</button>
-                {#if article.status === "draft"}<Badge tone="accent"
-                    >draft</Badge
-                  >{/if}
+                {#if article.status === "draft"}<Lamp
+                    lamp={statusLamp("draft")}
+                    word="draft"
+                  />{/if}
               </li>
             {/each}
           </ul>
