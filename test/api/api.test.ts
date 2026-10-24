@@ -98,6 +98,23 @@ describe("API error paths", () => {
     expect(response.status).toBe(404);
   });
 
+  it("finds nothing for an id that is no uuid, rather than failing", async () => {
+    const response = await app.request("/api/knowledge/new");
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ detail: "not found" });
+  });
+
+  it("refuses a write that names an id that is no uuid", async () => {
+    const response = await app.request(
+      "/api/knowledge/new/feedback",
+      json({ kind: "rating", rating: 5 }),
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      detail: "a value in the request is malformed",
+    });
+  });
+
   it("returns 400 for an unknown referenced slug (bad_input)", async () => {
     const response = await app.request(
       "/api/products",

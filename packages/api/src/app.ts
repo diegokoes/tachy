@@ -109,6 +109,8 @@ async function responseHeaders(c: Context, next: Next): Promise<void> {
 }
 
 const ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable";
+/** Postgres's invalid_text_representation. */
+const PG_INVALID_TEXT = "22P02";
 
 function isLoopback(c: Context): boolean {
   try {
@@ -233,6 +235,14 @@ export function createApp(
     if (err instanceof SyntaxError) {
       noteError(c, { error: "invalid JSON body" });
       return problem(c, 400, { detail: "invalid JSON body" });
+    }
+    // Postgres refuses text it cannot read as the column's type, an id that is
+    // no uuid most often: a lookup by one finds nothing, a write is refused.
+    if ((err as { code?: string }).code === PG_INVALID_TEXT) {
+      noteError(c, { error: errorText(err) });
+      return c.req.method === "GET"
+        ? problem(c, 404, { detail: "not found" })
+        : problem(c, 400, { detail: "a value in the request is malformed" });
     }
     noteError(c, {
       error: errorText(err),
