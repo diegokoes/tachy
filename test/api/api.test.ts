@@ -204,11 +204,26 @@ describe("API auth", () => {
 });
 
 describe("SPA hosting", () => {
+  const withWeb = createApp({ webRoot: "test/fixtures-web" });
+
   it("serves index.html as a fallback for non-API routes when webRoot is set", async () => {
-    const withWeb = createApp({ webRoot: "test/fixtures-web" });
     const response = await withWeb.request("/some/client/route");
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("tachy-spa-fixture");
+  });
+
+  it("has the shell revalidated on every visit", async () => {
+    const response = await withWeb.request("/console/integrations");
+    expect(response.headers.get("cache-control")).toBe("no-cache");
+  });
+
+  it("caches a built asset for good, and a missing one not at all", async () => {
+    const found = await withWeb.request("/assets/app-fixture.js");
+    expect(found.status).toBe(200);
+    expect(found.headers.get("cache-control")).toContain("immutable");
+    const missing = await withWeb.request("/assets/gone.js");
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get("cache-control")).toBeNull();
   });
 });
 

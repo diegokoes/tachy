@@ -108,6 +108,8 @@ async function responseHeaders(c: Context, next: Next): Promise<void> {
     if (!c.res.headers.has(name)) c.res.headers.set(name, value);
 }
 
+const ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable";
+
 function isLoopback(c: Context): boolean {
   try {
     const address = getConnInfo(c).remote.address ?? "";
@@ -183,11 +185,26 @@ export function createApp(
 
   if (opts.webRoot) {
     const root = opts.webRoot;
-    app.use("/assets/*", serveStatic({ root }));
-    const indexHandler = serveStatic({ path: "index.html", root });
-    app.get("*", (c, next) =>
-      c.req.path.startsWith("/api/") ? next() : indexHandler(c, next),
+    // Built asset names carry their content hash, so a name never changes
+    // meaning. Only a file that was found is cached; a 404 is not.
+    app.use(
+      "/assets/*",
+      async (c, next) => {
+        await next();
+        if (c.res.ok) c.header("Cache-Control", ASSET_CACHE_CONTROL);
+      },
+      serveStatic({ root }),
     );
+    const indexHandler = serveStatic({ path: "index.html", root });
+    // Revalidated on every visit: a shell kept from before a deploy would load
+    // the previous build's bundle.
+    app.get("*", (c, next) => {
+      const path = c.req.path;
+      if (path.startsWith("/api/") || path.startsWith("/assets/"))
+        return next();
+      c.header("Cache-Control", "no-cache");
+      return indexHandler(c, next);
+    });
   }
 
   app.notFound((c) => problem(c, 404));

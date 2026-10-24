@@ -22,6 +22,19 @@ export const CONSOLE_PAGES: ConsolePage[] = [
   { key: "system", label: "system", icon: "system" },
 ];
 
+/** The `page` values the issues endpoint accepts. */
+const ISSUE_PAGES = [
+  "integrations",
+  "structure",
+  "access",
+  "workers",
+  "system",
+];
+const ADMIN_ISSUE_PAGES = ["workers", "system"];
+
+export const hasIssueList = (page: string, { admin }: { admin: boolean }) =>
+  ISSUE_PAGES.includes(page) && (admin || !ADMIN_ISSUE_PAGES.includes(page));
+
 export type ConsoleSection = {
   key: string;
   label: string;

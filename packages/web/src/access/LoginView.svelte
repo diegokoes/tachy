@@ -66,7 +66,7 @@
       {#if session.uninvited}
         <Note tone="warn">
           {session.uninvited.email ?? "This account"} is signed in with SSO but has
-          not been added to tachy. Ask an app admin to add it under Admin › access.
+          not been added to tachy. Ask an app admin to add it under console › users.
         </Note>
         <button class="sso" onclick={logout}>sign out of SSO</button>
       {:else if session.config?.sso}

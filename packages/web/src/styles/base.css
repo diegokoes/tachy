@@ -59,6 +59,16 @@ select {
   caret-shape: bar;
 }
 
+/* Native spin buttons cannot take the theme, so number fields show none. */
+input[type="number"] {
+  appearance: textfield;
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
 /* The drawn caret's flash: lit most of the time, a short dip that springs
    back a hair tall. One beat per loop, so no cycle differs from the next. */
 @keyframes caret-beat {
