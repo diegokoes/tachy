@@ -248,7 +248,7 @@
     onConfirm={commit}
     destructive={open.row && ondelete && canDelete(open.row)
       ? {
-          label: armed === key ? "click again to confirm" : "delete",
+          label: armed === key ? "confirm delete" : "delete",
           icon: armed === key ? "confirm" : "delete",
           busy: busy === key,
           onclick: () => open.row && confirmDelete(open.row),

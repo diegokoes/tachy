@@ -14,7 +14,7 @@
     row,
     busy = false,
     error = null,
-    confirmLabel = "save",
+    confirmLabel,
     width = "40rem",
     destructive,
     onConfirm,
@@ -31,6 +31,7 @@
     row?: T;
     busy?: boolean;
     error?: string | null;
+    /** "add" when creating and "save" when editing, unless the caller names it. */
     confirmLabel?: string;
     width?: string;
     /** Deleting this record. Drawn at the far left of the titlebar. */
@@ -53,7 +54,7 @@
   {title}
   {width}
   {busy}
-  {confirmLabel}
+  confirmLabel={confirmLabel ?? (mode === "create" ? "add" : "save")}
   confirmIcon={mode === "create" ? "create" : "save"}
   {destructive}
   {barExtra}
