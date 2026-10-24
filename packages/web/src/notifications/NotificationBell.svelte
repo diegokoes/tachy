@@ -52,61 +52,59 @@
 
 <svelte:window onpointerdown={outside} />
 
-{#if unreadIds.length || shown}
-  <div class="host" bind:this={hostEl}>
-    <Button
-      variant="ghost"
-      size="sm"
-      square
-      icon={unreadIds.length ? "changesUnread" : "changes"}
-      tone={unreadIds.length ? "accent" : undefined}
-      aria-label={unreadIds.length
-        ? `${unreadIds.length} changes and notices`
-        : "Changes and notices"}
-      title="changes on items you follow, notices from flows"
-      onclick={() => (shown = !shown)}
-    />
-    {#if shown}
-      <div
-        class="menu"
-        role="dialog"
-        aria-label="Changes and notices"
-        tabindex="-1"
-        {onkeydown}
-      >
-        {#each changes as change (change.id)}
-          <button
-            class="change"
-            class:unread={!change.read_at}
-            onclick={() => open(change)}
+<div class="host" bind:this={hostEl}>
+  <Button
+    variant="ghost"
+    size="sm"
+    square
+    icon={unreadIds.length ? "changesUnread" : "changes"}
+    tone={unreadIds.length ? "accent" : undefined}
+    aria-label={unreadIds.length
+      ? `${unreadIds.length} changes and notices`
+      : "Changes and notices"}
+    title="changes on items you follow, notices from flows"
+    onclick={() => (shown = !shown)}
+  />
+  {#if shown}
+    <div
+      class="menu"
+      role="dialog"
+      aria-label="Changes and notices"
+      tabindex="-1"
+      {onkeydown}
+    >
+      {#each changes as change (change.id)}
+        <button
+          class="change"
+          class:unread={!change.read_at}
+          onclick={() => open(change)}
+        >
+          <span class="head">
+            <span class="title">{change.title}</span>
+            <span class="at"><Time at={change.created_at} /></span>
+          </span>
+          {#if change.body_text}<span class="lines">{change.body_text}</span
+            >{/if}
+        </button>
+      {:else}
+        <p class="note">
+          Nothing new. Changes others make to items you follow, and notices from
+          flows, show here.
+        </p>
+      {/each}
+      {#if unreadIds.length}
+        <div class="foot">
+          <Button
+            size="sm"
+            variant="ghost"
+            onclick={() => markNotificationsRead(unreadIds)}
+            >mark all read</Button
           >
-            <span class="head">
-              <span class="title">{change.title}</span>
-              <span class="at"><Time at={change.created_at} /></span>
-            </span>
-            {#if change.body_text}<span class="lines">{change.body_text}</span
-              >{/if}
-          </button>
-        {:else}
-          <p class="note">
-            Nothing new. Changes others make to items you follow, and notices
-            from flows, show here.
-          </p>
-        {/each}
-        {#if unreadIds.length}
-          <div class="foot">
-            <Button
-              size="sm"
-              variant="ghost"
-              onclick={() => markNotificationsRead(unreadIds)}
-              >mark all read</Button
-            >
-          </div>
-        {/if}
-      </div>
-    {/if}
-  </div>
-{/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
+</div>
 
 <style>
   .host {

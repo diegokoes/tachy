@@ -12,3 +12,7 @@ export const usd = (n: number) =>
 
 /** "2026-09-14" → "14": the day a column stands for, under the column. */
 export const dayOfMonth = (iso: string) => String(Number(iso.slice(8, 10)));
+
+/** "calls 14 d" with a no-break space before the unit, for a label that wraps. */
+export const keepUnits = (label: string) =>
+  label.replace(/(\d) (?=(?:d|h|min|mo)\b)/g, "$1\u00a0");

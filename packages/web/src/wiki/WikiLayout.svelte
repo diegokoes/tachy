@@ -9,10 +9,10 @@
   import WikiSearch from "./WikiSearch.svelte";
 
   /**
-   * Every reading page of the wiki: the switcher and whatever the page adds to
-   * the left column, beside the page itself. `lead` sits above the switcher and
-   * stays put with it; `aside` scrolls beneath. The editor does not use it - it
-   * needs the width more than the reader needs the index.
+   * Every reading page of the wiki: the switcher, at one place on every page,
+   * and what the page adds to the left column. `lead` stays put under the
+   * switcher; `aside` scrolls beneath. The editor does not use it - it needs
+   * the width more than the reader needs the index.
    */
   let {
     scope,
@@ -83,7 +83,6 @@
 
 <div class="wiki-root" bind:this={rootEl}>
   <aside class="side">
-    {#if lead}{@render lead()}{/if}
     <div class="switch">
       <Select
         value={scope}
@@ -93,6 +92,7 @@
         onchange={(v) => switchTo(String(v))}
       />
     </div>
+    {#if lead}{@render lead()}{/if}
     {#if aside}<div class="rest">{@render aside()}</div>{/if}
   </aside>
 

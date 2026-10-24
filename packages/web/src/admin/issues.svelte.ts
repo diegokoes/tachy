@@ -1,5 +1,7 @@
 import { api } from "../api";
+import { isGlobalAdmin } from "../access/session.svelte";
 import { createResource } from "../resource.svelte";
+import { hasIssueList } from "./pages";
 import type { Issues } from "./rows";
 
 let page = "integrations";
@@ -17,5 +19,5 @@ export const issues = createResource(
 export function loadIssues(next: string) {
   if (next !== page) issues.data = {};
   page = next;
-  return issues.reload();
+  if (hasIssueList(next, { admin: isGlobalAdmin() })) return issues.reload();
 }
