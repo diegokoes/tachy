@@ -195,10 +195,7 @@
         <tr>
           <td class="tip">model allowlist</td>
           <td class="edit-cell">
-            <input
-              bind:value={draft.allowed_models}
-              placeholder="unrestricted"
-            />
+            <input bind:value={draft.allowed_models} placeholder="any model" />
             {#if draft.allowed_models !== system.settings.allowed_models.value.join(", ")}
               <Button
                 size="sm"
@@ -275,7 +272,7 @@
           <td class="edit-cell">
             <input
               bind:value={draft.org_timezone}
-              placeholder="Europe/Madrid"
+              placeholder={system.settings.org_timezone.value}
             />
             {#if draft.org_timezone.trim() && draft.org_timezone.trim() !== system.settings.org_timezone.value}
               <Button

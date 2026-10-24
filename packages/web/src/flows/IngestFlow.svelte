@@ -299,7 +299,7 @@
         source="work_items"
         deps={{ connection }}
         value={previewItem}
-        placeholder="pick a stored ticket"
+        placeholder="none"
         label="ticket"
         onchange={(v) => (previewItem = v)}
       />

@@ -60,7 +60,7 @@
         options={left}
         searchable
         creatable={free}
-        placeholder={error ? "could not read the list" : "add"}
+        placeholder="add"
         aria-label={`add to ${label}`}
         onchange={(v) => add(String(v ?? ""))}
       />

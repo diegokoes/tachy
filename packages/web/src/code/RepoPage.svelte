@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from "svelte";
-  import type { IndexPreview } from "@tachy/contract";
+  import { DEFAULT_MAX_FILE_KB, type IndexPreview } from "@tachy/contract";
   import { api } from "../api";
   import { csv } from "../tui/fields";
   import { ComponentCache } from "../library/filing.svelte";
@@ -20,6 +20,7 @@
     DeleteButton,
     ErrorMark,
     Icon,
+    InfoMark,
     Meter,
     Note,
     Select,
@@ -606,7 +607,7 @@
                   class="kb"
                   type="number"
                   min="1"
-                  placeholder="200"
+                  placeholder={String(DEFAULT_MAX_FILE_KB)}
                   bind:value={edited.max_file_kb}
                   disabled={!canEdit}
                   aria-label="max file size in KB"
@@ -655,9 +656,13 @@
             />
             <Rows>
               <Row label="patterns">
+                {#snippet mark()}
+                  <InfoMark label="about patterns"
+                    >paths or globs to leave out, comma-separated</InfoMark
+                  >
+                {/snippet}
                 <input
                   value={patternText}
-                  placeholder="scripts/**/*.json"
                   aria-label="exclude patterns"
                   spellcheck="false"
                   onfocus={startTyping}

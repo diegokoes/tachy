@@ -28,8 +28,8 @@ export type Column<T> = {
   options?: Opt[] | ((draft: Draft) => Opt[]);
   /** Offer a filter box on a select, for choices that run to hundreds. */
   searchable?: boolean;
-  /** Shown in the empty control. Only ever an example of the *shape* of the
-   *  value; what the field is for and the rules behind it go in `info`. */
+  /** Shown muted in the empty control: only the value the field takes when
+   *  left empty, such as an inherited default. Examples and rules go in `info`. */
   placeholder?: string | ((draft: Draft) => string);
   /** Everything the field has to say, behind an info mark beside its label.
    *  A function when it depends on another field, e.g. the source type. */

@@ -12,6 +12,7 @@
     Modal,
     Note,
     RecordModal,
+    SearchBox,
     Select,
     blankDraft,
     draftFrom,
@@ -135,7 +136,7 @@
       options: (draft) => {
         const blocked = subtree(form?.row ?? null);
         return [
-          { value: "", label: "(top level)" },
+          { value: "", label: "top level" },
           ...siblings(productOf(draft))
             .filter((c) => !blocked.has(c.id))
             .map((c) => ({ value: c.slug, label: c.name })),
@@ -349,11 +350,9 @@
         keepOpen
         aria-label={t("product")}
       />
-      <input
-        class="q"
-        bind:this={findEl}
+      <SearchBox
+        bind:el={findEl}
         bind:value={filters.query}
-        placeholder="find a component…"
         aria-label="find a component"
         onkeydown={(e) => e.key === "Enter" && (finding = false)}
       />
@@ -453,10 +452,6 @@
     display: flex;
     align-items: center;
     gap: var(--pad-2);
-  }
-  .q {
-    flex: 1 1 12rem;
-    min-width: 0;
   }
   .dim {
     color: var(--muted);

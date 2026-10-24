@@ -44,7 +44,7 @@
   );
   const chosen = $derived(specs.filter((f) => f.reference_name in value));
   const addable = $derived([
-    { value: "", label: "add a field…" },
+    { value: "", label: "add a field" },
     ...specs
       .filter((f) => !(f.reference_name in value))
       .map((f) => ({

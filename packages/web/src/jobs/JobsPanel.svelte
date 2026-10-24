@@ -123,7 +123,6 @@
       label: "schedule",
       width: "14rem",
       edit: "text",
-      placeholder: "0 2 * * *",
       value: (d) => d.schedule ?? "",
       cell: scheduleCell,
       info: "cron, 5 fields: minute hour day month weekday. blank: manual or event only",
@@ -479,7 +478,7 @@
       <Select
         value={String(params[name] ?? "")}
         options={[
-          { value: "", label: "pick a connection…" },
+          { value: "", label: "none" },
           ...connections.data
             .filter(
               (c) =>

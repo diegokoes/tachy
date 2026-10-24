@@ -199,26 +199,24 @@
     <Field label="confidence">
       <AsciiSelect
         bind:value={confidence}
-        options={[{ value: "", label: "unset" }, ...CONFIDENCES]}
+        options={[{ value: "", label: "none" }, ...CONFIDENCES]}
       />
     </Field>
     <Field label="clarity">
       <AsciiSelect
         bind:value={resolutionClarity}
-        options={[{ value: "", label: "unset" }, ...RESOLUTION_CLARITIES]}
+        options={[{ value: "", label: "none" }, ...RESOLUTION_CLARITIES]}
       />
     </Field>
     <Field label={t("cloud")} error={cloudErr ?? undefined}>
-      <input
-        class="short"
-        bind:value={cloud}
-        list="entry-form-envs"
-        aria-invalid={cloudErr ? "true" : undefined}
-      />
-      <datalist id="entry-form-envs">
-        {#each environments as environment}<option value={environment.cloud}
-          ></option>{/each}
-      </datalist>
+      <span class="short">
+        <AsciiSelect
+          bind:value={cloud}
+          options={environments.map((environment) => environment.cloud)}
+          creatable
+          aria-label={t("cloud")}
+        />
+      </span>
     </Field>
   </div>
 
@@ -333,6 +331,7 @@
     resize: vertical;
   }
   .short {
+    display: flex;
     max-width: 10rem;
   }
   .row {

@@ -395,7 +395,7 @@
 
 {#snippet tokenCell(connection: Connection)}
   <Badge tone={connection.token_source ? "ok" : "warn"}
-    >{connection.token_source ?? "unset"}</Badge
+    >{connection.token_source ?? "none"}</Badge
   >
 {/snippet}
 

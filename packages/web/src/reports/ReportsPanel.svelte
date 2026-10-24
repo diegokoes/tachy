@@ -3,7 +3,7 @@
   import { api } from "../api";
   import { errText } from "../resource.svelte";
   import { refreshNotifications, toast } from "../notifications/notify.svelte";
-  import { Badge, Button, Note, Icon, EmptyState } from "../tui";
+  import { Badge, Button, Note, Icon, EmptyState, Field } from "../tui";
   import { age } from "../admin/overview";
   import { census } from "../admin/census.svelte";
   import {
@@ -192,10 +192,9 @@
       {#if error}<Note tone="danger">{error}</Note>{/if}
 
       <div class="reply">
-        <textarea
-          rows="3"
-          placeholder="reply to the reporter…"
-          bind:value={reply}></textarea>
+        <Field label="reply">
+          <textarea rows="3" bind:value={reply}></textarea>
+        </Field>
         <div class="actions">
           <div class="statuses">
             {#each REPORT_STATUSES as status}

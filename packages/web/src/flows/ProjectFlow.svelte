@@ -571,25 +571,31 @@
 
 <header class="bar">
   {@render lead()}
-  <span class="pick wide">
-    <Select
-      value={projectId}
-      options={projectOptions}
-      searchable
-      placeholder="project"
-      aria-label="project"
-      onchange={(v) => (projectId = String(v ?? ""))}
-    />
+  <span class="named">
+    <span class="k">project</span>
+    <span class="pick wide">
+      <Select
+        value={projectId}
+        options={projectOptions}
+        searchable
+        placeholder="none"
+        aria-label="project"
+        onchange={(v) => (projectId = String(v ?? ""))}
+      />
+    </span>
   </span>
   {#if types.length && !ingestConnection}
-    <span class="pick">
-      <Select
-        value={type}
-        options={typeOptions}
-        searchable
-        aria-label="type"
-        onchange={(v) => (type = String(v ?? ""))}
-      />
+    <span class="named">
+      <span class="k">type</span>
+      <span class="pick">
+        <Select
+          value={type}
+          options={typeOptions}
+          searchable
+          aria-label="type"
+          onchange={(v) => (type = String(v ?? ""))}
+        />
+      </span>
     </span>
     <Choice
       label="fields for creating an item or reading one"
@@ -803,6 +809,17 @@
   }
   .pick > :global(*) {
     width: 100%;
+  }
+  .named {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pad-3);
+  }
+  .k {
+    font-size: var(--fs-xs);
+    color: var(--muted);
+    letter-spacing: var(--label-spacing);
+    text-transform: uppercase;
   }
   .body {
     display: flex;

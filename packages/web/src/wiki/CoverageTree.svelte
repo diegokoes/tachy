@@ -102,7 +102,7 @@
       <Select
         bind:value={moveTo}
         options={[
-          { value: "", label: "(top level)" },
+          { value: "", label: "top level" },
           ...all
             .filter(({ n }) => !subtreeSlugs(moving!).includes(n.slug))
             .map(({ n, depth }) => ({
