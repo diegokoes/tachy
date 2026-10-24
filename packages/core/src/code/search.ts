@@ -95,6 +95,19 @@ type ShownRow = Record<string, unknown> & {
   defines: string[];
 };
 
+/**
+ * The words a code search's keyword leg matches. Each exact term is a group
+ * of its own, all of its words required: `tachy_code_words` drops the quotes
+ * of a quoted message, so an "or" inside one would split it otherwise.
+ */
+const codeWordsQuery = (query: string, terms: string[] | undefined) =>
+  terms?.length
+    ? sql`(select string_agg('(' || t.q::text || ')', ' | ')::tsquery
+           from unnest(${terms}::text[]) as term,
+                lateral (select plainto_tsquery('simple', tachy_code_words(term)) as q) t
+           where numnode(t.q) > 0)`
+    : sql`websearch_to_tsquery('simple', tachy_code_words(${query}))`;
+
 export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
   if (!query.trim()) return [];
   const limit = clampLimit(opts.limit, 8);
@@ -185,7 +198,7 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
     -- lexemes weighted A, which are the names a chunk defines.
     words as (
       select q, regexp_replace(q::text, $re$'( |$)$re$, $to$':A\\1$to$, 'g')::tsquery as defines
-      from (select websearch_to_tsquery('simple', tachy_code_words(${keywords.words})) as q) x
+      from (select ${codeWordsQuery(query, opts.exactTerms)} as q) x
     ),
     lex as (
       select id, row_number() over (order by score desc, id) as rnk, score as fts_rank
