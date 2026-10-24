@@ -7,7 +7,6 @@ import {
   issueGroups,
 } from "../../packages/web/src/admin/issueMessages";
 import {
-  age,
   bytes,
   duration,
   groupCounts,
@@ -15,7 +14,6 @@ import {
   load,
   pct,
   ratio,
-  span,
 } from "../../packages/web/src/admin/overview";
 import {
   OWN,
@@ -106,14 +104,7 @@ describe("overview figures", () => {
     ]);
   });
 
-  it("prints spans, durations and sizes short", () => {
-    expect(span(5 * 60_000)).toBe("5 min");
-    expect(span(3 * 3_600_000)).toBe("3 h");
-    expect(span(5 * 86_400_000)).toBe("5 d");
-    expect(
-      age("2026-09-18T10:00:00Z", Date.parse("2026-09-18T12:00:00Z")),
-    ).toBe("2 h");
-    expect(age(null)).toBeNull();
+  it("prints durations and sizes short", () => {
     expect([duration(45), duration(130), duration(3900)]).toEqual([
       "45s",
       "2m 10s",

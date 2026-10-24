@@ -13,6 +13,7 @@ import {
 import { tooltipAt, tooltipSize } from "../../packages/web/src/tui/tooltip";
 import {
   radarAnchor,
+  radarFits,
   radarMax,
   radarPath,
   radarPoint,
@@ -216,6 +217,12 @@ describe("waffle bars", () => {
 });
 
 describe("radar", () => {
+  it("is worth drawing from six axes; fewer read better as bars", () => {
+    expect(radarFits(5)).toBe(false);
+    expect(radarFits(6)).toBe(true);
+    expect(radarFits(9)).toBe(true);
+  });
+
   it("points the first spoke straight up and goes clockwise", () => {
     const up = radarPoint(0, 4, 10);
     expect(up.x).toBeCloseTo(0);

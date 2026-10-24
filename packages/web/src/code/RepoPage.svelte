@@ -2,6 +2,7 @@
   import { onDestroy, untrack } from "svelte";
   import { DEFAULT_MAX_FILE_KB, type IndexPreview } from "@tachy/contract";
   import { api } from "../api";
+  import { ago } from "../dates.svelte";
   import { csv } from "../tui/fields";
   import { ComponentCache } from "../library/filing.svelte";
   import { createResource, createSequence, errText } from "../resource.svelte";
@@ -15,7 +16,7 @@
   import Row from "../settings/Row.svelte";
   import Rows from "../settings/Rows.svelte";
   import {
-    Badge,
+    Lamp,
     Button,
     DeleteButton,
     ErrorMark,
@@ -26,6 +27,7 @@
     Select,
     Spinner,
   } from "../tui";
+  import { indexLamp } from "./status";
   import type { Customer, Product } from "../catalog/rows";
   import type { Repo } from "./rows";
   import type { SourceProject } from "../sources/rows";
@@ -317,17 +319,7 @@
     navigate("/console/workers/runs");
   }
 
-  const freshness = (at: string | null) => {
-    if (!at) return "never";
-    const days = Math.floor((Date.now() - new Date(at).getTime()) / 86_400_000);
-    return days === 0 ? "today" : `${days}d ago`;
-  };
   const fmt = (n: number) => n.toLocaleString();
-  const STATUS_TONES: Record<string, "ok" | "danger"> = {
-    ready: "ok",
-    error: "danger",
-  };
-  const tone = (status: string) => STATUS_TONES[status] ?? "muted";
 
   const projectOptions = $derived([
     { value: "", label: `(none, scope by ${t("product")})` },
@@ -387,7 +379,7 @@
     {@const edited = draft}
     <div class="layout">
       <div class="wide">
-        <Group label="source" icon="source">
+        <Group label="source">
           {#snippet action()}
             {#if canEdit}
               <span class="loud">
@@ -456,7 +448,6 @@
       <div class="col">
         <Group
           label="branches"
-          icon="branch"
           hint={refsHere
             ? `${fmt(refsHere.branches.length)} branches · ${fmt(refsHere.releases.length)} releases on the remote`
             : undefined}
@@ -506,9 +497,10 @@
                   {#if line.version_label}<span class="quiet"
                       >{line.version_label}</span
                     >{/if}
-                  <Badge tone={tone(line.index_status)}
-                    >{line.index_status}</Badge
-                  >
+                  <Lamp
+                    lamp={indexLamp(line.index_status)}
+                    word={line.index_status}
+                  />
                   {#if canEdit && !busy && !dirty}
                     <Button
                       variant="ghost"
@@ -545,7 +537,7 @@
           {/if}
         </Group>
 
-        <Group label="index" icon="index">
+        <Group label="index">
           <Rows>
             {#each repo.lines.filter((l) => l.ref === repo.default_branch) as line (line.id)}
               <Row label="status">
@@ -553,9 +545,10 @@
                   {#if line.version_label}<span class="quiet"
                       >{line.version_label}</span
                     >{/if}
-                  <Badge tone={tone(line.index_status)}
-                    >{line.index_status}</Badge
-                  >
+                  <Lamp
+                    lamp={indexLamp(line.index_status)}
+                    word={line.index_status}
+                  />
                   {#if line.index_error}
                     <ErrorMark
                       message={line.index_error}
@@ -594,7 +587,7 @@
               </Row>
             {/if}
             <Row label="last indexed">
-              <span class="quiet">{freshness(repo.last_indexed_at)}</span>
+              <span class="quiet">{ago(repo.last_indexed_at)}</span>
             </Row>
             <Row label="in the index">
               <span class="quiet"
@@ -626,7 +619,7 @@
       </div>
 
       <div class="col">
-        <Group label="files" icon="folder">
+        <Group label="files">
           {#if !canEdit}
             <p class="quiet">only editors of this repo see its files</p>
           {:else if previewError && !preview}
@@ -677,7 +670,6 @@
         {#if canEdit && preview}
           <Group
             label="file types"
-            icon="fileTypes"
             hint={edited.extensions
               ? "found in this repo. this repo's own set is on"
               : "found in this repo. the built-in set is on"}

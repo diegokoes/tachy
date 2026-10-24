@@ -38,9 +38,9 @@ export function readProblem(body: unknown): ProblemDetails | undefined {
   return carriesOne ? problem : undefined;
 }
 
-/** The sentence a person reads: `detail`, else `title`. */
+/** The sentence a person reads: `detail`, else `title` in the app's lowercase. */
 export const problemMessage = (problem: ProblemDetails | undefined) =>
-  problem?.detail ?? problem?.title;
+  problem?.detail ?? problem?.title?.toLowerCase();
 
 export const isProblemType = (
   problem: ProblemDetails | undefined,

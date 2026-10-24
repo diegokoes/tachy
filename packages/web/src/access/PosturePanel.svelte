@@ -6,6 +6,8 @@
   import { isGlobalAdmin } from "./session.svelte";
   import { t } from "../terms";
   import {
+    radarFits,
+    EMPTY,
     Bars,
     Cells,
     Columns,
@@ -276,7 +278,7 @@
   type Day = (typeof tools.per_day)[number];
   type Role = (typeof roles)[number];
 
-  const share = (n: number, of: number) => (of ? pct(n, of) : "–");
+  const share = (n: number, of: number) => (of ? pct(n, of) : EMPTY);
 
   const roleColumns: Column<Role>[] = [
     col<Role>("role", "role", (r) => r.title ?? r.label),
@@ -436,24 +438,28 @@
       label: "busiest day",
       text: callStats.peak
         ? `${callStats.peak.label} · ${compact(callStats.peak.value)}`
-        : "–",
+        : EMPTY,
     },
     { key: "change", label: "vs earlier half", text: signed(callStats.change) },
   ]);
 </script>
 
 {#snippet rolesChart()}
-  <Radar
-    axes={roles.map((x) => ({ key: x.key, label: x.label, tone: x.tone }))}
-    series={[
-      {
-        key: "users",
-        label: "users",
-        tone: "accent",
-        values: roles.map((x) => x.value),
-      },
-    ]}
-  />
+  {#if radarFits(roles.length)}
+    <Radar
+      axes={roles.map((x) => ({ key: x.key, label: x.label, tone: x.tone }))}
+      series={[
+        {
+          key: "users",
+          label: "users",
+          tone: "accent",
+          values: roles.map((x) => x.value),
+        },
+      ]}
+    />
+  {:else}
+    <Bars rows={roles} />
+  {/if}
 {/snippet}
 {#snippet rolesTable()}
   <DataTable columns={roleColumns} rows={roles} rowKey={(r) => r.key} />

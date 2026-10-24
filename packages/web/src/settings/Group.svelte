@@ -1,12 +1,11 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { G, Icon, InfoMark, type IconName } from "../tui";
+  import { G, InfoMark } from "../tui";
 
   let {
     label,
     hint,
     info,
-    icon,
     action,
     children,
   }: {
@@ -15,8 +14,6 @@
     hint?: string;
     /** What the section is for, behind an info mark after its label. */
     info?: string;
-    /** Drawn in the marker's place. */
-    icon?: IconName;
     /** Set at the right end of the rule: a reset, a small verb. */
     action?: Snippet;
     children: Snippet;
@@ -30,11 +27,9 @@ heading which sticks would only ever cover the rows under it. The body is
 indented past the marker so its rows start under the heading's word, and runs to
 the end of the rule so their controls end under it.
 -->
-<section style:--mark-w={icon ? "1em" : undefined}>
+<section>
   <h2 class="head">
-    <span class="mark" aria-hidden="true"
-      >{#if icon}<Icon name={icon} size="1em" />{:else}{G.marker}{/if}</span
-    >
+    <span class="mark" aria-hidden="true">{G.marker}</span>
     <span class="lbl">{label}</span>
     {#if info}<InfoMark label="about {label}">{info}</InfoMark>{/if}
     <span class="rule" aria-hidden="true"></span>

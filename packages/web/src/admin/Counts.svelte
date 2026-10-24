@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { keepUnits, RAMP } from "../tui";
+  import { compact, keepUnits, RAMP } from "../tui";
   import { groupCounts, showSection, type Count } from "./overview";
 
   let {
@@ -23,7 +23,7 @@
     <span class="n skeleton" aria-label="loading">{RAMP[0].repeat(4)}</span>
   {:else}
     <span class="n {counter.tone ?? 'accent'}"
-      >{counter.text ?? (counter.value ?? 0).toLocaleString()}</span
+      >{counter.text ?? compact(counter.value ?? 0)}</span
     >
   {/if}
   <span class="lbl">{keepUnits(counter.label)}</span>
@@ -33,7 +33,7 @@
   <span class="pn {counter.tone ?? 'accent'}"
     >{loading
       ? RAMP[0].repeat(2)
-      : (counter.text ?? (counter.value ?? 0).toLocaleString())}</span
+      : (counter.text ?? compact(counter.value ?? 0))}</span
   >
   <span class="pl">{keepUnits(counter.label)}</span>
 {/snippet}

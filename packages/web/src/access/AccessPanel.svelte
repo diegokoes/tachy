@@ -111,7 +111,13 @@
       editable: () => false,
       info: "sign-in identity. cannot change",
     },
-    { key: "display_name", label: "name", width: "12rem", edit: "text" },
+    {
+      key: "display_name",
+      face: "ui",
+      label: "name",
+      width: "12rem",
+      edit: "text",
+    },
     // A toggle, not a two-option select: the question is whether this person is
     // an app admin, and a list of two is a longer way to ask it. The draft
     // carries the role string the API wants; `value` and the commit convert.

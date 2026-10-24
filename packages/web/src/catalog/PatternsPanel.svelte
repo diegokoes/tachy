@@ -42,6 +42,7 @@
     },
     {
       key: "description",
+      face: "ui",
       label: "description",
       edit: "textarea",
       required: true,

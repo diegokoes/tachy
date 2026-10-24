@@ -45,6 +45,7 @@
   const columns: Column<Bucket>[] = $derived([
     {
       key: "name",
+      face: "ui",
       label: "bucket",
       width: "16rem",
       edit: "text",
@@ -62,6 +63,7 @@
     },
     {
       key: "description",
+      face: "ui",
       label: "description",
       edit: "textarea",
       formOnly: true,

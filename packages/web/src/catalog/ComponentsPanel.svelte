@@ -113,7 +113,7 @@
       options: picked.products,
       initial: filters.product || undefined,
     },
-    { key: "name", label: "name", edit: "text", required: true },
+    { key: "name", face: "ui", label: "name", edit: "text", required: true },
     {
       key: "slug",
       label: "id",
@@ -153,6 +153,7 @@
     },
     {
       key: "description",
+      face: "ui",
       label: "description",
       edit: "textarea",
       span: "full",

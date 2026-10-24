@@ -2,6 +2,7 @@
   import { fmtDate } from "../dates.svelte";
   import { onMount } from "svelte";
   import {
+    EMPTY,
     Bars,
     Columns,
     DataTable,
@@ -234,7 +235,7 @@
   const firings = $derived(lanes.reduce((n, l) => n + l.at.length, 0));
 
   type Kind = (typeof totals.by_kind)[number];
-  const outcome = (n: number, of: number) => (of ? pct(n, of) : "–");
+  const outcome = (n: number, of: number) => (of ? pct(n, of) : EMPTY);
 
   const runStats = $derived(seriesStats(perDay));
   const runFigures = $derived<Count[]>([
@@ -259,7 +260,7 @@
       label: "busiest day",
       text: runStats.peak
         ? `${runStats.peak.label} · ${runStats.peak.value}`
-        : "–",
+        : EMPTY,
     },
     { key: "change", label: "vs earlier half", text: signed(runStats.change) },
   ]);
@@ -296,19 +297,19 @@
     col<Kind>(
       "avg",
       "avg",
-      (k) => (k.avg_seconds === null ? "–" : duration(k.avg_seconds)),
+      (k) => (k.avg_seconds === null ? EMPTY : duration(k.avg_seconds)),
       { end: true },
     ),
     col<Kind>(
       "p50",
       "p50",
-      (k) => (k.p50_seconds === null ? "–" : duration(k.p50_seconds)),
+      (k) => (k.p50_seconds === null ? EMPTY : duration(k.p50_seconds)),
       { end: true },
     ),
     col<Kind>(
       "p95",
       "p95",
-      (k) => (k.p95_seconds === null ? "–" : duration(k.p95_seconds)),
+      (k) => (k.p95_seconds === null ? EMPTY : duration(k.p95_seconds)),
       { end: true },
     ),
     col<Kind>(
@@ -316,7 +317,7 @@
       "of timeout",
       (k) =>
         k.p95_seconds === null || !k.timeout_ms
-          ? "–"
+          ? EMPTY
           : pct(k.p95_seconds * 1000, k.timeout_ms),
       { end: true },
     ),
@@ -339,7 +340,7 @@
     {
       key: "slowest",
       label: slowest ? `slowest p95 · ${slowest.title}` : "slowest p95",
-      text: slowest ? duration(slowest.p95_seconds ?? 0) : "–",
+      text: slowest ? duration(slowest.p95_seconds ?? 0) : EMPTY,
     },
   ]);
 
@@ -368,13 +369,15 @@
     col<(typeof totals.by_queue)[number]>(
       "avg",
       "avg wait",
-      (q) => (q.avg_wait_seconds === null ? "–" : duration(q.avg_wait_seconds)),
+      (q) =>
+        q.avg_wait_seconds === null ? EMPTY : duration(q.avg_wait_seconds),
       { end: true },
     ),
     col<(typeof totals.by_queue)[number]>(
       "max",
       "longest wait",
-      (q) => (q.max_wait_seconds === null ? "–" : duration(q.max_wait_seconds)),
+      (q) =>
+        q.max_wait_seconds === null ? EMPTY : duration(q.max_wait_seconds),
       { end: true },
     ),
     col<(typeof totals.by_queue)[number]>(
@@ -439,10 +442,10 @@
       end: true,
     }),
     col<(typeof lanes)[number]>("first", "next", (l) =>
-      l.at[0] ? new Date(l.at[0]).toLocaleString() : "–",
+      l.at[0] ? new Date(l.at[0]).toLocaleString() : EMPTY,
     ),
     col<(typeof lanes)[number]>("last", "last in window", (l) =>
-      l.at.length ? new Date(l.at[l.at.length - 1]).toLocaleString() : "–",
+      l.at.length ? new Date(l.at[l.at.length - 1]).toLocaleString() : EMPTY,
     ),
   ];
   const laneFigures = $derived<Count[]>([
@@ -453,7 +456,7 @@
       label: "busiest hour",
       text: busiest
         ? `${String(busiest[0]).padStart(2, "0")}:00 · ${busiest[1]}`
-        : "–",
+        : EMPTY,
     },
   ]);
 </script>

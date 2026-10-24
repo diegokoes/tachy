@@ -2,7 +2,8 @@
   import { api } from "../api";
   import { navigate } from "../shell/router.svelte";
   import { createSequence } from "../resource.svelte";
-  import { Badge, Modal, SearchBox } from "../tui";
+  import { Lamp, Modal, SearchBox } from "../tui";
+  import { statusLamp } from "../library/status";
   import type { WikiSearchHit } from "@tachy/contract";
   import { wikiPath } from "./paths";
 
@@ -83,8 +84,10 @@
             <button class="hit" class:on={i === cursor} onclick={() => open(h)}>
               <span class="head">
                 <span class="title">{h.title}</span>
-                {#if h.status === "draft"}<Badge tone="accent">draft</Badge
-                  >{/if}
+                {#if h.status === "draft"}<Lamp
+                    lamp={statusLamp("draft")}
+                    word="draft"
+                  />{/if}
               </span>
               {#if h.snippet}<span class="snip">{h.snippet}</span>{/if}
             </button>

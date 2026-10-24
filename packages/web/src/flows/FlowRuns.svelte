@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { FlowRun } from "@tachy/contract";
   import { api } from "../api";
-  import { Badge, Note, Time } from "../tui";
+  import { Lamp, lampOf, Badge, Note, Time } from "../tui";
 
   let {
     flowId,
@@ -50,13 +50,6 @@
     }, POLL_MS);
     return () => clearInterval(timer);
   });
-
-  const TONES = {
-    running: "info",
-    succeeded: "ok",
-    failed: "danger",
-    stopped: "muted",
-  } as const;
 </script>
 
 <div class="runs">
@@ -67,7 +60,7 @@
       class:sel={run.id === selected}
       onclick={() => onpick(run.id === selected ? null : run)}
     >
-      <Badge tone={TONES[run.status]}>{run.status}</Badge>
+      <Lamp lamp={lampOf(run.status)} word={run.status} />
       {#if run.dry_run}<Badge tone="warn">dry</Badge>{/if}
       <span class="when"><Time at={run.started_at} /></span>
       <span class="trig">{run.trigger_id ?? "by hand"}</span>
