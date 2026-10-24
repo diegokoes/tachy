@@ -415,7 +415,7 @@
         </div>
       {:else if toc}
         <EmptyState
-          icon="file"
+          art="wiki"
           title="no intro yet"
           detail="a short landing: what this product is, and where to start"
         >

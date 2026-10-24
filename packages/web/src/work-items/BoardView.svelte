@@ -111,6 +111,7 @@
   <Spinner />
 {:else if !az.projects.length}
   <EmptyState
+    art="board"
     title="no Azure DevOps project yet"
     detail="an admin registers a team's projects under console › integrations"
   />

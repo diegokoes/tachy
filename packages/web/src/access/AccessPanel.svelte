@@ -324,6 +324,7 @@
   loading={users.loading}
   error={users.error ?? memberships.error}
   emptyTitle={users.data.length ? "no users match the filter" : "no users yet"}
+  emptyArt={users.data.length ? "noMatch" : "empty"}
   emptyDetail={users.data.length ? undefined : "run setup, or add one"}
   canEdit={() => admin}
   canDelete={() => false}

@@ -315,7 +315,10 @@
   rowKey={(r) => r.slug}
   loading={repos.loading}
   error={repos.error}
-  emptyTitle="no repositories linked yet"
+  emptyTitle={repos.data.length
+    ? "no repositories match the filter"
+    : "no repositories linked yet"}
+  emptyArt={repos.data.length ? "noMatch" : "empty"}
   canCreate={canAdd}
   addLabel="link repository"
   noun="repo"

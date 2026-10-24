@@ -112,7 +112,7 @@
     {#if loading}
       <p class="dim">loading…</p>
     {:else if reports.length === 0}
-      <EmptyState icon="flag" title="nothing here" />
+      <EmptyState art="reports" title="nothing here" />
     {:else}
       <ul class="rows">
         {#each reports as report (report.id)}

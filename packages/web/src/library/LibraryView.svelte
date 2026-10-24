@@ -764,13 +764,7 @@
     {#if !loading && !error && items.length === 0}
       <li>
         <EmptyState
-          icon={type === "docs"
-            ? "refDoc"
-            : type === "knowledge"
-              ? "knowledge"
-              : type === "wiki"
-                ? "wiki"
-                : "library"}
+          art={mode === "search" ? "noMatch" : "library"}
           title={mode === "search"
             ? `no matches for “${search}”`
             : "the library is empty"}

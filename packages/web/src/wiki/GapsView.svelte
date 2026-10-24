@@ -341,7 +341,7 @@
         {/each}
       {:else}
         <EmptyState
-          icon="success"
+          art="complete"
           title="nothing missing that the sweep can see"
         />
       {/if}
