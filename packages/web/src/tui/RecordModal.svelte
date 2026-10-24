@@ -15,6 +15,7 @@
     busy = false,
     error = null,
     confirmLabel,
+    closeConfirm,
     width = "40rem",
     destructive,
     onConfirm,
@@ -33,6 +34,8 @@
     error?: string | null;
     /** "add" when creating and "save" when editing, unless the caller names it. */
     confirmLabel?: string;
+    /** See Modal: the close button's word while closing needs a second press. */
+    closeConfirm?: string;
     width?: string;
     /** Deleting this record. Drawn at the far left of the titlebar. */
     destructive?: {
@@ -56,6 +59,7 @@
   {busy}
   confirmLabel={confirmLabel ?? (mode === "create" ? "add" : "save")}
   confirmIcon={mode === "create" ? "create" : "save"}
+  {closeConfirm}
   {destructive}
   {barExtra}
   {onConfirm}
