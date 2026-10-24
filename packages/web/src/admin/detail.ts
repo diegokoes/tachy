@@ -51,21 +51,6 @@ export const col = <T>(
   align: o.end ? "end" : undefined,
 });
 
-const HOUR_MINUTES = 60;
-const HOURS_SHOWN_BELOW = 48;
-const ONE_DECIMAL_BELOW = 10;
-
-/** "3.2 h ago", "12 min ago", "never" - how stale a timestamp is. */
-export function ago(iso: string | null, now = Date.now()) {
-  if (!iso) return "never";
-  const min = Math.max(0, Math.round((now - Date.parse(iso)) / 60_000));
-  if (min < HOUR_MINUTES) return `${min} min ago`;
-  const h = min / HOUR_MINUTES;
-  if (h < HOURS_SHOWN_BELOW)
-    return `${h < ONE_DECIMAL_BELOW ? h.toFixed(1) : Math.round(h)} h ago`;
-  return `${Math.round(h / 24)} d ago`;
-}
-
 /** Age in whole hours, or null for one that never happened. */
 export const ageHours = (iso: string | null, now = Date.now()) =>
   iso ? Math.max(0, (now - Date.parse(iso)) / 3_600_000) : null;

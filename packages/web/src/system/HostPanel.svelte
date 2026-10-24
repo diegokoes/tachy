@@ -3,6 +3,7 @@
   import { api } from "../api";
   import { errText } from "../resource.svelte";
   import { Badge, GroupHead, Note, toneOf } from "../tui";
+  import { ago } from "../dates.svelte";
   import type { SystemInfo } from "./rows";
 
   type Check = { state: string; value: string };
@@ -37,16 +38,6 @@
   let status = $state<Status | null>(null);
   let visible = $state(true);
   let error = $state<string | null>(null);
-
-  const HOUR_MS = 3_600_000;
-  const HOURS_SHOWN_BELOW = 48;
-  const ago = (iso?: string) => {
-    if (!iso) return "never";
-    const h = (Date.now() - new Date(iso).getTime()) / HOUR_MS;
-    if (h < 1) return `${Math.round(h * 60)} min ago`;
-    if (h < HOURS_SHOWN_BELOW) return `${Math.round(h)} h ago`;
-    return `${Math.round(h / 24)} days ago`;
-  };
 
   onMount(async () => {
     try {

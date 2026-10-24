@@ -2,6 +2,7 @@
   import { onDestroy, untrack } from "svelte";
   import { DEFAULT_MAX_FILE_KB, type IndexPreview } from "@tachy/contract";
   import { api } from "../api";
+  import { ago } from "../dates.svelte";
   import { csv } from "../tui/fields";
   import { ComponentCache } from "../library/filing.svelte";
   import { createResource, createSequence, errText } from "../resource.svelte";
@@ -317,11 +318,6 @@
     navigate("/console/workers/runs");
   }
 
-  const freshness = (at: string | null) => {
-    if (!at) return "never";
-    const days = Math.floor((Date.now() - new Date(at).getTime()) / 86_400_000);
-    return days === 0 ? "today" : `${days}d ago`;
-  };
   const fmt = (n: number) => n.toLocaleString();
   const STATUS_TONES: Record<string, "ok" | "danger"> = {
     ready: "ok",
@@ -593,7 +589,7 @@
               </Row>
             {/if}
             <Row label="last indexed">
-              <span class="quiet">{freshness(repo.last_indexed_at)}</span>
+              <span class="quiet">{ago(repo.last_indexed_at)}</span>
             </Row>
             <Row label="in the index">
               <span class="quiet"

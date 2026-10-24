@@ -24,19 +24,18 @@
   } from "../tui";
   import { loadSummary, runP95 } from "../diagnostics/loadRuns";
   import {
-    age,
     bytes,
     load,
     pct,
     ratio,
     showSection,
-    span,
     type Count,
     type Tone,
   } from "../admin/overview";
   import Dials, { type DialItem } from "../admin/Dials.svelte";
   import Detail from "../admin/Detail.svelte";
-  import { ago as agoText, col } from "../admin/detail";
+  import { col } from "../admin/detail";
+  import { ago, span } from "../dates.svelte";
   import Facts, { type Fact } from "../admin/Facts.svelte";
   import Overview from "../admin/Overview.svelte";
   import Tile from "../admin/Tile.svelte";
@@ -98,7 +97,7 @@
   ): { text: string; tone: Tone } => {
     if (!status) return { text: EMPTY, tone: "muted" };
     if (!hostResult?.at) return { text: "none", tone: "danger" };
-    const text = age(hostResult.at, now) ?? EMPTY;
+    const text = span(now - Date.parse(hostResult.at));
     if (hostResult.ok === false) return { text, tone: "danger" };
     return {
       text,
@@ -551,7 +550,7 @@
   );
   const backupColumns: Column<Backup>[] = [
     col<Backup>("at", "taken", (b) => new Date(b.at).toLocaleString()),
-    col<Backup>("age", "age", (b) => agoText(b.at), { end: true }),
+    col<Backup>("age", "age", (b) => ago(b.at), { end: true }),
     col<Backup>("ok", "result", (b) => (b.ok === false ? "failed" : "ok")),
     col<Backup>(
       "size",
@@ -572,9 +571,7 @@
     {
       key: "last",
       label: "last good",
-      text: agoText(
-        [...history].reverse().find((b) => b.ok !== false)?.at ?? null,
-      ),
+      text: ago([...history].reverse().find((b) => b.ok !== false)?.at ?? null),
     },
     {
       key: "size",

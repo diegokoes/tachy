@@ -21,7 +21,8 @@
   import { activity } from "../admin/activity.svelte";
   import { pct, type Count } from "../admin/overview";
   import Detail from "../admin/Detail.svelte";
-  import { ago, col, seriesStats, signed, TILE_DAYS } from "../admin/detail";
+  import { col, seriesStats, signed, TILE_DAYS } from "../admin/detail";
+  import { ago } from "../dates.svelte";
   import { band, FRESHNESS_STATES, freshnessGroups } from "./freshness";
   import { freshness } from "./freshness.svelte";
   import Overview from "../admin/Overview.svelte";

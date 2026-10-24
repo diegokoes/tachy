@@ -117,7 +117,7 @@
     <tbody>
       <tr>
         <td>chat slots</td>
-        <td>{runtime.turns.slotsUsed} / {runtime.turns.slotCap}</td>
+        <td>{runtime.turns.slotsUsed} of {runtime.turns.slotCap}</td>
         <td class="muted"
           >running {runtime.turns.running} · queued {runtime.turns.queued} · refused
           since boot
@@ -174,7 +174,7 @@
         <tr>
           <td>Postgres connections</td>
           <td
-            >{runtime.postgres.byProcess.reduce((n, p) => n + p.n, 0)} / {runtime
+            >{runtime.postgres.byProcess.reduce((n, p) => n + p.n, 0)} of {runtime
               .postgres.max}</td
           >
           <td class="muted"
