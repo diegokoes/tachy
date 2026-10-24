@@ -767,6 +767,11 @@
     text-transform: uppercase;
     letter-spacing: var(--label-spacing);
   }
+  /* A ghost draws no edge, so its padding is only spacing, which the corner
+     beside a long tab bar cannot spare. */
+  .top-acts :global(.btn.ghost) {
+    padding-inline: var(--pad-2);
+  }
 
   /* The rule fills a full-width bar; a hugging pill has no edge to run to. */
   .subnav :global(.rule) {
