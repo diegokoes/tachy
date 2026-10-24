@@ -1,5 +1,11 @@
 import { ticks } from "d3-array";
 
+/** Below this many spokes a radar's outline says nothing a list of bars does not. */
+const RADAR_MIN_AXES = 6;
+
+/** Whether `axes` comparable values earn a radar rather than bars. */
+export const radarFits = (axes: number) => axes >= RADAR_MIN_AXES;
+
 /** Spoke `i` of `n`, in radians: the first points straight up and the rest follow clockwise. */
 export const radarAngle = (i: number, n: number) =>
   -Math.PI / 2 + (2 * Math.PI * i) / Math.max(1, n);

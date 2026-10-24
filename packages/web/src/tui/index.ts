@@ -29,6 +29,7 @@ export { default as Tooltip } from "./Tooltip.svelte";
 export { default as Waffle, type WaffleItem } from "./Waffle.svelte";
 export { default as WaffleBars } from "./WaffleBars.svelte";
 export { default as Radar } from "./Radar.svelte";
+export { radarFits } from "./radar";
 export { default as Figures, type FigureItem } from "./Figures.svelte";
 export { default as Units } from "./Units.svelte";
 export { default as LineChart } from "./LineChart.svelte";

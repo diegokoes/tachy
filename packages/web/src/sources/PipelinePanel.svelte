@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { fmtDate } from "../dates.svelte";
   import {
+    radarFits,
     EMPTY,
     Bars,
     DataTable,
@@ -264,7 +265,7 @@
 </script>
 
 {#snippet sourcesChart()}
-  {#if bySource.length >= 3}
+  {#if radarFits(bySource.length)}
     <Radar
       axes={bySource.map((b) => ({ key: b.key, label: b.label }))}
       series={[
