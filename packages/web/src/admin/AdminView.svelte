@@ -3,12 +3,13 @@
   import { navigate, segment } from "../shell/router.svelte";
   import { keep, recall } from "../shell/kept";
   import { scrollport } from "../shell/scrollport.svelte";
-  import { Button } from "../tui";
+  import { Button, Menu } from "../tui";
   import { setSubnav, setTopActions } from "../shell/subnav.svelte";
   import SectionedPage, {
     type PageSection,
   } from "../sections/SectionedPage.svelte";
   import { sectionActions } from "./sectionAction.svelte";
+  import { OVERVIEW_ROW, sectionMenu } from "./sectionMenu";
   import { CONSOLE_PAGES, consoleSections, type ConsoleSection } from "./pages";
   import { pageActions } from "./pageActions.svelte";
   import FillSection from "./FillSection.svelte";
@@ -238,6 +239,22 @@
 
   const backToOverview = () => navigate(`/console/${page}`);
 
+  /** The section the route has open, whichever way it opens. */
+  const openKey = $derived(live.some((s) => s.key === at) ? at : undefined);
+  const menuRows = $derived(
+    sectionMenu(live, census.loading ? null : census.data.counts, openKey),
+  );
+  const menuLabel = $derived(
+    live.find((s) => s.key === openKey)?.label ?? "sections",
+  );
+  /** A page with one section and no overview has nowhere else to go. */
+  const hasMenu = $derived(live.length > (overview ? 0 : 1));
+
+  function pickRow(key: string) {
+    if (key === OVERVIEW_ROW) backToOverview();
+    else navigate(`/console/${page}/${key}`);
+  }
+
   // A page without an overview has nothing to show until a section is named, so
   // it opens on its first.
   $effect(() => {
@@ -268,8 +285,8 @@
 </script>
 
 {#snippet topActions()}
-  <!-- Only on the way back: going in is a click on a counter, and a modal
-       section carries its own close. -->
+  <!-- A record goes back to its section, an expanded tile to the overview;
+       everywhere else the menu names where you are and where else to go. -->
   {#if detail}
     <Button
       variant="ghost"
@@ -278,10 +295,6 @@
       onclick={() => navigate(`/console/${page}/${detail.key}`)}
       >{detail.label}</Button
     >
-  {:else if overview && !showing}
-    <Button variant="ghost" size="sm" icon="back" onclick={backToOverview}
-      >overview</Button
-    >
   {:else if overview && expanded}
     <Button
       variant="ghost"
@@ -289,6 +302,8 @@
       icon="back"
       onclick={() => closeTile(page)}>overview</Button
     >
+  {:else if hasMenu}
+    <Menu label={menuLabel} icon="menu" items={menuRows} onpick={pickRow} />
   {/if}
   {#if detail || filled}
     {@render pageActions()?.()}
