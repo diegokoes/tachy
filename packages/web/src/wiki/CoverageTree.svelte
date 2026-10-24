@@ -89,10 +89,6 @@
 
 <section class="coverage">
   <h3>coverage</h3>
-  <p class="muted sm">
-    what this product is made of, and how much of it has been written about.
-    counts are entries · docs · articles; a name opens what is recorded there
-  </p>
 
   {#if error}<Note tone="danger">{error}</Note>{/if}
 
@@ -217,8 +213,5 @@
   }
   .muted {
     color: var(--muted);
-  }
-  .sm {
-    font-size: var(--fs-sm);
   }
 </style>

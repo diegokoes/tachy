@@ -253,7 +253,7 @@
       {/if}
     {/if}
     {#if openTrigger.kind !== "manual"}
-      <Group label="filter" hint="runs only for items that match">
+      <Group label="filter" info="runs only for items that match">
         {#if openTrigger.where}
           <ConditionEditor
             value={openTrigger.where}
@@ -315,7 +315,7 @@
     {:else if openStep.kind === "if" || openStep.kind === "filter"}
       <Group
         label={openStep.kind === "if" ? "condition" : "continue when"}
-        hint={openStep.kind === "if"
+        info={openStep.kind === "if"
           ? "matches go to then, the rest to else; both end the flow"
           : "the run stops here when this does not match"}
       >

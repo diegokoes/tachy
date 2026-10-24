@@ -8,7 +8,7 @@
   import { navigate } from "../shell/router.svelte";
   import { isCurator } from "../access/session.svelte";
   import { setTopActions } from "../shell/subnav.svelte";
-  import { Button, EmptyState, Note, Time } from "../tui";
+  import { Button, EmptyState, InfoMark, Note, Time } from "../tui";
   import type { WikiGap, WikiGaps } from "./rows";
   import CoverageTree from "./CoverageTree.svelte";
   import WikiLayout from "./WikiLayout.svelte";
@@ -249,9 +249,8 @@
 
     {#if scope === ORG_WIDE}
       <Note tone="muted">
-        the org-wide wiki has no components, so coverage-based gaps (uncovered
-        lessons and outgrown articles) are not computed here - only stale
-        sources, wanted pages, drafts and uncategorised articles
+        the org-wide wiki has no components: only stale sources, wanted pages,
+        drafts and uncategorised articles are checked
       </Note>
     {/if}
 
@@ -259,8 +258,12 @@
       {#if groups.length}
         {#each groups as { kind, gaps } (kind)}
           <section>
-            <h3>{HEADS[kind].title} <span class="n">{gaps.length}</span></h3>
-            <p class="detail">{HEADS[kind].detail}</p>
+            <h3>
+              {HEADS[kind].title} <span class="n">{gaps.length}</span>
+              <InfoMark label="about {HEADS[kind].title}"
+                >{HEADS[kind].detail}</InfoMark
+              >
+            </h3>
             <ul>
               {#each gaps as gap (gap.id)}
                 <li>
@@ -346,7 +349,6 @@
         <EmptyState
           icon="success"
           title="nothing missing that the sweep can see"
-          detail="checks: uncovered lessons, outdated articles, stale sources, wanted pages, drafts, uncategorised"
         />
       {/if}
 
@@ -373,20 +375,17 @@
     margin-top: var(--pad-4);
   }
   h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-1);
     font-size: var(--fs-sm);
-    margin: 0;
+    margin: 0 0 var(--pad-2);
     text-transform: uppercase;
     letter-spacing: var(--label-spacing);
   }
   h3 .n {
     color: var(--warn);
     font-variant-numeric: tabular-nums;
-    margin-left: var(--pad-1);
-  }
-  .detail {
-    margin: var(--pad-1) 0 var(--pad-2);
-    color: var(--muted);
-    font-size: var(--fs-sm);
   }
   ul {
     list-style: none;
