@@ -19,6 +19,7 @@
     confirmLabel = "confirm",
     confirmIcon = "save",
     cancelLabel = "cancel",
+    closeConfirm,
     destructive,
     danger = false,
     busy = false,
@@ -38,6 +39,9 @@
     /** Drawn beside the word; a confirm that is not a save carries its own. */
     confirmIcon?: IconName;
     cancelLabel?: string;
+    /** Said by the close button while closing needs a second press, as when
+     *  it would throw away a changed draft. */
+    closeConfirm?: string;
     /** Sits at the far left of the bar, away from the two it must not be. */
     destructive?: {
       label: string;
@@ -221,14 +225,23 @@
         <div class="side end">
           {#if barExtra}{@render barExtra()}{/if}
 
-          <Button
-            variant="ghost"
-            square
-            icon="close"
-            title={cancelLabel}
-            aria-label={cancelLabel}
-            onclick={onCancel}
-          />
+          {#if closeConfirm}
+            <Button
+              variant="ghost"
+              tone="danger"
+              icon="confirm"
+              onclick={onCancel}>{closeConfirm}</Button
+            >
+          {:else}
+            <Button
+              variant="ghost"
+              square
+              icon="close"
+              title={cancelLabel}
+              aria-label={cancelLabel}
+              onclick={onCancel}
+            />
+          {/if}
           {#if onConfirm}
             <Button
               variant={danger ? "danger" : "primary"}

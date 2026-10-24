@@ -77,6 +77,15 @@ export function cellText<T>(c: Column<T>, row: T): string {
   return value == null || value === "" ? EMPTY : String(value);
 }
 
+/** Whether `after` differs from the draft it started as; an empty value and
+ *  a missing one are the same. */
+export function draftChanged(before: Draft, after: Draft): boolean {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return [...keys].some(
+    (key) => String(before[key] ?? "") !== String(after[key] ?? ""),
+  );
+}
+
 /** Seeds the record form from a row. See the note on `Column.value`. */
 export function draftFrom<T>(columns: Column<T>[], row: T): Draft {
   const draft: Draft = {};
