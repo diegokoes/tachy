@@ -14,6 +14,7 @@
     DeleteButton,
     Field,
     FilterBar,
+    GroupHead,
     Note,
     Select,
     type Column,
@@ -436,7 +437,7 @@
   {:else}
     <div class="detail">
       <div class="block">
-        <span class="dim">wikis</span>
+        <GroupHead label="wikis" />
         {#if project.source_type === "azure-devops"}
           {#each wikisFor[project.id] ?? [] as w (w.identifier)}
             {@const on = wikisOf(project).some(
@@ -478,7 +479,7 @@
       </div>
 
       <div class="block">
-        <span class="dim">repos</span>
+        <GroupHead label="repos" />
         {#if reposOf(project).length}
           <div class="chips">
             {#each reposOf(project) as repo (repo.id)}
@@ -495,7 +496,7 @@
       </div>
 
       <div class="block wide">
-        <span class="dim">area path → component</span>
+        <GroupHead label="area path → component" />
         {#each areas[project.id] ?? [] as area (area.id)}
           <div class="arow">
             <code>{area.area_prefix}</code>

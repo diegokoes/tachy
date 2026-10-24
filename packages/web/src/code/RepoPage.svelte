@@ -387,7 +387,7 @@
     {@const edited = draft}
     <div class="layout">
       <div class="wide">
-        <Group label="source" icon="source">
+        <Group label="source">
           {#snippet action()}
             {#if canEdit}
               <span class="loud">
@@ -456,7 +456,6 @@
       <div class="col">
         <Group
           label="branches"
-          icon="branch"
           hint={refsHere
             ? `${fmt(refsHere.branches.length)} branches · ${fmt(refsHere.releases.length)} releases on the remote`
             : undefined}
@@ -545,7 +544,7 @@
           {/if}
         </Group>
 
-        <Group label="index" icon="index">
+        <Group label="index">
           <Rows>
             {#each repo.lines.filter((l) => l.ref === repo.default_branch) as line (line.id)}
               <Row label="status">
@@ -626,7 +625,7 @@
       </div>
 
       <div class="col">
-        <Group label="files" icon="folder">
+        <Group label="files">
           {#if !canEdit}
             <p class="quiet">only editors of this repo see its files</p>
           {:else if previewError && !preview}
@@ -677,7 +676,6 @@
         {#if canEdit && preview}
           <Group
             label="file types"
-            icon="fileTypes"
             hint={edited.extensions
               ? "found in this repo. this repo's own set is on"
               : "found in this repo. the built-in set is on"}
