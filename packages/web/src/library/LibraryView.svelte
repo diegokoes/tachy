@@ -672,8 +672,8 @@
       {#each shown as key (key)}
         {@const def = byKey(key)}
         {#if def}
-          <!-- No close button: the add menu toggles it off, and so does a
-               right click anywhere on it. -->
+          <!-- Taken off by its ×, by the add menu, or by a right click
+               anywhere on it. -->
           <span
             class="extra"
             role="group"
@@ -714,6 +714,14 @@
                 />
               {/if}
             </BarField>
+            <Button
+              variant="ghost"
+              size="sm"
+              square
+              icon="close"
+              title="remove the {def.label} filter"
+              onclick={() => removeFilter(key)}
+            />
           </span>
         {/if}
       {/each}
