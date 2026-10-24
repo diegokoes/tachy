@@ -19,6 +19,7 @@
     confirmLabel = "confirm",
     confirmIcon = "save",
     cancelLabel = "cancel",
+    closeConfirm,
     destructive,
     danger = false,
     busy = false,
@@ -35,9 +36,12 @@
     /** The dialog's accessible name, and the label drawn in the titlebar. */
     title?: string;
     confirmLabel?: string;
-    /** The bar is icon-only, so a confirm that isn't a save must say so. */
+    /** Drawn beside the word; a confirm that is not a save carries its own. */
     confirmIcon?: IconName;
     cancelLabel?: string;
+    /** Said by the close button while closing needs a second press, as when
+     *  it would throw away a changed draft. */
+    closeConfirm?: string;
     /** Sits at the far left of the bar, away from the two it must not be. */
     destructive?: {
       label: string;
@@ -205,15 +209,12 @@
             <Button
               variant="ghost"
               tone="danger"
-              square
               icon={destructive.icon ?? "delete"}
               morph
-              title={destructive.label}
-              aria-label={destructive.label}
               busy={destructive.busy}
               disabled={destructive.disabled}
-              onclick={destructive.onclick}
-            />
+              onclick={destructive.onclick}>{destructive.label}</Button
+            >
           {/if}
         </div>
 
@@ -224,25 +225,31 @@
         <div class="side end">
           {#if barExtra}{@render barExtra()}{/if}
 
-          <Button
-            variant="ghost"
-            square
-            icon="close"
-            title={cancelLabel}
-            aria-label={cancelLabel}
-            onclick={onCancel}
-          />
+          {#if closeConfirm}
+            <Button
+              variant="ghost"
+              tone="danger"
+              icon="confirm"
+              onclick={onCancel}>{closeConfirm}</Button
+            >
+          {:else}
+            <Button
+              variant="ghost"
+              square
+              icon="close"
+              title={cancelLabel}
+              aria-label={cancelLabel}
+              onclick={onCancel}
+            />
+          {/if}
           {#if onConfirm}
             <Button
               variant={danger ? "danger" : "primary"}
-              square
               icon={confirmIcon}
-              title={confirmLabel}
-              aria-label={confirmLabel}
               {busy}
               {disabled}
-              onclick={onConfirm}
-            />
+              onclick={onConfirm}>{confirmLabel}</Button
+            >
           {/if}
         </div>
       </div>

@@ -10,7 +10,7 @@
   import { api } from "../api";
   import { isGlobalAdmin } from "../access/session.svelte";
   import { setPageActions } from "../admin/pageActions.svelte";
-  import Choice from "../settings/Choice.svelte";
+  import Choice from "../tui/Choice.svelte";
   import Group from "../settings/Group.svelte";
   import Row from "../settings/Row.svelte";
   import Rows from "../settings/Rows.svelte";

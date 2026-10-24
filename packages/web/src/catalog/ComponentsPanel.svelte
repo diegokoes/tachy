@@ -386,7 +386,7 @@
     extra={whereExtra}
     destructive={open.row && mayEdit(open.row)
       ? {
-          label: armed ? "click again to confirm" : "delete",
+          label: armed ? "confirm delete" : "delete",
           icon: armed ? "confirm" : "delete",
           busy,
           onclick: remove,
