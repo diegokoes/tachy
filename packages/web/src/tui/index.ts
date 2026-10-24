@@ -96,8 +96,10 @@ export {
   type Stacked,
 } from "./scale";
 export { EMPTY, G, RAMP } from "./glyphs";
+export { default as Lamp } from "./Lamp.svelte";
+export type { Lamp as LampState, LampLevel } from "./lamp";
 export { compact, usd, dayOfMonth, keepUnits } from "./figures";
-export { toneOf, isActive, type Tone } from "./tone";
+export { toneOf, lampOf, isActive, type Tone } from "./tone";
 export { ICONS, type IconName } from "./icons";
 export {
   blankDraft,

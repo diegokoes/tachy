@@ -6,6 +6,8 @@
   import { createResource, errText } from "../resource.svelte";
   import { ago } from "../dates.svelte";
   import {
+    Lamp,
+    lampOf,
     EMPTY,
     Badge,
     Button,
@@ -16,6 +18,7 @@
     Note,
     type Column,
   } from "../tui";
+  import { indexLamp } from "./status";
   import type { Product } from "../catalog/rows";
   import type { Repo } from "./rows";
   import type { SourceProject } from "../sources/rows";
@@ -191,10 +194,7 @@
 {/snippet}
 
 {#snippet statusBadge(status: string)}
-  <Badge
-    tone={status === "ready" ? "ok" : status === "error" ? "danger" : "muted"}
-    >{status}</Badge
-  >
+  <Lamp lamp={indexLamp(status)} word={status} />
 {/snippet}
 
 {#snippet indexCell(repo: Repo)}
@@ -228,7 +228,7 @@
     {@const run = repo.active_run}
     <span class="run">
       {#if run.status === "queued"}
-        <Badge tone="muted">queued</Badge>
+        <Lamp lamp={lampOf("queued")} word="queued" />
       {:else}
         <Meter value={run.progress ?? 0} width={8} label="index progress" />
         <span class="sm"
@@ -249,7 +249,7 @@
     {ago(repo.last_indexed_at)}
     {#if repo.file_count}
       <span class="counts"
-        >{repo.file_count} files / {repo.chunk_count} chunks</span
+        >{repo.file_count} files · {repo.chunk_count} chunks</span
       >
     {/if}
   </span>

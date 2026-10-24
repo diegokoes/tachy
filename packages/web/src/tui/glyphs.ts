@@ -10,6 +10,8 @@ export const G = {
   right: "▸",
   marker: "▎",
   dot: "●",
+  half: "◐",
+  ring: "○",
 } as const;
 
 /** What a cell or a figure shows when it has no value. */

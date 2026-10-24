@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { Badge, GroupHead, Note, toneOf } from "../tui";
+  import { Lamp, lampOf, type LampState, GroupHead, Note } from "../tui";
   import { ago } from "../dates.svelte";
   import type { SystemInfo } from "./rows";
 
@@ -36,6 +36,15 @@
   };
 
   let status = $state<Status | null>(null);
+
+  type Result = { ok: boolean } | undefined;
+  /** Lit ok or failed once there is a result, dark while there is none. */
+  const resultLamp = (result: Result): LampState =>
+    result
+      ? { level: "on", tone: result.ok ? "ok" : "danger" }
+      : { level: "off", tone: "danger" };
+  const resultWord = (result: Result) =>
+    result ? (result.ok ? "ok" : "failed") : "none";
   let visible = $state(true);
   let error = $state<string | null>(null);
 
@@ -62,13 +71,10 @@
       <tr>
         <td>newest backup</td>
         <td
-          ><Badge tone={status.backup?.ok ? "ok" : "danger"}
-            >{status.backup
-              ? status.backup.ok
-                ? "ok"
-                : "failed"
-              : "none"}</Badge
-          ></td
+          ><Lamp
+            lamp={resultLamp(status.backup)}
+            word={resultWord(status.backup)}
+          /></td
         >
         <td class="muted"
           >{ago(status.backup?.at)}{status.backup?.file
@@ -79,13 +85,10 @@
       <tr>
         <td>restore test</td>
         <td
-          ><Badge tone={status.restore?.ok ? "ok" : "danger"}
-            >{status.restore
-              ? status.restore.ok
-                ? "ok"
-                : "failed"
-              : "none"}</Badge
-          ></td
+          ><Lamp
+            lamp={resultLamp(status.restore)}
+            word={resultWord(status.restore)}
+          /></td
         >
         <td class="muted"
           >{ago(status.restore?.at)}{status.restore?.seconds
@@ -118,7 +121,7 @@
         {#each Object.entries(status.watch.checks) as [name, check] (name)}
           <tr
             ><td>{name}</td><td
-              ><Badge tone={toneOf(check.state)}>{check.state}</Badge></td
+              ><Lamp lamp={lampOf(check.state)} word={check.state} /></td
             ><td class="muted">{check.value}</td></tr
           >
         {/each}

@@ -19,7 +19,7 @@
   import { createResource, errText } from "../resource.svelte";
   import { slugify, uniqueSlug } from "../slug";
   import {
-    Badge,
+    Lamp,
     Button,
     Chip,
     CrudTable,
@@ -32,6 +32,7 @@
     type Column,
     type Draft,
   } from "../tui";
+  import { tokenLamp } from "./status";
   import { canCurateScope } from "../access/session.svelte";
   import { t } from "../terms";
   import type { Connection, SourceProject } from "./rows";
@@ -394,9 +395,10 @@
 {/snippet}
 
 {#snippet tokenCell(connection: Connection)}
-  <Badge tone={connection.token_source ? "ok" : "warn"}
-    >{connection.token_source ?? "none"}</Badge
-  >
+  <Lamp
+    lamp={tokenLamp(connection.token_source)}
+    word={connection.token_source ?? "none"}
+  />
 {/snippet}
 
 {#snippet testButton(connection: Connection, size: "sm" | "md" = "sm")}

@@ -3,7 +3,8 @@
   import { api } from "../api";
   import { errText } from "../resource.svelte";
   import { refreshNotifications, toast } from "../notifications/notify.svelte";
-  import { Badge, Button, Note, Icon, EmptyState, Field } from "../tui";
+  import { Lamp, Badge, Button, Note, Icon, EmptyState, Field } from "../tui";
+  import { reportLamp } from "./status";
   import { ago } from "../dates.svelte";
   import { census } from "../admin/census.svelte";
   import {
@@ -21,13 +22,6 @@
   let reply = $state("");
   let busy = $state(false);
 
-  const STATUS_TONE: Record<ReportStatus, "warn" | "accent" | "ok" | "muted"> =
-    {
-      open: "warn",
-      in_progress: "accent",
-      resolved: "ok",
-      closed: "muted",
-    };
   const typeTone = (t: ReportType) => (t === "bug" ? "danger" : "accent");
 
   async function loadList() {
@@ -143,9 +137,10 @@
                   {report.reporter_name ?? "someone"} · {ago(report.created_at)}
                 </span>
               </span>
-              <Badge tone={STATUS_TONE[report.status]}
-                >{report.status.replace("_", " ")}</Badge
-              >
+              <Lamp
+                lamp={reportLamp(report.status)}
+                word={report.status.replace("_", " ")}
+              />
             </button>
           </li>
         {/each}
