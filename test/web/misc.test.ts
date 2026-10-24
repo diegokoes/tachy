@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { slugify, uniqueSlug } from "../../packages/web/src/slug";
 import { ANSI16 } from "../../packages/web/src/settings/accent-palette";
+import { keepUnits } from "../../packages/web/src/tui/figures";
 import {
   CONFIDENCES,
   KNOWLEDGE_STATUSES,
@@ -84,5 +85,22 @@ describe("the accent palette", () => {
 
   it("gives every entry a usable hex value", () => {
     for (const colour of ANSI16) expect(colour.hex).toMatch(/^#[0-9a-f]{6}$/i);
+  });
+});
+
+describe("keepUnits", () => {
+  it("holds a figure on the line of the unit after it", () => {
+    expect(keepUnits("calls 14 d")).toBe("calls 14\u00a0d");
+    expect(keepUnits("approved, not edited in 12 mo")).toBe(
+      "approved, not edited in 12\u00a0mo",
+    );
+    expect(keepUnits("drafts waiting > 30 d")).toBe(
+      "drafts waiting > 30\u00a0d",
+    );
+  });
+
+  it("leaves words that only start like a unit", () => {
+    expect(keepUnits("3 dashboards")).toBe("3 dashboards");
+    expect(keepUnits("stored tickets")).toBe("stored tickets");
   });
 });
