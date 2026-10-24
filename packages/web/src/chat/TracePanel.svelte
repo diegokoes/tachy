@@ -46,7 +46,7 @@
     ["auto-approved", list(trace.sent.autoApprove)],
     [
       "redaction",
-      trace.sent.redactionForced ? "forced on everywhere" : "per connection",
+      trace.sent.redactionForced ? "forced on everywhere" : "per source",
     ],
   ]);
 </script>

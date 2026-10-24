@@ -59,8 +59,8 @@
   rows={probes.checks ?? []}
   rowKey={(p) => p.name}
   loading={probes.running}
-  emptyTitle="Not run yet."
-  emptyDetail="Run the checks to probe this deployment."
+  emptyTitle="not run yet"
+  emptyDetail="run the checks to probe this deployment"
 />
 
 <style>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Entry } from "./chatState.svelte";
   import { shatter } from "../motion/motion";
-  import { Button, Panel } from "../tui";
+  import { Button, Field, Panel } from "../tui";
   import ApprovalField from "./ApprovalField.svelte";
   import { api } from "../api";
   import { parseUploadRef, uploadPreviewPath } from "@tachy/contract";
@@ -222,15 +222,18 @@
 
     {#if pending}
       {#if denying}
-        <input
-          class="reason"
-          placeholder="why? (optional, the assistant reads this)"
-          bind:value={reason}
-          onkeydown={(e) => {
-            if (e.key === "Enter") ondecide(false, reason.trim() || undefined);
-            if (e.key === "Escape") denying = false;
-          }}
-        />
+        <div class="reason">
+          <Field label="reason" info="optional; the assistant reads it">
+            <input
+              bind:value={reason}
+              onkeydown={(e) => {
+                if (e.key === "Enter")
+                  ondecide(false, reason.trim() || undefined);
+                if (e.key === "Escape") denying = false;
+              }}
+            />
+          </Field>
+        </div>
       {/if}
       {#if adoptNote}<p class="missing">{adoptNote}</p>{/if}
       <div class="acts">
@@ -337,9 +340,7 @@
   }
 
   .reason {
-    width: 100%;
     margin-top: var(--pad-3);
-    font: inherit;
     font-size: var(--fs-sm);
   }
 

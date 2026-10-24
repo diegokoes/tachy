@@ -210,7 +210,7 @@
   type Block = {
     key: string;
     title: string;
-    hint?: string;
+    info?: string;
     fields: FieldSpec[];
   };
   const blocks = $derived.by<Block[]>(() => {
@@ -227,7 +227,7 @@
       ...effective.groups.map((g, i) => ({
         key: `g${i}`,
         title: g.label ?? "header",
-        hint:
+        info:
           g.label === "also required"
             ? "nothing fills them, so they stay on screen whatever is set"
             : undefined,
@@ -236,13 +236,13 @@
       {
         key: "folded",
         title: "folded away",
-        hint: "under more fields",
+        info: "under more fields",
         fields: effective.hidden,
       },
       {
         key: "out",
         title: "left out",
-        hint: "never shown; a default is still sent",
+        info: "never shown; a default is still sent",
         fields: raw.fields.filter(
           (f) =>
             f.reference_name !== TITLE &&
@@ -408,7 +408,7 @@
   type ViewBlock = {
     key: string;
     title: string;
-    hint?: string;
+    info?: string;
     refs: string[];
   };
   const viewBlocks = $derived.by<ViewBlock[]>(() => {
@@ -437,7 +437,7 @@
       {
         key: "rest",
         title: `not on ${sourceName}'s form`,
-        hint: "shown only when pinned or always shown",
+        info: "shown only when pinned or always shown",
         refs: rest,
       },
     ];
@@ -510,7 +510,7 @@
     <Note>reading {project?.name}'s {type} form…</Note>
   {:else}
     {#each viewBlocks as block (block.key)}
-      <Group label={block.title} hint={block.hint}>
+      <Group label={block.title} info={block.info}>
         <Rows>
           {#each block.refs as ref, i (ref)}
             {@const label = readForm.fields[ref]?.name ?? ref}
@@ -520,14 +520,14 @@
                   <span class="order">
                     <button
                       class="tiny"
-                      aria-label={`Move ${label} up`}
+                      aria-label={`move ${label} up`}
                       disabled={i === 0}
                       onclick={() => moveInView(block, ref, -1)}
                       ><Icon name="moveUp" size="0.85em" /></button
                     >
                     <button
                       class="tiny"
-                      aria-label={`Move ${label} down`}
+                      aria-label={`move ${label} down`}
                       disabled={i === block.refs.length - 1}
                       onclick={() => moveInView(block, ref, 1)}
                       ><Icon name="moveDown" size="0.85em" /></button
@@ -537,7 +537,7 @@
                 <span class="ref">{ref}</span>
               {/snippet}
               <Choice
-                label={`How ${label} shows on a read item`}
+                label={`how ${label} shows on a read item`}
                 options={viewPlaceOptions(block.key !== "rest")}
                 value={viewConfig.fields?.[ref]?.show ?? ""}
                 onpick={(picked) => setViewShow(ref, picked || undefined)}
@@ -556,7 +556,7 @@
     size="sm"
     icon="run"
     disabled={dirty || !raw || !isCurator()}
-    onclick={tryIt}>try it</Button
+    onclick={tryIt}>test</Button
   >
   <Button
     variant="ghost"
@@ -571,28 +571,34 @@
 
 <header class="bar">
   {@render lead()}
-  <span class="pick wide">
-    <Select
-      value={projectId}
-      options={projectOptions}
-      searchable
-      placeholder="project"
-      aria-label="Project"
-      onchange={(v) => (projectId = String(v ?? ""))}
-    />
-  </span>
-  {#if types.length && !ingestConnection}
-    <span class="pick">
+  <span class="named">
+    <span class="k">project</span>
+    <span class="pick wide">
       <Select
-        value={type}
-        options={typeOptions}
+        value={projectId}
+        options={projectOptions}
         searchable
-        aria-label="Type"
-        onchange={(v) => (type = String(v ?? ""))}
+        placeholder="none"
+        aria-label="project"
+        onchange={(v) => (projectId = String(v ?? ""))}
       />
     </span>
+  </span>
+  {#if types.length && !ingestConnection}
+    <span class="named">
+      <span class="k">type</span>
+      <span class="pick">
+        <Select
+          value={type}
+          options={typeOptions}
+          searchable
+          aria-label="type"
+          onchange={(v) => (type = String(v ?? ""))}
+        />
+      </span>
+    </span>
     <Choice
-      label="Fields for creating an item or reading one"
+      label="fields for creating an item or reading one"
       options={MODES}
       value={mode}
       onpick={(picked) => (mode = picked)}
@@ -607,7 +613,7 @@
   {:else if ingestConnection}
     <IngestFlow connection={ingestConnection} />
   {:else if !projectOptions.length}
-    <Note>No registered projects your teams own.</Note>
+    <Note>no registered projects your teams own</Note>
   {:else if loadError}
     <Note tone="danger">{loadError}</Note>
   {:else if project}
@@ -627,21 +633,21 @@
             </button>
             <button
               class="tiny"
-              aria-label={`Move ${name} earlier`}
+              aria-label={`move ${name} earlier`}
               disabled={i === 0}
               onclick={() => moveType(name, -1)}
               ><Icon name="moveUp" size="0.85em" /></button
             >
             <button
               class="tiny"
-              aria-label={`Move ${name} later`}
+              aria-label={`move ${name} later`}
               disabled={i === offered.length - 1}
               onclick={() => moveType(name, 1)}
               ><Icon name="moveDown" size="0.85em" /></button
             >
             <button
               class="tiny"
-              aria-label={`Stop offering ${name}`}
+              aria-label={`stop offering ${name}`}
               disabled={offered.length === 1}
               onclick={() => toggleType(name)}
               ><Icon name="close" size="0.85em" /></button
@@ -672,7 +678,7 @@
       <Note>reading {project.name}'s {type} form…</Note>
     {:else}
       {#each blocks as block (block.key)}
-        <Group label={block.title} hint={block.hint}>
+        <Group label={block.title} info={block.info}>
           <Rows>
             {#each block.fields as field, i (field.reference_name)}
               {@const ref = field.reference_name}
@@ -687,14 +693,14 @@
                     <span class="order">
                       <button
                         class="tiny"
-                        aria-label={`Move ${label} up`}
+                        aria-label={`move ${label} up`}
                         disabled={i === 0}
                         onclick={() => move(block, ref, -1)}
                         ><Icon name="moveUp" size="0.85em" /></button
                       >
                       <button
                         class="tiny"
-                        aria-label={`Move ${label} down`}
+                        aria-label={`move ${label} down`}
                         disabled={i === block.fields.length - 1}
                         onclick={() => move(block, ref, 1)}
                         ><Icon name="moveDown" size="0.85em" /></button
@@ -706,8 +712,8 @@
                       <button
                         class="tiny"
                         aria-label={hasSource(ref)
-                          ? `Back to ${sourceName}'s value`
-                          : "Clear the default"}
+                          ? `back to ${sourceName}'s value`
+                          : "clear the default"}
                         use:tip={hasSource(ref)
                           ? `back to ${sourceName}'s value`
                           : "clear the default"}
@@ -719,7 +725,7 @@
                     {/if}
                   </span>
                   <Choice
-                    label={`Where ${label} shows`}
+                    label={`where ${label} shows`}
                     options={placeOptions(ref)}
                     value={(typeConfig.fields?.[ref]?.show ?? "") as Place}
                     onpick={(v) =>
@@ -736,7 +742,7 @@
                         value={cur}
                         options={personOptions(cur)}
                         searchable
-                        aria-label={`Default for ${label}`}
+                        aria-label={`default for ${label}`}
                         onchange={(v) => setDefault(ref, v)}
                       />
                       <button
@@ -752,7 +758,7 @@
                     <FieldInput
                       id={`def-${ref}`}
                       spec={field}
-                      label={`Default for ${label}`}
+                      label={`default for ${label}`}
                       value={startsAs(ref) ?? null}
                       form={raw}
                       onchange={(v) => setDefault(ref, v)}
@@ -769,7 +775,7 @@
         <textarea
           class="guidance"
           rows="4"
-          aria-label={`Guidance for tachy's review of a ${type}`}
+          aria-label={`guidance for tachy's review of a ${type}`}
           value={typeConfig.guidance ?? ""}
           oninput={(e) =>
             setTc({
@@ -803,6 +809,17 @@
   }
   .pick > :global(*) {
     width: 100%;
+  }
+  .named {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pad-3);
+  }
+  .k {
+    font-size: var(--fs-xs);
+    color: var(--muted);
+    letter-spacing: var(--label-spacing);
+    text-transform: uppercase;
   }
   .body {
     display: flex;

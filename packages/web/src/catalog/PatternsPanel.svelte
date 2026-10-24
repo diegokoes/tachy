@@ -65,7 +65,7 @@
   rowKey={(r) => r.slug}
   loading={patterns.loading}
   error={patterns.error}
-  emptyTitle="No resolution patterns yet."
+  emptyTitle="no resolution patterns yet"
   addLabel="add pattern"
   noun="pattern"
   editTitle={(r) => r.slug}
@@ -106,9 +106,9 @@
   >
     {#snippet message(impact, to)}
       <p>
-        Renaming <strong>{target.slug}</strong> to <strong>{to}</strong>
+        renaming <strong>{target.slug}</strong> to <strong>{to}</strong>
         rewrites
-        {impact.entries} knowledge {impact.entries === 1 ? "entry" : "entries"}.
+        {impact.entries} knowledge {impact.entries === 1 ? "entry" : "entries"}
       </p>
     {/snippet}
   </SlugRename>

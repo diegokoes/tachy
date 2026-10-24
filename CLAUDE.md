@@ -38,6 +38,7 @@ npm run web:dev                  # SPA dev server
 npm test                         # the suite without the coverage ratchet
 npm run format                   # prettier
 npm run comments:check           # the comment rules under Conventions
+npm run copy:check               # the copy rules under Conventions
 ```
 
 Tests need Docker (testcontainers spins up Postgres).
@@ -71,6 +72,12 @@ if it starts reading from disk again.
   emphasis. At most 3 lines in a body, 5 on a declaration, 12 for one file
   header. `/** */` on declarations, `//` in bodies, `/* */` in CSS only.
   `npm run comments:check` holds the mechanical part.
+- **Copy is lowercase**, sentences included, and a one-line message drops its
+  period; brand names and acronyms keep their case. An empty field shows
+  nothing, or the value it takes when left empty ("any" in a filter, "none" in
+  a form, an inherited default): a sample or an instruction goes behind the
+  info mark, a stand-in becomes a label. `npm run copy:check` holds the
+  mechanical part.
 - **A name carries what a comment would.** Length follows lifetime: one letter
   only for a loop index, a one-expression callback or a fixed idiom (`c`, `tx`,
   `e`). A collection is named for its contents, a bare number carries its unit

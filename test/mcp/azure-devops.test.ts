@@ -157,7 +157,7 @@ describe("which connection and project a call reaches", () => {
       product_slug: "tpd",
     });
     expect(answer.isError).toBe(true);
-    expect(answer.text).toMatch(/No registered project matches/);
+    expect(answer.text).toMatch(/no registered project matches/);
   });
 });
 

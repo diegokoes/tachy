@@ -185,13 +185,13 @@
     <textarea rows="3" bind:value={resolution}></textarea>
   </Field>
 
-  <Field label="symptoms" info="Comma-separated.">
+  <Field label="symptoms" info="comma-separated">
     <input bind:value={symptoms} />
   </Field>
-  <Field label="signals" info="Error codes and log patterns, comma-separated.">
+  <Field label="signals" info="error codes and log patterns, comma-separated">
     <input bind:value={signals} />
   </Field>
-  <Field label="tags" info="Comma-separated.">
+  <Field label="tags" info="comma-separated">
     <input bind:value={tags} />
   </Field>
 
@@ -199,26 +199,24 @@
     <Field label="confidence">
       <AsciiSelect
         bind:value={confidence}
-        options={[{ value: "", label: "unset" }, ...CONFIDENCES]}
+        options={[{ value: "", label: "none" }, ...CONFIDENCES]}
       />
     </Field>
     <Field label="clarity">
       <AsciiSelect
         bind:value={resolutionClarity}
-        options={[{ value: "", label: "unset" }, ...RESOLUTION_CLARITIES]}
+        options={[{ value: "", label: "none" }, ...RESOLUTION_CLARITIES]}
       />
     </Field>
     <Field label={t("cloud")} error={cloudErr ?? undefined}>
-      <input
-        class="short"
-        bind:value={cloud}
-        list="entry-form-envs"
-        aria-invalid={cloudErr ? "true" : undefined}
-      />
-      <datalist id="entry-form-envs">
-        {#each environments as environment}<option value={environment.cloud}
-          ></option>{/each}
-      </datalist>
+      <span class="short">
+        <AsciiSelect
+          bind:value={cloud}
+          options={environments.map((environment) => environment.cloud)}
+          creatable
+          aria-label={t("cloud")}
+        />
+      </span>
     </Field>
   </div>
 
@@ -283,9 +281,9 @@
     type="button"
     class="json-toggle"
     aria-label={showStructured
-      ? "Hide structured JSON"
-      : "Show structured JSON"}
-    use:tip={showStructured ? "Hide structured JSON" : "Show structured JSON"}
+      ? "hide structured JSON"
+      : "show structured JSON"}
+    use:tip={showStructured ? "hide structured JSON" : "show structured JSON"}
     onclick={() => void toggleStructured()}
   >
     <Icon name="json" size="1.8rem" />
@@ -333,6 +331,7 @@
     resize: vertical;
   }
   .short {
+    display: flex;
     max-width: 10rem;
   }
   .row {

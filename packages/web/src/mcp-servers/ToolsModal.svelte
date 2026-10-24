@@ -156,8 +156,8 @@
     rowKey={(tool) => tool.name}
     loading={tools.loading}
     error={tools.error}
-    emptyTitle="No tools listed yet."
-    emptyDetail="Save a token, then list the server's tools."
+    emptyTitle="no tools listed yet"
+    emptyDetail="save a token, then list the server's tools"
     onrowclick={(tool) =>
       (expanded = expanded === tool.name ? null : tool.name)}
   />

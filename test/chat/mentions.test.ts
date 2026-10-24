@@ -101,13 +101,13 @@ describe("checkMentions", () => {
   it("names the first thing that is missing or not shared", async () => {
     await expect(
       checkMentions(memberId, [{ kind: "repo", key: "nope" }]),
-    ).rejects.toThrow(/Repo 'nope' not found/);
+    ).rejects.toThrow(/repo 'nope' not found/);
     await expect(
       checkMentions(memberId, [{ kind: "bucket", key: "private" }]),
     ).rejects.toThrow(/not shared with any of your teams/);
     await expect(
       checkMentions(memberId, [{ kind: "project", key: "Elsewhere" }]),
-    ).rejects.toThrow(/No linked repo belongs to a project 'Elsewhere'/);
+    ).rejects.toThrow(/no linked repo belongs to a project 'Elsewhere'/);
   });
 });
 

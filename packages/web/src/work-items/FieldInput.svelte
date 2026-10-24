@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { ComposerForm, FieldSpec } from "@tachy/contract";
-  import { Checkbox, Select } from "../tui";
+  import { CaretInput, Checkbox, Select } from "../tui";
   import { AREA, ITERATION } from "./layout";
 
   let {
@@ -109,7 +109,7 @@
         hint: p.unique_name,
       })),
     ),
-    { value: OTHER, label: "someone else: type their email…" },
+    { value: OTHER, label: "someone else" },
   ]);
 
   const choiceOptions = $derived([
@@ -170,7 +170,6 @@
         {id}
         class:invalid
         type="email"
-        placeholder="name@company.com"
         value={current}
         aria-label={label}
         onchange={(e) =>
@@ -208,33 +207,26 @@
       >
     {/each}
     {#if widget.allow_custom}
-      <input
-        class="custom"
-        placeholder="other…"
-        aria-label={`Another ${label}`}
-        bind:value={custom}
-        onkeydown={(e) =>
-          e.key === "Enter" && (e.preventDefault(), addCustom())}
-        onblur={addCustom}
-      />
+      <span class="custom">
+        <CaretInput
+          icon="plus"
+          aria-label={`another ${label}`}
+          bind:value={custom}
+          onkeydown={(e) =>
+            e.key === "Enter" && (e.preventDefault(), addCustom())}
+          onblur={addCustom}
+        />
+      </span>
     {/if}
   </div>
 {:else if kind === "suggest"}
-  <input
-    {id}
-    class:invalid
-    list={`${id}-list`}
+  <Select
     value={current}
+    options={widget?.kind === "suggest" ? widget.values : []}
+    creatable
     aria-label={label}
-    placeholder="type it"
-    oninput={(e) => onchange((e.target as HTMLInputElement).value || null)}
+    onchange={(v) => onchange(String(v ?? "") || null)}
   />
-  {#if widget?.kind === "suggest" && widget.values.length}
-    <datalist id={`${id}-list`}>
-      {#each widget.values as choice (choice)}<option value={choice}
-        ></option>{/each}
-    </datalist>
-  {/if}
 {:else if kind === "choice"}
   <Select
     value={current}
@@ -285,9 +277,6 @@
     class:invalid
     value={current}
     aria-label={label}
-    placeholder={spec.reference_name === "System.Tags"
-      ? "tag; another tag"
-      : ""}
     oninput={(e) => onchange((e.target as HTMLInputElement).value)}
   />
 {/if}
@@ -341,5 +330,13 @@
   }
   .custom {
     width: 6rem;
+    display: flex;
+    padding: 0.1rem 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-chip);
+    font-size: var(--fs-sm);
+  }
+  .custom:focus-within {
+    border-color: var(--accent);
   }
 </style>

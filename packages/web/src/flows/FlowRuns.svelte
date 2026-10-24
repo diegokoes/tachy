@@ -73,7 +73,7 @@
       <span class="trig">{run.trigger_id ?? "by hand"}</span>
     </button>
   {:else}
-    <p class="none">No runs yet. Try it on an item with test run.</p>
+    <p class="none">no runs yet</p>
   {/each}
 </div>
 

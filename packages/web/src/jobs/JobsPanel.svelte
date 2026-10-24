@@ -105,7 +105,7 @@
       edit: "text",
       required: true,
       cell: nameCell,
-      info: "Display name in run history and Teams.",
+      info: "display name in run history and Teams",
     },
     {
       key: "kind",
@@ -116,17 +116,16 @@
       required: true,
       editable: () => false,
       options: info.data.kinds.map((k) => ({ value: k.kind, label: k.title })),
-      info: "What the job does. Types are defined in code.",
+      info: "what the job does. types are defined in code",
     },
     {
       key: "schedule",
       label: "schedule",
       width: "14rem",
       edit: "text",
-      placeholder: "0 2 * * *",
       value: (d) => d.schedule ?? "",
       cell: scheduleCell,
-      info: "Cron, 5 fields. Blank: manual or event only.",
+      info: "cron, 5 fields: minute hour day month weekday. blank: manual or event only",
     },
     {
       key: "timezone",
@@ -152,7 +151,7 @@
         })),
       ],
       cell: queueCell,
-      info: "The line its runs wait in. Each queue belongs to the light or heavy worker pool, whose sizes are set in Compose.",
+      info: "the line its runs wait in. each queue belongs to the light or heavy worker pool, whose sizes are set in compose",
     },
     {
       key: "timeout",
@@ -161,7 +160,7 @@
       edit: "text",
       value: (d) => d.timeout ?? "",
       placeholder: (dr) => kindOf(dr.kind)?.timeout ?? "1h",
-      info: "Like 90s, 15m, 2h. Blank uses the type's.",
+      info: "like 90s, 15m, 2h. blank uses the type's",
     },
     {
       key: "overlap",
@@ -171,7 +170,7 @@
       value: (d) => d.overlap ?? "",
       options: (dr) =>
         opt(JOB_OVERLAP, `type default (${kindOf(dr.kind)?.overlap ?? "?"})`),
-      info: "Overlap policy: skip or queue.",
+      info: "overlap policy: skip or queue",
     },
     {
       key: "notify",
@@ -180,7 +179,7 @@
       edit: "select",
       initial: "failure",
       options: JOB_NOTIFY.map((v) => ({ value: v, label: v })),
-      info: "Posts to Teams (teams_job_webhook).",
+      info: "posts to Teams (teams_job_webhook)",
     },
     {
       key: "enabled",
@@ -188,7 +187,7 @@
       formOnly: true,
       edit: "checkbox",
       initial: true,
-      info: "A paused job keeps its schedule but does not fire.",
+      info: "a paused job keeps its schedule but does not fire",
     },
     // The toggle is what people come to this list to use, so it sits on the row
     // rather than one dialog away.
@@ -474,12 +473,12 @@
     <Field
       label={name}
       {required}
-      info={property.description ?? "The source connection this runs against."}
+      info={property.description ?? "the source this runs against"}
     >
       <Select
         value={String(params[name] ?? "")}
         options={[
-          { value: "", label: "pick a connection…" },
+          { value: "", label: "none" },
           ...connections.data
             .filter(
               (c) =>
@@ -580,7 +579,7 @@
           1,
           info.data.chat_slot_cap - info.data.class_chat_slots[effectiveClass],
         )}
-        instead of {info.data.chat_slot_cap}.
+        instead of {info.data.chat_slot_cap}
       </Note>
     {/if}
   {/if}
@@ -665,7 +664,7 @@
   rowKey={(d) => d.id}
   loading={defs.loading || info.loading}
   error={defs.error}
-  emptyTitle={defs.data.length ? "No jobs match." : "No job definitions yet."}
+  emptyTitle={defs.data.length ? "no jobs match" : "no job definitions yet"}
   addLabel="add job"
   noun="job"
   editTitle={(d) => d.name}

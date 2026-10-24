@@ -123,7 +123,7 @@
 <div class="structured">
   {#if environment && Object.keys(environment).length}
     <div class="block">
-      <h4>Environment</h4>
+      <h4>environment</h4>
       <dl>
         {#each Object.entries(environment) as [key, value]}
           <dt>{labelize(key)}</dt>
@@ -135,7 +135,7 @@
 
   {#if keySignals && Object.keys(keySignals).length}
     <div class="block">
-      <h4>Key signals</h4>
+      <h4>key signals</h4>
       <dl>
         {#each Object.entries(keySignals) as [key, value]}
           <dt>{labelize(key)}</dt>
@@ -147,7 +147,7 @@
 
   {#if analysis && Object.keys(analysis).length}
     <div class="block">
-      <h4>Technical analysis</h4>
+      <h4>technical analysis</h4>
       <dl>
         {#each Object.entries(analysis) as [key, value]}
           <dt>{labelize(key)}</dt>
@@ -159,7 +159,7 @@
 
   {#if steps?.length}
     <div class="block">
-      <h4>Investigation steps</h4>
+      <h4>investigation steps</h4>
       <ol>
         {#each steps as step}<li>{step}</li>{/each}
       </ol>
@@ -168,14 +168,14 @@
 
   {#if summary}
     <div class="block">
-      <h4>Conversation summary</h4>
+      <h4>conversation summary</h4>
       <p>{summary}</p>
     </div>
   {/if}
 
   {#if rules?.length}
     <div class="block">
-      <h4>Constraints &amp; rules</h4>
+      <h4>constraints &amp; rules</h4>
       <ul>
         {#each rules as rule}<li>{rule}</li>{/each}
       </ul>
@@ -184,7 +184,7 @@
 
   {#if config?.length}
     <div class="block">
-      <h4>Related configuration</h4>
+      <h4>related configuration</h4>
       <ul>
         {#each config as field}<li><code>{field}</code></li>{/each}
       </ul>
@@ -193,7 +193,7 @@
 
   {#if links?.length}
     <div class="block">
-      <h4>Related links</h4>
+      <h4>related links</h4>
       <ul>
         {#each links as link}
           <li>
@@ -211,15 +211,15 @@
 
   {#if Object.keys(extras).length && !showRaw}
     <div class="block">
-      <h4>Other</h4>
+      <h4>other</h4>
       <pre>{JSON.stringify(extras, null, 2)}</pre>
     </div>
   {/if}
 
   <button
     class="json-toggle"
-    aria-label={showRaw ? "Show rendered knowledge entry" : "Show raw JSON"}
-    use:tip={showRaw ? "Show rendered view" : "Show raw JSON"}
+    aria-label={showRaw ? "show rendered knowledge entry" : "show raw JSON"}
+    use:tip={showRaw ? "show rendered view" : "show raw JSON"}
     onclick={() => void toggleRaw()}
   >
     <Icon name="json" size="1.8rem" />

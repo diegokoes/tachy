@@ -18,14 +18,14 @@
     class="switch"
     role="switch"
     aria-checked={complex}
-    aria-label="Flow mode: complex"
+    aria-label="automations"
     onclick={() => (mode = complex ? "project" : "complex")}
   >
-    <span class="side" class:on={!complex}>project</span>
+    <span class="side" class:on={!complex}>projects</span>
     <span class="track" class:right={complex} aria-hidden="true"
       ><span class="knob"></span></span
     >
-    <span class="side" class:on={complex}>complex</span>
+    <span class="side" class:on={complex}>automations</span>
   </button>
 {/snippet}
 

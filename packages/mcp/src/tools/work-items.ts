@@ -333,7 +333,7 @@ tool(
   async ({ source, external_id, ...summary }) => {
     const { conn, source: src } = await resolveSource(source);
     if (!src.postNote)
-      throw badInput(`Source '${source}' does not support notes`);
+      throw badInput(`source '${source}' does not support notes`);
     await requireCanEdit(await externalWorkItemScope(conn.id, external_id));
     const raw = await src.fetchItem(external_id);
     const { customerId } = await ingestWorkItem(conn.id, raw);
@@ -470,7 +470,7 @@ tool(
   async ({ source, external_id, title, body, code }) => {
     const { conn, source: src } = await resolveSource(source);
     if (!src.postNote)
-      throw badInput(`Source '${source}' does not support notes`);
+      throw badInput(`source '${source}' does not support notes`);
     await requireCanEdit(await externalWorkItemScope(conn.id, external_id));
     const userId = await resolveCurrentUserId();
     const cited: CitedCode[] = [];

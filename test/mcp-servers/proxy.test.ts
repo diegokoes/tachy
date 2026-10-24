@@ -311,7 +311,7 @@ describe("calls", () => {
         "events_search",
         {},
       ),
-    ).rejects.toThrow(/Settings › agent/);
+    ).rejects.toThrow(/settings › agent/);
     const pooled = await hub();
     await expect(
       callServerTool(
@@ -455,7 +455,7 @@ describe("customer bindings", () => {
     );
     await expect(
       applyBindings(server, ["customer"], { tachy_customer: "nobody" }),
-    ).rejects.toThrow(/Unknown customer/);
+    ).rejects.toThrow(/unknown customer/);
   });
 });
 

@@ -61,7 +61,7 @@
 >
   <div class="stage">
     <p class="msg" class:warn={warning} role="status" aria-live="polite">
-      {warning || (rebind.pending ? "" : "Press the new key.")}
+      {warning || (rebind.pending ? "" : "press the new key")}
     </p>
     <div class="keys" class:bad={warning}>
       <Chord

@@ -32,8 +32,8 @@
   const rows = $derived(
     (
       [
-        ["conf", confidence],
-        ["clar", clarity],
+        ["confidence", confidence],
+        ["clarity", clarity],
       ] as const
     )
       .filter(([, v]) => v && STEPS[v])

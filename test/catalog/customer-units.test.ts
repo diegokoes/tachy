@@ -369,7 +369,7 @@ describe("unit attribution on tickets and entries", () => {
     const otherId = await getCustomerIdBySlug("other");
     const id = await ticket();
     await expect(setWorkItemCustomer(id, otherId, "tlc191")).rejects.toThrow(
-      /Unknown unit/,
+      /unknown unit/,
     );
   });
 

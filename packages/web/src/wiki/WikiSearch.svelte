@@ -2,7 +2,7 @@
   import { api } from "../api";
   import { navigate } from "../shell/router.svelte";
   import { createSequence } from "../resource.svelte";
-  import { Badge, Modal } from "../tui";
+  import { Badge, Modal, SearchBox } from "../tui";
   import type { WikiSearchHit } from "@tachy/contract";
   import { wikiPath } from "./paths";
 
@@ -67,16 +67,14 @@
 
 <Modal title="search this wiki" width="42rem" onCancel={onClose}>
   <div class="search">
-    <input
-      bind:this={inputEl}
+    <SearchBox
+      bind:el={inputEl}
       bind:value={query}
-      class="q"
-      placeholder="find an article…"
       aria-label="search this wiki"
       onkeydown={onKeydown}
     />
     {#if query.trim() && hits.length === 0}
-      <p class="empty">Nothing here matches.</p>
+      <p class="empty">nothing here matches</p>
     {/if}
     {#if hits.length}
       <ul>
@@ -102,9 +100,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--pad-2);
-  }
-  .q {
-    width: 100%;
   }
   .empty {
     margin: 0;

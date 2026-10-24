@@ -7,7 +7,15 @@
   import { navigate } from "../shell/router.svelte";
   import { canCurateScope } from "../access/session.svelte";
   import { slugify, uniqueSlug } from "../slug";
-  import { Button, Icon, Note, Scrollbar, Select, tip } from "../tui";
+  import {
+    Button,
+    Icon,
+    Note,
+    Scrollbar,
+    SearchBox,
+    Select,
+    tip,
+  } from "../tui";
   import Orbit from "./Orbit.svelte";
   import type { Repo } from "./rows";
   import type { SourceProject } from "../sources/rows";
@@ -64,7 +72,7 @@
   let scroller = $state<HTMLElement>();
   let cloud = $state<HTMLElement>();
   let dock = $state<HTMLElement>();
-  let search = $state<HTMLInputElement>();
+  let filterBox = $state<HTMLElement>();
 
   let viewH = $state(0);
   let topH = $state(0);
@@ -258,7 +266,7 @@
         ? letters
         : [...cloud.querySelectorAll<HTMLElement>(".tag .name")];
     const frames = [...cloud.querySelectorAll<HTMLElement>(".frame")];
-    gsap.set([search, dock].filter(Boolean), { opacity: 0 });
+    gsap.set([filterBox, dock].filter(Boolean), { opacity: 0 });
     gsap.set(frames, { opacity: 0 });
 
     const n = movers.length;
@@ -329,7 +337,7 @@
   /** The controls for the answer arrive once the answer has landed. */
   function reveal() {
     if (reducedMotion()) return;
-    const parts = [search, dock].filter(Boolean);
+    const parts = [filterBox, dock].filter(Boolean);
     if (!parts.length) return;
     gsap.fromTo(
       parts,
@@ -418,11 +426,7 @@
             {options}
             searchable
             placement="beside"
-            placeholder={projects.loading
-              ? "loading…"
-              : mine.length
-                ? "choose a project"
-                : "no project you can link into"}
+            placeholder="none"
             disabled={seeking || fetching || linking || !mine.length}
             aria-label="project to link repos from"
             onchange={(v) => choose(String(v))}
@@ -431,13 +435,13 @@
 
         <div class="find rise">
           {#if offered.length}
-            <input
-              bind:this={search}
-              placeholder="filter repos…"
-              aria-label="filter repos"
-              bind:value={filter}
-              disabled={linking}
-            />
+            <span class="filter" bind:this={filterBox}>
+              <SearchBox
+                bind:value={filter}
+                aria-label="filter repos"
+                disabled={linking}
+              />
+            </span>
           {/if}
         </div>
       </div>
@@ -460,6 +464,8 @@
           <p class="quiet">
             {project.external_key} shows no repos to this token
           </p>
+        {:else if !projects.loading && !mine.length}
+          <p class="quiet">no project you can link into</p>
         {/if}
 
         <div class="answer">
@@ -628,8 +634,8 @@
     height: var(--control-h);
     margin-top: var(--pad-2);
   }
-  .find input {
-    width: 100%;
+  .filter {
+    display: flex;
   }
 
   .well {

@@ -69,11 +69,11 @@ function sourceRefusal(reason: unknown): Error {
   const message = reason instanceof Error ? reason.message : "";
   if (TOKEN_REFUSED.test(message))
     return badInput(
-      "The source refused your token. Check it under Settings › agent.",
+      "the source refused your token. check it under settings › agent",
     );
   if (ITEM_MISSING.test(message))
-    return notFound("No such item, or your token cannot read it.");
-  return unavailable("The source did not answer. Try again.");
+    return notFound("no such item, or your token cannot read it");
+  return unavailable("the source did not answer. try again");
 }
 
 async function askSource<T>(ask: Promise<T>): Promise<T> {
@@ -320,7 +320,7 @@ export const workItems = new Hono()
         browser.changes([{ id: itemId, seenRev: null }]),
       );
       if (!current)
-        throw notFound("No such item, or your token cannot read it.");
+        throw notFound("no such item, or your token cannot read it");
       await followWorkItem({
         userId,
         connectionId: conn.id,
