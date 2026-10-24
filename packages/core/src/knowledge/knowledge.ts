@@ -305,8 +305,9 @@ export interface NearDuplicate {
 
 /**
  * Stored entries that hold nearly the lesson `prepared` does, at `floor` or
- * above, closest first: in its product, or in none, and rejected or archived
- * ones left out. An entry with no text to embed has none.
+ * above, closest first: in its product or in none, and an entry with no
+ * product among those with none. Rejected and archived ones are left out; an
+ * entry with no text to embed has none.
  */
 export async function nearDuplicateEntries(
   prepared: PreparedEntry,
@@ -315,7 +316,7 @@ export async function nearDuplicateEntries(
   if (!prepared.embedding) return [];
   const inScope = prepared.productId
     ? sql`and (product_id = ${prepared.productId} or product_id is null)`
-    : sql``;
+    : sql`and product_id is null`;
   const rows = await withSearchSession(
     (tx) => tx`
       select id, issue_summary, status, superseded_by,

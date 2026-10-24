@@ -121,6 +121,25 @@ describe("nearDuplicateEntries", () => {
     ).toEqual([unscoped.id]);
   });
 
+  it("looks only among entries with no product for an entry with none", async () => {
+    await saveKnowledgeEntry({
+      productId: await tpdProductId(),
+      status: "approved",
+      ...SCANNER,
+    });
+    const copy = await prepareKnowledgeEntry({ ...SCANNER });
+    expect(copy.productId).toBeNull();
+    expect(await nearDuplicateEntries(copy, COPY_FLOOR)).toEqual([]);
+
+    const unscoped = await saveKnowledgeEntry({
+      status: "approved",
+      ...SCANNER,
+    });
+    expect(
+      (await nearDuplicateEntries(copy, COPY_FLOOR)).map((d) => d.id),
+    ).toEqual([unscoped.id]);
+  });
+
   it("finds none for an entry with no text to embed", async () => {
     const empty = await prepareKnowledgeEntry({});
     expect(empty.embedding).toBeNull();
