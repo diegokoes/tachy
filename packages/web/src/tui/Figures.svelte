@@ -11,6 +11,8 @@
     /** Under the label, in figures: "815 / 853". */
     note?: string;
     tone?: Tone;
+    /** Opens the list the figure counts, when there is one. */
+    onclick?: () => void;
   };
 
   let { items }: { items: FigureItem[] } = $props();
@@ -23,11 +25,23 @@ against one another: the figure, what it is, out of what.
 -->
 <div class="figures">
   {#each items as item (item.key)}
-    <div class="one" style="--tone-color: {toneVar(item.tone ?? 'accent')}">
+    <svelte:element
+      this={item.onclick ? "button" : "div"}
+      class="one"
+      class:go={item.onclick}
+      style="--tone-color: {toneVar(item.tone ?? 'accent')}"
+      onclick={item.onclick}
+      role={item.onclick ? undefined : "group"}
+    >
       <span class="v">{item.value}</span>
-      <span class="l">{keepUnits(item.label)}</span>
+      <span class="l"
+        >{keepUnits(item.label)}{#if item.onclick}<span
+            class="go-mark"
+            aria-hidden="true">›</span
+          >{/if}</span
+      >
       {#if item.note}<span class="n">{item.note}</span>{/if}
-    </div>
+    </svelte:element>
   {/each}
 </div>
 
@@ -51,6 +65,23 @@ against one another: the figure, what it is, out of what.
     min-width: 0;
     padding-left: var(--pad-3);
     border-left: 2px solid var(--tone-color);
+  }
+  button.one {
+    font: inherit;
+    text-align: left;
+    background: none;
+    border-top: none;
+    border-right: none;
+    border-bottom: none;
+    cursor: pointer;
+  }
+  button.one:hover .l,
+  button.one:focus-visible .l {
+    color: var(--accent);
+  }
+  .go-mark {
+    margin-left: 0.3em;
+    color: var(--accent);
   }
   .v {
     font-family: var(--font-mono);

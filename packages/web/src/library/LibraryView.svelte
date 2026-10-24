@@ -435,6 +435,7 @@
 
   /** Opens narrowed to what another page asked for; see `presetScope`. */
   async function applyPreset(preset: ScopePreset) {
+    if (preset.status) status = preset.status;
     const id = products.find((x) => x.slug === preset.product)?.id as
       string | undefined;
     if (!id) return;
