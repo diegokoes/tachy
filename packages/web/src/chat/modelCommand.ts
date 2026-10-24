@@ -88,7 +88,7 @@ export function modelOptions(
     .map((m) => ({
       value: m.id,
       label: m.label,
-      hint: m.id,
+      hint: m.label === m.id ? "" : m.id,
       desc: m.id === defaultId ? YOUR_DEFAULT : "",
     }));
 }
