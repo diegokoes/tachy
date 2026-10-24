@@ -2,6 +2,7 @@ import type { ChatModeName } from "@tachy/core";
 
 export interface ChatMode {
   name: ChatModeName;
+  /** What follows the command, in words, for the menu; never parsed. */
   args: string;
   description: string;
   expand: (args: string) => string;
@@ -19,7 +20,7 @@ const CODE_ANSWER_SHAPE = [
 export const CHAT_MODE_LIST: ChatMode[] = [
   {
     name: "analyze",
-    args: "[ticket-id]",
+    args: "ticket",
     description: "turn tickets into knowledge entries for review",
     expand: (args) =>
       [

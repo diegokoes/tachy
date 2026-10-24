@@ -2,13 +2,22 @@
   import { onMount } from "svelte";
   import { gsap, SplitText, reducedMotion } from "./gsap";
 
-  let { text, caret = true }: { text: string; caret?: boolean } = $props();
+  let {
+    text,
+    caret = true,
+    ondone,
+  }: {
+    text: string;
+    caret?: boolean;
+    /** The line is fully typed: at once under reduced motion. */
+    ondone?: () => void;
+  } = $props();
 
   let paragraph = $state<HTMLParagraphElement>();
   let handle = $state<HTMLSpanElement>();
 
   onMount(() => {
-    if (reducedMotion()) return;
+    if (reducedMotion()) return ondone?.();
     const split = new SplitText(paragraph!, { type: "chars" });
     const n = split.chars.length;
     const width = paragraph!.getBoundingClientRect().width;
@@ -16,6 +25,7 @@
 
     const tl = gsap.timeline();
     tl.from(split.chars, { autoAlpha: 0, duration: 0.001, stagger: 0.03 }, 0);
+    if (ondone) tl.call(ondone, undefined, typeTime);
     if (handle)
       tl.to(
         handle,

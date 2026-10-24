@@ -46,7 +46,7 @@ export const defaultSubnavKey = (i: number) => `shift+${i + 1}`;
  */
 export const ACTIONS = {
   feedback: { label: "feedback", key: "ctrl+." },
-  artifacts: { label: "artifacts panel, in chat", key: "a" },
+  artifacts: { label: "recipes panel, in chat", key: "a" },
   // Firefox keeps ctrl+shift+p for a private window and never hands it to the
   // page; a rebind is the way round it there.
   palette: { label: "command palette", key: "ctrl+shift+p" },
