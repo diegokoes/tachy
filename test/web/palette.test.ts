@@ -209,7 +209,7 @@ describe("places", () => {
 
   it("lists every section with the key that opens it", () => {
     expect(byId("section:chat")).toMatchObject({ kind: "go", hotkey: "1" });
-    expect(byId("section:settings")?.hotkey).toBe("5");
+    expect(byId("section:settings")?.hotkey).toBe("ctrl+,");
     expect(byId("section:feedback")?.hotkey).toBe("ctrl+.");
     setNavKey("chat", "c");
     expect(byId("section:chat")?.hotkey).toBe("c");
@@ -218,6 +218,8 @@ describe("places", () => {
   it("opens a section where it was left", () => {
     byId("section:wiki")!.run();
     expect(router.path).toBe("/wiki");
+    byId("section:settings")!.run();
+    expect(router.path).toBe("/settings");
   });
 
   it("notes where feedback was asked for", () => {

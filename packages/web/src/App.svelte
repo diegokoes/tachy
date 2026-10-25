@@ -225,8 +225,7 @@
     );
   });
 
-  // ctrl+, is fixed beside the settings tab's digit: rebinding it would share
-  // the tab's stored key. Feedback and the palette are not tabs.
+  // Settings, feedback and the palette are not tabs, so no digit reaches them.
   $effect(() =>
     pushScope([
       {
@@ -324,7 +323,10 @@
       bind:offsetHeight={topbarH}
       style:--topbar-h="{topbarH}px"
     >
-      <div class="mark"><Wordmark /></div>
+      <div class="mark lead">
+        <span class="word"><Wordmark /></span>
+        <NotificationBell />
+      </div>
       <div class="navbar">
         <Panel>
           <Tabs
@@ -339,10 +341,9 @@
       <!-- Empty: balances the wordmark's track so the pill sits on the true
            centre. -->
       <div class="mark"></div>
-      <div class="bell">
-        <NotificationBell />
+      <div class="corner">
         <button
-          class="feedback"
+          class="corner-mark"
           aria-label="feedback"
           use:tip={"feedback"}
           onclick={(e) => {
@@ -352,6 +353,20 @@
           use:jellyPress
         >
           <Icon name="flag" weight={7} />
+        </button>
+        <button
+          class="corner-mark"
+          class:open={view === "settings"}
+          aria-label="settings"
+          aria-current={view === "settings" ? "page" : undefined}
+          use:tip={"settings"}
+          onclick={(e) => {
+            openSection("settings");
+            if (e.detail !== 0) e.currentTarget.blur();
+          }}
+          use:jellyPress
+        >
+          <Icon name="settings" weight={7} />
         </button>
       </div>
     </div>
@@ -538,7 +553,7 @@
   .topbar {
     position: relative;
   }
-  .bell {
+  .corner {
     position: absolute;
     top: 50%;
     right: 0;
@@ -550,6 +565,7 @@
   .mark {
     display: flex;
     align-items: center;
+    gap: var(--pad-2);
     min-width: 0;
   }
 
@@ -620,8 +636,7 @@
     }
   }
 
-  /* A lone mark beside the bell, coloured like an inactive tab. */
-  .feedback {
+  .corner-mark {
     display: inline-flex;
     align-items: center;
     font: inherit;
@@ -633,10 +648,11 @@
     line-height: 1;
     user-select: none;
   }
-  .feedback:hover {
+  .corner-mark:hover {
     color: var(--text);
   }
-  .feedback:focus-visible {
+  .corner-mark.open,
+  .corner-mark:focus-visible {
     outline: none;
     color: var(--accent);
   }
@@ -660,13 +676,20 @@
   }
 
   /* Below this the pill needs the whole row; the wordmark is decoration and
-     goes first. */
+     goes first, and the bell leaves the grid as the corner does. */
   @media (max-width: 52rem) {
     .topbar {
       grid-template-columns: 1fr;
     }
-    .mark {
+    .mark:not(.lead),
+    .word {
       display: none;
+    }
+    .lead {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      transform: translateY(-50%);
     }
   }
 

@@ -57,6 +57,7 @@
     variant="ghost"
     size="sm"
     square
+    iconSize="1.25rem"
     icon={unreadIds.length ? "changesUnread" : "changes"}
     tone={unreadIds.length ? "accent" : undefined}
     aria-label={unreadIds.length
@@ -113,7 +114,7 @@
   .menu {
     position: absolute;
     top: calc(100% + 0.35rem);
-    right: 0;
+    left: 0;
     z-index: 8;
     width: min(26rem, 80vw);
     max-height: 24rem;
