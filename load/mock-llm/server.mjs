@@ -3,10 +3,12 @@
 // ANTHROPIC_BASE_URL=http://<host>:<port> and any ANTHROPIC_API_KEY.
 //
 // Each turn is scripted from the conversation so far: while fewer than
-// MOCK_TOOL_ROUNDS tool results have come back, it calls the next tool from
+// MOCK_TOOL_ROUNDS tools have been called, it calls the next tool from
 // MOCK_TOOLS (matched by suffix against the tools the request offers);
-// then it answers with text. Requests that offer no matching tool (Claude
-// Code's own side calls) get a short text answer.
+// then it answers with text. A tool Claude Code defers behind ToolSearch is
+// loaded through one ToolSearch call first, which is not a round. Requests
+// that offer no matching tool (Claude Code's own side calls) get a short
+// text answer.
 //
 //   MOCK_PORT=4010 MOCK_DELAY_MS=800 node load/mock-llm/server.mjs
 import { createServer } from "node:http";
@@ -29,30 +31,58 @@ const QUERIES = [
 let served = 0;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function toolResultsSoFar(messages = []) {
-  let n = 0;
+const TOOL_SEARCH = "ToolSearch";
+
+function toolCallsSoFar(messages = []) {
+  const names = [];
   for (const message of messages)
     if (Array.isArray(message.content))
       for (const block of message.content)
-        if (block.type === "tool_result") n++;
-  return n;
+        if (block.type === "tool_use") names.push(block.name);
+  return names;
+}
+
+/** Deferred tools are named only in the request text, as `mcp__<server>__<tool>`. */
+function deferredNames(body) {
+  const text = JSON.stringify(body);
+  return TOOLS.map(
+    (want) => text.match(new RegExp(`mcp__\\w+__${want}\\b`))?.[0],
+  ).filter(Boolean);
+}
+
+function toolUse(name, input) {
+  return {
+    kind: "tool_use",
+    block: {
+      type: "tool_use",
+      id: `toolu_${randomUUID().replaceAll("-", "").slice(0, 24)}`,
+      name,
+      input,
+    },
+  };
 }
 
 function plan(body) {
   const offered = (body.tools ?? []).map((t) => t.name);
-  const done = toolResultsSoFar(body.messages);
+  const calls = toolCallsSoFar(body.messages);
+  const done = calls.filter((name) => name !== TOOL_SEARCH).length;
   const want = TOOLS[done % Math.max(TOOLS.length, 1)];
   const name = want && offered.find((n) => n.endsWith(want));
   if (name && done < ROUNDS)
-    return {
-      kind: "tool_use",
-      block: {
-        type: "tool_use",
-        id: `toolu_${randomUUID().replaceAll("-", "").slice(0, 24)}`,
-        name,
-        input: { query: QUERIES[(served + done) % QUERIES.length] },
-      },
-    };
+    return toolUse(name, {
+      query: QUERIES[(served + done) % QUERIES.length],
+    });
+  const deferred = deferredNames(body);
+  if (
+    done < ROUNDS &&
+    deferred.length &&
+    offered.includes(TOOL_SEARCH) &&
+    !calls.includes(TOOL_SEARCH)
+  )
+    return toolUse(TOOL_SEARCH, {
+      query: `select:${deferred.join(",")}`,
+      max_results: deferred.length,
+    });
   return {
     kind: "text",
     block: {
