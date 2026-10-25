@@ -303,7 +303,7 @@
         <ScopeCrumb area={entry.product_area} />
 
         <div class="content">
-          <h2>{entry.issue_summary ?? "(no summary)"}</h2>
+          <h2>{entry.title}</h2>
 
           <!-- Bars left, status band centred, nothing right - the third track
                keeps the centre optically centred whatever the bars measure. -->
@@ -407,7 +407,7 @@
                             checked={supersedeId === candidate.id}
                             onchange={() => (supersedeId = candidate.id)}
                           />
-                          {candidate.issue_summary ?? candidate.id}
+                          {candidate.title}
                         </label>
                       </li>
                     {/each}
@@ -449,6 +449,22 @@
             {/if}
           {/if}
 
+          {#if entry.issue_summary}
+            <section>
+              <h3>summary</h3>
+              <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
+             focusable wikilink anchors this div delegates to -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
+             wrapper, not an interactive element of its own -->
+              <div
+                class="md prose"
+                onclick={links.onClick}
+                onkeydown={links.onKeydown}
+              >
+                {@html prose(entry.issue_summary)}
+              </div>
+            </section>
+          {/if}
           <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
              focusable wikilink anchors this div delegates to -->
           <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation

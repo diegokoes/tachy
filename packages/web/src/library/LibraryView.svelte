@@ -769,7 +769,7 @@
             ? `no matches for “${search}”`
             : "the library is empty"}
           detail={mode === "search"
-            ? "searches summaries, symptoms, signals, root causes, tags, doc bodies"
+            ? "searches titles, summaries, symptoms, signals, root causes, tags, doc bodies"
             : "analyze a ticket in chat, or add an entry"}
         />
       </li>

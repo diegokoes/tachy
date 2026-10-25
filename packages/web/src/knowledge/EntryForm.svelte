@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { CLOUD_HINT, CLOUD_RE, type PatternRow } from "@tachy/contract";
+  import {
+    CLOUD_HINT,
+    CLOUD_RE,
+    MAX_ENTRY_TITLE_CHARS,
+    type PatternRow,
+  } from "@tachy/contract";
   import { CONFIDENCES, RESOLUTION_CLARITIES } from "../vocab";
   import type { Snippet } from "svelte";
   import { Checkbox, Field, FormActions } from "../tui";
@@ -39,6 +44,7 @@
 
   const seed = untrack(() => initial);
 
+  let title = $state(seed.title ?? "");
   let issueSummary = $state(seed.issue_summary ?? "");
   let rootCause = $state(seed.root_cause ?? "");
   let resolution = $state(seed.resolution ?? "");
@@ -100,6 +106,7 @@
     const blank = mode === "edit" ? null : undefined;
     const text = (v: string) => v.trim() || blank;
     const payload: Record<string, unknown> = {
+      title: title.trim(),
       issueSummary: text(issueSummary),
       rootCause: text(rootCause),
       resolution: text(resolution),
@@ -174,8 +181,15 @@
 
 <form id="entry-form" class="entry-form" onsubmit={submit}>
   {#if extra}<div class="formbar">{@render extra()}</div>{/if}
+  <Field
+    label="title"
+    required
+    info="one line, at most {MAX_ENTRY_TITLE_CHARS} characters"
+  >
+    <input bind:value={title} maxlength={MAX_ENTRY_TITLE_CHARS} required />
+  </Field>
   <Field label="issue summary" required>
-    <input bind:value={issueSummary} required />
+    <textarea rows="3" bind:value={issueSummary} required></textarea>
   </Field>
 
   <Field label="root cause">
