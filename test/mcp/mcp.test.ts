@@ -70,7 +70,7 @@ describe("runTool envelope", () => {
       "save_knowledge_entry",
       async () =>
         saveKnowledgeEntry({
-          issueSummary: "x",
+          title: "x",
           resolutionPattern: "does-not-exist",
         }),
       {},

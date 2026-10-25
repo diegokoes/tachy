@@ -229,12 +229,12 @@ describe("the admin census", () => {
       await saveKnowledgeEntry({
         status: "approved",
         productId: tpd,
-        issueSummary: "Export produces an empty PDF",
+        title: "Export produces an empty PDF",
         resolution: "clear the export cache",
       });
       await saveKnowledgeEntry({
         status: "draft",
-        issueSummary: "Something nobody has filed yet",
+        title: "Something nobody has filed yet",
       });
 
       const census = await knowledgeCensus();
@@ -252,7 +252,7 @@ describe("the admin census", () => {
         status: "approved",
         productId: tpd,
         component: "export",
-        issueSummary: "Export produces an empty PDF",
+        title: "Export produces an empty PDF",
         resolution: "clear the export cache",
       });
 
@@ -270,12 +270,12 @@ describe("the admin census", () => {
           status,
           productId: tpd,
           component: "export",
-          issueSummary: `An export lesson, ${status}`,
+          title: `An export lesson, ${status}`,
         });
       await saveKnowledgeEntry({
         status: "approved",
         productId: tpd,
-        issueSummary: "A lesson about the product as a whole",
+        title: "A lesson about the product as a whole",
       });
 
       // Only the component with something filed has a row.

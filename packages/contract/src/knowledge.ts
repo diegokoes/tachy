@@ -1,3 +1,6 @@
+/** The CHECK on knowledge_entries.title in db/schema.sql holds the same number. */
+export const MAX_ENTRY_TITLE_CHARS = 80;
+
 export interface KnowledgeCensus {
   entries: number;
   entries_no_component: number;

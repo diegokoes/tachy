@@ -16,7 +16,9 @@ describe("API knowledge round-trip", () => {
       "/api/knowledge",
       json({
         status: "approved",
-        issueSummary: "Printer queue stalls after reboot",
+        title: "Printer queue stalls after a reboot",
+        issueSummary:
+          "Jobs pile up in the printer queue once the host restarts.",
         symptoms: ["queue stalled"],
         cloud: "prod",
         resolutionClarity: "clear",
@@ -28,7 +30,11 @@ describe("API knowledge round-trip", () => {
 
     const got = await app.request(`/api/knowledge/${id}`);
     expect(got.status).toBe(200);
-    expect((await got.json()).issue_summary).toMatch(/Printer queue/);
+    expect(await got.json()).toMatchObject({
+      title: "Printer queue stalls after a reboot",
+      issue_summary:
+        "Jobs pile up in the printer queue once the host restarts.",
+    });
 
     const search = await app.request(
       "/api/knowledge/search?q=printer%20queue%20stalls&cloud=prod",
@@ -40,7 +46,7 @@ describe("API knowledge round-trip", () => {
   it("records and lists feedback", async () => {
     const created = await app.request(
       "/api/knowledge",
-      json({ status: "approved", issueSummary: "x" }),
+      json({ status: "approved", title: "x" }),
     );
     const { id } = await created.json();
 
@@ -77,9 +83,39 @@ describe("API error paths", () => {
   it("rejects a schema violation with 400", async () => {
     const response = await app.request(
       "/api/knowledge",
-      json({ issueSummary: "x", cloud: "Not A Slug" }),
+      json({ title: "x", cloud: "Not A Slug" }),
     );
     expect(response.status).toBe(400);
+    expect((await response.json()).detail).toMatch(/cloud/);
+  });
+
+  it("refuses an entry with no title, or one over the limit", async () => {
+    for (const body of [
+      { issueSummary: "no title" },
+      { title: "x".repeat(81) },
+    ]) {
+      const response = await app.request("/api/knowledge", json(body));
+      expect(response.status).toBe(400);
+      expect((await response.json()).detail).toMatch(/title/);
+    }
+  });
+
+  it("changes a title on PATCH, and never clears it", async () => {
+    const created = await app.request(
+      "/api/knowledge",
+      json({ status: "approved", title: "Spooler stalls" }),
+    );
+    const { id } = await created.json();
+    const patch = (body: Record<string, unknown>) =>
+      app.request(`/api/knowledge/${id}`, { ...json(body), method: "PATCH" });
+
+    expect(
+      (await patch({ title: "Spooler stalls on long batches" })).status,
+    ).toBe(200);
+    expect((await patch({ title: null })).status).toBe(400);
+    expect((await patch({ title: "y".repeat(81) })).status).toBe(400);
+    const got = await app.request(`/api/knowledge/${id}`);
+    expect((await got.json()).title).toBe("Spooler stalls on long batches");
   });
 
   it("rejects malformed JSON with 400", async () => {
@@ -126,7 +162,7 @@ describe("API error paths", () => {
   it("returns 409 on a stale optimistic-lock version", async () => {
     const created = await app.request(
       "/api/knowledge",
-      json({ status: "approved", issueSummary: "v" }),
+      json({ status: "approved", title: "v" }),
     );
     const { id } = await created.json();
     const response = await app.request(`/api/knowledge/${id}`, {
@@ -250,7 +286,7 @@ describe("API library history and reads", () => {
   const create = async () => {
     const response = await app.request(
       "/api/knowledge",
-      json({ status: "approved", issueSummary: "spooler stalls" }),
+      json({ status: "approved", title: "spooler stalls" }),
     );
     return (await response.json()).id as string;
   };

@@ -41,6 +41,12 @@ async function call(name: string, args: Record<string, unknown> = {}) {
   return { isError: answer.isError === true, text, json: json as never };
 }
 
+/** A search answers a bare list, or `{ results }` when it adds a note or a next step. */
+const hitsOf = (json: unknown) =>
+  (Array.isArray(json)
+    ? json
+    : (json as { results: unknown[] }).results) as Record<string, unknown>[];
+
 const fakeItem: RawWorkItem = {
   externalId: "ctx-1",
   kind: "ticket",
@@ -112,7 +118,9 @@ describe("knowledge round trip", () => {
     const saved = await call("save_knowledge_entry", {
       product_slug: "tpd",
       status: "approved",
-      issue_summary: "Label renderer drops the last row on long batches",
+      title: "Label renderer drops the last row",
+      issue_summary:
+        "On batches over a page long, the final row never reaches the label.",
       symptoms: ["last row missing"],
       root_cause: "the renderer paginates before the final flush",
       resolution: "flush before paginating",
@@ -125,26 +133,51 @@ describe("knowledge round trip", () => {
 
     const got = await call("get_knowledge_entry", { id });
     expect(got.isError).toBe(false);
-    expect(got.text).toMatch(/Label renderer drops the last row/);
+    expect(got.json).toMatchObject({
+      title: "Label renderer drops the last row",
+      issue_summary:
+        "On batches over a page long, the final row never reaches the label.",
+    });
 
     const found = await call("search_knowledge", {
-      query: "label renderer drops the last row on long batches",
+      query: "label renderer drops the last row",
     });
     expect(found.isError).toBe(false);
-    expect(found.text).toMatch(/Label renderer/);
+    expect(hitsOf(found.json)[0]).toMatchObject({
+      id,
+      title: "Label renderer drops the last row",
+    });
+  });
+
+  it("refuses a save with no title, or one over the limit", async () => {
+    for (const title of [undefined, "x".repeat(81)]) {
+      const answer = await call("save_knowledge_entry", {
+        product_slug: "tpd",
+        title,
+        issue_summary: "A summary on its own is not enough.",
+      });
+      expect(answer.isError).toBe(true);
+      expect(answer.text).toMatch(/title/);
+    }
+    const listed = await call("list_knowledge_entries", {
+      product_slug: "tpd",
+    });
+    expect(listed.json).toEqual([]);
   });
 
   it("lists entries and accepts feedback on one", async () => {
     const saved = await call("save_knowledge_entry", {
       product_slug: "tpd",
-      issue_summary: "Scanner bridge refuses TLS 1.3",
+      title: "Scanner bridge refuses TLS 1.3",
     });
     const id = (saved.json as { id: string }).id;
 
     const listed = await call("list_knowledge_entries", {
       product_slug: "tpd",
     });
-    expect(listed.text).toMatch(/Scanner bridge/);
+    expect((listed.json as { title: string }[]).map((e) => e.title)).toEqual([
+      "Scanner bridge refuses TLS 1.3",
+    ]);
 
     const feedback = await call("add_knowledge_feedback", {
       knowledge_entry_id: id,
@@ -157,25 +190,37 @@ describe("knowledge round trip", () => {
   it("updates an entry through its own tool", async () => {
     const saved = await call("save_knowledge_entry", {
       product_slug: "tpd",
-      issue_summary: "Queue dispatcher retries without backoff",
+      title: "Queue dispatcher retries without backoff",
       status: "draft",
     });
     const id = (saved.json as { id: string }).id;
     const updated = await call("update_knowledge_entry", {
       id,
       status: "approved",
+      title: "Dispatcher hammers the queue with instant retries",
       resolution: "enable exponential backoff",
     });
     expect(updated.isError).toBe(false);
     const got = await call("get_knowledge_entry", { id });
-    expect(got.text).toMatch(/approved/);
-    expect(got.text).toMatch(/exponential backoff/);
+    expect(got.json).toMatchObject({
+      status: "approved",
+      title: "Dispatcher hammers the queue with instant retries",
+      resolution: "enable exponential backoff",
+    });
+
+    const tooLong = await call("update_knowledge_entry", {
+      id,
+      title: "y".repeat(81),
+    });
+    expect(tooLong.isError).toBe(true);
+    expect(tooLong.text).toMatch(/title/);
   });
 
   it("hands back a near-copy instead of saving it, until confirm_new", async () => {
     const entry = {
       product_slug: "tpd",
       status: "approved",
+      title: "Label renderer drops the last row",
       issue_summary: "Label renderer drops the last row on long batches",
       symptoms: ["last row missing"],
       root_cause: "the renderer paginates before the final flush",
@@ -187,7 +232,13 @@ describe("knowledge round trip", () => {
     const again = await call("save_knowledge_entry", entry);
     expect(again.json).toMatchObject({
       saved: false,
-      possible_duplicates: [{ id: firstId, status: "approved" }],
+      possible_duplicates: [
+        {
+          id: firstId,
+          title: "Label renderer drops the last row",
+          status: "approved",
+        },
+      ],
       next: expect.stringContaining("confirm_new"),
     });
 
@@ -200,7 +251,7 @@ describe("knowledge round trip", () => {
 
     const unrelated = await call("save_knowledge_entry", {
       product_slug: "tpd",
-      issue_summary: "Ink cartridge rattles in transit",
+      title: "Ink cartridge rattles in transit",
       resolution: "Pack the cartridge with more padding.",
     });
     expect(unrelated.json).toMatchObject({ saved: true });
@@ -210,6 +261,7 @@ describe("knowledge round trip", () => {
     const entry = {
       product_slug: "tpd",
       status: "approved",
+      title: "Exports for anna.berger@example.com stall",
       issue_summary:
         "Exports for anna.berger@example.com stall once the queue holds 500 jobs",
       resolution: "Raise the export worker's queue limit.",
@@ -222,7 +274,9 @@ describe("knowledge round trip", () => {
       const again = await call("save_knowledge_entry", entry);
       expect(again.json).toMatchObject({ saved: false });
       expect(again.text).not.toContain("anna.berger@example.com");
-      expect(again.text).toMatch(/\[EMAIL_1\]/);
+      expect(again.json).toMatchObject({
+        possible_duplicates: [{ title: "Exports for [EMAIL_1] stall" }],
+      });
     } finally {
       delete process.env.TACHY_REDACT;
     }
@@ -857,17 +911,21 @@ describe("result guidance", () => {
   });
 
   it("carries the grade calibration on a search that did hit", async () => {
-    await call("save_knowledge_entry", {
+    const saved = await call("save_knowledge_entry", {
       product_slug: "tpd",
       status: "approved",
-      issue_summary: "Ink telemetry reads negative after a counter wrap",
+      title: "Ink telemetry reads negative after a counter wrap",
       root_cause: "the counter is unsigned and wraps at zero",
       resolution: "clamp at zero and reset the baseline",
     });
+    expect(saved.isError).toBe(false);
     const answer = await call("search_knowledge", {
       query: "ink telemetry reads negative",
     });
-    expect(answer.text).toMatch(/relevance/);
+    expect(hitsOf(answer.json)[0]).toMatchObject({
+      title: "Ink telemetry reads negative after a counter wrap",
+      relevance: expect.any(Number),
+    });
   });
 
   it("surfaces an unmatched customer on a fetched work item", async () => {
@@ -897,7 +955,7 @@ describe("failures come back as tool errors", () => {
   it("reports an unknown resolution_pattern readably", async () => {
     const answer = await call("save_knowledge_entry", {
       product_slug: "tpd",
-      issue_summary: "x",
+      title: "x",
       resolution_pattern: "does-not-exist",
     });
     expect(answer.isError).toBe(true);
@@ -929,11 +987,12 @@ describe("failures come back as tool errors", () => {
 
 describe("search scoping", () => {
   it("keeps another product's entries out of a scoped search", async () => {
-    await call("save_knowledge_entry", {
+    const saved = await call("save_knowledge_entry", {
       product_slug: "tpd",
       status: "approved",
-      issue_summary: "Dryline overshoots its setpoint by twenty degrees",
+      title: "Dryline overshoots its setpoint by twenty degrees",
     });
+    expect(saved.isError).toBe(false);
     const scoped = await call("search_knowledge", {
       query: "dryline overshoots its setpoint",
       product_slug: "ftrace",

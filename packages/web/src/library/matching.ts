@@ -95,7 +95,7 @@ export function excerpt(
   return segs;
 }
 
-/** The entry field the query landed in: root cause, else the fix. */
+/** The field holding most of the query's terms; with none, the first present. */
 export function entryText(
   fields: (string | null | undefined)[],
   query: string,

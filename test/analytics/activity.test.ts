@@ -312,12 +312,13 @@ describe("overview activity", () => {
       const reader = await createUser({ email: "reader@test.local" });
       const read = await saveKnowledgeEntry({
         productId,
-        issueSummary: "the popular one",
+        title: "the popular one",
+        issueSummary: "Everyone opens this one first.",
         resolution: "do the thing",
       });
       const ignored = await saveKnowledgeEntry({
         productId,
-        issueSummary: "the ignored one",
+        title: "the ignored one",
         resolution: "do the other thing",
       });
       await recordView({ entryId: read.id }, reader.id);
@@ -348,25 +349,25 @@ describe("overview activity", () => {
       const person = await createUser({ email: "editor@test.local" });
       await saveKnowledgeEntry({
         productId,
-        issueSummary: "typed in the app",
+        title: "typed in the app",
         resolution: "r",
         actor: { actor: "web", userId: person.id },
       });
       await saveKnowledgeEntry({
         productId,
-        issueSummary: "saved by the agent",
+        title: "saved by the agent",
         resolution: "r",
         actor: { actor: "agent", userId: person.id },
       });
       await saveKnowledgeEntry({
         productId,
-        issueSummary: "saved over MCP",
+        title: "saved over MCP",
         resolution: "r",
         actor: { actor: "mcp", userId: null },
       });
       await saveKnowledgeEntry({
         productId,
-        issueSummary: "ingested",
+        title: "ingested",
         resolution: "r",
         actor: { actor: "ingest", userId: null },
       });
@@ -417,10 +418,11 @@ describe("overview activity", () => {
     it("counts what waits for review and what nobody has read", async () => {
       const productId = await tpdProductId();
       const reader = await createUser({ email: "rater@test.local" });
-      const entry = (summary: string) =>
+      const entry = (title: string) =>
         saveKnowledgeEntry({
           productId,
-          issueSummary: summary,
+          title,
+          issueSummary: `The summary of ${title}.`,
           resolution: "r",
         });
       const fresh = await entry("fresh draft");

@@ -45,6 +45,7 @@ describe("seeded data has variety", () => {
   it.each([
     ["code_blob_chunks", "chunk_text", 0.9],
     ["reference_doc_chunks", "chunk_text", 0.9],
+    ["knowledge_entries", "title", 0.9],
     ["knowledge_entries", "issue_summary", 0.9],
     ["reference_docs", "body", 0.9],
     ["work_items", "title", 0.5],

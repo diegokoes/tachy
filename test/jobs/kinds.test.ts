@@ -138,7 +138,7 @@ describe("retention", () => {
   it("rolls old per-person usage up to months without people", async () => {
     const user = await createUser({ email: "reader@example.com" });
     const [entry] =
-      await sql`insert into knowledge_entries (status, issue_summary) values ('approved', 'x') returning id`;
+      await sql`insert into knowledge_entries (status, title) values ('approved', 'x') returning id`;
     await sql`
       insert into library_views (knowledge_entry_id, user_id, day, views) values
         (${entry.id}, ${user.id}, date_trunc('month', current_date) - interval '15 months', 2),

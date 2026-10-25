@@ -5,6 +5,7 @@ export interface KnowledgeRow {
   team_id?: string | null;
   status: string;
   superseded_by?: string | null;
+  title: string;
   issue_summary: string | null;
   root_cause: string | null;
   resolution: string | null;

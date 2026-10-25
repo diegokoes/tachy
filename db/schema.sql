@@ -568,6 +568,9 @@ create table knowledge_entries (
     superseded_by       uuid references knowledge_entries(id) on delete set null,
     constraint knowledge_entries_no_self_supersede check (superseded_by is null or superseded_by <> id),
 
+    -- The one line the library lists the entry by; the limit is
+    -- MAX_ENTRY_TITLE_CHARS in @tachy/contract.
+    title               text not null check (char_length(title) between 1 and 80),
     issue_summary       text,
     symptoms            text[] not null default '{}',
     root_cause          text,
@@ -613,6 +616,7 @@ create table knowledge_entries (
     -- typing "prod printer error" narrows by environment without spending a
     -- filter control on it.
     search_text text generated always as (
+        coalesce(title,'')        || ' ' ||
         coalesce(issue_summary,'') || ' ' ||
         coalesce(root_cause,'')   || ' ' ||
         coalesce(resolution,'')   || ' ' ||
@@ -630,6 +634,7 @@ create table knowledge_entries (
     -- "printer stopped" finds "printer stops". Searches match against either.
     search_tsv tsvector generated always as (
         to_tsvector('simple',
+            coalesce(title,'')        || ' ' ||
             coalesce(issue_summary,'') || ' ' ||
             coalesce(root_cause,'')   || ' ' ||
             coalesce(resolution,'')   || ' ' ||
@@ -645,6 +650,7 @@ create table knowledge_entries (
 
     search_tsv_en tsvector generated always as (
         to_tsvector('english',
+            coalesce(title,'')        || ' ' ||
             coalesce(issue_summary,'') || ' ' ||
             coalesce(root_cause,'')   || ' ' ||
             coalesce(resolution,'')   || ' ' ||

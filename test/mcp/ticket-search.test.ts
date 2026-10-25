@@ -97,6 +97,7 @@ beforeEach(async () => {
   const scanner = await saveKnowledgeEntry({
     productId,
     status: "approved",
+    title: "Barcode reader will not connect after an upgrade",
     issueSummary:
       "Handheld barcode reader will not connect after a software upgrade",
     symptoms: ["scanner shows offline", "no pairing dialog appears"],
@@ -108,6 +109,7 @@ beforeEach(async () => {
   await saveKnowledgeEntry({
     productId,
     status: "approved",
+    title: "Monthly invoice export is empty",
     issueSummary: "Monthly invoice export produces an empty PDF",
     rootCause: "The export cache retained a stale, empty render.",
     resolution: "Clear the export cache and re-run the monthly job.",
