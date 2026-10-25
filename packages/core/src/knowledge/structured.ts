@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   CLOUD_RE,
   CLOUD_HINT,
+  MAX_ENTRY_TITLE_CHARS,
   RESOLUTION_CLARITIES,
   KNOWLEDGE_STATUSES,
   REFERENCE_STATUSES,
@@ -72,6 +73,7 @@ export function parseStructured(value: unknown): Structured {
 }
 
 export const cloudSchema = z.string().regex(CLOUD_RE, CLOUD_HINT);
+export const entryTitleSchema = z.string().min(1).max(MAX_ENTRY_TITLE_CHARS);
 export const resolutionClaritySchema = z.enum(RESOLUTION_CLARITIES);
 
 export const knowledgeStatusSchema = z.enum(KNOWLEDGE_STATUSES);

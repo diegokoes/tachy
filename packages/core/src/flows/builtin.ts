@@ -158,10 +158,7 @@ export function registerBuiltinFlowActions(): void {
       return {
         results: rows,
         count: rows.length,
-        text: lines(
-          rows,
-          (r) => `${r.issue_summary ?? ""} → ${r.resolution ?? ""}`,
-        ),
+        text: lines(rows, (r) => `${r.title} → ${r.resolution ?? ""}`),
       };
     },
   });

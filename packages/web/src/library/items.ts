@@ -45,13 +45,18 @@ function versionSpan(row: KnowledgeRow) {
 
 export function toEntry(row: KnowledgeRow, query: string): Item {
   const text = entryText(
-    [row.root_cause, row.resolution, (row.signals ?? []).join(" · ")],
+    [
+      row.issue_summary,
+      row.root_cause,
+      row.resolution,
+      (row.signals ?? []).join(" · "),
+    ],
     query,
   );
   return {
     kind: "entry",
     id: row.id,
-    title: row.issue_summary ?? "(no summary)",
+    title: row.title,
     status: row.status,
     snippet: text ? excerpt(text, query) : undefined,
     version: versionSpan(row),

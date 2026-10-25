@@ -12,7 +12,9 @@
 #    the new schema, and apply it, then the new roles.sql as tachy-deploy does;
 # 2. a second plan must be empty;
 # 3. a database built fresh from the new schema must also plan empty, which
-#    catches any object the tool does not understand.
+#    catches any object the tool does not understand;
+# 4. the tool never compares a generated column's expression, so one that
+#    differs from the fresh database's is a warning naming the rebuild.
 # Hazards that only cost time or locks on this small database are allowed;
 # ones that can lose data or change behaviour need ALLOW_DESTRUCTIVE=1.
 #
@@ -52,4 +54,16 @@ echo "== a fresh database from the new schema must plan empty"
 cat "$new_dir"/1*.sql "$new_dir"/2*.sql 2>/dev/null | psql -v ON_ERROR_STOP=1 -q -d plan_fresh
 fresh=$(pg-schema-diff plan --from-dsn "$(dsn plan_fresh)" --to-dir "$new_dir" --data-pack-new-tables=false)
 [ -z "$(tr -d '[:space:]' <<<"$fresh")" ] || { echo "$fresh"; echo "the tool does not round-trip this schema"; exit 1; }
+
+echo "== generated columns must compute what a fresh database computes"
+generated() {
+  psql -At -d "$1" -c "select table_name || '.' || column_name || ': ' || generation_expression
+    from information_schema.columns
+    where table_schema = 'public' and is_generated = 'ALWAYS' order by 1"
+}
+if ! drift=$(diff <(generated plan_old) <(generated plan_fresh)); then
+  echo "$drift"
+  columns=$(sed -nE 's/^[<>] ([^:]+):.*/\1/p' <<<"$drift" | sort -u | paste -sd, -)
+  echo "::warning title=generated column expressions changed::$columns: the plan leaves the old expression on an existing database; rebuild them there as deploy/runbooks/schema-change.md describes"
+fi
 echo "schema plan ok"

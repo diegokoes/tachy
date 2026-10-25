@@ -43,13 +43,12 @@ export async function libraryEngagementCensus(
   `;
   const top = await sql<LibraryEngagement["top"]>`
     select * from (
-      select e.id::text as id, 'entry' as kind,
-             coalesce(e.issue_summary, 'untitled entry') as title,
+      select e.id::text as id, 'entry' as kind, e.title,
              sum(v.views)::int as reads, count(distinct v.user_id)::int as readers
       from library_views v
       join knowledge_entries e on e.id = v.knowledge_entry_id
       where v.day > current_date - ${days}::int
-      group by e.id, e.issue_summary
+      group by e.id, e.title
       union all
       select d.id::text, 'doc', d.title,
              sum(v.views)::int, count(distinct v.user_id)::int

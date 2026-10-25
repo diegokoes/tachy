@@ -138,7 +138,7 @@
         );
         entries = rows.map((r) => ({
           insert: `entry:${r.id}`,
-          label: r.issue_summary ?? "(no summary)",
+          label: r.title,
           what: "entry",
         }));
       } catch {

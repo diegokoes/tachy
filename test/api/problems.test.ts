@@ -92,6 +92,7 @@ describe("every refusal is a problem document", () => {
     const body = await problemOf(response);
     expect(typeof body.detail).toBe("string");
     expect(body.detail).toMatch(/status: /);
+    expect(body.detail).toMatch(/title: /);
   });
 
   it("answers a body that is not JSON", async () => {
