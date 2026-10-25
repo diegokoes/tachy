@@ -526,9 +526,9 @@ export async function draftSources(
       union all
       select c.id from components c join subtree s on c.parent_id = s.id
     )
-    select e.id, 'entry' as kind,
-           coalesce(e.issue_summary, '(no summary)') as title,
+    select e.id, 'entry' as kind, e.title,
            concat_ws(E'\\n\\n',
+             nullif(e.issue_summary, ''),
              nullif(e.root_cause, ''),
              nullif(e.resolution, ''),
              nullif(array_to_string(e.symptoms, '; '), '')) as body,

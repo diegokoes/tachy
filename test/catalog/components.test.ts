@@ -108,13 +108,13 @@ describe("components", () => {
     await addComponent({ productId: tqx, slug: "lc", name: "Line Controller" });
     const tagged = await saveKnowledgeEntry({
       productId: tqx,
-      issueSummary: "x",
+      title: "x",
       tags: ["lc", "printing"],
       status: "approved",
     });
     const untagged = await saveKnowledgeEntry({
       productId: tqx,
-      issueSummary: "y",
+      title: "y",
       tags: ["printing"],
       status: "approved",
     });

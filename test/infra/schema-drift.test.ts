@@ -29,6 +29,7 @@ import {
   JOB_NOTIFY,
   JOB_TRIGGERS,
   JOB_STATUSES,
+  MAX_ENTRY_TITLE_CHARS,
 } from "@tachy/core";
 import { WORK_ITEM_LINK_KINDS } from "@tachy/core/work-items";
 import { scopesOf } from "@tachy/core/config";
@@ -112,6 +113,13 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     expect(block).toContain("knowledge_entries_no_self_supersede");
     expect(block).toContain("affected_version");
     expect(block).toContain("fixed_version");
+  });
+
+  it("knowledge_entries.title is required and bounded by the contract's limit", () => {
+    const column = tableBlock("knowledge_entries").match(
+      /\n\s+title\s+text not null check \(char_length\(title\) between 1 and (\d+)\)/,
+    );
+    expect(Number(column?.[1])).toBe(MAX_ENTRY_TITLE_CHARS);
   });
 
   it("knowledge_entries.cloud has no CHECK constraint", () => {

@@ -132,7 +132,7 @@ export async function outboundLinks(
 ): Promise<OutboundLink[]> {
   return sql`
     select l.id, l.target, l.label, l.to_doc_id, l.to_entry_id,
-           coalesce(d.title, e.issue_summary) as to_title,
+           coalesce(d.title, e.title) as to_title,
            d.slug as to_slug, d.product_id as to_product_id,
            case when d.id is not null then d.kind
                 when e.id is not null then 'entry' end as to_kind
@@ -169,7 +169,7 @@ export async function backlinks(target: {
 }): Promise<Backlink[]> {
   return sql`
     select l.id, l.kind, l.label, l.from_doc_id, l.from_entry_id,
-           coalesce(d.title, e.issue_summary) as from_title,
+           coalesce(d.title, e.title) as from_title,
            d.slug as from_slug,
            coalesce(d.product_id, e.product_id) as from_product_id,
            case when d.id is not null then d.kind
@@ -265,7 +265,7 @@ export interface Staleness {
 export async function articleStaleness(pageId: string): Promise<Staleness> {
   const rows = await sql`
     select
-      coalesce(e.issue_summary, d.title) as title,
+      coalesce(e.title, d.title) as title,
       (l.to_entry_id is not null) as is_entry,
       coalesce(e.updated_at, d.updated_at) > page.updated_at as changed
     from library_links l

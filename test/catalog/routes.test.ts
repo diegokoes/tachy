@@ -122,7 +122,7 @@ describe("component routes", () => {
     await addComponent({ productId, slug: "spooler", name: "Spooler" });
     await saveKnowledgeEntry({
       productId,
-      issueSummary: "Spooler stalls mid-batch",
+      title: "Spooler stalls mid-batch",
       component: "spooler",
       // The impact count is over the tag, which is what a rename rewrites.
       tags: ["spooler"],
@@ -420,7 +420,9 @@ describe("customer component links", () => {
       "DELETE",
     );
     expect(response.status).toBe(400);
-    expect((await response.json()).detail).toMatch(/product_slug and component/);
+    expect((await response.json()).detail).toMatch(
+      /product_slug and component/,
+    );
   });
 });
 
@@ -438,7 +440,7 @@ describe("overview components", () => {
       status: "approved",
       productId,
       component: "engine-timer",
-      issueSummary: "The timer drifts after a DST change",
+      title: "The timer drifts after a DST change",
     });
 
     const response = await get("/api/overview/components");

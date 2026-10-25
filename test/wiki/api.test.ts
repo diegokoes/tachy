@@ -427,7 +427,7 @@ describe("wiki gaps API", () => {
       await saveKnowledgeEntry({
         productId,
         component: "coding",
-        issueSummary: `lesson ${n}`,
+        title: `lesson ${n}`,
       });
 
     const listed = await (

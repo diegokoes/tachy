@@ -13,6 +13,7 @@ import {
   addFeedback,
   listFeedback,
   cloudSchema,
+  entryTitleSchema,
   resolutionClaritySchema,
   knowledgeStatusSchema,
   confidenceSchema,
@@ -49,6 +50,7 @@ const knowledgeInputSchema = z.object({
   productId: z.string().optional(),
   teamId: z.string().optional(),
   status: knowledgeStatusSchema.optional(),
+  title: entryTitleSchema,
   issueSummary: z.string().optional(),
   symptoms: z.array(z.string()).optional(),
   signals: z.array(z.string()).optional(),
@@ -70,6 +72,7 @@ const knowledgeInputSchema = z.object({
 
 const knowledgeUpdateSchema = z.object({
   status: knowledgeStatusSchema.optional(),
+  title: entryTitleSchema.optional(),
   issueSummary: z.string().nullable().optional(),
   rootCause: z.string().nullable().optional(),
   resolution: z.string().nullable().optional(),

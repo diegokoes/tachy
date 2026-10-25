@@ -30,8 +30,12 @@ const cos = (a: number[], b: number[]) =>
   a.reduce((s, x, i) => s + x * b[i], 0);
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
+/** Golden kinds the keyword legs answer; their cosine is no evidence for SEM_FLOOR. */
+const KEYWORD_KINDS = new Set(["identifier", "title"]);
+
 const passageText = (e: (typeof KNOWLEDGE)[number]) =>
   [
+    e.title,
     e.issueSummary,
     e.symptoms.join(" "),
     e.rootCause,
@@ -91,7 +95,7 @@ for (const golden of GOLDEN) {
   const { rank, cosine: mine } = await placeOf(golden.q, golden.expect);
   if (rank === 0) top1++;
   mrrSum += 1 / (rank + 1);
-  if (golden.why !== "identifier") {
+  if (!KEYWORD_KINDS.has(golden.why)) {
     if (mine < semanticMin) {
       semanticMin = mine;
       semanticAt = `${JSON.stringify(golden.q)} -> ${golden.expect}`;
