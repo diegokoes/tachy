@@ -141,8 +141,8 @@ stored; then `add_source_project` to register the source's grouping. Once only.
 
 ## The knowledge entry
 
-`issue_summary`, `symptoms`, `signals`, `root_cause`, `resolution`, `component` and
-`confidence` are the core; `resolution_pattern`, `cloud`, `resolution_clarity`,
+`title`, `issue_summary`, `symptoms`, `signals`, `root_cause`, `resolution`, `component`
+and `confidence` are the core; `resolution_pattern`, `cloud`, `resolution_clarity`,
 `hidden_fix` and `tags` are the facets. `save_knowledge_entry`'s schema documents
 each field, and is where the wording for each one lives - this is only what
 shapes how you _read the ticket_, before you get as far as the call:

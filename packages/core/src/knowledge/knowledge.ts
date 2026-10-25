@@ -1,7 +1,8 @@
-import type {
-  ComponentKnowledge,
-  KnowledgeCensus,
-  KnowledgeStale,
+import {
+  MAX_ENTRY_TITLE_CHARS,
+  type ComponentKnowledge,
+  type KnowledgeCensus,
+  type KnowledgeStale,
 } from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
 import {
@@ -54,8 +55,16 @@ import { syncLinks } from "../library/links";
  * The prose fields of an entry, where a [[wikilink]] can be written. The
  * structured fields are values rather than writing, so they are not scanned.
  */
-const linkText = (rootCause?: string | null, resolution?: string | null) =>
-  [rootCause ?? "", resolution ?? ""].join("\n");
+const linkText = (entry: {
+  issueSummary?: string | null;
+  rootCause?: string | null;
+  resolution?: string | null;
+}) =>
+  [
+    entry.issueSummary ?? "",
+    entry.rootCause ?? "",
+    entry.resolution ?? "",
+  ].join("\n");
 
 /**
  * The columns a revision snapshot covers: everything an update can change. The
@@ -63,7 +72,7 @@ const linkText = (rootCause?: string | null, resolution?: string | null) =>
  * snapshots are the same shape and a diff between them means something.
  */
 const REVISION_COLUMNS = sql`
-  product_id, status, superseded_by, issue_summary, root_cause, resolution,
+  product_id, status, superseded_by, title, issue_summary, root_cause, resolution,
   resolution_pattern, symptoms, signals, tags, component_id, product_area,
   confidence, customer_id, customer_unit_id, cloud, resolution_clarity,
   hidden_fix, affected_version, fixed_version, structured
@@ -93,6 +102,7 @@ export interface KnowledgeInput extends KnowledgeFacets {
   unit?: string | null;
   createdById?: string | null;
   status?: string;
+  title: string;
   issueSummary?: string;
   symptoms?: string[];
   signals?: string[];
@@ -107,6 +117,8 @@ export interface KnowledgeInput extends KnowledgeFacets {
 
 export interface KnowledgeUpdateInput extends KnowledgeFacets {
   status?: string;
+  /** Replaces the title; an entry always has one, so it cannot be cleared. */
+  title?: string;
   issueSummary?: string | null;
   rootCause?: string | null;
   resolution?: string | null;
@@ -121,6 +133,17 @@ export interface KnowledgeUpdateInput extends KnowledgeFacets {
   tags?: string[];
   structured?: Record<string, unknown>;
   expectedVersion?: number;
+}
+
+/** The stored form: one line, each run of whitespace a single space. */
+function entryTitle(raw: string): string {
+  const title = raw.replace(/\s+/g, " ").trim();
+  if (!title) throw badInput("title is empty");
+  if (title.length > MAX_ENTRY_TITLE_CHARS)
+    throw badInput(
+      `title is ${title.length} characters; at most ${MAX_ENTRY_TITLE_CHARS} fit`,
+    );
+  return title;
 }
 
 async function resolvePatternDescription(
@@ -146,6 +169,7 @@ async function resolvePatternDescription(
  */
 function buildEmbedText(
   entry: {
+    title: string;
     issueSummary?: string;
     symptoms?: string[];
     rootCause?: string;
@@ -157,6 +181,7 @@ function buildEmbedText(
   productArea?: string | null,
 ): string {
   return [
+    entry.title,
     entry.issueSummary,
     (entry.symptoms ?? []).join(" "),
     entry.rootCause,
@@ -186,6 +211,7 @@ export type PreparedEntry = Awaited<ReturnType<typeof prepareKnowledgeEntry>>;
  * ticket's.
  */
 export async function prepareKnowledgeEntry(input: KnowledgeInput) {
+  const title = entryTitle(input.title);
   let productId = input.productId ?? null;
   let teamId = input.teamId ?? null;
   let affectedVersion = input.affectedVersion ?? null;
@@ -222,10 +248,15 @@ export async function prepareKnowledgeEntry(input: KnowledgeInput) {
   const patternDescription = await resolvePatternDescription(
     input.resolutionPattern,
   );
-  const text = buildEmbedText(input, patternDescription, productArea);
-  const embedding = text ? toVectorLiteral(await embedPassage(text)) : null;
+  const text = buildEmbedText(
+    { ...input, title },
+    patternDescription,
+    productArea,
+  );
+  const embedding = toVectorLiteral(await embedPassage(text));
   return {
     input,
+    title,
     productId,
     teamId,
     affectedVersion,
@@ -242,6 +273,7 @@ export async function prepareKnowledgeEntry(input: KnowledgeInput) {
 export async function insertKnowledgeEntry(prepared: PreparedEntry) {
   const {
     input,
+    title,
     productId,
     teamId,
     affectedVersion,
@@ -257,27 +289,21 @@ export async function insertKnowledgeEntry(prepared: PreparedEntry) {
     const [row] = await tx<RevisedRow[]>`
       insert into knowledge_entries
         (work_item_id, product_id, team_id, customer_id, customer_unit_id, created_by, status,
-         issue_summary, symptoms, signals, tags,
+         title, issue_summary, symptoms, signals, tags,
          root_cause, resolution, resolution_pattern, component_id, product_area, confidence,
          cloud, resolution_clarity, hidden_fix, affected_version, fixed_version,
          structured, embedding, embedding_model)
       values
         (${input.workItemId ?? null}, ${productId}, ${teamId}, ${customerId ?? null},
          ${customerUnitId}, ${input.createdById ?? null},
-         ${input.status ?? "approved"}, ${input.issueSummary ?? null}, ${input.symptoms ?? []}, ${input.signals ?? []}, ${input.tags ?? []},
+         ${input.status ?? "approved"}, ${title}, ${input.issueSummary ?? null}, ${input.symptoms ?? []}, ${input.signals ?? []}, ${input.tags ?? []},
          ${input.rootCause ?? null}, ${input.resolution ?? null}, ${input.resolutionPattern ?? null}, ${componentId}, ${productArea},
          ${confidence}, ${input.cloud ?? null}, ${input.resolutionClarity ?? null}, ${input.hiddenFix ?? null},
          ${affectedVersion}, ${input.fixedVersion ?? null},
-         ${jsonb(structured)}, ${embedding}::vector,
-         ${embedding ? EMBEDDING_MODEL : null})
+         ${jsonb(structured)}, ${embedding}::vector, ${EMBEDDING_MODEL})
       returning id, version, ${REVISION_COLUMNS}
     `;
-    await syncLinks(
-      tx,
-      { entryId: row.id },
-      linkText(input.rootCause, input.resolution),
-      productId,
-    );
+    await syncLinks(tx, { entryId: row.id }, linkText(input), productId);
     // Version 1, so history is complete for everything created from here on.
     await recordRevision(
       tx,
@@ -296,6 +322,7 @@ const MAX_NEAR_DUPLICATES = 3;
 
 export interface NearDuplicate {
   id: string;
+  title: string;
   issue_summary: string | null;
   status: string;
   superseded_by: string | null;
@@ -306,20 +333,18 @@ export interface NearDuplicate {
 /**
  * Stored entries that hold nearly the lesson `prepared` does, at `floor` or
  * above, closest first: in its product or in none, and an entry with no
- * product among those with none. Rejected and archived ones are left out; an
- * entry with no text to embed has none.
+ * product among those with none. Rejected and archived ones are left out.
  */
 export async function nearDuplicateEntries(
   prepared: PreparedEntry,
   floor: number,
 ): Promise<NearDuplicate[]> {
-  if (!prepared.embedding) return [];
   const inScope = prepared.productId
     ? sql`and (product_id = ${prepared.productId} or product_id is null)`
     : sql`and product_id is null`;
   const rows = await withSearchSession(
     (tx) => tx`
-      select id, issue_summary, status, superseded_by,
+      select id, title, issue_summary, status, superseded_by,
              1 - (embedding <=> ${prepared.embedding}::vector) as similarity
       from knowledge_entries
       where status in ('draft', 'approved', 'deprecated')
@@ -495,7 +520,7 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
           }
         : null,
     )}
-    select e.id, e.work_item_id, e.status, e.superseded_by, e.issue_summary, e.root_cause, e.resolution,
+    select e.id, e.work_item_id, e.status, e.superseded_by, e.title, e.issue_summary, e.root_cause, e.resolution,
            e.resolution_pattern, e.component_id, e.product_area, e.confidence, e.cloud,
            e.customer_id, cu.slug as customer_slug,
            e.resolution_clarity, e.hidden_fix,
@@ -516,7 +541,7 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
 
 export async function getKnowledgeEntry(id: string) {
   const [row] = await sql`
-    select e.id, e.work_item_id, e.product_id, e.team_id, e.status, e.superseded_by, e.issue_summary,
+    select e.id, e.work_item_id, e.product_id, e.team_id, e.status, e.superseded_by, e.title, e.issue_summary,
            e.symptoms, e.signals, e.tags, e.root_cause, e.resolution, e.resolution_pattern,
            e.component_id, e.product_area, e.confidence, e.cloud, e.resolution_clarity,
            e.hidden_fix, e.affected_version, e.fixed_version,
@@ -542,7 +567,7 @@ export interface KnowledgeListOptions extends KnowledgeFilters {
 export async function listKnowledgeEntries(opts: KnowledgeListOptions = {}) {
   const limit = clampLimit(opts.limit, 50);
   return sql`
-    select e.id, e.work_item_id, e.product_id, e.team_id, e.status, e.superseded_by, e.issue_summary,
+    select e.id, e.work_item_id, e.product_id, e.team_id, e.status, e.superseded_by, e.title, e.issue_summary,
            e.root_cause, e.resolution, e.resolution_pattern, e.component_id, e.product_area, e.confidence,
            e.cloud, e.resolution_clarity, e.hidden_fix, e.affected_version, e.fixed_version,
            e.customer_id, cu.slug as customer_slug,
@@ -698,6 +723,7 @@ export async function updateKnowledgeEntry(
 
   const merged = {
     status: patch.status ?? current.status,
+    title: patch.title === undefined ? current.title : entryTitle(patch.title),
     issueSummary:
       "issueSummary" in patch ? patch.issueSummary : current.issue_summary,
     rootCause: "rootCause" in patch ? patch.rootCause : current.root_cause,
@@ -732,6 +758,7 @@ export async function updateKnowledgeEntry(
   };
 
   const contentChanged =
+    merged.title !== current.title ||
     merged.issueSummary !== current.issue_summary ||
     merged.rootCause !== current.root_cause ||
     merged.resolution !== current.resolution ||
@@ -742,13 +769,14 @@ export async function updateKnowledgeEntry(
     (merged.tags ?? []).join("\0") !== (current.tags ?? []).join("\0") ||
     (merged.signals ?? []).join("\0") !== (current.signals ?? []).join("\0");
 
-  let vec: string | null = null;
+  let embeddingUpdate = sql``;
   if (contentChanged) {
     const patternDescription = await resolvePatternDescription(
       merged.resolutionPattern ?? undefined,
     );
     const text = buildEmbedText(
       {
+        title: merged.title,
         issueSummary: merged.issueSummary ?? undefined,
         symptoms: merged.symptoms,
         rootCause: merged.rootCause ?? undefined,
@@ -759,16 +787,15 @@ export async function updateKnowledgeEntry(
       patternDescription,
       productArea,
     );
-    vec = text ? toVectorLiteral(await embedPassage(text)) : null;
+    const vec = toVectorLiteral(await embedPassage(text));
+    embeddingUpdate = sql`, embedding = ${vec}::vector, embedding_model = ${EMBEDDING_MODEL}`;
   }
 
-  const embeddingUpdate = vec
-    ? sql`, embedding = ${vec}::vector, embedding_model = ${EMBEDDING_MODEL}`
-    : sql`, embedding = null, embedding_model = null`;
   return sql.begin(async (tx) => {
     const [row] = await tx<RevisedRow[]>`
     update knowledge_entries set
       status             = ${merged.status},
+      title              = ${merged.title},
       issue_summary      = ${merged.issueSummary ?? null},
       root_cause         = ${merged.rootCause ?? null},
       resolution         = ${merged.resolution ?? null},
@@ -789,17 +816,12 @@ export async function updateKnowledgeEntry(
       fixed_version      = ${merged.fixedVersion ?? null},
       structured         = ${jsonb(merged.structured ?? {})},
       version            = version + 1
-      ${contentChanged ? embeddingUpdate : sql``}
+      ${embeddingUpdate}
     where id = ${id} and version = ${current.version}
     returning id, version, ${REVISION_COLUMNS}
   `;
     assertUpdated(row, `knowledge entry '${id}'`);
-    await syncLinks(
-      tx,
-      { entryId: id },
-      linkText(merged.rootCause, merged.resolution),
-      current.product_id,
-    );
+    await syncLinks(tx, { entryId: id }, linkText(merged), current.product_id);
     return recordUpdate(tx, { entryId: id }, current, row, actor);
   });
 }
@@ -813,7 +835,7 @@ export async function backfillEmbeddings(
   opts: { all?: boolean } = {},
 ): Promise<number> {
   const rows = await sql`
-    select id, issue_summary, root_cause, resolution, resolution_pattern,
+    select id, title, issue_summary, root_cause, resolution, resolution_pattern,
            product_area, symptoms, signals, tags
     from knowledge_entries
     ${opts.all ? sql`` : sql`where ${needsVector()}`}
@@ -826,10 +848,11 @@ export async function backfillEmbeddings(
       await resolvePatternDescription((key as string) || undefined),
     );
 
-  const texts: { id: string; text: string }[] = [];
-  for (const row of rows) {
-    const text = buildEmbedText(
+  const texts = rows.map((row) => ({
+    id: row.id as string,
+    text: buildEmbedText(
       {
+        title: row.title,
         issueSummary: row.issue_summary,
         rootCause: row.root_cause,
         resolution: row.resolution,
@@ -839,9 +862,8 @@ export async function backfillEmbeddings(
       },
       patternDescriptions.get(row.resolution_pattern ?? "")!,
       row.product_area,
-    );
-    if (text) texts.push({ id: row.id, text });
-  }
+    ),
+  }));
   return writeEmbeddings("knowledge_entries", texts);
 }
 
@@ -862,6 +884,7 @@ export async function revertKnowledgeEntry(
   const past = snapshot as Record<string, any>;
   const patch: KnowledgeUpdateInput = {
     status: past.status,
+    title: past.title,
     issueSummary: past.issue_summary,
     rootCause: past.root_cause,
     resolution: past.resolution,
@@ -958,7 +981,7 @@ export async function knowledgeStale(): Promise<KnowledgeStale> {
     where e.status = 'approved'
   `;
   const weakest = await sql<KnowledgeStale["weakest"]>`
-    select e.id, coalesce(e.issue_summary, '') as title,
+    select e.id, e.title,
            avg(f.rating)::float8 as rating, count(f.id)::int as ratings,
            coalesce((
              select sum(v.views) from library_views v

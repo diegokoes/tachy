@@ -63,7 +63,7 @@ async function store() {
     ids[item.externalId] = (await ingestWorkItem(connId, item)).id;
   await sql`update work_items set customer_id = ${acme.id} where id = ${ids["102"]}`;
   await sql`
-    insert into knowledge_entries (status, issue_summary, work_item_id)
+    insert into knowledge_entries (status, title, work_item_id)
     values ('approved', 'learned from 103', ${ids["103"]})
   `;
   return ids;
@@ -163,7 +163,7 @@ describe("deleting stored tickets by filter", () => {
     const { matched } = await previewStoredItems(filter);
     await deleteStoredItems(filter, matched);
     const [entry] =
-      await sql`select work_item_id from knowledge_entries where issue_summary = 'learned from 103'`;
+      await sql`select work_item_id from knowledge_entries where title = 'learned from 103'`;
     expect(entry.work_item_id).toBeNull();
   });
 

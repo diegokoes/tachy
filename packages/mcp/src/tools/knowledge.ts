@@ -10,6 +10,7 @@ import {
   searchKnowledge,
   addFeedback,
   cloudSchema,
+  entryTitleSchema,
   resolutionClaritySchema,
   knowledgeStatusSchema,
   confidenceSchema,
@@ -134,6 +135,9 @@ tool(
           "Which part of that customer's estate it was learned on - a unit slug from list_customer_units. Needs customer_slug. When the entry comes from a ticket already filed against a unit AND you name that same customer, it is inherited automatically, so pass this only to override.",
         ),
       status: knowledgeStatusSchema.optional(),
+      title: entryTitleSchema.describe(
+        'The one line the library lists the entry by: what fails and where, in under ten words, e.g. "Printer error 023 on labels with many variable fields".',
+      ),
       issue_summary: z
         .string()
         .optional()
@@ -223,6 +227,7 @@ tool(
       createdById: await resolveCurrentUserId(),
       actor: await mcpActor(),
       status: args.status ?? "approved",
+      title: args.title,
       issueSummary: args.issue_summary,
       symptoms: args.symptoms,
       signals: args.signals,
@@ -294,6 +299,7 @@ tool(
     inputSchema: {
       id: z.string(),
       status: knowledgeStatusSchema.optional(),
+      title: entryTitleSchema.optional(),
       issue_summary: z.string().nullable().optional(),
       root_cause: z.string().nullable().optional(),
       resolution: z.string().nullable().optional(),
@@ -337,6 +343,7 @@ tool(
     await requireCanEdit(await knowledgeEntryScope(args.id));
     const patch: KnowledgeUpdateInput = {};
     if (args.status !== undefined) patch.status = args.status;
+    if (args.title !== undefined) patch.title = args.title;
     if (args.issue_summary !== undefined)
       patch.issueSummary = args.issue_summary;
     if (args.root_cause !== undefined) patch.rootCause = args.root_cause;

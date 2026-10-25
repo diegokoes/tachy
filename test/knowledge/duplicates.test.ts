@@ -11,6 +11,7 @@ import { resetData, sql, tpdProductId } from "../database";
 afterAll(() => sql.end());
 
 const SCANNER = {
+  title: "Scanner offline after a firmware update",
   issueSummary: "Barcode scanner stays offline after the firmware update",
   symptoms: ["scanner offline", "no pairing dialog"],
   rootCause: "The update reset the Bluetooth pairing table.",
@@ -18,6 +19,7 @@ const SCANNER = {
 };
 
 const EXPORT = {
+  title: "Invoice export is empty",
   issueSummary: "Monthly invoice export produces an empty PDF",
   rootCause: "A stale render in the export cache.",
   resolution: "Clear the export cache and run the export again.",
@@ -45,6 +47,7 @@ describe("nearDuplicateEntries", () => {
     const [match, ...rest] = await nearDuplicateEntries(copy, COPY_FLOOR);
     expect(match).toMatchObject({
       id: original.id,
+      title: SCANNER.title,
       issue_summary: SCANNER.issueSummary,
       status: "approved",
       superseded_by: null,
@@ -54,7 +57,7 @@ describe("nearDuplicateEntries", () => {
 
     const unrelated = await prepareKnowledgeEntry({
       productId,
-      issueSummary: "Ink cartridge rattles in transit",
+      title: "Ink cartridge rattles in transit",
       resolution: "Pack the cartridge with more padding.",
     });
     expect(await nearDuplicateEntries(unrelated, COPY_FLOOR)).toEqual([]);
@@ -140,10 +143,17 @@ describe("nearDuplicateEntries", () => {
     ).toEqual([unscoped.id]);
   });
 
-  it("finds none for an entry with no text to embed", async () => {
-    const empty = await prepareKnowledgeEntry({});
-    expect(empty.embedding).toBeNull();
-    expect(await nearDuplicateEntries(empty, 0)).toEqual([]);
+  it("embeds an entry that has only a title, and finds its near-copy", async () => {
+    const titleOnly = { title: "Ink cartridge rattles in transit" };
+    const saved = await saveKnowledgeEntry({
+      status: "approved",
+      ...titleOnly,
+    });
+    const copy = await prepareKnowledgeEntry(titleOnly);
+    expect(copy.embedding).toBeTruthy();
+    expect(
+      (await nearDuplicateEntries(copy, COPY_FLOOR)).map((d) => d.id),
+    ).toEqual([saved.id]);
   });
 });
 
@@ -159,12 +169,13 @@ describe("insertKnowledgeEntry", () => {
     });
     const saved = await insertKnowledgeEntry(prepared);
     const [row] = await sql`
-      select product_id, status, issue_summary, embedding is not null as embedded
+      select product_id, status, title, issue_summary, embedding is not null as embedded
       from knowledge_entries where id = ${saved.id}
     `;
     expect(row).toMatchObject({
       product_id: productId,
       status: "draft",
+      title: SCANNER.title,
       issue_summary: SCANNER.issueSummary,
       embedded: true,
     });

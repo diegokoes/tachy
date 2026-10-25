@@ -37,7 +37,7 @@ describe("wiki coverage", () => {
     await saveKnowledgeEntry({
       productId,
       component: "printing",
-      issueSummary: "spooler stalls",
+      title: "spooler stalls",
     });
     await saveReferenceDoc({
       productId,
@@ -63,11 +63,11 @@ describe("wiki coverage", () => {
   // other; each count has to come out as itself.
   it("counts several of each on one component without multiplying them", async () => {
     const productId = await tree();
-    for (const summary of ["a", "b", "c"])
+    for (const title of ["a", "b", "c"])
       await saveKnowledgeEntry({
         productId,
         component: "coding",
-        issueSummary: summary,
+        title,
       });
     for (const title of ["one", "two"])
       await saveReferenceDoc({
@@ -86,16 +86,16 @@ describe("wiki coverage", () => {
 
   it("rolls a subtree up into its parent, counting each item once", async () => {
     const productId = await tree();
-    for (const summary of ["a", "b", "c"])
+    for (const title of ["a", "b", "c"])
       await saveKnowledgeEntry({
         productId,
         component: "printing",
-        issueSummary: summary,
+        title,
       });
     await saveKnowledgeEntry({
       productId,
       component: "portal",
-      issueSummary: "d",
+      title: "d",
     });
 
     const covered = await coverage(productId);
@@ -124,7 +124,7 @@ describe("wiki coverage", () => {
     await saveKnowledgeEntry({
       productId,
       component: "coding",
-      issueSummary: "x",
+      title: "x",
     });
     const covered = await coverage(productId);
     const coding = find(covered.nodes, "coding");
@@ -134,12 +134,12 @@ describe("wiki coverage", () => {
 
   it("collects what is filed under no component at all", async () => {
     const productId = await tree();
-    await saveKnowledgeEntry({ productId, issueSummary: "unfiled entry" });
+    await saveKnowledgeEntry({ productId, title: "unfiled entry" });
     await saveReferenceDoc({ productId, title: "unfiled doc", body: "b" });
     await saveKnowledgeEntry({
       productId,
       component: "coding",
-      issueSummary: "filed",
+      title: "filed",
     });
 
     const covered = await coverage(productId);
@@ -151,7 +151,7 @@ describe("wiki coverage", () => {
     const entry = await saveKnowledgeEntry({
       productId,
       component: "printing",
-      issueSummary: "spooler",
+      title: "spooler",
     });
     await recordView({ entryId: entry.id }, null);
 
@@ -166,7 +166,7 @@ describe("wiki coverage", () => {
     await saveKnowledgeEntry({
       productId,
       component: "coding",
-      issueSummary: "gone",
+      title: "gone",
       status: "archived",
     });
     expect(find((await coverage(productId)).nodes, "coding").entries).toBe(0);

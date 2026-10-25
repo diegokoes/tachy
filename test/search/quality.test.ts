@@ -39,6 +39,7 @@ beforeAll(async () => {
     const row = await saveKnowledgeEntry({
       productId,
       status: "approved",
+      title: entry.title,
       issueSummary: entry.issueSummary,
       symptoms: entry.symptoms,
       signals: entry.signals,

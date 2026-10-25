@@ -93,6 +93,7 @@ beforeEach(async () => {
       productId,
       status: "approved",
       component: "scanner-driver",
+      title: `The ${device} drops its session`,
       issueSummary: `The ${device} drops its session with SCAN_TIMEOUT_42`,
       signals: ["SCAN_TIMEOUT_42"],
       rootCause: "The driver's keep-alive is shorter than the access point's.",
@@ -102,7 +103,7 @@ beforeEach(async () => {
     productId,
     status: "approved",
     component: "billing",
-    issueSummary: "Invoice totals are off by a cent",
+    title: "Invoice totals are off by a cent",
     resolution: "Round per invoice instead of per line.",
   });
   await addSourceConnection({
