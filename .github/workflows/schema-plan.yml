@@ -28,6 +28,7 @@ jobs:
     timeout-minutes: 2
     outputs:
       relevant: ${{ steps.diff.outputs.relevant }}
+      pg-image: ${{ steps.image.outputs.pg-image }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -41,6 +42,12 @@ jobs:
           else
             echo "relevant=false" >> "$GITHUB_OUTPUT"
           fi
+      # The image production runs; Dependabot bumps it in the Compose file only.
+      - id: image
+        run: |
+          image=$(sed -n 's/^ *image: *\(pgvector\/pgvector:[^ ]*\) *$/\1/p' docker-compose.yml)
+          test -n "$image"
+          echo "pg-image=$image" >> "$GITHUB_OUTPUT"
 
   schema-plan:
     needs: changes
@@ -49,7 +56,7 @@ jobs:
     timeout-minutes: 10
     services:
       postgres:
-        image: pgvector/pgvector:0.8.6-pg16
+        image: ${{ needs.changes.outputs.pg-image }}
         env:
           POSTGRES_USER: tachy
           POSTGRES_PASSWORD: tachy

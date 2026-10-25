@@ -9,11 +9,20 @@ const here = dirname(fileURLToPath(import.meta.url));
 const schemaPath = join(here, "..", "db", "schema.sql");
 const rolesPath = join(here, "..", "db", "roles.sql");
 const fixturesPath = join(here, "fixtures.sql");
+const composePath = join(here, "..", "docker-compose.yml");
+
+/** The image production runs; Dependabot bumps it in the Compose file only. */
+function postgresImage(): string {
+  const compose = readFileSync(composePath, "utf8");
+  const image = compose.match(
+    /^\s*image:\s*(pgvector\/pgvector:\S+)\s*$/m,
+  )?.[1];
+  if (!image) throw new Error(`no pgvector image in ${composePath}`);
+  return image;
+}
 
 export default async function setup() {
-  const container = await new PostgreSqlContainer(
-    "pgvector/pgvector:0.8.6-pg16",
-  )
+  const container = await new PostgreSqlContainer(postgresImage())
     // Durability buys nothing for a throwaway container, and every fork holds
     // its own pool against this one server.
     .withCommand([
