@@ -83,7 +83,6 @@
   let subEl = $state<HTMLElement>();
   let windowEl = $state<HTMLElement>();
   let subH = $state(0);
-  let settling = $state(false);
   let carveMask = $state("none");
   let carveOutline = $state("");
   let carveW = $state(0);
@@ -179,22 +178,6 @@
     observer.observe(el);
     observer.observe(host);
     return () => observer.disconnect();
-  });
-
-  // The subnav bar outlives a section change (see `setSubnav`), so its
-  // indicator would slide in from the old section's tab. Suppressed for two
-  // frames: the recess observer re-centres the bar a frame after the switch.
-  $effect(() => {
-    void view;
-    settling = true;
-    let second = 0;
-    const first = requestAnimationFrame(() => {
-      second = requestAnimationFrame(() => (settling = false));
-    });
-    return () => {
-      cancelAnimationFrame(first);
-      cancelAnimationFrame(second);
-    };
   });
 
   $effect(() => {
@@ -391,7 +374,6 @@
         </svg>
         <div
           class="subnav"
-          class:settling
           class:typing={recessTyping !== null}
           bind:this={subEl}
         >
@@ -799,11 +781,6 @@
   /* The rule fills a full-width bar; a hugging pill has no edge to run to. */
   .subnav :global(.rule) {
     display: none;
-  }
-  /* Held for the two frames a section change takes to settle, so the indicator
-     lands on the incoming section's tab instead of travelling to it. */
-  .subnav.settling :global(.tabs::before) {
-    transition: none;
   }
 
   /* Transparent, not hidden: the tabs keep the width the recess is cut to and
