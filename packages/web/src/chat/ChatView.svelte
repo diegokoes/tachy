@@ -1190,13 +1190,7 @@
         </div>
       {/if}
       {#if empty}
-        <Launcher
-          input={chat.input}
-          onstart={(line) => {
-            chat.input = line;
-            composerEl?.focus();
-          }}
-        />
+        <Launcher />
       {/if}
     </div>
     {#if !empty}

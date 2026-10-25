@@ -2,6 +2,7 @@
   import { pushScope } from "../keys/keys.svelte";
   import { subnavKey } from "../keys/bindings.svelte";
   import { vimState } from "../keys/vim.svelte";
+  import { gsap, reducedMotion } from "../motion/gsap";
   import { jellyPress } from "../motion/motion";
   import Icon from "./Icon.svelte";
   import type { Component } from "svelte";
@@ -55,6 +56,65 @@
     if (activeMatches) stickyKey = active;
   });
 
+  let inkEl = $state<HTMLElement>();
+  let inkTween: gsap.core.Timeline | undefined;
+  /** The tab and item set the ink was last drawn for. */
+  let drawn: { key: string; keys: string } | null = null;
+  let inkBefore: DOMRect | null = null;
+
+  const itemKeys = $derived(items.map((item) => item.key).join(" "));
+
+  // Runs ahead of the DOM update, so the rect is the old one, mid-tween included.
+  $effect.pre(() => {
+    void active;
+    void itemKeys;
+    inkBefore = inkEl?.getBoundingClientRect() ?? null;
+  });
+
+  // A new set of items (another section's subnav) lands the ink in place.
+  $effect(() => {
+    const key = active;
+    const keys = itemKeys;
+    const from = drawn;
+    drawn = { key, keys };
+    if (!inkEl || !inkBefore || !from || from.key === key) return;
+    inkTween?.kill();
+    gsap.set(inkEl, { clearProps: "transform" });
+    if (from.keys !== keys || !activeMatches || reducedMotion()) return;
+    if (!items.some((item) => item.key === from.key)) return;
+    glideInk(inkEl, inkBefore, inkEl.getBoundingClientRect());
+  });
+
+  function glideInk(el: HTMLElement, from: DOMRect, to: DOMRect) {
+    if (!to.width) return;
+    const edges = { left: from.left - to.left, right: from.right - to.right };
+    const draw = () =>
+      gsap.set(el, {
+        x: edges.left,
+        scaleX: (to.width + edges.right - edges.left) / to.width,
+      });
+    const rightward = to.left > from.left;
+    gsap.set(el, { transformOrigin: "0 50%" });
+    draw();
+    inkTween = gsap
+      .timeline({
+        onUpdate: draw,
+        onComplete: () => gsap.set(el, { clearProps: "transform" }),
+      })
+      .to(
+        edges,
+        { [rightward ? "right" : "left"]: 0, duration: 0.24, ease: "expo.out" },
+        0,
+      )
+      .to(
+        edges,
+        { [rightward ? "left" : "right"]: 0, duration: 0.38, ease: "expo.out" },
+        0,
+      );
+  }
+
+  $effect(() => () => inkTween?.kill());
+
   // No digit is drawn on the tab; Settings › keybinds lists these.
   $effect(() => {
     if (hotkeys !== "shift") return;
@@ -73,7 +133,7 @@
   });
 </script>
 
-<nav class="tabs" style="--tab-anchor: {anchor}">
+<nav class="tabs" style="--tab-anchor: {anchor}; --tab-on-anchor: {anchor}-on">
   {#each items as item}
     {@const on = item.key === active}
     {@const anchorHost =
@@ -111,6 +171,7 @@
   {/each}
 
   <span class="rule" aria-hidden="true"></span>
+  <span class="ink" aria-hidden="true" bind:this={inkEl}></span>
 </nav>
 
 <style>
@@ -208,28 +269,37 @@
   /* The anchor is the label, not the button: the button includes the padding
      between tabs. No `position: relative` on .tabs or .tab, so the indicator's
      containing block is the surface the bar sits on. */
-  .tab.on .lbl,
   .tab:hover .lbl,
   .tab:focus-visible .lbl,
   .tab.anchor-host:not(.on) .lbl {
     anchor-name: var(--tab-anchor);
+  }
+  /* The active label also holds the ink's name, whatever the pointer does. */
+  .tab.on .lbl {
+    anchor-name: var(--tab-anchor), var(--tab-on-anchor);
   }
 
   /* One element holds the name at a time: duplicate anchor names resolve to
      the last in tree order, so a hovered tab before the active one would lose
      to it. The sticky fallback gives the name up the same way. */
   .tabs:has(.tab:is(:hover, :focus-visible))
-    .tab.on:not(:hover, :focus-visible)
-    .lbl,
-  .tabs:has(.tab:is(:hover, :focus-visible))
     .tab.anchor-host:not(.on):not(:hover, :focus-visible)
     .lbl {
     anchor-name: none;
   }
+  .tabs:has(.tab:is(:hover, :focus-visible))
+    .tab.on:not(:hover, :focus-visible)
+    .lbl {
+    anchor-name: var(--tab-on-anchor);
+  }
 
-  /* No tab is on: the indicator is hidden but keeps the sticky tab's position,
-     so the next hover animates from a resolved place. */
-  .tabs:not(:has(.tab.on)):not(:has(.tab:is(:hover, :focus-visible)))::before {
+  /* At rest the hover block folds into the active tab's ink and fades, and
+     with no tab on it keeps the sticky tab's position, so the next hover
+     animates from a resolved place. */
+  .tabs:not(:has(.tab:is(:hover, :focus-visible)))::before {
+    opacity: 0;
+  }
+  .tabs:not(:has(.tab.on)) .ink {
     opacity: 0;
   }
 
@@ -260,6 +330,21 @@
         opacity 200ms ease;
     }
 
+    /* Sized by the anchor, moved by `glideInk`: a transition on the insets
+       would fight the tween. */
+    .ink {
+      position: absolute;
+      position-anchor: var(--tab-on-anchor);
+      z-index: -1;
+      pointer-events: none;
+      left: anchor(left);
+      right: anchor(right);
+      top: calc(anchor(bottom) + var(--pad-1));
+      bottom: calc(anchor(bottom) - var(--pad-1) - var(--panel-line-w));
+      background: var(--accent-fill);
+      transition: opacity 200ms ease;
+    }
+
     /* The anchor name stays the same and only the edges read off it change,
        so the insets interpolate. */
     .tabs:has(.tab:is(:hover, :focus-visible))::before {
@@ -273,7 +358,8 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .tabs::before {
+    .tabs::before,
+    .ink {
       transition: none;
     }
   }
