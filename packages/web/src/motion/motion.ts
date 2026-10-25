@@ -704,25 +704,38 @@ export function reflow(
 
 /**
  * Takes `tile` to the size of the window, or back: the live node resizes
- * between its two boxes, so its chart redraws at each size on the way instead
- * of crossfading two pictures. `swap` changes the layout and returns when the
- * DOM shows it. `data-morphing` is on the tile while it moves, so it can clip
- * what does not fit yet.
+ * between its two boxes, so its chart redraws at each size on the way. `swap`
+ * changes the layout and returns when the DOM shows it. While the tile travels
+ * out of flow, `data-morphing` lets it clip what does not fit yet and an empty
+ * copy holds its place, so its neighbours stay put.
  */
 export async function morphTile(
   tile: HTMLElement | null | undefined,
   swap: () => void | Promise<void>,
 ) {
+  let slot: HTMLElement | undefined;
   if (tile) tile.dataset.morphing = "";
   const play = reflow([tile], {
     duration: 0.5,
     ease: "expo.out",
     onComplete: () => {
+      slot?.remove();
       if (tile) delete tile.dataset.morphing;
     },
   });
   await swap();
+  if (tile) slot = holdPlace(tile);
   play();
+}
+
+/** Puts an empty node that lays out like `node` right after it. */
+function holdPlace(node: HTMLElement): HTMLElement {
+  const slot = document.createElement(node.tagName);
+  slot.className = node.className;
+  slot.style.cssText = node.style.cssText;
+  slot.setAttribute("aria-hidden", "true");
+  node.after(slot);
+  return slot;
 }
 
 /**
