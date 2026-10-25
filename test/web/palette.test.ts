@@ -218,6 +218,8 @@ describe("places", () => {
   it("opens a section where it was left", () => {
     byId("section:wiki")!.run();
     expect(router.path).toBe("/wiki");
+    byId("section:settings")!.run();
+    expect(router.path).toBe("/settings");
   });
 
   it("notes where feedback was asked for", () => {
