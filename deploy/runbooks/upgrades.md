@@ -2,12 +2,13 @@
 
 ## Postgres or pgvector
 
-The image is pinned (`pgvector/pgvector:<pgvector>-pg<major>`) in
-`docker-compose.yml`, `test/global-setup.ts` and `load/turns.compose.yml`. The
-restore test reads it from `docker-compose.yml`.
+The image is pinned (`pgvector/pgvector:<pgvector>-pg<major>@sha256:…`) in
+`docker-compose.yml` and `load/turns.compose.yml`, the two files Dependabot
+updates. The restore test, `test/global-setup.ts` and the schema-plan workflow
+read it from `docker-compose.yml`.
 
-- **pgvector minor** (same Postgres major): bump the tag everywhere in a
-  release and deploy; `tachy-deploy` runs `alter extension vector update`
+- **pgvector minor** (same Postgres major): bump the tag and digest in both
+  Compose files in a release and deploy; `tachy-deploy` runs `alter extension vector update`
   before planning, because the schema plan cannot validate against an
   extension version the new image no longer ships. Then run a restore test.
 - **Postgres major:** dump and restore. Take `tachy-backup db --restore-test`,
