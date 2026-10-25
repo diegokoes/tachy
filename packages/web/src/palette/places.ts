@@ -90,6 +90,10 @@ function sections(): Place[] {
   );
   return [
     ...tabs,
+    go("section:settings", "settings", [], () => openSection("settings"), {
+      icon: "settings",
+      hotkey: "ctrl+,",
+    }),
     go("section:feedback", "feedback", [], openFeedback, {
       icon: "flag",
       hotkey: actionKey("feedback"),
