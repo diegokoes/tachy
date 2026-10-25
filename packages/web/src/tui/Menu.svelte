@@ -148,7 +148,7 @@ reader is on. ↑ ↓ move, ⏎ picks, esc and a click outside close it.
     width: max-content;
     min-width: 12rem;
     max-width: min(90vw, 22rem);
-    padding: var(--pad-1) 0;
+    overflow: hidden;
     --edge: color-mix(in srgb, var(--accent) 55%, var(--border));
     background: var(--panel-bg);
     border: 1px solid var(--edge);
