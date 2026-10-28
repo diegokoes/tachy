@@ -16,7 +16,8 @@ export interface Toast {
 export const notifyState = $state<{
   items: NotificationRow[];
   toasts: Toast[];
-}>({ items: [], toasts: [] });
+  loaded: boolean;
+}>({ items: [], toasts: [], loaded: false });
 
 let toastSeq = 0;
 
@@ -53,8 +54,21 @@ export async function refreshNotifications(): Promise<void> {
   if (!session.me) return;
   try {
     notifyState.items = await api.get<NotificationRow[]>("/me/notifications");
+    notifyState.loaded = true;
   } catch {
     // A failed poll is not worth surfacing; the next one recovers.
+  }
+}
+
+export async function markNotificationsSeen(): Promise<void> {
+  const now = new Date().toISOString();
+  notifyState.items = notifyState.items.map((n) =>
+    n.seen_at ? n : { ...n, seen_at: now },
+  );
+  try {
+    await api.post("/me/notifications/seen", {});
+  } catch {
+    // Optimistic; the next refresh reconciles.
   }
 }
 
