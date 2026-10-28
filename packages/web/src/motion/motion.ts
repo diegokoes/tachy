@@ -202,6 +202,25 @@ export function jolt(node: Element) {
   );
 }
 
+const BELL_PIVOT = "50% 12%";
+
+export function ring(node: Element) {
+  if (reducedMotion()) return null;
+  // A keyframed tween drops from-values and clearProps.
+  gsap.set(node, { transformOrigin: BELL_PIVOT });
+  return gsap.to(node, {
+    keyframes: {
+      rotation: [0, 18, -15, 11, -7, 4, 0],
+      easeEach: "sine.inOut",
+    },
+    duration: 0.7,
+    overwrite: true,
+    onComplete: () => {
+      gsap.set(node, { clearProps: "transform,transformOrigin" });
+    },
+  });
+}
+
 /**
  * Squash-and-stretch on click, settling elastic. A press has to feel like it
  * landed on something with give, so the overshoot is the point.
