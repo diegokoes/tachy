@@ -20,7 +20,6 @@ import {
   Ban,
   BookDashed,
   Bell,
-  BellDot,
   BellMinus,
   BellPlus,
   BellRing,
@@ -245,9 +244,9 @@ export const ICONS = {
   unfollow: BellMinus,
   /** An item the reader follows, in a list. */
   followed: BellRing,
-  /** What changed on followed items, with and without unread ones. */
+  /** Changes on followed items; ringing while some are unseen. */
   changes: Bell,
-  changesUnread: BellDot,
+  changesArrived: BellRing,
   conversation: MessagesSquare,
   sortAscending: ArrowUpNarrowWide,
   sortDescending: ArrowDownWideNarrow,
