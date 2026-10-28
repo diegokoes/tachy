@@ -1,22 +1,71 @@
 <script lang="ts">
   import type { NotificationRow } from "@tachy/contract";
+  import { ring } from "../motion/motion";
   import { navigate, router } from "../shell/router.svelte";
   import { Button, Time } from "../tui";
   import { boardItemPath } from "../work-items/board";
-  import { itemChanges, markNotificationsRead } from "./notify.svelte";
+  import {
+    itemChanges,
+    markNotificationsRead,
+    markNotificationsSeen,
+    notifyState,
+  } from "./notify.svelte";
+
+  const MAX_COUNT_SHOWN = 99;
+  const WINDOW_GUTTER_PX = 12;
 
   let shown = $state(false);
   let hostEl = $state<HTMLElement>();
+  let menuEl = $state<HTMLElement>();
+  let nudgePx = $state(0);
 
   const changes = $derived(itemChanges());
   const unreadIds = $derived(
     changes.filter((change) => !change.read_at).map((change) => change.id),
   );
+  const countLabel = $derived(
+    unreadIds.length > MAX_COUNT_SHOWN
+      ? `${MAX_COUNT_SHOWN}+`
+      : String(unreadIds.length),
+  );
+  const ringing = $derived(changes.some((change) => !change.seen_at));
 
   $effect(() => {
     void router.path;
     shown = false;
   });
+
+  let heardIds: Set<string> | undefined;
+  $effect(() => {
+    if (!notifyState.loaded) return;
+    const heard = heardIds;
+    const arrived =
+      heard !== undefined &&
+      changes.some((change) => !change.seen_at && !heard.has(change.id));
+    heardIds = new Set(changes.map((change) => change.id));
+    const bell = hostEl?.querySelector("svg");
+    if (arrived && bell) ring(bell);
+  });
+
+  $effect(() => {
+    if (shown && ringing) void markNotificationsSeen();
+  });
+
+  $effect(() => {
+    if (menuEl) placeUnderBell();
+  });
+
+  function placeUnderBell() {
+    if (!hostEl || !menuEl) return;
+    const bell = hostEl.getBoundingClientRect();
+    const width = menuEl.offsetWidth;
+    const centredLeft = bell.left + bell.width / 2 - width / 2;
+    const fittedLeft = Math.min(
+      Math.max(centredLeft, WINDOW_GUTTER_PX),
+      window.innerWidth - WINDOW_GUTTER_PX - width,
+    );
+    nudgePx = fittedLeft - centredLeft;
+  }
 
   /** A change note carries where its item lives on the board. */
   function itemPath(change: NotificationRow): string | null {
@@ -50,7 +99,7 @@
   }
 </script>
 
-<svelte:window onpointerdown={outside} />
+<svelte:window onpointerdown={outside} onresize={placeUnderBell} />
 
 <div class="host" bind:this={hostEl}>
   <Button
@@ -58,17 +107,22 @@
     size="sm"
     square
     iconSize="1.25rem"
-    icon={unreadIds.length ? "changesUnread" : "changes"}
-    tone={unreadIds.length ? "accent" : undefined}
+    icon={ringing ? "changesArrived" : "changes"}
+    morph
+    tone={ringing ? "warn" : unreadIds.length ? "accent" : undefined}
     aria-label={unreadIds.length
       ? `${unreadIds.length} changes and notices`
       : "changes and notices"}
-    title="changes on items you follow, notices from flows"
     onclick={() => (shown = !shown)}
   />
+  {#if unreadIds.length}
+    <span class="count" class:ringing aria-hidden="true">{countLabel}</span>
+  {/if}
   {#if shown}
     <div
       class="menu"
+      bind:this={menuEl}
+      style:--nudge="{nudgePx}px"
       role="dialog"
       aria-label="changes and notices"
       tabindex="-1"
@@ -111,12 +165,38 @@
   .host {
     position: relative;
   }
+  .count {
+    position: absolute;
+    top: 0;
+    right: 0;
+    translate: 20% -10%;
+    box-sizing: border-box;
+    min-width: 1.05rem;
+    height: 1.05rem;
+    padding: 0 0.28rem;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--accent-fill);
+    box-shadow: 0 0 0 2px var(--bg);
+    color: var(--bg);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    pointer-events: none;
+  }
+  .count.ringing {
+    background: var(--warn);
+  }
   .menu {
     position: absolute;
     top: calc(100% + 0.35rem);
-    left: 0;
+    left: 50%;
+    translate: calc(-50% + var(--nudge, 0px)) 0;
     z-index: 8;
-    width: min(26rem, 80vw);
+    width: min(20rem, calc(100vw - 24px));
     max-height: 24rem;
     overflow-y: auto;
     display: flex;
