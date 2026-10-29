@@ -20,5 +20,6 @@
     margin: 0;
     color: var(--muted);
     font-size: var(--fs-md);
+    user-select: none;
   }
 </style>
