@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { tick, type Snippet } from "svelte";
   import Button from "./Button.svelte";
   import Icon from "./Icon.svelte";
   import { float } from "./float";
   import type { IconName } from "./icons";
+  import { LAMP_GLYPHS } from "./lamp";
   import type { MenuItem } from "./menu";
 
   let {
@@ -13,6 +14,7 @@
     items,
     empty = "",
     open = $bindable(false),
+    face,
     onpick,
   }: {
     /** The trigger's word, and the list's accessible name. */
@@ -23,6 +25,8 @@
     /** Said in place of the rows while there are none. */
     empty?: string;
     open?: boolean;
+    /** Drawn in the trigger in place of `label`, which stays its accessible name. */
+    face?: Snippet;
     onpick: (key: string) => void;
   } = $props();
 
@@ -87,10 +91,14 @@ reader is on. ↑ ↓ move, ⏎ picks, esc and a click outside close it.
     size="sm"
     {icon}
     {tone}
+    aria-label={face ? label : undefined}
     aria-haspopup="menu"
     aria-expanded={open}
     onclick={() => (open = !open)}
-    >{label}<span class="arrow" aria-hidden="true">▾</span></Button
+    >{#if face}{@render face()}{:else}{label}{/if}<span
+      class="arrow"
+      aria-hidden="true">▾</span
+    ></Button
   >
   {#if open}
     <div
@@ -117,7 +125,11 @@ reader is on. ↑ ↓ move, ⏎ picks, esc and a click outside close it.
         >
           <span class="mark" aria-hidden="true">{item.current ? "›" : " "}</span
           >
-          {#if item.icon}<span class="glyph" style:color={item.color}
+          {#if item.lamp}<span
+              class="glyph lamp"
+              style:color="var(--{item.lamp.tone})"
+              aria-hidden="true">{LAMP_GLYPHS[item.lamp.level]}</span
+            >{:else if item.icon}<span class="glyph" style:color={item.color}
               ><Icon name={item.icon} size="1em" /></span
             >{/if}
           <span class="txt">{item.label}</span>
@@ -175,6 +187,9 @@ reader is on. ↑ ↓ move, ⏎ picks, esc and a click outside close it.
   .glyph {
     display: inline-flex;
     color: var(--muted);
+  }
+  .lamp {
+    font-family: var(--font-mono);
   }
   .txt {
     flex: 0 1 auto;
