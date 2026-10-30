@@ -9,11 +9,14 @@
     base,
     id,
     version,
+    inline = false,
   }: {
     base: "knowledge" | "reference";
     id: string;
     /** Re-reads the count when the item changes under the page. */
     version?: number;
+    /** Only the count, to sit in a line of other facts. */
+    inline?: boolean;
   } = $props();
 
   let views = $state<ViewSummary | null>(null);
@@ -34,29 +37,32 @@
   const plural = (n: number, one: string, many: string) =>
     `${n} ${n === 1 ? one : many}`;
 
-  const line = $derived(
+  const count = $derived(
     views
-      ? [
-          plural(views.views, "read", "reads") +
-            (views.viewers
-              ? ` by ${plural(views.viewers, "person", "people")}`
-              : ""),
-          views.last_viewed_at
-            ? `last ${fmtDateTime(views.last_viewed_at)}`
-            : "",
-        ]
-          .filter(Boolean)
-          .join(" · ")
+      ? plural(views.views, "read", "reads") +
+          (views.viewers
+            ? ` by ${plural(views.viewers, "person", "people")}`
+            : "")
       : "no reads yet",
+  );
+  const lastRead = $derived(
+    views?.last_viewed_at ? `last ${fmtDateTime(views.last_viewed_at)}` : "",
   );
 </script>
 
-<p class="reads">
-  <Icon name="eye" size="1.1em" weight={7} />
-  <span>{line}</span>
-</p>
+{#if inline}
+  <span class="count">{count}</span>
+{:else}
+  <p class="reads">
+    <Icon name="eye" size="1.1em" weight={7} />
+    <span>{[count, lastRead].filter(Boolean).join(" · ")}</span>
+  </p>
+{/if}
 
 <style>
+  .count {
+    color: var(--muted);
+  }
   /* --reads-inset lines it up with what starts the page under it. */
   .reads {
     display: flex;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { indexLamp } from "../../packages/web/src/code/status";
-import { statusLamp } from "../../packages/web/src/library/status";
+import { statusItems, statusLamp } from "../../packages/web/src/library/status";
 import { reportLamp } from "../../packages/web/src/reports/status";
 import { tokenLamp } from "../../packages/web/src/sources/status";
 import { LAMP_GLYPHS } from "../../packages/web/src/tui/lamp";
@@ -18,6 +18,26 @@ describe("status lamps", () => {
     expect(statusLamp("rejected")).toEqual({ level: "off", tone: "danger" });
     expect(statusLamp("archived")).toEqual({ level: "off", tone: "muted" });
     expect(statusLamp("unheard-of")).toEqual({ level: "off", tone: "muted" });
+  });
+
+  it("offers every status with its lamp, marks the current one and says which search returns", () => {
+    const items = statusItems(["draft", "approved"], "approved", ["approved"]);
+    expect(items).toEqual([
+      {
+        key: "draft",
+        label: "draft",
+        lamp: { level: "half", tone: "accent" },
+        hint: "not searched",
+        current: false,
+      },
+      {
+        key: "approved",
+        label: "approved",
+        lamp: { level: "on", tone: "ok" },
+        hint: "searched",
+        current: true,
+      },
+    ]);
   });
 
   it("half-lights a run while it runs and lights it once it has an outcome", () => {
