@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NOT_INVITED } from "@tachy/contract";
 import {
+  canEditLibraryItem,
   initSession,
   session,
+  type Me,
 } from "../../packages/web/src/access/session.svelte";
 
 /** What the three calls a boot makes are answered with. */
@@ -81,5 +83,40 @@ describe("what the app knows once it has booted", () => {
     expect(session.uninvited).toBeNull();
     expect(session.unreachable).toBe(true);
     expect(session.me).toBeNull();
+  });
+});
+
+describe("who may edit a library item", () => {
+  const lead: Me = {
+    email: "lead@example.test",
+    name: "Lead",
+    role: "member",
+    via: "password",
+    team_admin: [{ team_id: "t-print", team_slug: "print" }],
+  };
+
+  afterEach(() => {
+    session.me = null;
+  });
+
+  it("is an app admin for anything", () => {
+    session.me = { ...lead, role: "admin", team_admin: [] };
+    expect(canEditLibraryItem({})).toBe(true);
+  });
+
+  it("is a team admin of the item's team or of its product's team", () => {
+    session.me = lead;
+    expect(canEditLibraryItem({ team_id: "t-print" })).toBe(true);
+    expect(canEditLibraryItem({ product_team_slug: "print" })).toBe(true);
+    expect(canEditLibraryItem({ team_id: "t-billing" })).toBe(false);
+  });
+
+  it("is no team admin for an item filed under no team and no product", () => {
+    session.me = lead;
+    expect(canEditLibraryItem({})).toBe(false);
+  });
+
+  it("is nobody without a session", () => {
+    expect(canEditLibraryItem({ team_id: "t-print" })).toBe(false);
   });
 });
