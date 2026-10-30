@@ -14,7 +14,7 @@
     "dotenv": "^18.0.8",
     "fflate": "^0.8.2",
     "material-icon-theme": "^5.39.0",
-    "postal-mime": "^4.0.7",
+    "postal-mime": "^4.1.4",
     "postgres": "^3.4.5",
     "sharp": "^0.35.5",
     "unpdf": "^1.8.1",
