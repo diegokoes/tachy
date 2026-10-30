@@ -575,10 +575,14 @@ create table knowledge_entries (
     symptoms            text[] not null default '{}',
     root_cause          text,
     resolution          text,
+    -- What was checked or tried on the way to the cause, in order; markdown.
+    investigation       text,
     -- on update cascade so renaming a pattern slug rewrites referencing entries.
     resolution_pattern  text references resolution_patterns(slug) on update cascade,
     signals             text[] not null default '{}',
     tags                text[] not null default '{}',
+    -- Web addresses the lesson rests on; isRelatedLink in @tachy/contract is the rule.
+    related_links       text[] not null default '{}',
     -- component is the validated taxonomy anchor; product_area is derived from the
     -- component hierarchy at write time (kept as a column so the generated search
     -- columns can reference it - they can't join other tables).
@@ -592,8 +596,8 @@ create table knowledge_entries (
     -- understood is unclear/high.
     confidence          text check (confidence is null or confidence in ('low','medium','high')),
 
-    -- low-cardinality, filterable facets promoted out of `structured` so they're
-    -- indexable/queryable (e.g. "all prod issues", "all unclear resolutions").
+    -- low-cardinality, filterable facets (e.g. "all prod issues", "all unclear
+    -- resolutions").
     -- cloud = observed environment. No CHECK: the vocabulary is
     -- deployment-specific (prod/qa vs dev/demo/preprod…). The app layer enforces
     -- a lowercase-slug shape and surfaces existing values for reuse.
@@ -620,6 +624,7 @@ create table knowledge_entries (
         coalesce(issue_summary,'') || ' ' ||
         coalesce(root_cause,'')   || ' ' ||
         coalesce(resolution,'')   || ' ' ||
+        coalesce(investigation,'') || ' ' ||
         coalesce(resolution_pattern,'') || ' ' ||
         coalesce(product_area,'') || ' ' ||
         coalesce(cloud,'')        || ' ' ||
@@ -638,6 +643,7 @@ create table knowledge_entries (
             coalesce(issue_summary,'') || ' ' ||
             coalesce(root_cause,'')   || ' ' ||
             coalesce(resolution,'')   || ' ' ||
+            coalesce(investigation,'') || ' ' ||
             coalesce(resolution_pattern,'') || ' ' ||
             coalesce(product_area,'') || ' ' ||
             coalesce(cloud,'')        || ' ' ||
@@ -654,6 +660,7 @@ create table knowledge_entries (
             coalesce(issue_summary,'') || ' ' ||
             coalesce(root_cause,'')   || ' ' ||
             coalesce(resolution,'')   || ' ' ||
+            coalesce(investigation,'') || ' ' ||
             coalesce(resolution_pattern,'') || ' ' ||
             coalesce(product_area,'') || ' ' ||
             coalesce(cloud,'')        || ' ' ||

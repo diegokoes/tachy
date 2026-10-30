@@ -60,9 +60,7 @@ export function snapshotOf(row: Record<string, any>): Record<string, unknown> {
 
 /**
  * Which keys differ between two snapshots. Arrays compare by content, so
- * re-saving the same tags is not an edit. Everything else compares by JSON,
- * which reports a re-ordered `structured` blob as changed - cheap and honest,
- * rather than a deep-equality guess that could hide a real edit.
+ * re-saving the same tags is not an edit; a missing value equals null.
  */
 export function changedFields(
   before: Record<string, unknown>,

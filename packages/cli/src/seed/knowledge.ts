@@ -105,7 +105,8 @@ export async function seedKnowledge(
       "hidden_fix",
       "affected_version",
       "fixed_version",
-      "structured",
+      "investigation",
+      "related_links",
       "embedding",
       "created_at",
       "updated_at",
@@ -155,6 +156,7 @@ export async function seedKnowledge(
       // in signals rather than being asserted as part of the explanation.
       const rootCause = `${cause}. Seen ${context}.`;
       const resolution = `${fix}. Until then ${impact}. Confirmed on ${affected}.`;
+      const investigation = `1. Reproduced ${context}.\n2. Checked the logs: ${diagnostic}.`;
 
       return {
         id: entries[i],
@@ -196,11 +198,14 @@ export async function seedKnowledge(
         fixed_version: chance(rng, 0.6)
           ? `${intBetween(rng, 9, 11)}.${intBetween(rng, 0, 6)}`
           : null,
-        structured: tx.json({ seeded: true }),
+        investigation,
+        related_links: [
+          `https://docs.example.invalid/${product.slug}/${place}`,
+        ],
         // The embed text is the row's own prose, so distinct rows get distinct
         // vectors. The column holds it until the window's fill swaps in the
         // vector.
-        embedding: `${title} ${summary} ${rootCause} ${resolution}`,
+        embedding: `${title} ${summary} ${rootCause} ${resolution} ${investigation}`,
         created_at: created,
         updated_at: created,
       };
@@ -312,7 +317,6 @@ async function seedReference(
       "title",
       "body",
       "tags",
-      "structured",
       "status",
       "doc_version",
       "superseded_by",
@@ -350,7 +354,6 @@ async function seedReference(
         title: meta[i].fullTitle,
         body: docBody,
         tags: pickMany(rng, TAGS, intBetween(rng, 1, 3)),
-        structured: tx.json({ seeded: true }),
         status: pick(rng, REFERENCE_STATUSES),
         doc_version: `${intBetween(rng, 1, 9)}.0`,
         superseded_by: null,

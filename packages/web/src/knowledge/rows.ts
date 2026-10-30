@@ -9,6 +9,7 @@ export interface KnowledgeRow {
   issue_summary: string | null;
   root_cause: string | null;
   resolution: string | null;
+  investigation?: string | null;
   resolution_pattern: string | null;
   component_id?: string | null;
   product_area: string | null;
@@ -25,7 +26,7 @@ export interface KnowledgeRow {
   symptoms: string[] | null;
   signals: string[] | null;
   tags: string[] | null;
-  structured?: Record<string, unknown> | null;
+  related_links?: string[];
   version: number;
   created_at?: string;
   updated_at?: string;
