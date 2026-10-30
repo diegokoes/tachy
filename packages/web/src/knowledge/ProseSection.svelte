@@ -1,6 +1,5 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
-  import { Button } from "../tui";
   import type { LinkTargets } from "../wiki/wikilinks.svelte";
   import EntrySection from "./EntrySection.svelte";
 
@@ -59,25 +58,11 @@
   });
 </script>
 
-{#snippet editButton()}
-  <Button
-    variant="ghost"
-    size="sm"
-    square
-    icon="edit"
-    title="edit {label}"
-    onclick={startEditing}
-  />
-{/snippet}
-
 {#if onchange || text.trim()}
-  <EntrySection
-    {label}
-    {unsaved}
-    action={onchange && !editing ? editButton : undefined}
-  >
+  <EntrySection {label} {unsaved} active={editing}>
     {#if editing && onchange}
       <textarea
+        class="frame"
         bind:this={field}
         value={text}
         aria-label={label}
@@ -87,14 +72,18 @@
         }}
         onblur={() => (editing = false)}></textarea>
     {:else}
+      {#if onchange}
+        <button class="start" type="button" onclick={startEditing}
+          >edit {label}</button
+        >
+      {/if}
       <!-- svelte-ignore a11y_click_events_have_key_events -- links are focusable
-           anchors, and the edit button is the keyboard's way in -->
+           anchors, and the hidden button before it is the keyboard's way in -->
       <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
-           wrapper; a click is a shortcut for the edit button -->
+           wrapper; a click is a shortcut for that button -->
       <div
         class="md prose"
-        class:blank={!text.trim()}
-        class:editable={Boolean(onchange)}
+        class:frame={Boolean(onchange)}
         onclick={onTextClick}
         onkeydown={links.onKeydown}
       >
@@ -106,38 +95,59 @@
 {/if}
 
 <style>
-  /* Text and editor sit on one left edge: the editor's frame and the hover
-     frame both reach out by the editor's padding and border. */
-  textarea,
-  .editable {
-    --reach: calc(var(--pad-3) + 1px);
-  }
-  textarea {
+  /* Text and editor share one box: the frame reaches out by the margin it
+     pads back in, so nothing moves when one becomes the other, and the
+     highlight is a shadow, which takes no room. */
+  .frame {
+    --reach-x: var(--pad-3);
+    --reach-y: var(--pad-2);
     display: block;
     box-sizing: border-box;
-    width: calc(100% + 2 * var(--reach));
-    margin: 0 calc(-1 * var(--reach));
-    min-height: 3lh;
+    width: calc(100% + 2 * var(--reach-x));
+    min-height: calc(1lh + 2 * var(--reach-y));
+    margin: calc(-1 * var(--reach-y)) calc(-1 * var(--reach-x));
+    padding: var(--reach-y) var(--reach-x);
+    border: 0;
+    border-radius: var(--radius-control);
+    line-height: 1.6;
+  }
+  /* Paragraph spacing stays between paragraphs; the frame owns the edges. */
+  .md > :global(:first-child) {
+    margin-top: 0;
+  }
+  .md > :global(:last-child) {
+    margin-bottom: 0;
+  }
+  div.frame {
+    cursor: text;
+  }
+  div.frame:hover {
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .start:focus-visible + div.frame {
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  textarea.frame {
     overflow: hidden;
     resize: none;
     font: inherit;
     line-height: 1.6;
     color: var(--text);
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+    outline: none;
   }
-  .editable {
-    margin: 0 calc(-1 * var(--reach));
-    padding: 0 var(--reach);
-    border-radius: var(--radius-control);
-    cursor: text;
-  }
-  .editable:hover {
-    box-shadow: inset 0 0 0 1px var(--border);
-  }
-  .blank {
-    min-height: 1.5em;
+  /* Reachable by tab and read out, but drawn as the frame around the text. */
+  .start {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .problem {
-    margin: var(--pad-1) 0 0;
+    margin: var(--pad-2) 0 0;
     font-size: var(--fs-xs);
     color: var(--danger);
   }
