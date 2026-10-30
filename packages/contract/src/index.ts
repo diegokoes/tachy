@@ -202,7 +202,11 @@ export {
 } from "./buckets";
 export type { BucketRow, BucketWithToken } from "./buckets";
 export type { AgentUsage, ToolUsage } from "./analytics";
-export { MAX_ENTRY_TITLE_CHARS } from "./knowledge";
+export {
+  MAX_ENTRY_TITLE_CHARS,
+  RELATED_LINK_HINT,
+  isRelatedLink,
+} from "./knowledge";
 export type {
   ComponentKnowledge,
   KnowledgeCensus,

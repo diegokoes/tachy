@@ -142,18 +142,11 @@ stored; then `add_source_project` to register the source's grouping. Once only.
 ## The knowledge entry
 
 `title`, `issue_summary`, `symptoms`, `signals`, `root_cause`, `resolution`, `component`
-and `confidence` are the core; `resolution_pattern`, `cloud`, `resolution_clarity`,
-`hidden_fix` and `tags` are the facets. `save_knowledge_entry`'s schema documents
-each field, and is where the wording for each one lives - this is only what
-shapes how you _read the ticket_, before you get as far as the call:
-
-- **Links are full URLs**, never "Azure work item 50912". Build one from the connection's
-  `base_url` (`<base_url>/_workitems/edit/<id>`) or take `externalUrl` off the fetched
-  item. If no URL can be constructed, record the number as a signal (`"DevOps#158327"`)
-  rather than guessing.
-- Everything narrative - investigation steps, how the conversation progressed, technical
-  analysis, environment, related configuration and links - goes in `structured`. Include
-  what is relevant; don't force empty objects.
+and `confidence` are the core; `investigation` and `related_links` record how the cause
+was found and what the lesson rests on; `resolution_pattern`, `cloud`,
+`resolution_clarity`, `hidden_fix` and `tags` are the facets. Every one is a field people
+read and correct on the entry's page. `save_knowledge_entry`'s schema documents each
+field, and is where the wording for each one lives.
 
 Customer and version live on the **work item**, not on the entry: `set_work_item_customer`
 and `set_observed_version`.

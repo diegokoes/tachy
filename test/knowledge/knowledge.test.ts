@@ -421,29 +421,69 @@ describe("deprecation lifecycle", () => {
   });
 });
 
-describe("structured validation", () => {
+describe("investigation and related links", () => {
   beforeEach(resetData);
 
-  it("rejects a malformed structured field with a bad_input error", async () => {
-    await expect(
-      saveKnowledgeEntry({
-        title: "x",
-        structured: { investigation_steps: "not-an-array" },
-      }),
-    ).rejects.toThrow(/Invalid structured field/i);
+  const TICKET_URL = "https://dev.azure.com/seed/_workitems/edit/50912";
+
+  const investigated = () =>
+    saveKnowledgeEntry({
+      status: "approved",
+      title: "Label printer drops jobs after a firmware rollout",
+      issueSummary: "Jobs vanish from the queue on line 2.",
+      investigation:
+        "1. Traced the spooler with quarnix.\n2. Compared the firmware builds.",
+      relatedLinks: [TICKET_URL],
+    });
+
+  it("returns both from get and search, and an update replaces or clears them", async () => {
+    const row = await investigated();
+    const fromGet = await getKnowledgeEntry(row.id);
+    const [fromSearch] = await searchKnowledge("printer drops jobs");
+    for (const found of [fromGet, fromSearch]) {
+      expect(found.investigation).toMatch(/^1\. Traced the spooler/);
+      expect(found.related_links).toEqual([TICKET_URL]);
+    }
+
+    await updateKnowledgeEntry(row.id, {
+      investigation: null,
+      relatedLinks: [],
+    });
+    const cleared = await getKnowledgeEntry(row.id);
+    expect(cleared.investigation).toBeNull();
+    expect(cleared.related_links).toEqual([]);
   });
 
-  it("keeps unknown structured keys (passthrough)", async () => {
-    const row = await saveKnowledgeEntry({
-      title: "x",
-      structured: {
-        conversation_summary: "summary",
-        custom_field: { nested: true },
-      },
+  it("finds an entry by a word only its investigation holds, on the keyword and the fuzzy leg", async () => {
+    const row = await investigated();
+    await saveKnowledgeEntry({
+      status: "approved",
+      title: "Invoice export is empty",
+      issueSummary: "The monthly export produces an empty file.",
     });
-    const stored = await getKnowledgeEntry(row.id);
-    expect(stored.structured.conversation_summary).toBe("summary");
-    expect(stored.structured.custom_field).toEqual({ nested: true });
+
+    const [exact] = await searchKnowledge("quarnix");
+    expect(exact.id).toBe(row.id);
+    expect(Number(exact.fts_rank)).toBeGreaterThan(0);
+
+    const [misspelt] = await searchKnowledge("quarnx");
+    expect(misspelt.id).toBe(row.id);
+    expect(Number(misspelt.trgm_sim)).toBeGreaterThan(0);
+  });
+
+  it("re-embeds an entry when only its investigation changes", async () => {
+    const row = await investigated();
+    const vector = async () => {
+      const [stored] = await sql`
+        select embedding::text as embedding from knowledge_entries where id = ${row.id}
+      `;
+      return stored.embedding as string;
+    };
+    const before = await vector();
+    await updateKnowledgeEntry(row.id, {
+      investigation: "1. Swapped the print head; the drops stopped.",
+    });
+    expect(await vector()).not.toBe(before);
   });
 });
 

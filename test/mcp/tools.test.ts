@@ -216,6 +216,33 @@ describe("knowledge round trip", () => {
     expect(tooLong.text).toMatch(/title/);
   });
 
+  it("saves and updates the investigation and related links, refusing a link that is no URL", async () => {
+    const saved = await call("save_knowledge_entry", {
+      product_slug: "tpd",
+      title: "Dispatcher drops jobs after a restart",
+      investigation: "1. Replayed the queue log.",
+      related_links: ["https://dev.azure.com/seed/_workitems/edit/50912"],
+    });
+    const id = (saved.json as { id: string }).id;
+    const updated = await call("update_knowledge_entry", {
+      id,
+      investigation: "1. Replayed the queue log.\n2. Found the lost ack.",
+      related_links: ["https://docs.example.invalid/dispatcher/acks"],
+    });
+    expect(updated.isError).toBe(false);
+    expect((await call("get_knowledge_entry", { id })).json).toMatchObject({
+      investigation: "1. Replayed the queue log.\n2. Found the lost ack.",
+      related_links: ["https://docs.example.invalid/dispatcher/acks"],
+    });
+
+    const unbuilt = await call("update_knowledge_entry", {
+      id,
+      related_links: ["DevOps#50912"],
+    });
+    expect(unbuilt.isError).toBe(true);
+    expect(unbuilt.text).toMatch(/related link/);
+  });
+
   it("hands back a near-copy instead of saving it, until confirm_new", async () => {
     const entry = {
       product_slug: "tpd",

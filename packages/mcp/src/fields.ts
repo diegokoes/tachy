@@ -4,7 +4,7 @@
  * cannot describe it differently.
  */
 import { z } from "zod";
-import { cloudSchema } from "@tachy/core/knowledge";
+import { cloudSchema, relatedLinksSchema } from "@tachy/core/knowledge";
 
 /**
  * A common tool-call mistake is passing the source type here. Every tool that
@@ -17,11 +17,18 @@ export const sourceSlug = z
     "Source CONNECTION SLUG from list_source_connections (e.g. 'osapiens-freshdesk'), never the source type ('freshdesk', 'azure-devops'). Call list_source_connections first if you do not have it.",
   );
 
-export const structuredField = z
-  .record(z.string(), z.any())
+export const investigationField = z
+  .string()
+  .nullable()
   .optional()
   .describe(
-    "Narrative context - stored and returned wholesale, never filtered on. Include only the keys that apply; don't force empty objects. Known shape: environment {machine, line, component}, key_signals {error_description, context}, investigation_steps [], conversation_summary, technical_analysis {what_happened, why, system_behavior}, constraints_and_rules [], related_configuration [], related_links [] (full URLs). Extra keys are kept.",
+    "How the cause was found: what was checked or tried, in order, and what each check showed. Markdown, a numbered list for steps. Omit when the ticket shows no investigation; null clears it.",
+  );
+
+export const relatedLinksField = relatedLinksSchema
+  .optional()
+  .describe(
+    "Full URLs the lesson rests on: the source ticket, linked work items, docs. Build a work item's URL from the connection's base_url (<base_url>/_workitems/edit/<id>) or take externalUrl off the fetched item; when none can be built, put the number in signals (\"DevOps#158327\") rather than guessing.",
   );
 
 export const symptomsField = z

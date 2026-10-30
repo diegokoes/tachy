@@ -18,6 +18,7 @@ import {
   knowledgeStatusSchema,
   confidenceSchema,
   feedbackKindSchema,
+  relatedLinksSchema,
   runModeSchema,
 } from "@tachy/core/knowledge";
 import {
@@ -56,18 +57,19 @@ const knowledgeInputSchema = z.object({
   signals: z.array(z.string()).optional(),
   rootCause: z.string().optional(),
   resolution: z.string().optional(),
+  investigation: z.string().optional(),
   resolutionPattern: z.string().optional(),
   component: z.string().optional(),
   customerSlug: z.string().nullable().optional(),
   unit: z.string().nullable().optional(),
   confidence: confidenceSchema.optional(),
   tags: z.array(z.string()).optional(),
+  relatedLinks: relatedLinksSchema.optional(),
   cloud: cloudSchema.optional(),
   resolutionClarity: resolutionClaritySchema.optional(),
   hiddenFix: z.boolean().optional(),
   affectedVersion: z.string().optional(),
   fixedVersion: z.string().optional(),
-  structured: z.record(z.string(), z.any()).optional(),
 });
 
 const knowledgeUpdateSchema = z.object({
@@ -76,10 +78,12 @@ const knowledgeUpdateSchema = z.object({
   issueSummary: z.string().nullable().optional(),
   rootCause: z.string().nullable().optional(),
   resolution: z.string().nullable().optional(),
+  investigation: z.string().nullable().optional(),
   resolutionPattern: z.string().nullable().optional(),
   symptoms: z.array(z.string()).optional(),
   signals: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
+  relatedLinks: relatedLinksSchema.optional(),
   component: z.string().nullable().optional(),
   customerSlug: z.string().nullable().optional(),
   unit: z.string().nullable().optional(),
@@ -90,7 +94,6 @@ const knowledgeUpdateSchema = z.object({
   hiddenFix: z.boolean().nullable().optional(),
   affectedVersion: z.string().nullable().optional(),
   fixedVersion: z.string().nullable().optional(),
-  structured: z.record(z.string(), z.any()).optional(),
   expectedVersion: z.number().int().optional(),
 });
 
