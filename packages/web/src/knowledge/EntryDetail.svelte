@@ -11,8 +11,6 @@
   import Backlinks from "../library/Backlinks.svelte";
   import { renderMarkdown, markBrokenLinks } from "../markdown/markdown";
   import { LinkTargets } from "../wiki/wikilinks.svelte";
-  import StructuredView from "./StructuredView.svelte";
-  import { asStructured } from "./structured";
   import QualityBars from "./QualityBars.svelte";
   import EntryForm from "./EntryForm.svelte";
   import ScopeCrumb from "../library/ScopeCrumb.svelte";
@@ -121,8 +119,6 @@
   }
 
   const statusActions = $derived(entry && canEdit ? actionsFor(entry) : []);
-
-  const structured = $derived(asStructured(entry?.structured));
 
   // Reading the entry, backspace or esc goes back. Not bound while editing,
   // where it would sit one keystroke from discarding a form. Hidden: back is a
@@ -247,6 +243,21 @@
     load();
   });
 </script>
+
+{#snippet proseSection(label: string, text: string | null | undefined)}
+  {#if text}
+    <section>
+      <h3>{label}</h3>
+      <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
+           focusable wikilink anchors this div delegates to -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
+           wrapper, not an interactive element of its own -->
+      <div class="md prose" onclick={links.onClick} onkeydown={links.onKeydown}>
+        {@html prose(text)}
+      </div>
+    </section>
+  {/if}
+{/snippet}
 
 {#snippet chips(label: string, items: string[] | null | undefined)}
   {#if items && items.length}
@@ -449,63 +460,27 @@
             {/if}
           {/if}
 
-          {#if entry.issue_summary}
-            <section>
-              <h3>summary</h3>
-              <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
-             focusable wikilink anchors this div delegates to -->
-              <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
-             wrapper, not an interactive element of its own -->
-              <div
-                class="md prose"
-                onclick={links.onClick}
-                onkeydown={links.onKeydown}
-              >
-                {@html prose(entry.issue_summary)}
-              </div>
-            </section>
-          {/if}
-          <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
-             focusable wikilink anchors this div delegates to -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
-             wrapper, not an interactive element of its own -->
-          {#if entry.root_cause}
-            <section>
-              <h3>root cause</h3>
-              <div
-                class="md prose"
-                onclick={links.onClick}
-                onkeydown={links.onKeydown}
-              >
-                {@html prose(entry.root_cause)}
-              </div>
-            </section>
-          {/if}
-          {#if entry.resolution}
-            <section>
-              <h3>resolution</h3>
-              <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
-             focusable wikilink anchors this div delegates to -->
-              <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
-             wrapper, not an interactive element of its own -->
-              <div
-                class="md prose"
-                onclick={links.onClick}
-                onkeydown={links.onKeydown}
-              >
-                {@html prose(entry.resolution)}
-              </div>
-            </section>
-          {/if}
+          {@render proseSection("summary", entry.issue_summary)}
+          {@render proseSection("root cause", entry.root_cause)}
+          {@render proseSection("resolution", entry.resolution)}
+          {@render proseSection("investigation", entry.investigation)}
 
           {@render chips("symptoms", entry.symptoms)}
           {@render chips("signals", entry.signals)}
           {@render chips("tags", entry.tags)}
 
-          {#if Object.keys(structured).length}
+          {#if entry.related_links?.length}
             <section>
-              <h3>structured context</h3>
-              <StructuredView {structured} />
+              <h3>related links</h3>
+              <ul class="related">
+                {#each entry.related_links as link}
+                  <li>
+                    <a href={link} target="_blank" rel="noopener noreferrer"
+                      >{link}</a
+                    >
+                  </li>
+                {/each}
+              </ul>
             </section>
           {/if}
 
@@ -682,6 +657,15 @@
   .actions {
     display: flex;
     gap: var(--pad-2);
+  }
+  .related {
+    margin: 0;
+    padding-left: 1.25rem;
+    font-size: var(--fs-sm);
+  }
+  .related a {
+    color: var(--accent);
+    word-break: break-all;
   }
   .fb-list {
     list-style: none;

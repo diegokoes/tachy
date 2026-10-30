@@ -200,7 +200,7 @@ describe("scrubDeep", () => {
       signals: ["token=abc123secret", "HTTP 503"],
       version: 3,
       created_at: created,
-      structured: { conversation_summary: "call from ops@acme.com" },
+      similar: [{ investigation: "call from ops@acme.com" }],
     };
     const scrubbed = scrubDeep(row, map);
     expect(scrubbed.issue_summary).toBe("mail [EMAIL_1]");
@@ -208,9 +208,7 @@ describe("scrubDeep", () => {
     expect(scrubbed.signals[1]).toBe("HTTP 503");
     expect(scrubbed.version).toBe(3);
     expect(scrubbed.created_at).toBe(created);
-    expect(scrubbed.structured.conversation_summary).toBe(
-      "call from [EMAIL_1]",
-    );
+    expect(scrubbed.similar[0].investigation).toBe("call from [EMAIL_1]");
     expect(row.issue_summary).toBe("mail ops@acme.com");
   });
 });

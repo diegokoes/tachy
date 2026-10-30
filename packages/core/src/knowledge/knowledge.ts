@@ -4,7 +4,7 @@ import {
   type KnowledgeCensus,
   type KnowledgeStale,
 } from "@tachy/contract";
-import { sql, jsonb } from "../infra/db";
+import { sql } from "../infra/db";
 import {
   embedPassage,
   embedQueryLiteral,
@@ -30,7 +30,6 @@ import {
 import { SEM_FLOOR, withRelevance } from "../search/relevance";
 import { keywordInputs } from "../search/terms";
 import { notFound, badInput } from "../infra/errors";
-import { parseStructured } from "./structured";
 import {
   assertExpectedVersion,
   assertUpdated,
@@ -51,19 +50,18 @@ import {
 } from "../library/filing";
 import { syncLinks } from "../library/links";
 
-/**
- * The prose fields of an entry, where a [[wikilink]] can be written. The
- * structured fields are values rather than writing, so they are not scanned.
- */
+/** The prose fields of an entry, where a [[wikilink]] can be written. */
 const linkText = (entry: {
   issueSummary?: string | null;
   rootCause?: string | null;
   resolution?: string | null;
+  investigation?: string | null;
 }) =>
   [
     entry.issueSummary ?? "",
     entry.rootCause ?? "",
     entry.resolution ?? "",
+    entry.investigation ?? "",
   ].join("\n");
 
 /**
@@ -73,9 +71,9 @@ const linkText = (entry: {
  */
 const REVISION_COLUMNS = sql`
   product_id, status, superseded_by, title, issue_summary, root_cause, resolution,
-  resolution_pattern, symptoms, signals, tags, component_id, product_area,
-  confidence, customer_id, customer_unit_id, cloud, resolution_clarity,
-  hidden_fix, affected_version, fixed_version, structured
+  investigation, resolution_pattern, symptoms, signals, tags, related_links,
+  component_id, product_area, confidence, customer_id, customer_unit_id, cloud,
+  resolution_clarity, hidden_fix, affected_version, fixed_version
 `;
 
 export interface KnowledgeFacets {
@@ -108,11 +106,12 @@ export interface KnowledgeInput extends KnowledgeFacets {
   signals?: string[];
   rootCause?: string;
   resolution?: string;
+  investigation?: string | null;
   resolutionPattern?: string;
   component?: string;
   confidence?: string;
   tags?: string[];
-  structured?: Record<string, unknown>;
+  relatedLinks?: string[];
 }
 
 export interface KnowledgeUpdateInput extends KnowledgeFacets {
@@ -122,6 +121,7 @@ export interface KnowledgeUpdateInput extends KnowledgeFacets {
   issueSummary?: string | null;
   rootCause?: string | null;
   resolution?: string | null;
+  investigation?: string | null;
   resolutionPattern?: string | null;
   symptoms?: string[];
   signals?: string[];
@@ -131,7 +131,7 @@ export interface KnowledgeUpdateInput extends KnowledgeFacets {
   supersededBy?: string | null;
   confidence?: string | null;
   tags?: string[];
-  structured?: Record<string, unknown>;
+  relatedLinks?: string[];
   expectedVersion?: number;
 }
 
@@ -165,7 +165,8 @@ async function resolvePatternDescription(
  * Must stay in step with the generated search_text column: a field the vector
  * cannot see is only findable by exact words. `resolution` is the one that
  * matters: a query phrased as the fix ("restart the label cache service")
- * otherwise has no semantic representation.
+ * otherwise has no semantic representation. `investigation` goes last, so the
+ * embedder's token cap trims it before the fields that identify the entry.
  */
 function buildEmbedText(
   entry: {
@@ -176,6 +177,7 @@ function buildEmbedText(
     resolution?: string;
     signals?: string[];
     tags?: string[];
+    investigation?: string | null;
   },
   patternDescription: string,
   productArea?: string | null,
@@ -190,6 +192,7 @@ function buildEmbedText(
     productArea,
     (entry.signals ?? []).join(" "),
     (entry.tags ?? []).join(" "),
+    entry.investigation,
   ]
     .filter(Boolean)
     .join(" ")
@@ -244,7 +247,6 @@ export async function prepareKnowledgeEntry(input: KnowledgeInput) {
   );
 
   const confidence = input.confidence ? input.confidence.toLowerCase() : null;
-  const structured = parseStructured(input.structured);
   const patternDescription = await resolvePatternDescription(
     input.resolutionPattern,
   );
@@ -265,7 +267,6 @@ export async function prepareKnowledgeEntry(input: KnowledgeInput) {
     componentId,
     productArea,
     confidence,
-    structured,
     embedding,
   };
 }
@@ -282,25 +283,26 @@ export async function insertKnowledgeEntry(prepared: PreparedEntry) {
     componentId,
     productArea,
     confidence,
-    structured,
     embedding,
   } = prepared;
   return sql.begin(async (tx) => {
     const [row] = await tx<RevisedRow[]>`
       insert into knowledge_entries
         (work_item_id, product_id, team_id, customer_id, customer_unit_id, created_by, status,
-         title, issue_summary, symptoms, signals, tags,
-         root_cause, resolution, resolution_pattern, component_id, product_area, confidence,
+         title, issue_summary, symptoms, signals, tags, related_links,
+         root_cause, resolution, investigation, resolution_pattern, component_id, product_area, confidence,
          cloud, resolution_clarity, hidden_fix, affected_version, fixed_version,
-         structured, embedding, embedding_model)
+         embedding, embedding_model)
       values
         (${input.workItemId ?? null}, ${productId}, ${teamId}, ${customerId ?? null},
          ${customerUnitId}, ${input.createdById ?? null},
          ${input.status ?? "approved"}, ${title}, ${input.issueSummary ?? null}, ${input.symptoms ?? []}, ${input.signals ?? []}, ${input.tags ?? []},
-         ${input.rootCause ?? null}, ${input.resolution ?? null}, ${input.resolutionPattern ?? null}, ${componentId}, ${productArea},
+         ${input.relatedLinks ?? []},
+         ${input.rootCause ?? null}, ${input.resolution ?? null}, ${input.investigation ?? null},
+         ${input.resolutionPattern ?? null}, ${componentId}, ${productArea},
          ${confidence}, ${input.cloud ?? null}, ${input.resolutionClarity ?? null}, ${input.hiddenFix ?? null},
          ${affectedVersion}, ${input.fixedVersion ?? null},
-         ${jsonb(structured)}, ${embedding}::vector, ${EMBEDDING_MODEL})
+         ${embedding}::vector, ${EMBEDDING_MODEL})
       returning id, version, ${REVISION_COLUMNS}
     `;
     await syncLinks(tx, { entryId: row.id }, linkText(input), productId);
@@ -521,11 +523,11 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
         : null,
     )}
     select e.id, e.work_item_id, e.status, e.superseded_by, e.title, e.issue_summary, e.root_cause, e.resolution,
-           e.resolution_pattern, e.component_id, e.product_area, e.confidence, e.cloud,
+           e.investigation, e.resolution_pattern, e.component_id, e.product_area, e.confidence, e.cloud,
            e.customer_id, cu.slug as customer_slug,
            e.resolution_clarity, e.hidden_fix,
            e.affected_version, e.fixed_version,
-           e.symptoms, e.signals, e.tags, e.structured, e.version, e.created_at, e.updated_at,
+           e.symptoms, e.signals, e.tags, e.related_links, e.version, e.created_at, e.updated_at,
            f.cos_sim, f.fts_rank, f.trgm_sim, f.rrf
     from fused f
     join knowledge_entries e on e.id = f.id
@@ -542,12 +544,12 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
 export async function getKnowledgeEntry(id: string) {
   const [row] = await sql`
     select e.id, e.work_item_id, e.product_id, e.team_id, e.status, e.superseded_by, e.title, e.issue_summary,
-           e.symptoms, e.signals, e.tags, e.root_cause, e.resolution, e.resolution_pattern,
+           e.symptoms, e.signals, e.tags, e.root_cause, e.resolution, e.investigation, e.resolution_pattern,
            e.component_id, e.product_area, e.confidence, e.cloud, e.resolution_clarity,
            e.hidden_fix, e.affected_version, e.fixed_version,
            e.customer_id, cu.slug as customer_slug,
            e.customer_unit_id, un.slug as customer_unit_slug,
-           e.structured, e.version, e.created_at, e.updated_at
+           e.related_links, e.version, e.created_at, e.updated_at
     from knowledge_entries e
     left join customers cu on cu.id = e.customer_id
     left join customer_units un on un.id = e.customer_unit_id
@@ -728,6 +730,8 @@ export async function updateKnowledgeEntry(
       "issueSummary" in patch ? patch.issueSummary : current.issue_summary,
     rootCause: "rootCause" in patch ? patch.rootCause : current.root_cause,
     resolution: "resolution" in patch ? patch.resolution : current.resolution,
+    investigation:
+      "investigation" in patch ? patch.investigation : current.investigation,
     resolutionPattern:
       "resolutionPattern" in patch
         ? patch.resolutionPattern
@@ -735,6 +739,7 @@ export async function updateKnowledgeEntry(
     symptoms: patch.symptoms ?? current.symptoms,
     signals: patch.signals ?? current.signals,
     tags: patch.tags ?? current.tags,
+    relatedLinks: patch.relatedLinks ?? current.related_links,
     confidence:
       "confidence" in patch
         ? (patch.confidence?.toLowerCase() ?? null)
@@ -751,10 +756,6 @@ export async function updateKnowledgeEntry(
         : current.affected_version,
     fixedVersion:
       "fixedVersion" in patch ? patch.fixedVersion : current.fixed_version,
-    structured:
-      "structured" in patch
-        ? parseStructured(patch.structured)
-        : current.structured,
   };
 
   const contentChanged =
@@ -762,6 +763,7 @@ export async function updateKnowledgeEntry(
     merged.issueSummary !== current.issue_summary ||
     merged.rootCause !== current.root_cause ||
     merged.resolution !== current.resolution ||
+    merged.investigation !== current.investigation ||
     merged.resolutionPattern !== current.resolution_pattern ||
     productArea !== current.product_area ||
     (merged.symptoms ?? []).join("\0") !==
@@ -783,6 +785,7 @@ export async function updateKnowledgeEntry(
         resolution: merged.resolution ?? undefined,
         signals: merged.signals,
         tags: merged.tags,
+        investigation: merged.investigation,
       },
       patternDescription,
       productArea,
@@ -799,10 +802,12 @@ export async function updateKnowledgeEntry(
       issue_summary      = ${merged.issueSummary ?? null},
       root_cause         = ${merged.rootCause ?? null},
       resolution         = ${merged.resolution ?? null},
+      investigation      = ${merged.investigation ?? null},
       resolution_pattern = ${merged.resolutionPattern ?? null},
       symptoms           = ${merged.symptoms ?? []},
       signals            = ${merged.signals ?? []},
       tags               = ${merged.tags ?? []},
+      related_links      = ${merged.relatedLinks ?? []},
       component_id       = ${componentId},
       product_area       = ${productArea},
       customer_id        = ${customerId},
@@ -814,7 +819,6 @@ export async function updateKnowledgeEntry(
       hidden_fix         = ${merged.hiddenFix ?? null},
       affected_version   = ${merged.affectedVersion ?? null},
       fixed_version      = ${merged.fixedVersion ?? null},
-      structured         = ${jsonb(merged.structured ?? {})},
       version            = version + 1
       ${embeddingUpdate}
     where id = ${id} and version = ${current.version}
@@ -835,8 +839,8 @@ export async function backfillEmbeddings(
   opts: { all?: boolean } = {},
 ): Promise<number> {
   const rows = await sql`
-    select id, title, issue_summary, root_cause, resolution, resolution_pattern,
-           product_area, symptoms, signals, tags
+    select id, title, issue_summary, root_cause, resolution, investigation,
+           resolution_pattern, product_area, symptoms, signals, tags
     from knowledge_entries
     ${opts.all ? sql`` : sql`where ${needsVector()}`}
   `;
@@ -859,6 +863,7 @@ export async function backfillEmbeddings(
         symptoms: row.symptoms,
         signals: row.signals,
         tags: row.tags,
+        investigation: row.investigation,
       },
       patternDescriptions.get(row.resolution_pattern ?? "")!,
       row.product_area,
@@ -899,7 +904,9 @@ export async function revertKnowledgeEntry(
     hiddenFix: past.hidden_fix,
     affectedVersion: past.affected_version,
     fixedVersion: past.fixed_version,
-    structured: past.structured,
+    // A revision recorded before these fields existed leaves them as they are.
+    ...("investigation" in past && { investigation: past.investigation }),
+    ...("related_links" in past && { relatedLinks: past.related_links }),
     ...(await filingSlugs(past)),
   };
   return updateKnowledgeEntry(id, patch, actor);

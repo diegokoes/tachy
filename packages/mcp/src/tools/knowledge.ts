@@ -33,9 +33,10 @@ import {
   requireCanEdit,
 } from "../permissions";
 import {
+  investigationField,
   knowledgeFilterFields,
+  relatedLinksField,
   signalsField,
-  structuredField,
   symptomsField,
   tagsField,
 } from "../fields";
@@ -101,7 +102,7 @@ tool(
   "save_knowledge_entry",
   {
     description:
-      "Persist a structured knowledge entry. The call is gated by a review box the user can edit before it runs, so draft it and call - do not ask for approval in prose first. resolution_pattern must be an existing slug from list_resolution_patterns (or omitted) - it is not free text. component must be an existing slug/alias from list_components; if the ticket's area is missing from the glossary, call add_component first - it gets its own review box - then save. product_area is derived automatically from the component hierarchy - it is not an input. For manual entries (no work_item_id) that set component, pass product_slug - component slugs resolve within a product.",
+      "Persist a knowledge entry. The call is gated by a review box the user can edit before it runs, so draft it and call - do not ask for approval in prose first. resolution_pattern must be an existing slug from list_resolution_patterns (or omitted) - it is not free text. component must be an existing slug/alias from list_components; if the ticket's area is missing from the glossary, call add_component first - it gets its own review box - then save. product_area is derived automatically from the component hierarchy - it is not an input. For manual entries (no work_item_id) that set component, pass product_slug - component slugs resolve within a product.",
     inputSchema: {
       work_item_id: z.string().optional(),
       product_slug: z
@@ -150,12 +151,15 @@ tool(
         .string()
         .optional()
         .describe(
-          "The underlying technical cause, stated precisely. Omit rather than guess - an unknown cause means confidence 'low'.",
+          "The underlying technical cause, stated precisely, with the rule or limit it comes from. Omit rather than guess - an unknown cause means confidence 'low'.",
         ),
       resolution: z
         .string()
         .optional()
-        .describe("What was done, or should be done, to fix it."),
+        .describe(
+          "What was done, or should be done, to fix it, naming the settings it changes and the conditions it needs.",
+        ),
+      investigation: investigationField,
       resolution_pattern: z
         .string()
         .optional()
@@ -202,7 +206,7 @@ tool(
         .describe(
           "Product version the fix landed in  only when actually known.",
         ),
-      structured: structuredField,
+      related_links: relatedLinksField,
       confirm_new: z
         .boolean()
         .optional()
@@ -233,16 +237,17 @@ tool(
       signals: args.signals,
       rootCause: args.root_cause,
       resolution: args.resolution,
+      investigation: args.investigation,
       resolutionPattern: args.resolution_pattern,
       component: args.component,
       confidence: args.confidence,
       tags: args.tags,
+      relatedLinks: args.related_links,
       cloud: args.cloud,
       resolutionClarity: args.resolution_clarity,
       hiddenFix: args.hidden_fix,
       affectedVersion: args.affected_version,
       fixedVersion: args.fixed_version,
-      structured: args.structured,
     });
     const duplicates =
       DUPLICATE_FLOOR === undefined || args.confirm_new
@@ -303,10 +308,12 @@ tool(
       issue_summary: z.string().nullable().optional(),
       root_cause: z.string().nullable().optional(),
       resolution: z.string().nullable().optional(),
+      investigation: investigationField,
       resolution_pattern: z.string().nullable().optional(),
       symptoms: symptomsField,
       signals: signalsField,
       tags: tagsField,
+      related_links: relatedLinksField,
       component: z.string().nullable().optional(),
       customer_slug: z
         .string()
@@ -335,7 +342,6 @@ tool(
         .nullable()
         .optional()
         .describe("Product version the fix landed in; null clears it."),
-      structured: structuredField,
       expected_version: z.number().int().optional(),
     },
   },
@@ -348,11 +354,15 @@ tool(
       patch.issueSummary = args.issue_summary;
     if (args.root_cause !== undefined) patch.rootCause = args.root_cause;
     if (args.resolution !== undefined) patch.resolution = args.resolution;
+    if (args.investigation !== undefined)
+      patch.investigation = args.investigation;
     if (args.resolution_pattern !== undefined)
       patch.resolutionPattern = args.resolution_pattern;
     if (args.symptoms !== undefined) patch.symptoms = args.symptoms;
     if (args.signals !== undefined) patch.signals = args.signals;
     if (args.tags !== undefined) patch.tags = args.tags;
+    if (args.related_links !== undefined)
+      patch.relatedLinks = args.related_links;
     if (args.component !== undefined) patch.component = args.component;
     if (args.customer_slug !== undefined)
       patch.customerSlug = args.customer_slug;
@@ -367,7 +377,6 @@ tool(
       patch.affectedVersion = args.affected_version;
     if (args.fixed_version !== undefined)
       patch.fixedVersion = args.fixed_version;
-    if (args.structured !== undefined) patch.structured = args.structured;
     if (args.expected_version !== undefined)
       patch.expectedVersion = args.expected_version;
     const row = await updateKnowledgeEntry(args.id, patch, await mcpActor());
@@ -384,7 +393,7 @@ tool(
   "get_knowledge_entry",
   {
     description:
-      "Fetch a single knowledge entry by id, including its current version and full structured field. Use before update_knowledge_entry / add_knowledge_feedback when you have an id but not the latest version.",
+      "Fetch a single knowledge entry by id, including its current version. Use before update_knowledge_entry / add_knowledge_feedback when you have an id but not the latest version.",
     inputSchema: { id: z.string() },
     annotations: { readOnlyHint: true },
   },

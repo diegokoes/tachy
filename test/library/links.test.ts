@@ -174,6 +174,17 @@ describe("library links", () => {
     expect(back.map((b) => b.from_entry_id)).toEqual([entry.id]);
   });
 
+  it("links from a knowledge entry's investigation", async () => {
+    const target = await article("spooler-stalls");
+    const entry = await saveKnowledgeEntry({
+      productId: await tpdProductId(),
+      title: "Printer stalls on line 2",
+      investigation: "1. Ruled out [[spooler-stalls]] first.",
+    });
+    const back = await backlinks({ docId: target.id });
+    expect(back.map((b) => b.from_entry_id)).toEqual([entry.id]);
+  });
+
   it("re-derives an entry's links when its resolution changes", async () => {
     const a = await article("a");
     await article("b");

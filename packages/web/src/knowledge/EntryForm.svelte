@@ -3,13 +3,14 @@
     CLOUD_HINT,
     CLOUD_RE,
     MAX_ENTRY_TITLE_CHARS,
+    RELATED_LINK_HINT,
+    isRelatedLink,
     type PatternRow,
   } from "@tachy/contract";
   import { CONFIDENCES, RESOLUTION_CLARITIES } from "../vocab";
   import type { Snippet } from "svelte";
   import { Checkbox, Field, FormActions } from "../tui";
-  import { onMount, tick, untrack } from "svelte";
-  import { gsap } from "../motion/gsap";
+  import { onMount, untrack } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
   import type { KnowledgeRow } from "./rows";
@@ -18,9 +19,6 @@
   import { csv } from "../tui/fields";
   import { setTopActions } from "../shell/subnav.svelte";
   import { Filing } from "../library/filing.svelte";
-  import Icon from "../tui/Icon.svelte";
-  import { tip } from "../tui/tip.svelte";
-  import { asStructured } from "./structured";
 
   let {
     mode,
@@ -48,9 +46,14 @@
   let issueSummary = $state(seed.issue_summary ?? "");
   let rootCause = $state(seed.root_cause ?? "");
   let resolution = $state(seed.resolution ?? "");
+  let investigation = $state(seed.investigation ?? "");
   let symptoms = $state(csvJoin(seed.symptoms));
   let signals = $state(csvJoin(seed.signals));
   let tags = $state(csvJoin(seed.tags));
+  let relatedLinks = $state(csvJoin(seed.related_links));
+  const relatedLinkErr = $derived(
+    csv(relatedLinks).every(isRelatedLink) ? null : RELATED_LINK_HINT,
+  );
   let confidence = $state(seed.confidence ?? "");
   let cloud = $state(seed.cloud ?? "");
   // Same rule and wording as the API's zod schema, both from the contract, so
@@ -66,15 +69,6 @@
     ...seed,
     product_id: untrack(() => mode) === "edit" ? seed.product_id : null,
   });
-
-  let showStructured = $state(false);
-  let structuredField = $state<HTMLTextAreaElement>();
-  let structuredText = $state(
-    Object.keys(asStructured(seed.structured)).length
-      ? JSON.stringify(asStructured(seed.structured), null, 2)
-      : "",
-  );
-  let structuredError = $state<string | null>(null);
 
   let patterns = $state<PatternRow[]>([]);
   let environments = $state<{ cloud: string; count: number }[]>([]);
@@ -92,17 +86,7 @@
     }
   });
 
-  function buildPayload(): Record<string, unknown> | null {
-    structuredError = null;
-    let structured: Record<string, unknown> | undefined;
-    if (structuredText.trim()) {
-      try {
-        structured = JSON.parse(structuredText);
-      } catch (e) {
-        structuredError = `invalid JSON: ${e instanceof Error ? e.message : String(e)}`;
-        return null;
-      }
-    }
+  function buildPayload(): Record<string, unknown> {
     const blank = mode === "edit" ? null : undefined;
     const text = (v: string) => v.trim() || blank;
     const payload: Record<string, unknown> = {
@@ -110,9 +94,11 @@
       issueSummary: text(issueSummary),
       rootCause: text(rootCause),
       resolution: text(resolution),
+      investigation: text(investigation),
       symptoms: csv(symptoms),
       signals: csv(signals),
       tags: csv(tags),
+      relatedLinks: csv(relatedLinks),
       confidence: confidence || (mode === "edit" ? null : undefined),
       cloud: cloud.trim() || (mode === "edit" ? null : undefined),
       resolutionClarity:
@@ -127,7 +113,6 @@
       fixedVersion: fixedVersion.trim() || (mode === "edit" ? null : undefined),
       ...filing.payload(mode),
     };
-    if (structured !== undefined) payload.structured = structured;
     if (mode === "create") payload.status = status;
     return Object.fromEntries(
       Object.entries(payload).filter(([, v]) => v !== undefined),
@@ -138,35 +123,7 @@
 
   function submit(e: SubmitEvent) {
     e.preventDefault();
-    const payload = buildPayload();
-    if (payload) onSubmit(payload);
-  }
-
-  async function toggleStructured() {
-    showStructured = !showStructured;
-    if (!showStructured) return;
-    await tick();
-    if (!structuredField) return;
-    resizeStructured();
-    const container = structuredField.closest("main") as HTMLElement | null;
-    if (!container) return;
-    const target =
-      container.scrollTop +
-      structuredField.getBoundingClientRect().top -
-      container.getBoundingClientRect().top -
-      24;
-    gsap.to(container, {
-      scrollTop: target,
-      duration: 0.82,
-      ease: "power3.inOut",
-      overwrite: "auto",
-    });
-  }
-
-  function resizeStructured() {
-    if (!structuredField) return;
-    structuredField.style.height = "auto";
-    structuredField.style.height = `${Math.max(structuredField.scrollHeight, 320)}px`;
+    onSubmit(buildPayload());
   }
 </script>
 
@@ -198,6 +155,9 @@
   <Field label="resolution">
     <textarea rows="3" bind:value={resolution}></textarea>
   </Field>
+  <Field label="investigation">
+    <textarea rows="3" bind:value={investigation}></textarea>
+  </Field>
 
   <Field label="symptoms" info="comma-separated">
     <input bind:value={symptoms} />
@@ -207,6 +167,13 @@
   </Field>
   <Field label="tags" info="comma-separated">
     <input bind:value={tags} />
+  </Field>
+  <Field
+    label="related links"
+    info="full web addresses, comma-separated"
+    error={relatedLinkErr ?? undefined}
+  >
+    <input bind:value={relatedLinks} />
   </Field>
 
   <div class="row">
@@ -291,29 +258,6 @@
     </Field>
   </div>
 
-  <button
-    type="button"
-    class="json-toggle"
-    aria-label={showStructured
-      ? "hide structured JSON"
-      : "show structured JSON"}
-    use:tip={showStructured ? "hide structured JSON" : "show structured JSON"}
-    onclick={() => void toggleStructured()}
-  >
-    <Icon name="json" size="1.8rem" />
-  </button>
-  {#if showStructured}
-    <textarea
-      bind:this={structuredField}
-      class="structured"
-      rows="16"
-      bind:value={structuredText}
-      aria-label="structured JSON"
-      spellcheck="false"
-      oninput={resizeStructured}></textarea>
-    {#if structuredError}<p class="error">{structuredError}</p>{/if}
-  {/if}
-
   {#if error ?? loadError ?? filing.error}
     <p class="error">{error ?? loadError ?? filing.error}</p>
   {/if}
@@ -366,36 +310,6 @@
     padding-bottom: 0.4rem;
     font-size: var(--fs-sm);
     color: var(--muted);
-  }
-  .structured {
-    width: 100%;
-    min-height: 20rem;
-    height: 20rem;
-    box-sizing: border-box;
-    overflow: hidden;
-    resize: none;
-    color: #e2e2e2;
-    background: #000;
-    font-family: var(--font-mono);
-    font-size: 0.82rem;
-    line-height: 1.5;
-  }
-  :global(:root[data-theme="light"]) .structured {
-    color: #000;
-    background: #fff;
-  }
-  .json-toggle {
-    align-self: center;
-    display: grid;
-    place-items: center;
-    color: var(--text);
-    background: transparent;
-    border: 0;
-    padding: 0.25rem;
-    cursor: pointer;
-  }
-  .json-toggle:hover :global(svg) {
-    stroke-width: var(--sw-hover, 9);
   }
   .error {
     color: var(--danger);

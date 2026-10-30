@@ -118,6 +118,39 @@ describe("API error paths", () => {
     expect((await got.json()).title).toBe("Spooler stalls on long batches");
   });
 
+  it("keeps a related link only when it is a full web address", async () => {
+    const created = await app.request(
+      "/api/knowledge",
+      json({ title: "Spooler stalls", relatedLinks: ["DevOps#158327"] }),
+    );
+    expect(created.status).toBe(400);
+    expect((await created.json()).detail).toMatch(/related link/);
+
+    const saved = await app.request(
+      "/api/knowledge",
+      json({
+        title: "Spooler stalls",
+        relatedLinks: ["https://dev.azure.com/seed/_workitems/edit/158327"],
+      }),
+    );
+    const { id } = await saved.json();
+    const patch = (relatedLinks: string[]) =>
+      app.request(`/api/knowledge/${id}`, {
+        ...json({ relatedLinks }),
+        method: "PATCH",
+      });
+    expect((await patch(["ftp://files.example.invalid/log.txt"])).status).toBe(
+      400,
+    );
+    expect((await patch(["https://user:secret@example.invalid"])).status).toBe(
+      400,
+    );
+    const got = await app.request(`/api/knowledge/${id}`);
+    expect((await got.json()).related_links).toEqual([
+      "https://dev.azure.com/seed/_workitems/edit/158327",
+    ]);
+  });
+
   it("rejects malformed JSON with 400", async () => {
     const response = await app.request("/api/knowledge", {
       method: "POST",

@@ -41,7 +41,7 @@ import {
   shownText,
 } from "../results";
 import { mcpActor, requireCanEdit, referenceDocScope } from "../permissions";
-import { memberField, structuredField, textWindowFields } from "../fields";
+import { memberField, textWindowFields } from "../fields";
 import {
   codeNextFor,
   componentIntoFilter,
@@ -213,7 +213,6 @@ tool(
         ),
       tags: z.array(z.string()).optional(),
       status: referenceStatusSchema.optional(),
-      structured: structuredField,
       doc_version: z.string().optional(),
       supersedes: z.string().optional(),
       source_project_id: z
@@ -261,7 +260,6 @@ tool(
       externalKey: args.external_key,
       tags: args.tags,
       status: args.status ?? "approved",
-      structured: args.structured,
       docVersion: args.doc_version,
       supersedes: args.supersedes,
       component: args.component,
@@ -400,7 +398,6 @@ tool(
       tags: z.array(z.string()).optional(),
       status: referenceStatusSchema.optional(),
       source: z.string().nullable().optional(),
-      structured: structuredField,
       doc_version: z.string().nullable().optional(),
       customer_slug: z
         .string()
@@ -420,7 +417,6 @@ tool(
     if (args.tags !== undefined) patch.tags = args.tags;
     if (args.status !== undefined) patch.status = args.status;
     if (args.source !== undefined) patch.source = args.source;
-    if (args.structured !== undefined) patch.structured = args.structured;
     if (args.doc_version !== undefined) patch.docVersion = args.doc_version;
     if (args.customer_slug !== undefined)
       patch.customerSlug = args.customer_slug;

@@ -140,6 +140,27 @@ describe("library revisions", () => {
     );
   });
 
+  it("keeps the fields a reverted revision predates", async () => {
+    const saved = await entry({
+      investigation: "1. Checked the spooler log.",
+      relatedLinks: ["https://docs.example.invalid/spooler"],
+    });
+    await updateKnowledgeEntry(saved.id, { resolution: "wrong turn" });
+    await sql`
+      update library_revisions
+      set snapshot = snapshot - 'investigation' - 'related_links'
+      where knowledge_entry_id = ${saved.id} and version = 1
+    `;
+
+    await revertKnowledgeEntry(saved.id, 1);
+    const live = await getKnowledgeEntry(saved.id);
+    expect(live.resolution).toBe("restart the spooler");
+    expect(live.investigation).toBe("1. Checked the spooler log.");
+    expect(live.related_links).toEqual([
+      "https://docs.example.invalid/spooler",
+    ]);
+  });
+
   it("goes away with the entry", async () => {
     const saved = await entry();
     await sql`delete from knowledge_entries where id = ${saved.id}`;

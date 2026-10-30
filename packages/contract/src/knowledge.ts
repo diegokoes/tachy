@@ -1,6 +1,24 @@
 /** The CHECK on knowledge_entries.title in db/schema.sql holds the same number. */
 export const MAX_ENTRY_TITLE_CHARS = 80;
 
+/**
+ * Whether `value` can be kept as one of an entry's related links: a full http
+ * or https address, with no credentials in it, since every reader sees it.
+ */
+export function isRelatedLink(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  return !url.username && !url.password;
+}
+
+export const RELATED_LINK_HINT =
+  "a related link must be a full http or https address, without credentials";
+
 export interface KnowledgeCensus {
   entries: number;
   entries_no_component: number;
