@@ -1,5 +1,6 @@
 import {
   MAX_ENTRY_TITLE_CHARS,
+  SEARCHED_ENTRY_STATUSES,
   type ComponentKnowledge,
   type KnowledgeCensus,
   type KnowledgeStale,
@@ -49,6 +50,8 @@ import {
   type FiledRow,
 } from "../library/filing";
 import { syncLinks } from "../library/links";
+
+const searchedStatuses = [...SEARCHED_ENTRY_STATUSES];
 
 /** The prose fields of an entry, where a [[wikilink]] can be written. */
 const linkText = (entry: {
@@ -465,7 +468,7 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
       ? sql`and (team_id = ${id} or team_id is null)`
       : sql`and team_id = ${id}`;
   const filters = sql`
-    status in ('approved', 'deprecated')
+    status = any(${searchedStatuses})
     ${opts.productId ? inProduct(opts.productId) : sql``}
     ${opts.teamId ? inTeam(opts.teamId) : sql``}
     ${facetSql(opts)}
@@ -944,7 +947,7 @@ export async function knowledgeByComponent(): Promise<ComponentKnowledge[]> {
   return sql<ComponentKnowledge[]>`
     select component_id,
            count(*)::int as entries,
-           count(*) filter (where status in ('approved', 'deprecated'))::int
+           count(*) filter (where status = any(${searchedStatuses}))::int
              as searchable
     from knowledge_entries
     where component_id is not null
@@ -997,7 +1000,7 @@ export async function knowledgeStale(): Promise<KnowledgeStale> {
     from knowledge_entries e
     join knowledge_feedback f
       on f.knowledge_entry_id = e.id and f.kind = 'rating' and f.rating is not null
-    where e.status in ('approved', 'deprecated')
+    where e.status = any(${searchedStatuses})
     group by e.id
     order by avg(f.rating), 5 desc
     limit 8
