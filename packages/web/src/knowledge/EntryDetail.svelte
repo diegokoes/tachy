@@ -15,7 +15,6 @@
   import Reads from "../library/Reads.svelte";
   import Versions from "../library/Versions.svelte";
   import Backlinks from "../library/Backlinks.svelte";
-  import ScopeCrumb from "../library/ScopeCrumb.svelte";
   import StatusMenu from "../library/StatusMenu.svelte";
   import { renderMarkdown, markBrokenLinks } from "../markdown/markdown";
   import { LinkTargets } from "../wiki/wikilinks.svelte";
@@ -60,6 +59,8 @@
     extra?: Snippet;
   } = $props();
 
+  type ListField = "symptoms" | "signals" | "tags" | "relatedLinks";
+
   /** A new entry starts as one of these; the rest need an entry to judge. */
   const NEW_ENTRY_STATUSES = ["approved", "draft"] as const;
   const DISCARD_ARM_MS = 3000;
@@ -88,6 +89,8 @@
   let disarmTimer: ReturnType<typeof setTimeout> | undefined;
   /** A navigation held until the person chooses to drop their changes. */
   let pendingLeave = $state<(() => void) | null>(null);
+  /** The list a new value is being typed into. */
+  let addingTo = $state<ListField | null>(null);
 
   const canEdit = $derived(
     creating ||
@@ -298,6 +301,10 @@
     void followCustomer();
   }
 
+  function stopAdding(field: ListField) {
+    if (addingTo === field) addingTo = null;
+  }
+
   function leaveAnyway() {
     const leave = pendingLeave;
     pendingLeave = null;
@@ -382,6 +389,19 @@
   {/if}
 {/snippet}
 
+{#snippet addButton(field: ListField, label: string)}
+  {#if canEdit}
+    <Button
+      variant="ghost"
+      size="sm"
+      square
+      icon="plus"
+      title="add to {label}"
+      onclick={() => (addingTo = field)}
+    />
+  {/if}
+{/snippet}
+
 {#snippet linkItem(link: string)}
   <a href={link} target="_blank" rel="noopener noreferrer">{linkLabel(link)}</a>
 {/snippet}
@@ -392,7 +412,6 @@
     {#if creating && extra}<div class="kind">{@render extra()}</div>{/if}
     <div class="page">
       <header class="head">
-        {#if entry}<ScopeCrumb area={entry.product_area} />{/if}
         {#if canEdit}
           <input
             class="title"
@@ -464,21 +483,119 @@
         {/if}
       </header>
 
-      {#if canEdit || holdsProperties(draft) || entry?.work_item_external_id}
-        <aside class="facts">
-          <EntryProperties
-            bind:draft
-            {unsaved}
-            {canEdit}
-            {creating}
-            {filing}
-            {patterns}
-            {environments}
-            {entry}
-            {problems}
-          />
-        </aside>
-      {/if}
+      <div class="side">
+        {#if canEdit || holdsProperties(draft) || entry?.work_item_external_id}
+          <div class="facts">
+            <EntryProperties
+              bind:draft
+              {unsaved}
+              {canEdit}
+              {creating}
+              {filing}
+              {patterns}
+              {environments}
+              {entry}
+              {problems}
+            />
+          </div>
+        {/if}
+        {#if canEdit || listed}
+          <div class="lists">
+            {#if canEdit || draft.symptoms.length}
+              <EntrySection
+                label="symptoms"
+                compact
+                unsaved={unsaved.has("symptoms")}
+                active={addingTo === "symptoms"}
+              >
+                {#snippet action()}{@render addButton(
+                    "symptoms",
+                    "symptoms",
+                  )}{/snippet}
+                <ValueList
+                  variant="lines"
+                  label="symptom"
+                  values={draft.symptoms}
+                  adding={addingTo === "symptoms"}
+                  ondone={() => stopAdding("symptoms")}
+                  onchange={canEdit
+                    ? (values) => (draft.symptoms = values)
+                    : undefined}
+                />
+              </EntrySection>
+            {/if}
+            {#if canEdit || draft.signals.length}
+              <EntrySection
+                label="signals"
+                compact
+                unsaved={unsaved.has("signals")}
+                active={addingTo === "signals"}
+              >
+                {#snippet action()}{@render addButton(
+                    "signals",
+                    "signals",
+                  )}{/snippet}
+                <ValueList
+                  variant="lines"
+                  mono
+                  label="signal"
+                  values={draft.signals}
+                  adding={addingTo === "signals"}
+                  ondone={() => stopAdding("signals")}
+                  onchange={canEdit
+                    ? (values) => (draft.signals = values)
+                    : undefined}
+                />
+              </EntrySection>
+            {/if}
+            {#if canEdit || draft.tags.length}
+              <EntrySection
+                label="tags"
+                compact
+                unsaved={unsaved.has("tags")}
+                active={addingTo === "tags"}
+              >
+                {#snippet action()}{@render addButton("tags", "tags")}{/snippet}
+                <ValueList
+                  label="tag"
+                  values={draft.tags}
+                  adding={addingTo === "tags"}
+                  ondone={() => stopAdding("tags")}
+                  onchange={canEdit
+                    ? (values) => (draft.tags = values)
+                    : undefined}
+                />
+              </EntrySection>
+            {/if}
+            {#if canEdit || draft.relatedLinks.length}
+              <EntrySection
+                label="related links"
+                compact
+                unsaved={unsaved.has("relatedLinks")}
+                active={addingTo === "relatedLinks"}
+              >
+                {#snippet action()}{@render addButton(
+                    "relatedLinks",
+                    "related links",
+                  )}{/snippet}
+                <ValueList
+                  variant="lines"
+                  label="related link"
+                  values={draft.relatedLinks}
+                  item={linkItem}
+                  accepts={isRelatedLink}
+                  refusal={RELATED_LINK_HINT}
+                  adding={addingTo === "relatedLinks"}
+                  ondone={() => stopAdding("relatedLinks")}
+                  onchange={canEdit
+                    ? (values) => (draft.relatedLinks = values)
+                    : undefined}
+                />
+              </EntrySection>
+            {/if}
+          </div>
+        {/if}
+      </div>
 
       <div class="content">
         <ProseSection
@@ -540,74 +657,6 @@
           </EntrySection>
         {/if}
       </div>
-
-      {#if canEdit || listed}
-        <aside class="lists">
-          {#if canEdit || draft.symptoms.length}
-            <EntrySection
-              label="symptoms"
-              compact
-              unsaved={unsaved.has("symptoms")}
-            >
-              <ValueList
-                variant="lines"
-                label="symptoms"
-                values={draft.symptoms}
-                onchange={canEdit
-                  ? (values) => (draft.symptoms = values)
-                  : undefined}
-              />
-            </EntrySection>
-          {/if}
-          {#if canEdit || draft.signals.length}
-            <EntrySection
-              label="signals"
-              compact
-              unsaved={unsaved.has("signals")}
-            >
-              <ValueList
-                variant="lines"
-                mono
-                label="signals"
-                values={draft.signals}
-                onchange={canEdit
-                  ? (values) => (draft.signals = values)
-                  : undefined}
-              />
-            </EntrySection>
-          {/if}
-          {#if canEdit || draft.tags.length}
-            <EntrySection label="tags" compact unsaved={unsaved.has("tags")}>
-              <ValueList
-                label="tags"
-                values={draft.tags}
-                onchange={canEdit
-                  ? (values) => (draft.tags = values)
-                  : undefined}
-              />
-            </EntrySection>
-          {/if}
-          {#if canEdit || draft.relatedLinks.length}
-            <EntrySection
-              label="related links"
-              compact
-              unsaved={unsaved.has("relatedLinks")}
-            >
-              <ValueList
-                variant="lines"
-                label="related links"
-                values={draft.relatedLinks}
-                item={linkItem}
-                accepts={isRelatedLink}
-                refusal={RELATED_LINK_HINT}
-                onchange={canEdit
-                  ? (values) => (draft.relatedLinks = values)
-                  : undefined}
-              />
-            </EntrySection>
-          {/if}
-        </aside>
-      {/if}
     </div>
   {:else if !loadError}
     <p class="muted">loading…</p>
@@ -640,9 +689,9 @@
     margin-bottom: var(--pad-3);
   }
 
-  /* The reading column, and the facts and lists beside it once there is
-     room; until then the facts sit above the summary and the lists below the
-     text. ch tracks the reading face, so the measure holds in any font. */
+  /* Facts and lists beside the text from the title down; on a narrow window
+     the facts go above the summary and the lists below the text. ch tracks
+     the reading face, so the measure holds in any font. */
   .page {
     display: grid;
     grid-template-columns: minmax(0, 76ch);
@@ -652,9 +701,11 @@
     font-family: var(--font-prose);
   }
   @media (min-width: 72rem) {
+    /* The text's row is flexible, so a long side column grows it rather than
+       the title's row, which would push the text down. */
     .page {
       grid-template-columns: minmax(0, 76ch) 22rem;
-      grid-template-rows: auto auto 1fr;
+      grid-template-rows: auto 1fr;
     }
     .head {
       grid-column: 1;
@@ -662,23 +713,24 @@
     }
     .content {
       grid-column: 1;
-      grid-row: 2 / span 2;
-    }
-    /* Level with the summary's heading. */
-    .facts {
-      grid-column: 2;
       grid-row: 2;
-      padding-top: var(--pad-4);
     }
-    .lists {
+    .side {
       grid-column: 2;
-      grid-row: 3;
+      grid-row: 1 / span 2;
       align-self: start;
+      padding-top: var(--pad-2);
     }
   }
   @media (max-width: 72rem) {
+    .side {
+      display: contents;
+    }
     .facts {
       margin-top: var(--pad-3);
+    }
+    .lists {
+      order: 1;
     }
   }
 
