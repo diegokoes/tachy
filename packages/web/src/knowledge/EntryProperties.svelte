@@ -95,22 +95,24 @@
 
 <dl class="props">
   {#if creating}
-    <dt>{t("product")}</dt>
-    <dd>
-      <Select
-        face={text}
-        value={filing.productSlug}
-        options={productOptions}
-        aria-label={t("product")}
-        onchange={pickProduct}
-      />
-    </dd>
+    <div class="row">
+      <dt>{t("product")}</dt>
+      <dd class="wide">
+        <Select
+          face={text}
+          value={filing.productSlug}
+          options={productOptions}
+          aria-label={t("product")}
+          onchange={pickProduct}
+        />
+      </dd>
+    </div>
   {/if}
 
   {#if canEdit}
     <div class="row" class:unsaved={unsaved.has("component")}>
       <dt>component</dt>
-      <dd>
+      <dd class="wide">
         <Select
           face={componentText}
           value={draft.component}
@@ -126,7 +128,7 @@
   {#if showCustomer() && (canEdit || draft.customerSlug)}
     <div class="row" class:unsaved={unsaved.has("customerSlug")}>
       <dt>{t("customer")}</dt>
-      <dd>
+      <dd class="wide">
         {#if canEdit}
           <Select
             face={text}
@@ -146,7 +148,7 @@
   {#if showCustomer() && (canEdit || draft.unit)}
     <div class="row" class:unsaved={unsaved.has("unit")}>
       <dt>unit</dt>
-      <dd>
+      <dd class="wide">
         {#if canEdit}
           <Select
             face={text}
@@ -166,7 +168,7 @@
   {#if canEdit || draft.cloud}
     <div class="row" class:unsaved={unsaved.has("cloud")}>
       <dt>{t("cloud")}</dt>
-      <dd>
+      <dd class="wide">
         {#if canEdit}
           <Select
             face={text}
@@ -187,7 +189,7 @@
   {#if canEdit || draft.resolutionPattern}
     <div class="row" class:unsaved={unsaved.has("resolutionPattern")}>
       <dt>pattern</dt>
-      <dd>
+      <dd class="wide">
         {#if canEdit}
           <Select
             face={text}
@@ -206,7 +208,7 @@
   {#if canEdit || draft.hiddenFix}
     <div class="row" class:unsaved={unsaved.has("hiddenFix")}>
       <dt>hidden fix</dt>
-      <dd>
+      <dd class="wide">
         {#if canEdit}
           <Select
             face={text}
@@ -297,38 +299,54 @@
   {/if}
 
   {#if entry?.work_item_external_id}
-    <dt>source</dt>
-    <dd class="mono">
-      {#if entry.work_item_url}
-        <a href={entry.work_item_url} target="_blank" rel="noopener noreferrer"
-          >#{entry.work_item_external_id}</a
-        >
-      {:else}
-        #{entry.work_item_external_id}
-      {/if}
-    </dd>
+    <div class="row">
+      <dt>source</dt>
+      <dd class="wide mono">
+        {#if entry.work_item_url}
+          <a
+            href={entry.work_item_url}
+            target="_blank"
+            rel="noopener noreferrer">#{entry.work_item_external_id}</a
+          >
+        {:else}
+          #{entry.work_item_external_id}
+        {/if}
+      </dd>
+    </div>
   {/if}
 </dl>
 
 <style>
+  /* Four tracks: a fact alone spans the last three, and confidence and
+     affected each share their row with the fact that pairs with them. */
   .props {
     display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-columns:
+      max-content minmax(0, 1fr)
+      max-content minmax(0, 1fr);
     align-items: baseline;
     gap: var(--pad-2) var(--pad-3);
     margin: 0;
     font-size: var(--fs-sm);
+  }
+  .row {
+    display: contents;
   }
   dt {
     font-size: var(--fs-xs);
     letter-spacing: var(--label-spacing);
     color: var(--muted);
   }
+  /* The right padding parts a value from the label beside it in a shared row. */
   dd {
     min-width: 0;
     margin: 0;
+    padding-right: var(--pad-3);
     line-height: 1.6;
     overflow-wrap: anywhere;
+  }
+  .wide {
+    grid-column: 2 / -1;
   }
   .mono {
     font-family: var(--font-mono);
@@ -341,9 +359,6 @@
   }
   .fixed {
     color: var(--ok);
-  }
-  .row {
-    display: contents;
   }
   .row.unsaved dt,
   .row.unsaved dd {
@@ -363,6 +378,7 @@
     background: none;
     border: none;
     border-bottom: 1px dotted transparent;
+    border-radius: 0;
   }
   .inline:hover,
   .inline:focus {
@@ -380,10 +396,10 @@
     font-size: var(--fs-xs);
     color: var(--danger);
   }
-  /* Folded above the summary, where the column's whole width is free. */
-  @media (max-width: 68rem) {
-    .props {
-      grid-template-columns: repeat(2, max-content minmax(0, 1fr));
+  /* Folded above the summary the column is wide: two facts a line. */
+  @media (max-width: 72rem) {
+    .wide {
+      grid-column: auto;
     }
   }
   @media (max-width: 40rem) {

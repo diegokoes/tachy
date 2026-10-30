@@ -2,6 +2,8 @@
   import { untrack, type Snippet } from "svelte";
   import {
     MAX_ENTRY_TITLE_CHARS,
+    RELATED_LINK_HINT,
+    isRelatedLink,
     type PatternRow,
     type ProductRow,
   } from "@tachy/contract";
@@ -21,7 +23,7 @@
   import { pushScope, type Binding } from "../keys/keys.svelte";
   import { setTopActions } from "../shell/subnav.svelte";
   import { setLeaveGuard } from "../shell/router.svelte";
-  import { Button, ChipList, Modal, Note } from "../tui";
+  import { Button, Modal, Note, ValueList } from "../tui";
   import {
     blankDraft,
     createPayload,
@@ -39,8 +41,8 @@
   import EntrySection from "./EntrySection.svelte";
   import ProseSection from "./ProseSection.svelte";
   import EntryProperties from "./EntryProperties.svelte";
-  import RelatedLinks from "./RelatedLinks.svelte";
   import DeprecatePanel from "./DeprecatePanel.svelte";
+  import { linkLabel } from "./related";
 
   let {
     id,
@@ -99,6 +101,11 @@
   const dirty = $derived(unsaved.size > 0);
   const problems = $derived(draftProblems(draft, { requireSummary: creating }));
   const blocked = $derived(Object.keys(problems).length > 0);
+  const listed = $derived(
+    [draft.symptoms, draft.signals, draft.tags, draft.relatedLinks].some(
+      (values) => values.length > 0,
+    ),
+  );
   const deprecating = $derived(
     canEdit &&
       draft.status === "deprecated" &&
@@ -375,16 +382,8 @@
   {/if}
 {/snippet}
 
-{#snippet list(label: string, field: "symptoms" | "signals" | "tags")}
-  {#if canEdit || draft[field].length}
-    <EntrySection {label} unsaved={unsaved.has(field)}>
-      <ChipList
-        values={draft[field]}
-        {label}
-        onchange={canEdit ? (values) => (draft[field] = values) : undefined}
-      />
-    </EntrySection>
-  {/if}
+{#snippet linkItem(link: string)}
+  <a href={link} target="_blank" rel="noopener noreferrer">{linkLabel(link)}</a>
 {/snippet}
 
 <div class="detail">
@@ -466,7 +465,7 @@
       </header>
 
       {#if canEdit || holdsProperties(draft) || entry?.work_item_external_id}
-        <aside class="side">
+        <aside class="facts">
           <EntryProperties
             bind:draft
             {unsaved}
@@ -522,24 +521,6 @@
             : undefined}
         />
 
-        {@render list("symptoms", "symptoms")}
-        {@render list("signals", "signals")}
-        {@render list("tags", "tags")}
-
-        {#if canEdit || draft.relatedLinks.length}
-          <EntrySection
-            label="related links"
-            unsaved={unsaved.has("relatedLinks")}
-          >
-            <RelatedLinks
-              links={draft.relatedLinks}
-              onchange={canEdit
-                ? (related) => (draft.relatedLinks = related)
-                : undefined}
-            />
-          </EntrySection>
-        {/if}
-
         {#if entry}<Backlinks base="knowledge" id={entry.id} />{/if}
 
         {#if feedback.length}
@@ -559,6 +540,74 @@
           </EntrySection>
         {/if}
       </div>
+
+      {#if canEdit || listed}
+        <aside class="lists">
+          {#if canEdit || draft.symptoms.length}
+            <EntrySection
+              label="symptoms"
+              compact
+              unsaved={unsaved.has("symptoms")}
+            >
+              <ValueList
+                variant="lines"
+                label="symptoms"
+                values={draft.symptoms}
+                onchange={canEdit
+                  ? (values) => (draft.symptoms = values)
+                  : undefined}
+              />
+            </EntrySection>
+          {/if}
+          {#if canEdit || draft.signals.length}
+            <EntrySection
+              label="signals"
+              compact
+              unsaved={unsaved.has("signals")}
+            >
+              <ValueList
+                variant="lines"
+                mono
+                label="signals"
+                values={draft.signals}
+                onchange={canEdit
+                  ? (values) => (draft.signals = values)
+                  : undefined}
+              />
+            </EntrySection>
+          {/if}
+          {#if canEdit || draft.tags.length}
+            <EntrySection label="tags" compact unsaved={unsaved.has("tags")}>
+              <ValueList
+                label="tags"
+                values={draft.tags}
+                onchange={canEdit
+                  ? (values) => (draft.tags = values)
+                  : undefined}
+              />
+            </EntrySection>
+          {/if}
+          {#if canEdit || draft.relatedLinks.length}
+            <EntrySection
+              label="related links"
+              compact
+              unsaved={unsaved.has("relatedLinks")}
+            >
+              <ValueList
+                variant="lines"
+                label="related links"
+                values={draft.relatedLinks}
+                item={linkItem}
+                accepts={isRelatedLink}
+                refusal={RELATED_LINK_HINT}
+                onchange={canEdit
+                  ? (values) => (draft.relatedLinks = values)
+                  : undefined}
+              />
+            </EntrySection>
+          {/if}
+        </aside>
+      {/if}
     </div>
   {:else if !loadError}
     <p class="muted">loading…</p>
@@ -591,38 +640,44 @@
     margin-bottom: var(--pad-3);
   }
 
-  /* One reading column, with the properties beside it once there is room and
-     above the summary until then. ch tracks the reading face, so the measure
-     holds in any font. */
+  /* The reading column, and the facts and lists beside it once there is
+     room; until then the facts sit above the summary and the lists below the
+     text. ch tracks the reading face, so the measure holds in any font. */
   .page {
     display: grid;
     grid-template-columns: minmax(0, 76ch);
     justify-content: center;
-    column-gap: var(--pad-5);
+    column-gap: calc(var(--pad-4) * 4);
     padding: 0 var(--pad-4);
     font-family: var(--font-prose);
   }
-  @media (min-width: 68rem) {
+  @media (min-width: 72rem) {
     .page {
-      grid-template-columns: minmax(0, 76ch) 17rem;
+      grid-template-columns: minmax(0, 76ch) 22rem;
+      grid-template-rows: auto auto 1fr;
     }
     .head {
       grid-column: 1;
-    }
-    .side {
-      grid-column: 2;
-      grid-row: 2;
-      align-self: start;
-      position: sticky;
-      top: var(--pad-3);
+      grid-row: 1;
     }
     .content {
       grid-column: 1;
+      grid-row: 2 / span 2;
+    }
+    /* Level with the summary's heading. */
+    .facts {
+      grid-column: 2;
       grid-row: 2;
+      padding-top: var(--pad-4);
+    }
+    .lists {
+      grid-column: 2;
+      grid-row: 3;
+      align-self: start;
     }
   }
-  @media (max-width: 68rem) {
-    .side {
+  @media (max-width: 72rem) {
+    .facts {
       margin-top: var(--pad-3);
     }
   }
