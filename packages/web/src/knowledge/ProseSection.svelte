@@ -43,6 +43,17 @@
     field?.focus();
   }
 
+  /**
+   * A click on the text edits it, except on a link, which is followed, and at
+   * the end of a drag that selected some of it to copy.
+   */
+  function onTextClick(e: MouseEvent) {
+    links.onClick(e);
+    if (!onchange || (e.target as Element).closest("a")) return;
+    if (window.getSelection()?.toString()) return;
+    void startEditing();
+  }
+
   $effect(() => {
     if (editing) fitHeight();
   });
@@ -76,16 +87,16 @@
         }}
         onblur={() => (editing = false)}></textarea>
     {:else}
-      <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
-           focusable wikilink anchors this div delegates to -->
+      <!-- svelte-ignore a11y_click_events_have_key_events -- links are focusable
+           anchors, and the edit button is the keyboard's way in -->
       <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
-           wrapper; double-click is a shortcut for the edit button -->
+           wrapper; a click is a shortcut for the edit button -->
       <div
         class="md prose"
         class:blank={!text.trim()}
-        onclick={links.onClick}
+        class:editable={Boolean(onchange)}
+        onclick={onTextClick}
         onkeydown={links.onKeydown}
-        ondblclick={onchange ? startEditing : undefined}
       >
         {@html render(text)}
       </div>
@@ -95,16 +106,32 @@
 {/if}
 
 <style>
+  /* Text and editor sit on one left edge: the editor's frame and the hover
+     frame both reach out by the editor's padding and border. */
+  textarea,
+  .editable {
+    --reach: calc(var(--pad-3) + 1px);
+  }
   textarea {
     display: block;
     box-sizing: border-box;
-    width: 100%;
+    width: calc(100% + 2 * var(--reach));
+    margin: 0 calc(-1 * var(--reach));
     min-height: 3lh;
     overflow: hidden;
     resize: none;
     font: inherit;
     line-height: 1.6;
     color: var(--text);
+  }
+  .editable {
+    margin: 0 calc(-1 * var(--reach));
+    padding: 0 var(--reach);
+    border-radius: var(--radius-control);
+    cursor: text;
+  }
+  .editable:hover {
+    box-shadow: inset 0 0 0 1px var(--border);
   }
   .blank {
     min-height: 1.5em;
