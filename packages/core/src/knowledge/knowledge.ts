@@ -548,14 +548,17 @@ export async function getKnowledgeEntry(id: string) {
   const [row] = await sql`
     select e.id, e.work_item_id, e.product_id, e.team_id, e.status, e.superseded_by, e.title, e.issue_summary,
            e.symptoms, e.signals, e.tags, e.root_cause, e.resolution, e.investigation, e.resolution_pattern,
-           e.component_id, e.product_area, e.confidence, e.cloud, e.resolution_clarity,
+           e.component_id, co.slug as component_slug, e.product_area, e.confidence, e.cloud, e.resolution_clarity,
            e.hidden_fix, e.affected_version, e.fixed_version,
            e.customer_id, cu.slug as customer_slug,
            e.customer_unit_id, un.slug as customer_unit_slug,
+           wi.external_id as work_item_external_id, wi.external_url as work_item_url,
            e.related_links, e.version, e.created_at, e.updated_at
     from knowledge_entries e
+    left join components co on co.id = e.component_id
     left join customers cu on cu.id = e.customer_id
     left join customer_units un on un.id = e.customer_unit_id
+    left join work_items wi on wi.id = e.work_item_id
     where e.id = ${id}
   `;
   if (!row) throw notFound(`knowledge entry '${id}' not found`);
