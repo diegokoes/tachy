@@ -45,13 +45,38 @@ export function segment(i: number): string | undefined {
   return segments()[i];
 }
 
+/** Unsaved work that leaving the view would throw away. */
+export type LeaveGuard = {
+  blocks: () => boolean;
+  /** Asks the person, and calls `leave` if they choose to go anyway. */
+  ask: (leave: () => void) => void;
+};
+
+let leaveGuard: LeaveGuard | null = null;
+
+/** Call from a view's `$effect` and return the result, as with `setSubnav`. */
+export function setLeaveGuard(guard: LeaveGuard) {
+  leaveGuard = guard;
+  return () => {
+    if (leaveGuard === guard) leaveGuard = null;
+  };
+}
+
+function go(path: string, { replace = false } = {}) {
+  history[replace ? "replaceState" : "pushState"]({}, "", path);
+  router.path = path;
+  visit(path);
+}
+
 export function navigate(to: string, { replace = false } = {}) {
   const path = normalizePath(to);
   if (SERVER_SEGMENTS.has(path.slice(1).split("/")[0] ?? "")) return;
   if (path === router.path) return;
-  history[replace ? "replaceState" : "pushState"]({}, "", path);
-  router.path = path;
-  visit(path);
+  if (leaveGuard?.blocks()) {
+    leaveGuard.ask(() => go(path, { replace }));
+    return;
+  }
+  go(path, { replace });
 }
 
 const landings = new Map<string, () => string>();
@@ -85,11 +110,26 @@ export function isActive(prefix: string): boolean {
 
 export function startRouter() {
   const onPop = () => {
-    router.path = normalizePath(window.location.pathname);
-    visit(router.path);
+    const path = normalizePath(window.location.pathname);
+    if (leaveGuard?.blocks()) {
+      // The address bar has already moved; it stays on the view until the
+      // person chooses.
+      history.pushState({}, "", router.path);
+      leaveGuard.ask(() => go(path));
+      return;
+    }
+    router.path = path;
+    visit(path);
+  };
+  const onUnload = (e: BeforeUnloadEvent) => {
+    if (leaveGuard?.blocks()) e.preventDefault();
   };
   window.addEventListener("popstate", onPop);
-  return () => window.removeEventListener("popstate", onPop);
+  window.addEventListener("beforeunload", onUnload);
+  return () => {
+    window.removeEventListener("popstate", onPop);
+    window.removeEventListener("beforeunload", onUnload);
+  };
 }
 
 export function link(node: HTMLAnchorElement) {
