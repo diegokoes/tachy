@@ -15,6 +15,7 @@ export { default as Rail, type RailItem } from "./Rail.svelte";
 export { default as FilterBar } from "./FilterBar.svelte";
 export { default as Badge } from "./Badge.svelte";
 export { default as Chip } from "./Chip.svelte";
+export { default as ChipList } from "./ChipList.svelte";
 export { default as Meter } from "./Meter.svelte";
 export { default as Dial } from "./Dial.svelte";
 export { default as Plot, getPlot, type Frame } from "./Plot.svelte";

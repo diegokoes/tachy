@@ -103,6 +103,27 @@ export function canCurateScope(scope: {
   return !scope.team_id && !scope.team_slug && teams.length > 0;
 }
 
+/**
+ * Whether the server lets this person edit a library item: an app admin, or a
+ * team admin of the item's team or of its product's team. An item filed under
+ * neither is the app admins' alone.
+ */
+export function canEditLibraryItem(scope: {
+  team_id?: string | null;
+  product_team_slug?: string | null;
+}): boolean {
+  const me = session.me;
+  if (!me) return false;
+  if (me.role === "admin") return true;
+  const teams = me.team_admin ?? [];
+  if (scope.team_id && teams.some((t) => t.team_id === scope.team_id))
+    return true;
+  return (
+    !!scope.product_team_slug &&
+    teams.some((t) => t.team_slug === scope.product_team_slug)
+  );
+}
+
 export function onUnauthorized(): void {
   if (session.config?.sso && !session.config.passwordLogin) {
     window.location.href = `/auth/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;

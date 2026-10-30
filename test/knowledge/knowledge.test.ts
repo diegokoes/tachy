@@ -9,7 +9,11 @@ import {
   listEnvironments,
   listKnowledgeFacets,
 } from "@tachy/core/knowledge";
-import { addCustomer, getCustomerIdBySlug } from "@tachy/core/catalog";
+import {
+  addComponent,
+  addCustomer,
+  getCustomerIdBySlug,
+} from "@tachy/core/catalog";
 import { MAX_ENTRY_TITLE_CHARS } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "../database";
 
@@ -469,6 +473,29 @@ describe("investigation and related links", () => {
     const [misspelt] = await searchKnowledge("quarnx");
     expect(misspelt.id).toBe(row.id);
     expect(Number(misspelt.trgm_sim)).toBeGreaterThan(0);
+  });
+
+  it("names its component and the work item it was learned from", async () => {
+    const productId = await tpdProductId();
+    await addComponent({ productId, slug: "spooler", name: "Spooler" });
+    const [conn] =
+      await sql`select id from source_connections where slug = 'test-freshdesk'`;
+    const [workItem] = await sql`
+      insert into work_items (source_connection_id, external_id, external_url)
+      values (${conn.id}, '4711', 'https://acme.freshdesk.com/a/tickets/4711')
+      returning id
+    `;
+    const row = await saveKnowledgeEntry({
+      productId,
+      workItemId: workItem.id as string,
+      component: "spooler",
+      title: "Spooler stalls on long batches",
+    });
+    expect(await getKnowledgeEntry(row.id)).toMatchObject({
+      component_slug: "spooler",
+      work_item_external_id: "4711",
+      work_item_url: "https://acme.freshdesk.com/a/tickets/4711",
+    });
   });
 
   it("re-embeds an entry when only its investigation changes", async () => {

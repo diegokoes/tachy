@@ -49,7 +49,6 @@
   import { movedWikiPath, ORG_WIDE, wikiPath } from "../wiki/paths";
   import { landingScope, loadWikis, wikis } from "../wiki/wikis.svelte";
   import { LIBRARY_TABS, libraryTabPath } from "./tabs";
-  import EntryForm from "../knowledge/EntryForm.svelte";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
 
   // Entries, docs and articles are one corpus that search spans; narrowing to
@@ -430,7 +429,6 @@
         createSaving = false;
       }
     };
-  const createEntry = create("/knowledge", "entries");
   const createDoc = create("/reference", "docs");
 
   /** Opens narrowed to what another page asked for; see `presetScope`. */
@@ -559,12 +557,9 @@
       extra={kindToggle}
     />
   {:else}
-    <EntryForm
-      mode="create"
-      saving={createSaving}
-      error={createError}
-      onSubmit={createEntry}
-      onCancel={() => navigate("/library")}
+    <EntryDetail
+      onClose={backToList}
+      onCreated={(id) => navigate(`/library/entries/${id}`)}
       extra={kindToggle}
     />
   {/if}

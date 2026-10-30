@@ -1,4 +1,4 @@
-import type { IconName, LampState } from "../tui";
+import type { IconName, LampState, MenuItem } from "../tui";
 
 /**
  * A library item's status as a lamp. One map over the union of both
@@ -17,6 +17,24 @@ const UNKNOWN_STATUS: LampState = { level: "off", tone: "muted" };
 
 export const statusLamp = (status: string): LampState =>
   STATUS_LAMPS[status] ?? UNKNOWN_STATUS;
+
+/**
+ * A status menu's rows, the current one marked, each saying whether search
+ * returns an item in that status.
+ */
+export function statusItems(
+  statuses: readonly string[],
+  current: string,
+  searched: readonly string[],
+): MenuItem[] {
+  return statuses.map((status) => ({
+    key: status,
+    label: status,
+    lamp: statusLamp(status),
+    hint: searched.includes(status) ? "searched" : "not searched",
+    current: status === current,
+  }));
+}
 
 /** One lifecycle action on a library item, as the left rail draws it. */
 export type StatusAction = {

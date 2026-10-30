@@ -1,4 +1,8 @@
-import { MAIN_PAGE_SLUG, SLUG_RE } from "@tachy/contract";
+import {
+  MAIN_PAGE_SLUG,
+  SEARCHED_ENTRY_STATUSES,
+  SLUG_RE,
+} from "@tachy/contract";
 import { sql } from "../infra/db";
 import { wouldCycle } from "../infra/hierarchy";
 import { badInput, conflict, notFound } from "../infra/errors";
@@ -535,7 +539,7 @@ export async function draftSources(
            e.product_area as component, e.updated_at
     from knowledge_entries e
     where e.component_id in (select id from subtree)
-      and e.status in ('approved', 'deprecated')
+      and e.status = any(${[...SEARCHED_ENTRY_STATUSES]})
     union all
     select d.id, 'doc', d.title, left(d.body, 4000), d.product_area, d.updated_at
     from reference_docs d

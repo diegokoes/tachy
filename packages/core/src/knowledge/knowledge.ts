@@ -1,5 +1,6 @@
 import {
   MAX_ENTRY_TITLE_CHARS,
+  SEARCHED_ENTRY_STATUSES,
   type ComponentKnowledge,
   type KnowledgeCensus,
   type KnowledgeStale,
@@ -49,6 +50,8 @@ import {
   type FiledRow,
 } from "../library/filing";
 import { syncLinks } from "../library/links";
+
+const searchedStatuses = [...SEARCHED_ENTRY_STATUSES];
 
 /** The prose fields of an entry, where a [[wikilink]] can be written. */
 const linkText = (entry: {
@@ -465,7 +468,7 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
       ? sql`and (team_id = ${id} or team_id is null)`
       : sql`and team_id = ${id}`;
   const filters = sql`
-    status in ('approved', 'deprecated')
+    status = any(${searchedStatuses})
     ${opts.productId ? inProduct(opts.productId) : sql``}
     ${opts.teamId ? inTeam(opts.teamId) : sql``}
     ${facetSql(opts)}
@@ -545,14 +548,17 @@ export async function getKnowledgeEntry(id: string) {
   const [row] = await sql`
     select e.id, e.work_item_id, e.product_id, e.team_id, e.status, e.superseded_by, e.title, e.issue_summary,
            e.symptoms, e.signals, e.tags, e.root_cause, e.resolution, e.investigation, e.resolution_pattern,
-           e.component_id, e.product_area, e.confidence, e.cloud, e.resolution_clarity,
+           e.component_id, co.slug as component_slug, e.product_area, e.confidence, e.cloud, e.resolution_clarity,
            e.hidden_fix, e.affected_version, e.fixed_version,
            e.customer_id, cu.slug as customer_slug,
            e.customer_unit_id, un.slug as customer_unit_slug,
+           wi.external_id as work_item_external_id, wi.external_url as work_item_url,
            e.related_links, e.version, e.created_at, e.updated_at
     from knowledge_entries e
+    left join components co on co.id = e.component_id
     left join customers cu on cu.id = e.customer_id
     left join customer_units un on un.id = e.customer_unit_id
+    left join work_items wi on wi.id = e.work_item_id
     where e.id = ${id}
   `;
   if (!row) throw notFound(`knowledge entry '${id}' not found`);
@@ -944,7 +950,7 @@ export async function knowledgeByComponent(): Promise<ComponentKnowledge[]> {
   return sql<ComponentKnowledge[]>`
     select component_id,
            count(*)::int as entries,
-           count(*) filter (where status in ('approved', 'deprecated'))::int
+           count(*) filter (where status = any(${searchedStatuses}))::int
              as searchable
     from knowledge_entries
     where component_id is not null
@@ -997,7 +1003,7 @@ export async function knowledgeStale(): Promise<KnowledgeStale> {
     from knowledge_entries e
     join knowledge_feedback f
       on f.knowledge_entry_id = e.id and f.kind = 'rating' and f.rating is not null
-    where e.status in ('approved', 'deprecated')
+    where e.status = any(${searchedStatuses})
     group by e.id
     order by avg(f.rating), 5 desc
     limit 8

@@ -12,11 +12,14 @@ export interface KnowledgeRow {
   investigation?: string | null;
   resolution_pattern: string | null;
   component_id?: string | null;
+  component_slug?: string | null;
   product_area: string | null;
   /** Whose install this was learned on. Null = general to every customer. */
   customer_id?: string | null;
   customer_slug?: string | null;
   customer_unit_slug?: string | null;
+  work_item_external_id?: string | null;
+  work_item_url?: string | null;
   confidence: string | null;
   cloud: string | null;
   resolution_clarity: string | null;
