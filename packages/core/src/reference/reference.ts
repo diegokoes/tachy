@@ -1,6 +1,6 @@
 import { renameWikilinks, SLUG_RE, WIKI_RESERVED_SLUGS } from "@tachy/contract";
 import type { TransactionSql } from "postgres";
-import { sql, jsonb } from "../infra/db";
+import { sql } from "../infra/db";
 import { chunkPages } from "../search/chunk";
 import {
   embedPassages,
@@ -51,11 +51,9 @@ import { linkersBySlug, releaseSlug, rememberOldSlug } from "../wiki/aliases";
 
 /** Shared by the read and the RETURNING so before/after snapshots line up. */
 const REVISION_COLUMNS = sql`
-  title, body, tags, status, source, structured, doc_version,
+  title, body, tags, status, source, doc_version,
   product_id, component_id, product_area, customer_id, customer_unit_id, kind, slug
 `;
-
-import { parseStructured } from "../knowledge/structured";
 
 /** Checked here rather than in the API so the MCP write path cannot bypass it. */
 export function assertArticleSlug(slug: string): void {
@@ -83,7 +81,6 @@ export interface ReferenceDocInput {
   body: string;
   tags?: string[];
   status?: string;
-  structured?: Record<string, unknown>;
   docVersion?: string | null;
   supersedes?: string;
   /**
@@ -107,7 +104,6 @@ export interface ReferenceDocUpdate {
   tags?: string[];
   status?: string;
   source?: string | null;
-  structured?: Record<string, unknown>;
   docVersion?: string | null;
   component?: string | null;
   customerSlug?: string | null;
@@ -175,7 +171,6 @@ const DOC_NO_PRODUCT =
   "component requires a product (pass product_slug); a doc with no product cannot name one";
 
 export async function saveReferenceDoc(input: ReferenceDocInput) {
-  const structured = parseStructured(input.structured);
   let predecessor:
     | {
         id: string;
@@ -217,7 +212,7 @@ export async function saveReferenceDoc(input: ReferenceDocInput) {
       insert into reference_docs
         (product_id, team_id, created_by, source, source_project_id, external_key,
          component_id, product_area, customer_id, customer_unit_id, title, body, tags,
-         status, structured, doc_version, kind, slug)
+         status, doc_version, kind, slug)
       values
         (${productId},
          ${input.teamId ?? predecessor?.team_id ?? null},
@@ -225,7 +220,7 @@ export async function saveReferenceDoc(input: ReferenceDocInput) {
          ${input.sourceProjectId ?? null}, ${input.externalKey ?? null},
          ${componentId}, ${productArea}, ${customerId}, ${customerUnitId},
          ${input.title}, ${input.body}, ${input.tags ?? predecessor?.tags ?? []},
-         ${input.status ?? "approved"}, ${jsonb(structured)},
+         ${input.status ?? "approved"},
          ${input.docVersion ?? null}, ${kind}, ${kind === "wiki" ? (input.slug ?? null) : null})
       returning id, version, ${REVISION_COLUMNS}
     `;
@@ -264,7 +259,7 @@ export async function saveReferenceDoc(input: ReferenceDocInput) {
 export async function getReferenceDoc(id: string) {
   const [row] = await sql`
     select d.id, d.product_id, d.team_id, d.component_id, d.product_area, d.source,
-           d.title, d.body, d.tags, d.status, d.structured, d.doc_version,
+           d.title, d.body, d.tags, d.status, d.doc_version,
            d.superseded_by, d.version, d.customer_id, cu.slug as customer_slug,
            d.customer_unit_id, un.slug as customer_unit_slug,
            d.kind, d.slug, d.created_at, d.updated_at
@@ -360,10 +355,6 @@ export async function updateReferenceDoc(
     tags: patch.tags ?? current.tags,
     status: patch.status ?? current.status,
     source: "source" in patch ? patch.source : current.source,
-    structured:
-      "structured" in patch
-        ? parseStructured(patch.structured)
-        : current.structured,
     docVersion: "docVersion" in patch ? patch.docVersion : current.doc_version,
     // An article's slug is its address, so it can be changed but never cleared:
     // a null slug would make the article unreachable and orphan its links.
@@ -389,7 +380,6 @@ export async function updateReferenceDoc(
         tags        = ${merged.tags ?? []},
         status      = ${merged.status},
         source      = ${merged.source ?? null},
-        structured  = ${jsonb(merged.structured ?? {})},
         doc_version = ${merged.docVersion ?? null},
         component_id = ${componentId},
         product_area = ${productArea},
@@ -571,7 +561,7 @@ export async function searchReferenceDocs(
         : null,
     )}
     select d.id, d.title, d.tags, d.product_id, d.team_id, d.component_id, d.product_area,
-           d.status, d.doc_version, d.version, d.structured, d.source, d.created_at, d.updated_at,
+           d.status, d.doc_version, d.version, d.source, d.created_at, d.updated_at,
            d.customer_id, cu.slug as customer_slug, d.kind, d.slug,
            coalesce(b.snippet, left(d.body, 400)) as snippet, b.page,
            f.cos_sim, f.fts_rank, f.trgm_sim, f.rrf
@@ -625,7 +615,6 @@ export async function revertReferenceDoc(
       tags: past.tags ?? [],
       status: past.status,
       source: past.source,
-      structured: past.structured,
       docVersion: past.doc_version,
       ...(await filingSlugs(past)),
     },

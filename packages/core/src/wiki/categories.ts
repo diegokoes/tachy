@@ -410,7 +410,7 @@ export async function setArticleCategories(
 export async function findArticle(productId: string | null, slug: string) {
   const [row] = await sql`
     select d.id, d.product_id, d.team_id, d.component_id, d.product_area, d.source,
-           d.title, d.body, d.tags, d.status, d.structured, d.doc_version,
+           d.title, d.body, d.tags, d.status, d.doc_version,
            d.version, d.customer_id, cu.slug as customer_slug, d.kind, d.slug,
            d.created_at, d.updated_at
     from reference_docs d
