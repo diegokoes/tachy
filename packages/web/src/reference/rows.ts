@@ -31,7 +31,6 @@ export interface ReferenceRow {
   superseded_by?: string | null;
   snippet?: string;
   body?: string;
-  structured?: Record<string, unknown> | null;
   created_at?: string;
   updated_at?: string;
   relevance?: number;
