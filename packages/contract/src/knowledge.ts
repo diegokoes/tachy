@@ -50,6 +50,6 @@ export interface KnowledgeStale {
 export interface ComponentKnowledge {
   component_id: string;
   entries: number;
-  /** Approved or deprecated: the statuses searchKnowledge returns. */
+  /** In one of SEARCHED_ENTRY_STATUSES. */
   searchable: number;
 }

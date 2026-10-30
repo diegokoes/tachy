@@ -14,6 +14,8 @@ export const KNOWLEDGE_STATUSES = [
   "archived",
   "deprecated",
 ] as const;
+/** The statuses whose entries search returns; the rest stay out of every answer. */
+export const SEARCHED_ENTRY_STATUSES = ["approved", "deprecated"] as const;
 export const REFERENCE_STATUSES = ["draft", "approved", "archived"] as const;
 /**
  * What a reference_docs row is. 'reference' is imported source material - an
