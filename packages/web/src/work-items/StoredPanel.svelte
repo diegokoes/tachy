@@ -6,7 +6,8 @@
   import { navigate } from "../shell/router.svelte";
   import type { Connection } from "../sources/rows";
   import {
-    Badge,
+    Lamp,
+    EMPTY,
     Button,
     DataTable,
     FilterBar,
@@ -99,11 +100,11 @@
 
 {#snippet titleCell(item: StoredItemRow)}
   <span class="titled">
-    <span class="title">{item.title ?? "-"}</span>
+    <span class="title">{item.title ?? EMPTY}</span>
     {#if !item.fetched_at}
       <span
-        use:tip={"Only a listing has carried it: no messages are stored until it is fetched."}
-        ><Badge>listed</Badge></span
+        use:tip={"only a listing has carried it: no messages are stored until it is fetched"}
+        ><Lamp lamp={{ level: "half", tone: "muted" }} word="listed" /></span
       >
     {/if}
   </span>
@@ -114,7 +115,7 @@
     bind:value={query}
     shown={items.length}
     {total}
-    label="search stored tickets"
+    label="search stored items"
   />
   <Select
     bind:value={connection}
@@ -133,8 +134,8 @@
   rowKey={(item) => item.id}
   {loading}
   {error}
-  emptyTitle="No stored tickets."
-  emptyDetail="A ticket or work item is stored when it is fetched in chat, by a flow or by a sync."
+  emptyTitle="no stored items"
+  emptyDetail="a ticket or work item is stored when it is fetched in chat, by a flow or by a sync"
   onrowclick={(item) => navigate(`/console/integrations/tickets/${item.id}`)}
 />
 

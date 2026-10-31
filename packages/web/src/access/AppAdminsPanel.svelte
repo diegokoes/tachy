@@ -33,7 +33,7 @@
 
   const columns: Column<UserRow>[] = $derived([
     { key: "email", label: "user", width: "20rem" },
-    { key: "display_name", label: "name", width: "14rem" },
+    { key: "display_name", face: "ui", label: "name", width: "14rem" },
     ...(seesSignIn()
       ? [
           {
@@ -87,8 +87,8 @@
 
 {#if seesSignIn() && !live.length && rows.length}
   <Note tone="danger">
-    No {roleLabel("app", "admin")} can currently sign in. Nobody can change settings,
-    users or connections until one can.
+    no {roleLabel("app", "admin")} can currently sign in. nobody can change settings,
+    users or sources until one can
   </Note>
 {/if}
 
@@ -98,8 +98,8 @@
   rowKey={(u) => u.id}
   loading={users.loading}
   error={users.error}
-  emptyTitle={`No ${roleLabel("app", "admin")} yet.`}
-  emptyDetail="Nobody can change settings, users or connections."
+  emptyTitle={`no ${roleLabel("app", "admin")} yet`}
+  emptyDetail="nobody can change settings, users or sources"
 />
 
 <style>

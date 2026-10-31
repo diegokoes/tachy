@@ -1,5 +1,6 @@
 export interface Subcommand {
   name: string;
+  /** What follows the command, in words, for the menu; never parsed. */
   args: string;
   description: string;
   /** Handled by the web app itself, with no agent turn at all. */
@@ -9,6 +10,7 @@ export interface Subcommand {
 
 export interface BuiltinCommand {
   name: string;
+  /** What follows the command, in words, for the menu; never parsed. */
   args: string;
   description: string;
   expand: (args: string) => string;
@@ -31,8 +33,8 @@ const argsLine = (args: string) =>
 export const BUILTIN_COMMANDS: BuiltinCommand[] = [
   {
     name: "compact",
-    args: "<source> <ticket-id> [--no-note]",
-    description: "Rebuild a repetitive ticket as a de-duplicated script",
+    args: "source ticket",
+    description: "rebuild a repetitive ticket as a de-duplicated script",
     expand: (args) =>
       [
         "Run COMPACT MODE as defined in your instructions, calling compact_work_item for the ticket. Posting the transcript back as a private note is the point of this command - leave post_note at its default so it posts, and only pass post_note: false if the user's arguments include --no-note.",
@@ -43,8 +45,8 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
   },
   {
     name: "summary",
-    args: "<source> <ticket-id>",
-    description: "Post a summary of a ticket onto it as a private note",
+    args: "source ticket",
+    description: "post a summary of a ticket onto it as a private note",
     // Self-contained, so the steps are paid for on the click, not every turn.
     expand: (args) =>
       [
@@ -57,14 +59,14 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
   group("az", "Azure DevOps work items", [
     {
       name: "new",
-      args: "[project] [type]",
-      description: "Compose a work item with the project's own fields",
+      args: "project type",
+      description: "compose a work item with the project's own fields",
       client: true,
     },
     {
       name: "explain",
-      args: "<id>",
-      description: "Explain a work item: what, why, where it stands, what next",
+      args: "item",
+      description: "explain a work item: what, why, where it stands, what next",
       // Self-contained: this is paid only when someone types it, where a mode
       // in prompt.md is paid on every message.
       expand: (args) =>
@@ -79,7 +81,7 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
   {
     name: "walkthrough",
     args: "",
-    description: "Show the last code answer as a stepped walkthrough",
+    description: "show the last code answer as a stepped walkthrough",
     hidden: true,
     // Self-contained for the same reason as /az explain: paid on the click.
     expand: () =>
@@ -91,8 +93,8 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
   },
   {
     name: "ingest-wiki",
-    args: "<source> <project> [wiki] [page-path]",
-    description: "Pull Azure DevOps wiki pages into reference docs",
+    args: "source project wiki page",
+    description: "pull Azure DevOps wiki pages into reference docs",
     hidden: true,
     expand: (args) =>
       [
@@ -102,8 +104,8 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
   },
   {
     name: "wiki-draft",
-    args: "<product> [component=<slug>] [article=<slug>]",
-    description: "Write or refresh a wiki article from recorded knowledge",
+    args: "product component article",
+    description: "write or refresh a wiki article from recorded knowledge",
     hidden: true,
     expand: (args) =>
       [
@@ -127,7 +129,7 @@ function group(
   const names = subcommands.map((s) => s.name).join(", ");
   return {
     name,
-    args: `<${subcommands.map((s) => s.name).join("|")}> ...`,
+    args: subcommands.map((s) => s.name).join(" · "),
     description,
     subcommands,
     expand: (args) => {

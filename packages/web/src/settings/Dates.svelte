@@ -8,7 +8,7 @@
   import { dateFormat, loadDateFormat, setDatePart } from "../dates.svelte";
   import { errText } from "../resource.svelte";
   import { Note, Select } from "../tui";
-  import Choice from "./Choice.svelte";
+  import Choice from "../tui/Choice.svelte";
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";
 

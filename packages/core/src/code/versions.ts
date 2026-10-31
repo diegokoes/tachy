@@ -6,6 +6,8 @@ import {
   changedFiles,
   commitSummary,
   diffBetween,
+  listCommits,
+  listPathCommits,
   logBetween,
   parentOf,
   releasesContaining,
@@ -14,7 +16,7 @@ import {
   type ChangedFile,
   type CommitSummary,
 } from "./git";
-import { getRepoBySlug } from "./repos";
+import { getRepoBySlug, type RepoRow } from "./repos";
 
 export interface ResolvedVersion {
   version: string;
@@ -50,7 +52,7 @@ export async function resolveVersion(
     (l) => l.version_label && releaseMinor(l.version_label) === minor,
   );
   const line = onMinor ?? repo.lines[0];
-  if (!line) throw notFound(`Repo '${slug}' has no tracked line`);
+  if (!line) throw notFound(`repo '${slug}' has no tracked line`);
 
   let tag: string | null = null;
   let commit: string | null = null;
@@ -73,19 +75,46 @@ export async function resolveVersion(
 
 const WORK_ITEM_REF_RE = /(?:AB)?#(\d{2,9})\b/g;
 
+/** A `#123` reference in a commit message that matches an archived work item. */
+export interface WorkItemReference {
+  id: string;
+  external_id: string;
+  title: string | null;
+  status: string | null;
+  fixed_versions: string[];
+}
+
 export interface CodeChanges {
   from: string;
   to: string;
   commits: CommitSummary[];
   truncated: boolean;
-  /** `#123` references in the messages that match an archived work item. */
-  work_items: {
-    id: string;
-    external_id: string;
-    title: string | null;
-    status: string | null;
-    fixed_versions: string[];
-  }[];
+  work_items: WorkItemReference[];
+}
+
+async function workItemsNamed(
+  repo: RepoRow,
+  commits: CommitSummary[],
+): Promise<WorkItemReference[]> {
+  const refs = [
+    ...new Set(
+      commits.flatMap((c) =>
+        [...c.subject.matchAll(WORK_ITEM_REF_RE)].map((m) => m[1]),
+      ),
+    ),
+  ];
+  if (!refs.length || !repo.source_slug) return [];
+  return sql<WorkItemReference[]>`
+    select w.id, w.external_id, w.title, w.status,
+           coalesce(array_agg(distinct k.fixed_version)
+             filter (where k.fixed_version is not null), '{}') as fixed_versions
+    from work_items w
+    join source_connections sc on sc.id = w.source_connection_id
+    left join knowledge_entries k on k.work_item_id = w.id
+    where sc.slug = ${repo.source_slug} and w.external_id = any(${refs})
+    group by w.id
+    order by w.external_id
+  `;
 }
 
 /**
@@ -102,20 +131,20 @@ export async function codeChangesBetween(
   const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
   const from = await resolveVersion(slug, fromVersion);
   if (!from.tag)
-    throw notFound(`Repo '${slug}' has no release tag for ${from.version}`);
+    throw notFound(`repo '${slug}' has no release tag for ${from.version}`);
 
   let toRev: string;
   if (toVersion) {
     const to = await resolveVersion(slug, toVersion);
     if (!to.tag)
-      throw notFound(`Repo '${slug}' has no release tag for ${to.version}`);
+      throw notFound(`repo '${slug}' has no release tag for ${to.version}`);
     toRev = to.tag;
   } else {
     toRev = from.line.ref;
   }
   const toRef = toVersion ? `refs/tags/${toRev}` : `refs/heads/${toRev}`;
   if (!(await resolveRef(slug, toRef)))
-    throw notFound(`Repo '${slug}' has no '${toRev}' fetched yet; reindex it`);
+    throw notFound(`repo '${slug}' has no '${toRev}' fetched yet; reindex it`);
 
   const commits = await logBetween(slug, `refs/tags/${from.tag}`, toRef, {
     path: opts.path,
@@ -124,34 +153,76 @@ export async function codeChangesBetween(
   const truncated = commits.length > limit;
   const shown = commits.slice(0, limit);
 
-  const refs = [
-    ...new Set(
-      shown.flatMap((c) =>
-        [...c.subject.matchAll(WORK_ITEM_REF_RE)].map((m) => m[1]),
-      ),
-    ),
-  ];
-  const repo = await getRepoBySlug(slug);
-  const workItems =
-    refs.length && repo.source_slug
-      ? await sql<CodeChanges["work_items"]>`
-          select w.id, w.external_id, w.title, w.status,
-                 coalesce(array_agg(distinct k.fixed_version)
-                   filter (where k.fixed_version is not null), '{}') as fixed_versions
-          from work_items w
-          join source_connections sc on sc.id = w.source_connection_id
-          left join knowledge_entries k on k.work_item_id = w.id
-          where sc.slug = ${repo.source_slug} and w.external_id = any(${refs})
-          group by w.id
-          order by w.external_id
-        `
-      : [];
   return {
     from: from.tag,
     to: toRev,
     commits: shown,
     truncated,
-    work_items: workItems,
+    work_items: await workItemsNamed(await getRepoBySlug(slug), shown),
+  };
+}
+
+/**
+ * Commits searched at most. A symbol search fetches every version of the
+ * path those commits hold before it reads them.
+ */
+export const MAX_HISTORY_COMMITS = 100;
+const DEFAULT_HISTORY_COMMITS = 30;
+
+export interface CodeHistory {
+  repo: string;
+  /** The commit the history is read back from. */
+  from: string;
+  path: string;
+  symbol: string | null;
+  /** How many of the newest commits touching `path` were searched. */
+  searched: number;
+  /** More commits touch `path` than were searched. */
+  truncated: boolean;
+  commits: CommitSummary[];
+  work_items: WorkItemReference[];
+}
+
+/**
+ * The newest commits that touched a path, or with `symbol` those among them
+ * that change how often it occurs there (`git log -S`), with the archived
+ * work items their messages name.
+ */
+export async function codeHistory(
+  slug: string,
+  opts: {
+    path: string;
+    symbol?: string;
+    ref?: string;
+    limit?: number;
+    token?: string;
+  },
+): Promise<CodeHistory> {
+  const repo = await getRepoBySlug(slug);
+  const path = opts.path.replace(/^\/+|\/+$/g, "");
+  if (!path)
+    throw badInput("code_history needs the path of a file or directory");
+  const limit = Math.min(
+    Math.max(opts.limit ?? DEFAULT_HISTORY_COMMITS, 1),
+    MAX_HISTORY_COMMITS,
+  );
+  const from = await resolveRevision(slug, opts.ref ?? repo.default_branch);
+  const touching = await listPathCommits(slug, from, path, limit + 1);
+  const searched = touching.slice(0, limit);
+  const commits = await listCommits(slug, searched, {
+    path,
+    pickaxe: opts.symbol || undefined,
+    token: opts.token,
+  });
+  return {
+    repo: slug,
+    from,
+    path,
+    symbol: opts.symbol || null,
+    searched: searched.length,
+    truncated: touching.length > limit,
+    commits,
+    work_items: await workItemsNamed(repo, commits),
   };
 }
 
@@ -174,7 +245,7 @@ export async function resolveRevision(
     (await resolveRef(slug, `refs/tags/${revision}`));
   if (byRef) return byRef;
   throw notFound(
-    `Repo '${slug}' has no commit, release, branch or tag '${revision}' fetched`,
+    `repo '${slug}' has no commit, release, branch or tag '${revision}' fetched`,
   );
 }
 
@@ -267,7 +338,7 @@ export async function codeReleasesContaining(
 ): Promise<ReleasesContaining> {
   const repo = await getRepoBySlug(slug);
   const sha = await resolveCommit(slug, commit);
-  if (!sha) throw notFound(`Repo '${slug}' has no commit '${commit}' fetched`);
+  if (!sha) throw notFound(`repo '${slug}' has no commit '${commit}' fetched`);
   const releases = await releasesContaining(slug, sha);
   const firstPerMinor = new Map<string, string>();
   for (const tag of releases) {

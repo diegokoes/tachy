@@ -111,7 +111,7 @@ function assertRateWindows(windows: RateWindow[]): void {
 export function assertServerInput(input: McpServerInput): void {
   if (!SLUG_RE.test(input.slug))
     throw badInput(
-      `Invalid server slug '${input.slug}': lowercase letters, digits and hyphens only.`,
+      `invalid server slug '${input.slug}': lowercase letters, digits and hyphens only`,
     );
   if (!input.name?.trim()) throw badInput("a server needs a name");
   if (!TOOL_PREFIX_RE.test(input.toolPrefix))

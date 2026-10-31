@@ -115,6 +115,79 @@ export function takeTypedMentions(
 export const withoutMentionBeingTyped = (input: string): string =>
   input.replace(TRAILING_WORD_RE, "$1");
 
+/**
+ * Slug parts too common to name one repo, or too common in prose: "the api
+ * addon" names no repo on the strength of `api` or `addon`.
+ */
+const GENERIC_SLUG_PARTS = new Set([
+  "addon",
+  "addons",
+  "api",
+  "app",
+  "apps",
+  "backend",
+  "client",
+  "common",
+  "config",
+  "core",
+  "docs",
+  "frontend",
+  "lib",
+  "libs",
+  "main",
+  "mobile",
+  "plugin",
+  "server",
+  "service",
+  "services",
+  "shared",
+  "test",
+  "tests",
+  "tools",
+  "web",
+  "and",
+  "for",
+  "the",
+  "with",
+]);
+
+const MIN_NAMING_PART_CHARS = 3;
+const WORD_RE = /[\p{L}\p{N}]+(?:[-_.][\p{L}\p{N}]+)*/gu;
+const SLUG_SEPARATOR_RE = /[-_.]/;
+const DIGITS_RE = /^\d+$/;
+
+const slugParts = (slug: string): string[] =>
+  slug.toLowerCase().split(SLUG_SEPARATOR_RE).filter(Boolean);
+
+/**
+ * The repos a message names without an `@`: by the whole slug, or by a part of
+ * it that no other repo shares ("the acme addon" names `addon-acme`). `@` words
+ * are left to `takeTypedMentions`.
+ */
+export function reposNamedIn(message: string, slugs: string[]): string[] {
+  const tokens = message
+    .replace(ANY_WORD_RE, "$1")
+    .toLowerCase()
+    .match(WORD_RE);
+  if (!tokens) return [];
+  const words = new Set(
+    tokens.flatMap((token) => [token, ...slugParts(token)]),
+  );
+  const owners = new Map<string, number>();
+  for (const slug of slugs)
+    for (const part of new Set(slugParts(slug)))
+      owners.set(part, (owners.get(part) ?? 0) + 1);
+  const names = (part: string) =>
+    part.length >= MIN_NAMING_PART_CHARS &&
+    !DIGITS_RE.test(part) &&
+    !GENERIC_SLUG_PARTS.has(part) &&
+    owners.get(part) === 1 &&
+    words.has(part);
+  return slugs.filter(
+    (slug) => words.has(slug.toLowerCase()) || slugParts(slug).some(names),
+  );
+}
+
 export function withMentions(current: Mention[], added: Mention[]): Mention[] {
   const merged = [...current];
   for (const mention of added)

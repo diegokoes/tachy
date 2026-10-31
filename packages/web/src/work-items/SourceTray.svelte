@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api } from "../api";
-  import { Button, Chip, Select } from "../tui";
+  import { BarField, Button, Chip, Select } from "../tui";
   import type { ContextItem } from "./composer.svelte";
 
   let {
@@ -96,25 +96,24 @@
         add();
       }}
     >
-      <Select
-        value={source}
-        options={connections.map((c) => ({ value: c.slug, label: c.slug }))}
-        aria-label="Source"
-        onchange={(v) => (source = String(v))}
-      />
-      <input
-        class="id"
-        placeholder="ticket id"
-        aria-label="Ticket id"
-        bind:value={externalId}
-      />
+      <BarField label="source">
+        <Select
+          value={source}
+          options={connections.map((c) => ({ value: c.slug, label: c.slug }))}
+          aria-label="source"
+          onchange={(v) => (source = String(v))}
+        />
+      </BarField>
+      <BarField label="ticket id">
+        <input class="id" aria-label="ticket id" bind:value={externalId} />
+      </BarField>
       <Button
         size="sm"
         variant="ghost"
         icon="plus"
         type="submit"
         {busy}
-        aria-label="Add as context"
+        aria-label="add as context"
         title="add as context"
       />
     </form>
@@ -136,7 +135,7 @@
   }
   .add {
     display: inline-flex;
-    align-items: center;
+    align-items: end;
     gap: var(--pad-1);
   }
   .id {

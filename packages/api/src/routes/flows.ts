@@ -31,6 +31,7 @@ import {
   isAdminIdentity,
   requireCaller,
 } from "../authz";
+import { asNoToken } from "../sources";
 
 const flowSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -84,12 +85,17 @@ export const flows = new Hono()
   // Query params are the sibling values the list depends on.
   .get("/options/:key", async (c) => {
     await assertAnyTeamAdminApi(c);
-    return c.json(
-      await listOptions(c.req.param("key"), {
-        scope: await callerScope(c),
-        params: c.req.query(),
-      }),
-    );
+    const params = c.req.query();
+    try {
+      return c.json(
+        await listOptions(c.req.param("key"), {
+          scope: await callerScope(c),
+          params,
+        }),
+      );
+    } catch (e) {
+      throw asNoToken(params.connection ?? "", e);
+    }
   })
 
   // A connection serves every team: team admins read and preview, app admins save.

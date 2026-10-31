@@ -1,4 +1,5 @@
 import { navigate, segment } from "../shell/router.svelte";
+import { EMPTY } from "../tui/glyphs";
 
 /**
  * Leave the overview for one section of the same page. The overview and the
@@ -14,7 +15,7 @@ export const ratio = (n: number, of: number) => (of ? n / of : 0);
 
 /** "83%", or a dash when there is nothing to take a share of. */
 export const pct = (n: number, of: number) =>
-  of ? `${Math.round((n / of) * 100)}%` : "–";
+  of ? `${Math.round((n / of) * 100)}%` : EMPTY;
 
 /**
  * Readiness: all of it, some of it, none of it - and muted when there is
@@ -38,20 +39,6 @@ export const load = (share: number): Tone => {
 
 const MINUTE_SECONDS = 60;
 const HOUR_MINUTES = 60;
-const HOURS_SHOWN_BELOW = 48;
-
-/** "12 min", "5 h", "3 d" - how long ago, or how long up. */
-export const span = (ms: number) => {
-  const min = Math.max(0, Math.round(ms / 60_000));
-  if (min < HOUR_MINUTES) return `${min} min`;
-  const h = Math.round(min / HOUR_MINUTES);
-  return h < HOURS_SHOWN_BELOW ? `${h} h` : `${Math.round(h / 24)} d`;
-};
-
-export const age = (iso: string | null | undefined, now = Date.now()) => {
-  const atMs = iso ? Date.parse(iso) : NaN;
-  return Number.isFinite(atMs) ? span(now - atMs) : null;
-};
 
 /** "2m 10s", "45s", "1h 5m". */
 export const duration = (seconds: number) => {

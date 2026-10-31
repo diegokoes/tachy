@@ -1,6 +1,6 @@
 import { renameWikilinks, SLUG_RE, WIKI_RESERVED_SLUGS } from "@tachy/contract";
 import type { TransactionSql } from "postgres";
-import { sql, jsonb } from "../infra/db";
+import { sql } from "../infra/db";
 import { chunkPages } from "../search/chunk";
 import {
   embedPassages,
@@ -19,9 +19,13 @@ import {
   ftsMatch,
   ftsRank,
   fusedCte,
+  fuzzyMatch,
+  fuzzyScore,
+  nearestToAny,
   withSearchSession,
 } from "../search/rank";
 import { SEM_FLOOR, withRelevance } from "../search/relevance";
+import { keywordInputs } from "../search/terms";
 import { notFound, badInput } from "../infra/errors";
 import {
   assertExpectedVersion,
@@ -47,21 +51,19 @@ import { linkersBySlug, releaseSlug, rememberOldSlug } from "../wiki/aliases";
 
 /** Shared by the read and the RETURNING so before/after snapshots line up. */
 const REVISION_COLUMNS = sql`
-  title, body, tags, status, source, structured, doc_version,
+  title, body, tags, status, source, doc_version,
   product_id, component_id, product_area, customer_id, customer_unit_id, kind, slug
 `;
-
-import { parseStructured } from "../knowledge/structured";
 
 /** Checked here rather than in the API so the MCP write path cannot bypass it. */
 export function assertArticleSlug(slug: string): void {
   if (!SLUG_RE.test(slug))
     throw badInput(
-      `Invalid article slug '${slug}': lowercase letters, digits and hyphens only.`,
+      `invalid article slug '${slug}': lowercase letters, digits and hyphens only`,
     );
   if ((WIKI_RESERVED_SLUGS as readonly string[]).includes(slug))
     throw badInput(
-      `'${slug}' is reserved by the wiki's own routes; pick another slug.`,
+      `'${slug}' is reserved by the wiki's own routes; pick another slug`,
     );
 }
 
@@ -79,7 +81,6 @@ export interface ReferenceDocInput {
   body: string;
   tags?: string[];
   status?: string;
-  structured?: Record<string, unknown>;
   docVersion?: string | null;
   supersedes?: string;
   /**
@@ -103,7 +104,6 @@ export interface ReferenceDocUpdate {
   tags?: string[];
   status?: string;
   source?: string | null;
-  structured?: Record<string, unknown>;
   docVersion?: string | null;
   component?: string | null;
   customerSlug?: string | null;
@@ -171,7 +171,6 @@ const DOC_NO_PRODUCT =
   "component requires a product (pass product_slug); a doc with no product cannot name one";
 
 export async function saveReferenceDoc(input: ReferenceDocInput) {
-  const structured = parseStructured(input.structured);
   let predecessor:
     | {
         id: string;
@@ -189,7 +188,7 @@ export async function saveReferenceDoc(input: ReferenceDocInput) {
     const [row] = await sql`
       select id, product_id, team_id, tags from reference_docs where id = ${supersedes}
     `;
-    if (!row) throw notFound(`Reference doc '${supersedes}' not found`);
+    if (!row) throw notFound(`reference doc '${supersedes}' not found`);
     predecessor = row as typeof predecessor;
   }
   const productId = input.productId ?? predecessor?.product_id ?? null;
@@ -213,7 +212,7 @@ export async function saveReferenceDoc(input: ReferenceDocInput) {
       insert into reference_docs
         (product_id, team_id, created_by, source, source_project_id, external_key,
          component_id, product_area, customer_id, customer_unit_id, title, body, tags,
-         status, structured, doc_version, kind, slug)
+         status, doc_version, kind, slug)
       values
         (${productId},
          ${input.teamId ?? predecessor?.team_id ?? null},
@@ -221,7 +220,7 @@ export async function saveReferenceDoc(input: ReferenceDocInput) {
          ${input.sourceProjectId ?? null}, ${input.externalKey ?? null},
          ${componentId}, ${productArea}, ${customerId}, ${customerUnitId},
          ${input.title}, ${input.body}, ${input.tags ?? predecessor?.tags ?? []},
-         ${input.status ?? "approved"}, ${jsonb(structured)},
+         ${input.status ?? "approved"},
          ${input.docVersion ?? null}, ${kind}, ${kind === "wiki" ? (input.slug ?? null) : null})
       returning id, version, ${REVISION_COLUMNS}
     `;
@@ -260,7 +259,7 @@ export async function saveReferenceDoc(input: ReferenceDocInput) {
 export async function getReferenceDoc(id: string) {
   const [row] = await sql`
     select d.id, d.product_id, d.team_id, d.component_id, d.product_area, d.source,
-           d.title, d.body, d.tags, d.status, d.structured, d.doc_version,
+           d.title, d.body, d.tags, d.status, d.doc_version,
            d.superseded_by, d.version, d.customer_id, cu.slug as customer_slug,
            d.customer_unit_id, un.slug as customer_unit_slug,
            d.kind, d.slug, d.created_at, d.updated_at
@@ -269,7 +268,7 @@ export async function getReferenceDoc(id: string) {
     left join customer_units un on un.id = d.customer_unit_id
     where d.id = ${id}
   `;
-  if (!row) throw notFound(`Reference doc '${id}' not found`);
+  if (!row) throw notFound(`reference doc '${id}' not found`);
   return row;
 }
 
@@ -347,7 +346,7 @@ export async function updateReferenceDoc(
   >`
     select ${REVISION_COLUMNS}, version from reference_docs where id = ${id}
   `;
-  if (!current) throw notFound(`Reference doc '${id}' not found`);
+  if (!current) throw notFound(`reference doc '${id}' not found`);
   assertExpectedVersion(current.version, patch.expectedVersion);
 
   const merged = {
@@ -356,10 +355,6 @@ export async function updateReferenceDoc(
     tags: patch.tags ?? current.tags,
     status: patch.status ?? current.status,
     source: "source" in patch ? patch.source : current.source,
-    structured:
-      "structured" in patch
-        ? parseStructured(patch.structured)
-        : current.structured,
     docVersion: "docVersion" in patch ? patch.docVersion : current.doc_version,
     // An article's slug is its address, so it can be changed but never cleared:
     // a null slug would make the article unreachable and orphan its links.
@@ -385,7 +380,6 @@ export async function updateReferenceDoc(
         tags        = ${merged.tags ?? []},
         status      = ${merged.status},
         source      = ${merged.source ?? null},
-        structured  = ${jsonb(merged.structured ?? {})},
         doc_version = ${merged.docVersion ?? null},
         component_id = ${componentId},
         product_area = ${productArea},
@@ -465,8 +459,14 @@ export interface ReferenceSearchOptions {
   customerId?: string;
   docVersion?: string;
   limit?: number;
-  /** Pre-embedded query, so a caller searching two surfaces embeds once. */
-  queryVector?: string;
+  /**
+   * The query pre-embedded, one vector per window of a long one; a doc scores
+   * by the window nearest any of its chunks. A caller searching two surfaces
+   * embeds once.
+   */
+  queryVectors?: string[];
+  /** The exact terms of a long query, which the keyword legs read instead. */
+  exactTerms?: string[];
   /** Rank this customer's docs first without excluding the general ones. */
   boostCustomerId?: string;
   /**
@@ -483,7 +483,10 @@ export async function searchReferenceDocs(
 ) {
   const limit = clampLimit(opts.limit, 6);
   if (!query.trim()) return [];
-  const qvec = opts.queryVector ?? (await embedQueryLiteral(query));
+  const queryVectors = opts.queryVectors?.length
+    ? opts.queryVectors
+    : [await embedQueryLiteral(query)];
+  const keywords = keywordInputs(query, opts.exactTerms);
 
   const inProduct = (id: string) =>
     opts.includeUnscoped
@@ -510,14 +513,18 @@ export async function searchReferenceDocs(
     -- The vector leg is chunk-level and keyed back to the doc, so a long
     -- runbook is judged by its best passage rather than its average.
     chunk_hits as (
-      select c.doc_id, c.chunk_text, c.page,
-             1 - (c.embedding <=> ${qvec}::vector) as cos_sim
-      from reference_doc_chunks c
-      join reference_docs d on d.id = c.doc_id
-      where ${filters} and c.embedding is not null and ${currentVector("c")}
-        and 1 - (c.embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
-      order by c.embedding <=> ${qvec}::vector
-      limit ${CANDIDATES}
+      ${nearestToAny(
+        queryVectors,
+        (qvec) => sql`
+          select c.doc_id, c.chunk_text, c.page,
+                 1 - (c.embedding <=> ${qvec}::vector) as cos_sim
+          from reference_doc_chunks c
+          join reference_docs d on d.id = c.doc_id
+          where ${filters} and c.embedding is not null and ${currentVector("c")}
+            and 1 - (c.embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
+          order by c.embedding <=> ${qvec}::vector
+          limit ${CANDIDATES}`,
+      )}
     ),
     best_chunk as (
       select distinct on (doc_id) doc_id as id, chunk_text as snippet, page, cos_sim
@@ -527,23 +534,25 @@ export async function searchReferenceDocs(
     vec as (
       select id, row_number() over (order by cos_sim desc) as rnk, cos_sim
       from best_chunk
+      order by cos_sim desc
+      limit ${CANDIDATES}
     ),
     lex as (
       select d.id,
-             row_number() over (order by ${ftsRank(sql`d.search_tsv`, sql`d.search_tsv_en`, query)} desc) as rnk,
-             ${ftsRank(sql`d.search_tsv`, sql`d.search_tsv_en`, query)} as fts_rank
+             row_number() over (order by ${ftsRank(sql`d.search_tsv`, sql`d.search_tsv_en`, keywords.words)} desc) as rnk,
+             ${ftsRank(sql`d.search_tsv`, sql`d.search_tsv_en`, keywords.words)} as fts_rank
       from reference_docs d
-      where ${filters} and ${ftsMatch(sql`d.search_tsv`, sql`d.search_tsv_en`, query)}
-      order by ${ftsRank(sql`d.search_tsv`, sql`d.search_tsv_en`, query)} desc
+      where ${filters} and ${ftsMatch(sql`d.search_tsv`, sql`d.search_tsv_en`, keywords.words)}
+      order by ${ftsRank(sql`d.search_tsv`, sql`d.search_tsv_en`, keywords.words)} desc
       limit ${CANDIDATES}
     ),
     fuzzy as (
       select d.id,
-             row_number() over (order by word_similarity(${query}, d.search_text) desc) as rnk,
-             word_similarity(${query}, d.search_text) as trgm_sim
+             row_number() over (order by ${fuzzyScore(keywords.fuzzy, sql`d.search_text`)} desc) as rnk,
+             ${fuzzyScore(keywords.fuzzy, sql`d.search_text`)} as trgm_sim
       from reference_docs d
-      where ${filters} and ${query} <% d.search_text
-      order by word_similarity(${query}, d.search_text) desc
+      where ${filters} and ${fuzzyMatch(keywords.fuzzy, sql`d.search_text`)}
+      order by ${fuzzyScore(keywords.fuzzy, sql`d.search_text`)} desc
       limit ${CANDIDATES}
     ),
     ${fusedCte(
@@ -552,7 +561,7 @@ export async function searchReferenceDocs(
         : null,
     )}
     select d.id, d.title, d.tags, d.product_id, d.team_id, d.component_id, d.product_area,
-           d.status, d.doc_version, d.version, d.structured, d.source, d.created_at, d.updated_at,
+           d.status, d.doc_version, d.version, d.source, d.created_at, d.updated_at,
            d.customer_id, cu.slug as customer_slug, d.kind, d.slug,
            coalesce(b.snippet, left(d.body, 400)) as snippet, b.page,
            f.cos_sim, f.fts_rank, f.trgm_sim, f.rrf
@@ -606,7 +615,6 @@ export async function revertReferenceDoc(
       tags: past.tags ?? [],
       status: past.status,
       source: past.source,
-      structured: past.structured,
       docVersion: past.doc_version,
       ...(await filingSlugs(past)),
     },

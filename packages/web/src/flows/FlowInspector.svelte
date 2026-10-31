@@ -159,7 +159,7 @@
       <Select
         value={openTrigger.kind}
         options={KINDS}
-        aria-label="Trigger kind"
+        aria-label="trigger kind"
         onchange={(k) =>
           setTrigger({
             id: openTrigger.id,
@@ -178,13 +178,13 @@
         label="connection"
         required={openTrigger.kind === "item.synced"}
         info={openTrigger.kind === "schedule"
-          ? "With one, the flow runs once per recent item of it that passes the condition; without, once on its own."
+          ? "with one, the flow runs once per recent item of it that passes the condition; without, once on its own"
           : undefined}
       >
         <OptionSelect
           source="connections"
           value={asText(openTrigger.params.connection)}
-          label="Connection"
+          label="source"
           onchange={(v) => setParam(openTrigger, "connection", v)}
         />
       </Field>
@@ -253,7 +253,7 @@
       {/if}
     {/if}
     {#if openTrigger.kind !== "manual"}
-      <Group label="filter" hint="runs only for items that match">
+      <Group label="filter" info="runs only for items that match">
         {#if openTrigger.where}
           <ConditionEditor
             value={openTrigger.where}
@@ -287,7 +287,7 @@
     {#if action?.description}<Note>{action.description}</Note>{/if}
     {#if openStep.kind === "action" && !action}
       <Note tone="danger"
-        >'{openStep.action}' is not in the library any more.</Note
+        >'{openStep.action}' is not in the library any more</Note
       >
     {/if}
     <Field
@@ -315,7 +315,7 @@
     {:else if openStep.kind === "if" || openStep.kind === "filter"}
       <Group
         label={openStep.kind === "if" ? "condition" : "continue when"}
-        hint={openStep.kind === "if"
+        info={openStep.kind === "if"
           ? "matches go to then, the rest to else; both end the flow"
           : "the run stops here when this does not match"}
       >

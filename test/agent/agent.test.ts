@@ -604,7 +604,7 @@ describe("failure explanations", () => {
   it("points a missing credential at settings", () => {
     const explained = explainFailure("Not logged in · Please run /login");
     expect(explained.kind).toBe("no_credential");
-    expect(explained.message).toMatch(/Settings/);
+    expect(explained.message).toMatch(/settings › agent/);
   });
 
   it("distinguishes a rejected credential from a missing one", () => {

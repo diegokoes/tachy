@@ -15,15 +15,16 @@ import {
   type TextWindow,
 } from "@tachy/core/files";
 
+/**
+ * Compact JSON: the model reads it as well as indented JSON, and every result
+ * stays in the context, paid again on each later round of the turn.
+ */
 export function out(payload: unknown) {
   return {
     content: [
       {
         type: "text" as const,
-        text:
-          typeof payload === "string"
-            ? payload
-            : JSON.stringify(payload, null, 2),
+        text: typeof payload === "string" ? payload : JSON.stringify(payload),
       },
     ],
   };
@@ -160,12 +161,45 @@ export const GRADE_NOTE =
 export const CUSTOMER_NOTE =
   "Some hits carry a `customer`: that material came from one customer's install and must be attributed to them by name - never restated as general product behaviour. Hits with customer null are general. Where the two disagree, say so rather than merging them.";
 
-export function searchOut(rows: Record<string, unknown>[], kind: string) {
+const MAX_NAMED_REPOS = 5;
+
+/**
+ * Said on an archive search that found nothing better than weak while code is
+ * linked in its scope: past cases live in the archive, how the product
+ * behaves lives in its code.
+ */
+export function searchCodeNext(repoSlugs: string[]): string {
+  const named = repoSlugs.slice(0, MAX_NAMED_REPOS).join(", ");
+  const more = repoSlugs.length - MAX_NAMED_REPOS;
+  const repos = more > 0 ? `${named} and ${more} more` : named;
+  return `Linked repos hold this product's code (${repos}): a question about how the product behaves is answered from it. Run search_code before saying nothing is known.`;
+}
+
+/**
+ * `next` is attached as given; the caller decides when a result needs one.
+ * `repos` says once what every hit from a repo shares, ahead of the hits.
+ */
+export function searchOut(
+  rows: Record<string, unknown>[],
+  kind: string,
+  opts: { next?: string; repos?: Record<string, unknown>[] } = {},
+) {
   const trimmed = forAgent(rows);
+  const next = opts.next ? { next: opts.next } : {};
   if (!trimmed.length)
-    return outScrubbed({ results: [], note: `${kind}: ${NO_MATCHES}` });
-  const scoped = rows.some((r) => r.customer_slug ?? r.customer);
-  return outScrubbed(
-    scoped ? { results: trimmed, note: CUSTOMER_NOTE } : trimmed,
+    return outScrubbed({
+      results: [],
+      note: `${kind}: ${NO_MATCHES}`,
+      ...next,
+    });
+  const scoped = [...rows, ...(opts.repos ?? [])].some(
+    (r) => r.customer_slug ?? r.customer,
   );
+  if (!scoped && !opts.next && !opts.repos) return outScrubbed(trimmed);
+  return outScrubbed({
+    ...(opts.repos ? { repos: opts.repos } : {}),
+    results: trimmed,
+    ...(scoped ? { note: CUSTOMER_NOTE } : {}),
+    ...next,
+  });
 }

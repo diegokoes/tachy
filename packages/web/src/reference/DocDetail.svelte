@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fmtDate } from "../dates.svelte";
-  import { statusTone, type StatusAction } from "../library/status";
+  import { statusLamp, type StatusAction } from "../library/status";
   import { patchLibraryItem } from "../library/edit";
   import { api } from "../api";
   import type { ReferenceLineageRow, ReferenceRow } from "./rows";
@@ -14,7 +14,7 @@
   import { pushScope } from "../keys/keys.svelte";
   import { setTopActions } from "../shell/subnav.svelte";
   import { createSequence, errText } from "../resource.svelte";
-  import { Badge, Button, Chip, Icon, Note, Select } from "../tui";
+  import { Lamp, Badge, Button, Chip, Icon, Note, Select } from "../tui";
   import ReferenceForm from "./ReferenceForm.svelte";
   import ScopeCrumb from "../library/ScopeCrumb.svelte";
   import StatusActions from "../library/StatusActions.svelte";
@@ -204,7 +204,7 @@
 
 <!-- Rendered by App into the carved row beside the subnav, not here. -->
 {#snippet readActions()}
-  <Button size="sm" icon="back" onclick={onClose}>back</Button>
+  <Button size="sm" icon="back" onclick={onClose}>library</Button>
   {#if canEdit}
     <Button
       size="sm"
@@ -270,7 +270,7 @@
 
     <div class="meta status-meta">
       <span class="lifecycle">
-        <Badge tone={statusTone(doc.status)}>{doc.status}</Badge>
+        <Lamp lamp={statusLamp(doc.status)} word={doc.status} />
         {#if doc.customer_slug}
           <Badge tone="accent">{doc.customer_slug}</Badge>
         {/if}

@@ -3,7 +3,7 @@
   import { onDestroy, onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { Badge, Button, GroupHead, Note, Time } from "../tui";
+  import { Button, GroupHead, Lamp, Note, Time } from "../tui";
   import type { SystemInfo } from "./rows";
   import { system as shared } from "./systemState.svelte";
 
@@ -61,11 +61,15 @@
   <table>
     <tbody>
       <tr>
-        <td>Readiness</td>
+        <td>readiness</td>
         <td
-          ><Badge tone={runtime.readiness.ready ? "ok" : "danger"}
-            >{runtime.readiness.ready ? "ready" : "not ready"}</Badge
-          ></td
+          ><Lamp
+            lamp={{
+              level: "on",
+              tone: runtime.readiness.ready ? "ok" : "danger",
+            }}
+            word={runtime.readiness.ready ? "ready" : "not ready"}
+          /></td
         >
         <td class="muted"
           >database {runtime.readiness.database ? "up" : "down"} · schema {runtime
@@ -74,7 +78,7 @@
         >
       </tr>
       <tr>
-        <td>Release</td>
+        <td>release</td>
         <td
           >{system.env?.commit ?? "unknown"}{system.env?.env_badge
             ? ` (${system.env.env_badge})`
@@ -87,11 +91,14 @@
         </td>
       </tr>
       <tr>
-        <td>Maintenance</td>
+        <td>maintenance</td>
         <td>
-          <Badge tone={runtime.refusingChats ? "warn" : "muted"}
-            >{runtime.refusingChats ? "chats paused" : "off"}</Badge
-          >
+          <Lamp
+            lamp={runtime.refusingChats
+              ? { level: "on", tone: "warn" }
+              : { level: "off", tone: "muted" }}
+            word={runtime.refusingChats ? "chats paused" : "off"}
+          />
         </td>
         <td>
           {#if isGlobalAdmin()}
@@ -116,8 +123,8 @@
     <thead><tr><th>what</th><th>now</th><th>detail</th></tr></thead>
     <tbody>
       <tr>
-        <td>Chat slots</td>
-        <td>{runtime.turns.slotsUsed} / {runtime.turns.slotCap}</td>
+        <td>chat slots</td>
+        <td>{runtime.turns.slotsUsed} of {runtime.turns.slotCap}</td>
         <td class="muted"
           >running {runtime.turns.running} · queued {runtime.turns.queued} · refused
           since boot
@@ -125,7 +132,7 @@
         >
       </tr>
       <tr>
-        <td>Approvals waiting</td>
+        <td>approvals waiting</td>
         <td>{runtime.turns.pendingApprovals}</td>
         <td class="muted"
           >{runtime.turns.oldestApprovalAgeSeconds === null
@@ -147,12 +154,12 @@
         >
       </tr>
       <tr>
-        <td>Event loop delay</td>
+        <td>event loop delay</td>
         <td>{runtime.eventLoopP99Ms} ms</td>
         <td class="muted">p99, last 60 s</td>
       </tr>
       <tr>
-        <td>Embedding queue</td>
+        <td>embedding queue</td>
         <td
           >{runtime.embed
             ? `${runtime.embed.queries} queries · ${runtime.embed.passages} passages`
@@ -174,7 +181,7 @@
         <tr>
           <td>Postgres connections</td>
           <td
-            >{runtime.postgres.byProcess.reduce((n, p) => n + p.n, 0)} / {runtime
+            >{runtime.postgres.byProcess.reduce((n, p) => n + p.n, 0)} of {runtime
               .postgres.max}</td
           >
           <td class="muted"
@@ -192,7 +199,7 @@
     <table>
       <tbody>
         <tr
-          ><td>Single sign-on</td><td
+          ><td>single sign-on</td><td
             >{runtime.security.sso_configured
               ? "configured"
               : "not configured"}</td
@@ -203,7 +210,7 @@
           ></tr
         >
         <tr>
-          <td>Credential vault</td>
+          <td>credential vault</td>
           <td
             >{runtime.security.vault.enabled
               ? (runtime.security.vault.current_key ?? "on")
@@ -224,7 +231,7 @@
           </td>
         </tr>
         <tr
-          ><td>Accounts with a password</td><td
+          ><td>accounts with a password</td><td
             >{runtime.security.users_with_password}</td
           ><td class="muted"
             >{runtime.security.service_accounts} service account(s)</td
@@ -252,5 +259,5 @@
     (workers › jobs)</Note
   >
 {:else if !error}
-  <p class="muted">Loading…</p>
+  <p class="muted">loading…</p>
 {/if}

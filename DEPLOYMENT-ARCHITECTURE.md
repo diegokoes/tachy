@@ -54,7 +54,7 @@ api            node dist/api.js
 embedder       node dist/embedder.js: the one embedding model (§5.4)
 worker-light   node dist/worker.js: queues sync, flows, maintenance; 4 runs
 worker-heavy   node dist/worker.js: queues index, embed, testing; 1 run; k6
-postgres       pgvector/pgvector:0.8.6-pg16, with deploy/postgres/postgresql.conf
+postgres       pgvector/pgvector on Postgres 16, with deploy/postgres/postgresql.conf
 cli            profile "tools", ad hoc: sync, backup, restore, reembed, seed
 ```
 
@@ -1231,10 +1231,12 @@ are sized for the laptop: another host mounts its own file with
 
 `shm_size: 1gb` is set in `docker-compose.yml`, since Docker's default
 `/dev/shm` is 64 MB and parallel HNSW builds failed without it. The image is
-pinned to a pgvector version as well as a Postgres major
-(`pgvector/pgvector:0.8.6-pg16`): a floating `pg16` tag can change the
-extension under a running database. The restore test reads the image from
-the Compose file, so a bump changes one place.
+pinned to a pgvector version and digest as well as a Postgres major
+(`pgvector/pgvector:<pgvector>-pg16@sha256:…`): a floating `pg16` tag can
+change the extension under a running database. The restore test, the test
+suite and the CI schema plan read the image from `docker-compose.yml`, so a
+bump changes it there and in `load/turns.compose.yml`, the two files Dependabot
+updates.
 
 **Pools,** per process type:
 
@@ -1320,7 +1322,10 @@ image, and the `schema-plan` CI job runs `scripts/schema-plan.sh`.
   expand and contract instead: add the new column, backfill, move the code over
   to it, and drop the old one in a later release.
 - On Postgres 16, changing a generated column's expression means dropping and
-  re-adding the column.
+  re-adding the column. pg-schema-diff does not compare expressions, so its
+  plan stays empty and an existing database keeps the old one. The
+  `schema-plan` job warns, and the column is rebuilt by hand
+  (`deploy/runbooks/schema-change.md`).
 - Changing the embedding model needs no schema change. Changing the vector
   dimension needs the vectors nulled before the plan runs (§5.15).
 - Profile B's two-replica deploys need every schema change to be compatible

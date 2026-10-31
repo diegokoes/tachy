@@ -42,6 +42,7 @@
     },
     {
       key: "description",
+      face: "ui",
       label: "description",
       edit: "textarea",
       required: true,
@@ -65,7 +66,10 @@
   rowKey={(r) => r.slug}
   loading={patterns.loading}
   error={patterns.error}
-  emptyTitle="No resolution patterns yet."
+  emptyTitle={patterns.data.length
+    ? "no patterns match the filter"
+    : "no resolution patterns yet"}
+  emptyArt={patterns.data.length ? "noMatch" : "empty"}
   addLabel="add pattern"
   noun="pattern"
   editTitle={(r) => r.slug}
@@ -106,9 +110,9 @@
   >
     {#snippet message(impact, to)}
       <p>
-        Renaming <strong>{target.slug}</strong> to <strong>{to}</strong>
+        renaming <strong>{target.slug}</strong> to <strong>{to}</strong>
         rewrites
-        {impact.entries} knowledge {impact.entries === 1 ? "entry" : "entries"}.
+        {impact.entries} knowledge {impact.entries === 1 ? "entry" : "entries"}
       </p>
     {/snippet}
   </SlugRename>

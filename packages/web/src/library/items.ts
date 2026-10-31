@@ -36,22 +36,27 @@ const at = (d?: string) => (d ? Date.parse(d) || 0 : 0);
 export const fill = (v: number) => Math.max(3, v * 100);
 
 function versionSpan(row: KnowledgeRow) {
-  if (row.affected_version && row.fixed_version)
-    return `${row.affected_version} → ${row.fixed_version}`;
-  if (row.affected_version) return row.affected_version;
-  if (row.fixed_version) return `fixed ${row.fixed_version}`;
-  return undefined;
+  const parts = [
+    row.affected_version ? `affected ${row.affected_version}` : "",
+    row.fixed_version ? `fixed ${row.fixed_version}` : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : undefined;
 }
 
 export function toEntry(row: KnowledgeRow, query: string): Item {
   const text = entryText(
-    [row.root_cause, row.resolution, (row.signals ?? []).join(" · ")],
+    [
+      row.issue_summary,
+      row.root_cause,
+      row.resolution,
+      (row.signals ?? []).join(" · "),
+    ],
     query,
   );
   return {
     kind: "entry",
     id: row.id,
-    title: row.issue_summary ?? "(no summary)",
+    title: row.title,
     status: row.status,
     snippet: text ? excerpt(text, query) : undefined,
     version: versionSpan(row),

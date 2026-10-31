@@ -17,10 +17,24 @@ export const CONSOLE_PAGES: ConsolePage[] = [
   { key: "integrations", label: "integrations", icon: "integrations" },
   { key: "structure", label: "structure", icon: "structure" },
   { key: "access", label: "users", icon: "users" },
+  { key: "usage", label: "usage", icon: "usage" },
   { key: "flows", label: "flows", icon: "flows", overview: false },
   { key: "workers", label: "jobs", icon: "workers" },
   { key: "system", label: "system", icon: "system" },
 ];
+
+/** The `page` values the issues endpoint accepts. */
+const ISSUE_PAGES = [
+  "integrations",
+  "structure",
+  "access",
+  "workers",
+  "system",
+];
+const ADMIN_ISSUE_PAGES = ["workers", "system"];
+
+export const hasIssueList = (page: string, { admin }: { admin: boolean }) =>
+  ISSUE_PAGES.includes(page) && (admin || !ADMIN_ISSUE_PAGES.includes(page));
 
 export type ConsoleSection = {
   key: string;
@@ -45,9 +59,10 @@ export type ConsoleSection = {
 export function consoleSections(): Record<string, ConsoleSection[]> {
   const admin = isGlobalAdmin();
   return {
-    flows: [{ key: "forms", label: "ticket forms", fill: true }],
+    flows: [{ key: "forms", label: "flows", fill: true }],
+    usage: [],
     integrations: [
-      { key: "sources", label: "sources", n: "sources", add: "add connection" },
+      { key: "sources", label: "sources", n: "sources", add: "add source" },
       {
         key: "projects",
         label: "projects",
@@ -55,7 +70,7 @@ export function consoleSections(): Record<string, ConsoleSection[]> {
         n: "projects",
         add: "register project",
       },
-      { key: "tickets", label: "stored tickets", n: "tickets" },
+      { key: "tickets", label: "stored items", n: "tickets" },
       {
         key: "repos",
         label: "repos",

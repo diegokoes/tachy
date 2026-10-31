@@ -30,14 +30,16 @@ describe("draft sources", () => {
     await saveKnowledgeEntry({
       productId,
       component: "printing",
-      issueSummary: "spooler stalls at 023",
+      title: "Spooler stalls at 023",
+      issueSummary: "The spooler halts with error 023 on long batches.",
       rootCause: "buffer overrun",
       resolution: "restart the spooler",
     });
 
     const [source] = await draftSources(productId, "printing");
     expect(source.kind).toBe("entry");
-    expect(source.title).toBe("spooler stalls at 023");
+    expect(source.title).toBe("Spooler stalls at 023");
+    expect(source.body).toContain("The spooler halts with error 023");
     expect(source.body).toContain("buffer overrun");
     expect(source.body).toContain("restart the spooler");
   });
@@ -48,7 +50,7 @@ describe("draft sources", () => {
     await saveKnowledgeEntry({
       productId,
       component: "spooler",
-      issueSummary: "child lesson",
+      title: "child lesson",
     });
     expect(
       (await draftSources(productId, "printing")).map((s) => s.title),
@@ -60,7 +62,7 @@ describe("draft sources", () => {
     await saveKnowledgeEntry({
       productId,
       component: "coding",
-      issueSummary: "unrelated",
+      title: "unrelated",
     });
     expect(await draftSources(productId, "printing")).toEqual([]);
   });
@@ -91,7 +93,7 @@ describe("draft sources", () => {
     await saveKnowledgeEntry({
       productId,
       component: "printing",
-      issueSummary: "rejected",
+      title: "rejected",
       status: "rejected",
     });
     expect(await draftSources(productId, "printing")).toEqual([]);
@@ -100,7 +102,7 @@ describe("draft sources", () => {
   it("refuses an unknown component rather than returning nothing", async () => {
     const productId = await tree();
     await expect(draftSources(productId, "nope")).rejects.toThrow(
-      /No component/,
+      /no component/,
     );
   });
 });
@@ -122,7 +124,8 @@ describe("composed-from provenance", () => {
     const entry = await saveKnowledgeEntry({
       productId,
       component: "printing",
-      issueSummary: "a lesson",
+      title: "a lesson",
+      issueSummary: "What the spooler taught us.",
     });
     const doc = await saveReferenceDoc({
       productId,
@@ -151,7 +154,8 @@ describe("composed-from provenance", () => {
     const entry = await saveKnowledgeEntry({
       productId,
       component: "printing",
-      issueSummary: "a lesson",
+      title: "a lesson",
+      issueSummary: "What the spooler taught us.",
     });
     const article = await page(productId);
     await setComposedFrom(coreSql, article.id, [{ entryId: entry.id }]);
@@ -161,7 +165,7 @@ describe("composed-from provenance", () => {
     // now(), which is transaction-scoped. Two separate statements give the
     // source a later timestamp than the article, as in real use.
     await sql`update reference_docs set title = title where id = ${article.id}`;
-    await sql`update knowledge_entries set issue_summary = issue_summary
+    await sql`update knowledge_entries set title = title
               where id = ${entry.id}`;
 
     const built = await articleStaleness(article.id);
@@ -171,8 +175,8 @@ describe("composed-from provenance", () => {
 
   it("replaces the source set wholesale rather than accumulating", async () => {
     const productId = await tree();
-    const a = await saveKnowledgeEntry({ productId, issueSummary: "a" });
-    const b = await saveKnowledgeEntry({ productId, issueSummary: "b" });
+    const a = await saveKnowledgeEntry({ productId, title: "a" });
+    const b = await saveKnowledgeEntry({ productId, title: "b" });
     const article = await page(productId);
 
     await setComposedFrom(coreSql, article.id, [
@@ -197,7 +201,8 @@ describe("composed-from provenance", () => {
     const productId = await tree();
     const entry = await saveKnowledgeEntry({
       productId,
-      issueSummary: "a lesson",
+      title: "a lesson",
+      issueSummary: "What the spooler taught us.",
     });
     const article = await page(productId);
     await setComposedFrom(coreSql, article.id, [{ entryId: entry.id }]);
@@ -211,7 +216,8 @@ describe("composed-from provenance", () => {
     const productId = await tree();
     const entry = await saveKnowledgeEntry({
       productId,
-      issueSummary: "a lesson",
+      title: "a lesson",
+      issueSummary: "What the spooler taught us.",
     });
     const article = await page(productId);
     await setComposedFrom(coreSql, article.id, [{ entryId: entry.id }]);
@@ -230,12 +236,13 @@ describe("composed-from provenance", () => {
     await addWikiCategory({ productId, slug: "guides", name: "Guides" });
     const entry = await saveKnowledgeEntry({
       productId,
-      issueSummary: "a lesson",
+      title: "a lesson",
+      issueSummary: "What the spooler taught us.",
     });
     const article = await page(productId);
     await setComposedFrom(coreSql, article.id, [{ entryId: entry.id }]);
     await sql`update reference_docs set title = title where id = ${article.id}`;
-    await sql`update knowledge_entries set issue_summary = issue_summary
+    await sql`update knowledge_entries set title = title
               where id = ${entry.id}`;
 
     const toc = await wikiToc(productId);

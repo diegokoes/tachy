@@ -90,6 +90,7 @@
     mentionOptions,
     mentionWord,
     parseMentionWord,
+    reposNamedIn,
     takeTypedMentions,
     withMentions,
     withoutMentionBeingTyped,
@@ -264,13 +265,13 @@
   const modelCtx = $derived(parseModel(chat.input, offeredModels));
 
   /**
-   * `/name` picks a command or mode; `/artifact <query>`, `/az …`, a ticket
+   * `/name` picks a command or mode; `/recipe <query>`, `/az …`, a ticket
    * line and `/model …` pick arguments; an `@` word anywhere picks a source.
    */
   const cmdCtx = $derived.by(() => {
     const name = chat.input.match(/^\/([a-z0-9-]*)$/);
     if (name) return { mode: "command" as const, query: name[1] };
-    const arg = chat.input.match(/^\/artifact[ \t]+([^\n]*)$/);
+    const arg = chat.input.match(/^\/(?:recipe|artifact)[ \t]+([^\n]*)$/);
     if (arg) return { mode: "artifact" as const, query: arg[1] };
     if (azCtx) return { mode: "options" as const, query: azCtx.query };
     if (ticketCtx) return { mode: "options" as const, query: ticketCtx.id };
@@ -335,6 +336,25 @@
   $effect(() => {
     if (mentionCtx) ensureMentionables();
   });
+
+  // Typing starts the fetch once, so a repo named in the line can be offered.
+  $effect(() => {
+    if (chat.input.trim() && !mentionables.error) ensureMentionables();
+  });
+
+  /** Repos the line names in prose, attached on send unless dismissed. */
+  const namedRepos = $derived(
+    mentionables.list
+      ? reposNamedIn(
+          chat.input,
+          mentionables.list.repos.map((r) => r.slug),
+        ).filter(
+          (slug) =>
+            !chat.dismissedRepos.includes(slug) &&
+            !chat.mentions.some((m) => m.kind === "repo" && m.key === slug),
+        )
+      : [],
+  );
 
   const mentionMenu = $derived.by(
     (): { options: MenuOption[]; crumb: MenuCrumb } | null => {
@@ -675,7 +695,12 @@
     // puts one in the composer - would go out as plain text without this.
     if (message.startsWith("/") && !commands)
       commands = await getCommands().catch(() => null);
+    const named = namedRepos.map((slug) => ({
+      kind: "repo" as const,
+      key: slug,
+    }));
     const typed = await takeMentions(message);
+    chat.mentions = withMentions(chat.mentions, named);
     // Read before the input clears, which clears the lookup it comes from.
     const ticketArgsTyped = ticketLineArgs(typed);
     chat.input = "";
@@ -1048,7 +1073,7 @@
   class="chat bare"
   class:empty
   role="region"
-  aria-label="Chat"
+  aria-label="chat"
   ondragenter={(e) => {
     e.preventDefault();
     dragDepth++;
@@ -1091,7 +1116,7 @@
                 size="sm"
                 square
                 icon="flows"
-                title="Walk me through it"
+                title="walk me through it"
                 onclick={() =>
                   startTurn("walk me through it", WALKTHROUGH_COMMAND)}
               />
@@ -1141,7 +1166,7 @@
           <div class="turn">
             <span class="who err">{G.marker}busy</span>
             <div class="body err">
-              {#if entry.stopped}stopped. send your message again.{:else}{entry.text}
+              {#if entry.stopped}stopped. send your message again{:else}{entry.text}
                 <Button size="sm" onclick={() => stopRunning(entry)}
                   >stop it</Button
                 >{/if}
@@ -1177,7 +1202,7 @@
   </div>
 
   <div class="dock" bind:this={dockEl}>
-    {#if chat.uploads.length || chat.artifact || chat.model || chat.debug || chat.mode || chat.mentions.length || draftWaiting}
+    {#if chat.uploads.length || chat.artifact || chat.model || chat.debug || chat.mode || chat.mentions.length || namedRepos.length || draftWaiting}
       <div class="attachments">
         {#if chat.mode}
           <span class="attach model-chip">
@@ -1187,8 +1212,8 @@
             {chat.mode} mode
             <button
               class="chip-x"
-              aria-label="Leave {chat.mode} mode"
-              use:tip={`Leave ${chat.mode} mode`}
+              aria-label="leave {chat.mode} mode"
+              use:tip={`leave ${chat.mode} mode`}
               onclick={() => (chat.mode = undefined)}
               ><Icon name="close" size="1em" weight={7} /></button
             >
@@ -1200,9 +1225,25 @@
             {mention.key}
             <button
               class="chip-x"
-              aria-label="Detach {mention.kind} {mention.key}"
-              use:tip={`Detach ${mention.kind} ${mention.key}`}
+              aria-label="detach {mention.kind} {mention.key}"
+              use:tip={`detach ${mention.kind} ${mention.key}`}
               onclick={() => chat.mentions.splice(i, 1)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/each}
+        {#each namedRepos as slug (slug)}
+          <span
+            class="attach named-chip"
+            use:tip={"named in your message: attached when you send"}
+          >
+            <Icon name={MENTION_ICONS.repo} size="1em" />
+            {slug}
+            <button
+              class="chip-x"
+              aria-label="do not attach repo {slug}"
+              use:tip={`do not attach ${slug}`}
+              onclick={() => chat.dismissedRepos.push(slug)}
               ><Icon name="close" size="1em" weight={7} /></button
             >
           </span>
@@ -1215,8 +1256,8 @@
               : ""}
             <button
               class="chip-x"
-              aria-label="Back to your settings model"
-              use:tip={"Back to your settings model"}
+              aria-label="back to your settings model"
+              use:tip={"back to your settings model"}
               onclick={() => (chat.model = undefined)}
               ><Icon name="close" size="1em" weight={7} /></button
             >
@@ -1228,8 +1269,8 @@
             debug
             <button
               class="chip-x"
-              aria-label="Switch debug off"
-              use:tip={"Switch debug off"}
+              aria-label="switch debug off"
+              use:tip={"switch debug off"}
               onclick={() => (chat.debug = false)}
               ><Icon name="close" size="1em" weight={7} /></button
             >
@@ -1252,8 +1293,8 @@
             {chat.artifact.title}
             <button
               class="chip-x"
-              aria-label="Detach artifact"
-              use:tip={"Detach artifact"}
+              aria-label="detach recipe"
+              use:tip={"detach recipe"}
               onclick={() => (chat.artifact = undefined)}
               ><Icon name="close" size="1em" weight={7} /></button
             >
@@ -1266,8 +1307,8 @@
             {upload.filename}
             <button
               class="chip-x"
-              aria-label="Remove attachment"
-              use:tip={"Remove attachment"}
+              aria-label="remove attachment"
+              use:tip={"remove attachment"}
               onclick={() => chat.uploads.splice(i, 1)}
               ><Icon name="close" size="1em" weight={7} /></button
             >
@@ -1294,14 +1335,14 @@
           onpick={pickCommand}
         />
       {/if}
-      <label class="upload" use:tip={"Attach a document"}>
-        <Icon name="attach" label="Attach a document" />
+      <label class="upload" use:tip={"attach a document"}>
+        <Icon name="attach" label="attach a document" />
         <input type="file" accept={CHAT_UPLOAD_ACCEPT} onchange={onFile} />
       </label>
       <span class="field">
         <textarea
           bind:this={composerEl}
-          aria-label="Message the assistant, / for commands"
+          aria-label="message the assistant, / for commands"
           bind:value={chat.input}
           rows="2"
           onscroll={restSync}
@@ -1325,8 +1366,8 @@
               icon="clear"
               iconSize="1.25em"
               disabled={chat.busy}
-              aria-label="Clear the conversation"
-              title="Clear the conversation"
+              aria-label="clear the conversation"
+              title="clear the conversation"
               onclick={onClear}
             />
           {/if}
@@ -1337,8 +1378,8 @@
               variant="ghost"
               icon="stop"
               iconSize="1.25em"
-              aria-label="Stop"
-              title="Stop (/stop)"
+              aria-label="stop"
+              title="stop (/stop)"
               onclick={stopClick}
             />
           {:else if chat.input.trim()}
@@ -1346,8 +1387,8 @@
               variant="ghost"
               icon="send"
               iconSize="1.25em"
-              aria-label="Send"
-              title="Send"
+              aria-label="send"
+              title="send"
               onclick={sendClick}
             />
           {/if}
@@ -1637,8 +1678,10 @@
     display: inline-block;
     transform: scaleX(-1);
   }
+  /* Pasted ids, paths and URLs have no break opportunity of their own. */
   .turn.user .body {
     background: color-mix(in srgb, var(--accent) 14%, var(--panel-solid));
+    overflow-wrap: anywhere;
   }
 
   /* The textarea is what sits on the nav's centre line, not the row: the
@@ -1687,6 +1730,12 @@
   .artifact-chip,
   .model-chip {
     color: var(--accent);
+  }
+  .named-chip {
+    color: var(--accent);
+    opacity: 0.6;
+    text-decoration: underline dashed;
+    text-underline-offset: 0.25em;
   }
   .chip-x {
     display: inline-flex;

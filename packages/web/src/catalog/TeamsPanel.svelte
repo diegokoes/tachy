@@ -29,6 +29,7 @@
   const columns: Column<Team>[] = $derived([
     {
       key: "name",
+      face: "ui",
       label: t("team"),
       width: "18rem",
       edit: "text",
@@ -61,8 +62,8 @@
   rowKey={(r) => r.slug}
   loading={teams.loading}
   error={teams.error}
-  emptyTitle={`No ${t("teams")} yet.`}
-  emptyDetail={`Owns ${t("products")}, projects, repos.`}
+  emptyTitle={`no ${t("teams")} yet`}
+  emptyDetail={`owns ${t("products")}, projects, repos`}
   canEdit={() => admin}
   canDelete={() => admin}
   canCreate={admin}

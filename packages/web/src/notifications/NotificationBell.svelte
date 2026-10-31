@@ -1,22 +1,71 @@
 <script lang="ts">
   import type { NotificationRow } from "@tachy/contract";
+  import { ring } from "../motion/motion";
   import { navigate, router } from "../shell/router.svelte";
   import { Button, Time } from "../tui";
   import { boardItemPath } from "../work-items/board";
-  import { itemChanges, markNotificationsRead } from "./notify.svelte";
+  import {
+    itemChanges,
+    markNotificationsRead,
+    markNotificationsSeen,
+    notifyState,
+  } from "./notify.svelte";
+
+  const MAX_COUNT_SHOWN = 99;
+  const WINDOW_GUTTER_PX = 12;
 
   let shown = $state(false);
   let hostEl = $state<HTMLElement>();
+  let menuEl = $state<HTMLElement>();
+  let nudgePx = $state(0);
 
   const changes = $derived(itemChanges());
   const unreadIds = $derived(
     changes.filter((change) => !change.read_at).map((change) => change.id),
   );
+  const countLabel = $derived(
+    unreadIds.length > MAX_COUNT_SHOWN
+      ? `${MAX_COUNT_SHOWN}+`
+      : String(unreadIds.length),
+  );
+  const ringing = $derived(changes.some((change) => !change.seen_at));
 
   $effect(() => {
     void router.path;
     shown = false;
   });
+
+  let heardIds: Set<string> | undefined;
+  $effect(() => {
+    if (!notifyState.loaded) return;
+    const heard = heardIds;
+    const arrived =
+      heard !== undefined &&
+      changes.some((change) => !change.seen_at && !heard.has(change.id));
+    heardIds = new Set(changes.map((change) => change.id));
+    const bell = hostEl?.querySelector("svg");
+    if (arrived && bell) ring(bell);
+  });
+
+  $effect(() => {
+    if (shown && ringing) void markNotificationsSeen();
+  });
+
+  $effect(() => {
+    if (menuEl) placeUnderBell();
+  });
+
+  function placeUnderBell() {
+    if (!hostEl || !menuEl) return;
+    const bell = hostEl.getBoundingClientRect();
+    const width = menuEl.offsetWidth;
+    const centredLeft = bell.left + bell.width / 2 - width / 2;
+    const fittedLeft = Math.min(
+      Math.max(centredLeft, WINDOW_GUTTER_PX),
+      window.innerWidth - WINDOW_GUTTER_PX - width,
+    );
+    nudgePx = fittedLeft - centredLeft;
+  }
 
   /** A change note carries where its item lives on the board. */
   function itemPath(change: NotificationRow): string | null {
@@ -50,74 +99,104 @@
   }
 </script>
 
-<svelte:window onpointerdown={outside} />
+<svelte:window onpointerdown={outside} onresize={placeUnderBell} />
 
-{#if unreadIds.length || shown}
-  <div class="host" bind:this={hostEl}>
-    <Button
-      variant="ghost"
-      size="sm"
-      square
-      icon={unreadIds.length ? "changesUnread" : "changes"}
-      tone={unreadIds.length ? "accent" : undefined}
-      aria-label={unreadIds.length
-        ? `${unreadIds.length} changes and notices`
-        : "Changes and notices"}
-      title="changes on items you follow, notices from flows"
-      onclick={() => (shown = !shown)}
-    />
-    {#if shown}
-      <div
-        class="menu"
-        role="dialog"
-        aria-label="Changes and notices"
-        tabindex="-1"
-        {onkeydown}
-      >
-        {#each changes as change (change.id)}
-          <button
-            class="change"
-            class:unread={!change.read_at}
-            onclick={() => open(change)}
+<div class="host" bind:this={hostEl}>
+  <Button
+    variant="ghost"
+    size="sm"
+    square
+    iconSize="1.25rem"
+    icon={ringing ? "changesArrived" : "changes"}
+    morph
+    tone={ringing ? "warn" : unreadIds.length ? "accent" : undefined}
+    aria-label={unreadIds.length
+      ? `${unreadIds.length} changes and notices`
+      : "changes and notices"}
+    onclick={() => (shown = !shown)}
+  />
+  {#if unreadIds.length}
+    <span class="count" class:ringing aria-hidden="true">{countLabel}</span>
+  {/if}
+  {#if shown}
+    <div
+      class="menu"
+      bind:this={menuEl}
+      style:--nudge="{nudgePx}px"
+      role="dialog"
+      aria-label="changes and notices"
+      tabindex="-1"
+      {onkeydown}
+    >
+      {#each changes as change (change.id)}
+        <button
+          class="change"
+          class:unread={!change.read_at}
+          onclick={() => open(change)}
+        >
+          <span class="head">
+            <span class="title">{change.title}</span>
+            <span class="at"><Time at={change.created_at} /></span>
+          </span>
+          {#if change.body_text}<span class="lines">{change.body_text}</span
+            >{/if}
+        </button>
+      {:else}
+        <p class="note">
+          nothing new. changes others make to items you follow, and notices from
+          flows, show here
+        </p>
+      {/each}
+      {#if unreadIds.length}
+        <div class="foot">
+          <Button
+            size="sm"
+            variant="ghost"
+            onclick={() => markNotificationsRead(unreadIds)}
+            >mark all read</Button
           >
-            <span class="head">
-              <span class="title">{change.title}</span>
-              <span class="at"><Time at={change.created_at} /></span>
-            </span>
-            {#if change.body_text}<span class="lines">{change.body_text}</span
-              >{/if}
-          </button>
-        {:else}
-          <p class="note">
-            Nothing new. Changes others make to items you follow, and notices
-            from flows, show here.
-          </p>
-        {/each}
-        {#if unreadIds.length}
-          <div class="foot">
-            <Button
-              size="sm"
-              variant="ghost"
-              onclick={() => markNotificationsRead(unreadIds)}
-              >mark all read</Button
-            >
-          </div>
-        {/if}
-      </div>
-    {/if}
-  </div>
-{/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
+</div>
 
 <style>
   .host {
     position: relative;
   }
+  .count {
+    position: absolute;
+    top: 0;
+    right: 0;
+    translate: 20% -10%;
+    box-sizing: border-box;
+    min-width: 1.05rem;
+    height: 1.05rem;
+    padding: 0 0.28rem;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--accent-fill);
+    box-shadow: 0 0 0 2px var(--bg);
+    color: var(--bg);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    pointer-events: none;
+  }
+  .count.ringing {
+    background: var(--warn);
+  }
   .menu {
     position: absolute;
     top: calc(100% + 0.35rem);
-    right: 0;
+    left: 50%;
+    translate: calc(-50% + var(--nudge, 0px)) 0;
     z-index: 8;
-    width: min(26rem, 80vw);
+    width: min(20rem, calc(100vw - 24px));
     max-height: 24rem;
     overflow-y: auto;
     display: flex;

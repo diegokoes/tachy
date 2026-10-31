@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
+  import { fade } from "svelte/transition";
   import ChatView from "./chat/ChatView.svelte";
   import LibraryView from "./library/LibraryView.svelte";
   import BoardView from "./work-items/BoardView.svelte";
@@ -16,7 +17,14 @@
   import { isSection, navItems, tabOf } from "./shell/nav";
   import { jellyPress } from "./motion/motion";
   import StarField from "./motion/StarField.svelte";
+  import TypeLine from "./motion/TypeLine.svelte";
   import Wordmark from "./motion/Wordmark.svelte";
+  import { reducedMotion } from "./motion/gsap";
+  import {
+    claimFirstVisit,
+    RECESS_TYPING_MS,
+    recessLine,
+  } from "./motion/recess";
   import { loadTheme, themeState } from "./theme/theme.svelte";
   import { applyOrgDefaults } from "./theme/defaults";
   import { loadFonts } from "./theme/fonts.svelte";
@@ -45,7 +53,11 @@
   const view = $derived(section("chat"));
 
   const sub = $derived(subnav());
+  const hasSubnav = $derived(sub !== null);
   const acts = $derived(sub ? (topActions() ?? sub.actions) : undefined);
+
+  /** Typed over the tabs on a section's first visit; null once it is typed. */
+  let recessTyping = $state<string | null>(null);
 
   let wizardSkipped = $state(localStorage.getItem("tachy-skip-wizard") === "1");
   const showWizard = $derived(session.bootstrapped === false && !wizardSkipped);
@@ -71,7 +83,6 @@
   let subEl = $state<HTMLElement>();
   let windowEl = $state<HTMLElement>();
   let subH = $state(0);
-  let settling = $state(false);
   let carveMask = $state("none");
   let carveOutline = $state("");
   let carveW = $state(0);
@@ -169,20 +180,15 @@
     return () => observer.disconnect();
   });
 
-  // The subnav bar outlives a section change (see `setSubnav`), so its
-  // indicator would slide in from the old section's tab. Suppressed for two
-  // frames: the recess observer re-centres the bar a frame after the switch.
   $effect(() => {
-    void view;
-    settling = true;
-    let second = 0;
-    const first = requestAnimationFrame(() => {
-      second = requestAnimationFrame(() => (settling = false));
-    });
-    return () => {
-      cancelAnimationFrame(first);
-      cancelAnimationFrame(second);
-    };
+    const tab = tabOf(view);
+    const section = nav.find((item) => item.key === tab);
+    // Presence only, so picking a tab types nothing. The incoming view's
+    // effect has registered its bar by the time this one runs.
+    const bar = hasSubnav ? untrack(() => sub) : null;
+    if (!section || !bar || reducedMotion() || !claimFirstVisit(tab)) return;
+    recessTyping = recessLine(section, bar);
+    return () => (recessTyping = null);
   });
 
   $effect(() => setScrollport(mainEl ?? null));
@@ -202,8 +208,7 @@
     );
   });
 
-  // ctrl+, is fixed beside the settings tab's digit: rebinding it would share
-  // the tab's stored key. Feedback and the palette are not tabs.
+  // Settings, feedback and the palette are not tabs, so no digit reaches them.
   $effect(() =>
     pushScope([
       {
@@ -301,7 +306,10 @@
       bind:offsetHeight={topbarH}
       style:--topbar-h="{topbarH}px"
     >
-      <div class="mark"><Wordmark /></div>
+      <div class="mark lead">
+        <span class="word"><Wordmark /></span>
+        <NotificationBell />
+      </div>
       <div class="navbar">
         <Panel>
           <Tabs
@@ -316,10 +324,9 @@
       <!-- Empty: balances the wordmark's track so the pill sits on the true
            centre. -->
       <div class="mark"></div>
-      <div class="bell">
-        <NotificationBell />
+      <div class="corner">
         <button
-          class="feedback"
+          class="corner-mark"
           aria-label="feedback"
           use:tip={"feedback"}
           onclick={(e) => {
@@ -329,6 +336,20 @@
           use:jellyPress
         >
           <Icon name="flag" weight={7} />
+        </button>
+        <button
+          class="corner-mark"
+          class:open={view === "settings"}
+          aria-label="settings"
+          aria-current={view === "settings" ? "page" : undefined}
+          use:tip={"settings"}
+          onclick={(e) => {
+            openSection("settings");
+            if (e.detail !== 0) e.currentTarget.blur();
+          }}
+          use:jellyPress
+        >
+          <Icon name="settings" weight={7} />
         </button>
       </div>
     </div>
@@ -351,15 +372,34 @@
         >
           <path d={carveOutline} />
         </svg>
-        <div class="subnav" class:settling bind:this={subEl}>
+        <div
+          class="subnav"
+          class:typing={recessTyping !== null}
+          bind:this={subEl}
+        >
           <Tabs
             items={sub.items}
             active={sub.active}
             hotkeys="shift"
             anchor="--tab-sub"
             labels={themeState.navLabels}
-            onpick={sub.onpick}
+            onpick={(key) => {
+              recessTyping = null;
+              sub.onpick(key);
+            }}
           />
+          {#if recessTyping}
+            <span class="typed" aria-hidden="true" out:fade={{ duration: 160 }}>
+              {#key recessTyping}
+                <TypeLine
+                  text={recessTyping}
+                  caret={false}
+                  withinMs={RECESS_TYPING_MS}
+                  ondone={() => (recessTyping = null)}
+                />
+              {/key}
+            </span>
+          {/if}
         </div>
         {#if acts}
           <div class="top-acts">{@render acts()}</div>
@@ -495,7 +535,7 @@
   .topbar {
     position: relative;
   }
-  .bell {
+  .corner {
     position: absolute;
     top: 50%;
     right: 0;
@@ -507,6 +547,7 @@
   .mark {
     display: flex;
     align-items: center;
+    gap: var(--pad-2);
     min-width: 0;
   }
 
@@ -577,8 +618,7 @@
     }
   }
 
-  /* A lone mark beside the bell, coloured like an inactive tab. */
-  .feedback {
+  .corner-mark {
     display: inline-flex;
     align-items: center;
     font: inherit;
@@ -590,10 +630,11 @@
     line-height: 1;
     user-select: none;
   }
-  .feedback:hover {
+  .corner-mark:hover {
     color: var(--text);
   }
-  .feedback:focus-visible {
+  .corner-mark.open,
+  .corner-mark:focus-visible {
     outline: none;
     color: var(--accent);
   }
@@ -617,13 +658,20 @@
   }
 
   /* Below this the pill needs the whole row; the wordmark is decoration and
-     goes first. */
+     goes first, and the bell leaves the grid as the corner does. */
   @media (max-width: 52rem) {
     .topbar {
       grid-template-columns: 1fr;
     }
-    .mark {
+    .mark:not(.lead),
+    .word {
       display: none;
+    }
+    .lead {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      transform: translateY(-50%);
     }
   }
 
@@ -724,15 +772,36 @@
     text-transform: uppercase;
     letter-spacing: var(--label-spacing);
   }
+  /* A ghost draws no edge, so its padding is only spacing, which the corner
+     beside a long tab bar cannot spare. */
+  .top-acts :global(.btn.ghost) {
+    padding-inline: var(--pad-2);
+  }
 
   /* The rule fills a full-width bar; a hugging pill has no edge to run to. */
   .subnav :global(.rule) {
     display: none;
   }
-  /* Held for the two frames a section change takes to settle, so the indicator
-     lands on the incoming section's tab instead of travelling to it. */
-  .subnav.settling :global(.tabs::before) {
+
+  /* Transparent, not hidden: the tabs keep the width the recess is cut to and
+     stay clickable under the line typing over them. They drop out at once and
+     fade back in. */
+  .subnav :global(.tabs) {
+    transition: opacity 160ms ease-out;
+  }
+  .subnav.typing :global(.tabs) {
+    opacity: 0;
     transition: none;
+  }
+  .typed {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    color: var(--muted);
+    font-family: var(--font-mono);
   }
 
   /* Content clears the recess floor, less the padding the Panel already

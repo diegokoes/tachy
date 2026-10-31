@@ -97,7 +97,7 @@ describe("reference docs", () => {
 
     await expect(
       updateReferenceDoc(saved.id, { body: "x", expectedVersion: 999 }),
-    ).rejects.toThrow(/Version conflict/);
+    ).rejects.toThrow(/version conflict/);
 
     await updateReferenceDoc(saved.id, {
       body: "rewritten body about scanners",

@@ -9,7 +9,7 @@ export const ORG_WIDE = "general";
 export const scopeOf = (w: WikiListRow) => w.product_slug ?? ORG_WIDE;
 
 export const wikiLabel = (w: WikiListRow) =>
-  w.product_name ?? "General (org-wide)";
+  w.product_name ?? "general (org-wide)";
 
 /** Every path in the section, built in one place. */
 export const wikiPath = (scope: string, ...rest: string[]) =>

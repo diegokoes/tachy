@@ -15,11 +15,11 @@ describe("what a refused response says", () => {
     expect(refusal.problem?.title).toBe("Forbidden");
   });
 
-  it("falls back to the title when there is no detail", async () => {
+  it("falls back to the title, in lowercase, when there is no detail", async () => {
     const refusal = await readError(
       Response.json({ title: "Bad Gateway", status: 502 }, { status: 502 }),
     );
-    expect(refusal.message).toBe("Bad Gateway");
+    expect(refusal.message).toBe("bad gateway");
   });
 
   it("lets the status speak for a body that is not a problem", async () => {
@@ -27,7 +27,7 @@ describe("what a refused response says", () => {
       status: 502,
       statusText: "Bad Gateway",
     });
-    expect((await readError(page)).message).toBe("Bad Gateway");
+    expect((await readError(page)).message).toBe("bad gateway");
 
     const bare = new Response("", { status: 503 });
     const refusal = await readError(bare);

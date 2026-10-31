@@ -76,9 +76,9 @@ async function savedPdf(
 export function defineReferenceJobs() {
   defineJob({
     kind: EXTRACT_KIND,
-    title: "Complete a doc saved from a PDF",
+    title: "complete a doc saved from a PDF",
     description:
-      "Places the PDF's figures in the reference doc that was saved from its text, and reads its scanned pages with the model, on the credential of whoever saved it. Queued by that save.",
+      "places the PDF's figures in the reference doc that was saved from its text, and reads its scanned pages with the model, on the credential of whoever saved it. queued by that save",
     params: paramsSchema,
     // Each page's pictures are decoded whole, which a light worker has no
     // room for beside its other runs.

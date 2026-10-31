@@ -3,14 +3,16 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  EXTRA_FILTERS,
   applyExtras,
   byKey,
+  EXTRA_FILTERS,
   loadFilters,
+  presetScope,
   pruneValues,
   saveFilters,
-  type Facets,
+  takePreset,
   type FacetKey,
+  type Facets,
 } from "../../packages/web/src/library/filters";
 import {
   CONFIDENCES,
@@ -148,5 +150,13 @@ describe("applyExtras", () => {
   it("leaves out an extra that is shown but unset", () => {
     const params = applyExtras(new URLSearchParams(), ["cloud"], {});
     expect(params.has("cloud")).toBe(false);
+  });
+});
+
+describe("scope presets", () => {
+  it("hands a status over once, and nothing the next time", () => {
+    presetScope({ status: "draft" });
+    expect(takePreset()).toEqual({ status: "draft" });
+    expect(takePreset()).toBeNull();
   });
 });

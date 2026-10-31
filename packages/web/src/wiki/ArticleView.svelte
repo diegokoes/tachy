@@ -9,11 +9,11 @@
   import { scrollport } from "../shell/scrollport.svelte";
   import { isCurator } from "../access/session.svelte";
   import { setTopActions } from "../shell/subnav.svelte";
-  import { Badge, Button, EmptyState, Note } from "../tui";
+  import { Lamp, Button, EmptyState, Note } from "../tui";
   import Reads from "../library/Reads.svelte";
   import Versions from "../library/Versions.svelte";
   import { patchLibraryItem } from "../library/edit";
-  import { statusTone } from "../library/status";
+  import { statusLamp } from "../library/status";
   import { LinkTargets } from "./wikilinks.svelte";
   import type { ReferenceRow } from "../reference/rows";
   import ArticleContents from "./ArticleContents.svelte";
@@ -233,13 +233,13 @@
     <Note tone="danger">{error}</Note>
   {:else if missing}
     <EmptyState
-      icon="file"
+      art="wiki"
       title={slug === MAIN_PAGE_SLUG
-        ? "No main page yet."
-        : `No article '${slug}' yet.`}
+        ? "no main page yet"
+        : `no article '${slug}' yet`}
       detail={slug === MAIN_PAGE_SLUG
-        ? "Landing page: product summary, entry points."
-        : "Linked but not written."}
+        ? "landing page: product summary, entry points"
+        : "linked but not written"}
     >
       {#if isCurator()}
         <Button
@@ -256,7 +256,7 @@
       <header>
         <h2 bind:this={titleEl}>{article.title}</h2>
         {#if article.status !== "approved"}
-          <Badge tone={statusTone(article.status)}>{article.status}</Badge>
+          <Lamp lamp={statusLamp(article.status)} word={article.status} />
         {/if}
         <span class="when">
           <Versions
@@ -289,7 +289,7 @@
           {article.built.changed === 1 ? "source has" : "sources have"} changed since
           this was written{article.built.changedTitles.length
             ? `: ${article.built.changedTitles.join(" · ")}`
-            : "."}
+            : ""}
         </Note>
       {/if}
 
@@ -307,7 +307,7 @@
 
       <footer class="cats">
         {#if article.categories?.length}
-          <span class="lbl">categories:</span>
+          <span class="lbl">sections:</span>
           {#each article.categories as category, i (category.id)}
             {#if i > 0}<span class="sep">|</span>{/if}
             <a
@@ -319,7 +319,7 @@
             >
           {/each}
         {:else}
-          <span class="muted">Filed under no category yet.</span>
+          <span class="muted">in no section yet</span>
         {/if}
       </footer>
     </article>
@@ -357,12 +357,12 @@
      never moves. Two lines; a longer title is cut rather than let grow. */
   .pin-slot {
     display: flex;
-    align-items: flex-end;
-    height: calc(2 * 1.3em + var(--pad-2));
+    align-items: flex-start;
+    height: calc(2 * 1.3em);
     font-size: var(--fs-md);
   }
   .pinned {
-    margin: 0 0 var(--pad-2);
+    margin: 0;
     font-weight: 700;
     line-height: 1.3;
     display: -webkit-box;

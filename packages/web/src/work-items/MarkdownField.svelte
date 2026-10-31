@@ -100,7 +100,7 @@
     class="md-toggle"
     class:on={!preview}
     aria-pressed={!preview}
-    aria-label={preview ? `Write ${label} as markdown` : `Preview ${label}`}
+    aria-label={preview ? `write ${label} as markdown` : `preview ${label}`}
     use:tip={preview ? "back to markdown" : "preview"}
     onclick={() => (preview = !preview)}
   >
@@ -133,8 +133,8 @@
           <img src={img.url} alt={img.name} />
           <button
             class="x"
-            aria-label={`Remove ${img.name}`}
-            use:tip={"Remove image"}
+            aria-label={`remove ${img.name}`}
+            use:tip={"remove image"}
             onclick={() => removeImage(img.key)}
           >
             <Icon name="close" size="0.9em" weight={7} />

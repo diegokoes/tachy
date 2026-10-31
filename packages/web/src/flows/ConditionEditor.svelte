@@ -5,7 +5,7 @@
     type ConditionOp,
     type FlowOption,
   } from "@tachy/contract";
-  import Choice from "../settings/Choice.svelte";
+  import Choice from "../tui/Choice.svelte";
   import { Icon, Select } from "../tui";
   import ConditionEditor from "./ConditionEditor.svelte";
   import OptionSelect from "./OptionSelect.svelte";
@@ -81,7 +81,7 @@
   <div class="group">
     <div class="head">
       <Choice
-        label="How the conditions combine"
+        label="how the conditions combine"
         options={[
           { value: "all", label: "all of" },
           { value: "any", label: "any of" },
@@ -91,7 +91,7 @@
           onchange(m === "any" ? { any: children } : { all: children })}
       />
       {#if onremove}
-        <button class="x" aria-label="Remove this group" onclick={onremove}
+        <button class="x" aria-label="remove this group" onclick={onremove}
           ><Icon name="close" size="0.85em" /></button
         >
       {/if}
@@ -125,7 +125,7 @@
     <div class="head">
       <span class="k">not</span>
       {#if onremove}
-        <button class="x" aria-label="Remove" onclick={onremove}
+        <button class="x" aria-label="remove" onclick={onremove}
           ><Icon name="close" size="0.85em" /></button
         >
       {/if}
@@ -151,7 +151,7 @@
         value={leaf.field}
         extra={fields}
         free
-        label="Field"
+        label="field"
         onchange={(v) => onchange({ ...leaf, field: v })}
       />
     </span>
@@ -159,7 +159,7 @@
       <Select
         value={leaf.op}
         options={ops}
-        aria-label="Comparison"
+        aria-label="comparison"
         onchange={(v) => onchange({ ...leaf, op: v as ConditionOp })}
       />
     </span>
@@ -167,7 +167,7 @@
       <span class="value">
         {#if leaf.op === "in"}
           <input
-            aria-label="Values"
+            aria-label="values"
             value={listText(leaf.value)}
             oninput={(e) =>
               onchange({
@@ -184,12 +184,12 @@
             deps={{ connection, field: leaf.field }}
             value={listText(leaf.value)}
             free
-            label="Value"
+            label="value"
             onchange={(v) => onchange({ ...leaf, value: v })}
           />
         {:else}
           <input
-            aria-label="Value"
+            aria-label="value"
             value={listText(leaf.value)}
             oninput={(e) => onchange({ ...leaf, value: e.currentTarget.value })}
           />
@@ -197,7 +197,7 @@
       </span>
     {/if}
     {#if onremove}
-      <button class="x" aria-label="Remove this condition" onclick={onremove}
+      <button class="x" aria-label="remove this condition" onclick={onremove}
         ><Icon name="close" size="0.85em" /></button
       >
     {/if}

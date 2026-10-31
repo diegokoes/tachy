@@ -141,7 +141,7 @@
   </ol>
 {/snippet}
 
-<nav class="contents" aria-label="Contents" bind:this={nav}>
+<nav class="contents" aria-label="contents" bind:this={nav}>
   <a class="cap" href={location.pathname} onclick={toTop}>contents</a>
   {@render branch(tree)}
 </nav>

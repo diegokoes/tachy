@@ -60,9 +60,7 @@ export function snapshotOf(row: Record<string, any>): Record<string, unknown> {
 
 /**
  * Which keys differ between two snapshots. Arrays compare by content, so
- * re-saving the same tags is not an edit. Everything else compares by JSON,
- * which reports a re-ordered `structured` blob as changed - cheap and honest,
- * rather than a deep-equality guess that could hide a real edit.
+ * re-saving the same tags is not an edit; a missing value equals null.
  */
 export function changedFields(
   before: Record<string, unknown>,
@@ -121,7 +119,7 @@ export function assertExpectedVersion(
   expected: number | null | undefined,
 ): void {
   if (expected != null && current !== expected)
-    throw conflict(`Version conflict: expected ${expected}, found ${current}`);
+    throw conflict(`version conflict: expected ${expected}, found ${current}`);
 }
 
 /**
@@ -133,7 +131,7 @@ export function assertUpdated<T>(
   what: string,
 ): asserts row is T {
   if (!row)
-    throw conflict(`Version conflict: ${what} was updated concurrently`);
+    throw conflict(`version conflict: ${what} was updated concurrently`);
 }
 
 /**
@@ -198,7 +196,7 @@ export async function getRevision(
     left join users u on u.id = r.user_id
     where ${targetWhere(target)} and r.version = ${version}
   `;
-  if (!row) throw notFound(`No revision ${version} for this library item`);
+  if (!row) throw notFound(`no revision ${version} for this library item`);
   return row as RevisionRow & { snapshot: Record<string, unknown> };
 }
 

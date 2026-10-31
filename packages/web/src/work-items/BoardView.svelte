@@ -96,7 +96,7 @@
   <div class="top">
     {#if project && itemId}
       <Button size="sm" variant="ghost" icon="back" onclick={backToList}
-        >back</Button
+        >{project.name}</Button
       >
     {/if}
     {#if project}
@@ -111,8 +111,9 @@
   <Spinner />
 {:else if !az.projects.length}
   <EmptyState
-    title="No Azure DevOps project yet."
-    detail="An admin registers a team's projects under console › integrations."
+    art="board"
+    title="no Azure DevOps project yet"
+    detail="an admin registers a team's projects under console › integrations"
   />
 {:else if composing}
   <TicketComposer oncreated={created} />

@@ -356,6 +356,18 @@ create table work_item_messages (
 
 create index work_item_messages_item_idx on work_item_messages(work_item_id, created_at);
 
+-- The query vector of each window a ticket's thread was last searched by,
+-- keyed by the window's text, so opening it again embeds only what changed.
+-- Rewritten at each open: an item keeps the windows of its latest search only.
+create table work_item_query_vectors (
+    work_item_id     uuid not null references work_items(id) on delete cascade,
+    text_sha256      text not null,
+    embedding_model  text not null,
+    embedding        vector(768) not null,
+    created_at       timestamptz not null default now(),
+    primary key (work_item_id, embedding_model, text_sha256)
+);
+
 -- What happened to an item besides its messages: a field that changed, a
 -- moment the source reports (first response, resolved), a link added. With the
 -- messages, in time order, this is the item's timeline.
@@ -556,14 +568,21 @@ create table knowledge_entries (
     superseded_by       uuid references knowledge_entries(id) on delete set null,
     constraint knowledge_entries_no_self_supersede check (superseded_by is null or superseded_by <> id),
 
+    -- The one line the library lists the entry by; the limit is
+    -- MAX_ENTRY_TITLE_CHARS in @tachy/contract.
+    title               text not null check (char_length(title) between 1 and 80),
     issue_summary       text,
     symptoms            text[] not null default '{}',
     root_cause          text,
     resolution          text,
+    -- What was checked or tried on the way to the cause, in order; markdown.
+    investigation       text,
     -- on update cascade so renaming a pattern slug rewrites referencing entries.
     resolution_pattern  text references resolution_patterns(slug) on update cascade,
     signals             text[] not null default '{}',
     tags                text[] not null default '{}',
+    -- Web addresses the lesson rests on; isRelatedLink in @tachy/contract is the rule.
+    related_links       text[] not null default '{}',
     -- component is the validated taxonomy anchor; product_area is derived from the
     -- component hierarchy at write time (kept as a column so the generated search
     -- columns can reference it - they can't join other tables).
@@ -577,8 +596,8 @@ create table knowledge_entries (
     -- understood is unclear/high.
     confidence          text check (confidence is null or confidence in ('low','medium','high')),
 
-    -- low-cardinality, filterable facets promoted out of `structured` so they're
-    -- indexable/queryable (e.g. "all prod issues", "all unclear resolutions").
+    -- low-cardinality, filterable facets (e.g. "all prod issues", "all unclear
+    -- resolutions").
     -- cloud = observed environment. No CHECK: the vocabulary is
     -- deployment-specific (prod/qa vs dev/demo/preprod…). The app layer enforces
     -- a lowercase-slug shape and surfaces existing values for reuse.
@@ -601,9 +620,11 @@ create table knowledge_entries (
     -- typing "prod printer error" narrows by environment without spending a
     -- filter control on it.
     search_text text generated always as (
+        coalesce(title,'')        || ' ' ||
         coalesce(issue_summary,'') || ' ' ||
         coalesce(root_cause,'')   || ' ' ||
         coalesce(resolution,'')   || ' ' ||
+        coalesce(investigation,'') || ' ' ||
         coalesce(resolution_pattern,'') || ' ' ||
         coalesce(product_area,'') || ' ' ||
         coalesce(cloud,'')        || ' ' ||
@@ -618,9 +639,11 @@ create table knowledge_entries (
     -- "printer stopped" finds "printer stops". Searches match against either.
     search_tsv tsvector generated always as (
         to_tsvector('simple',
+            coalesce(title,'')        || ' ' ||
             coalesce(issue_summary,'') || ' ' ||
             coalesce(root_cause,'')   || ' ' ||
             coalesce(resolution,'')   || ' ' ||
+            coalesce(investigation,'') || ' ' ||
             coalesce(resolution_pattern,'') || ' ' ||
             coalesce(product_area,'') || ' ' ||
             coalesce(cloud,'')        || ' ' ||
@@ -633,9 +656,11 @@ create table knowledge_entries (
 
     search_tsv_en tsvector generated always as (
         to_tsvector('english',
+            coalesce(title,'')        || ' ' ||
             coalesce(issue_summary,'') || ' ' ||
             coalesce(root_cause,'')   || ' ' ||
             coalesce(resolution,'')   || ' ' ||
+            coalesce(investigation,'') || ' ' ||
             coalesce(resolution_pattern,'') || ' ' ||
             coalesce(product_area,'') || ' ' ||
             coalesce(cloud,'')        || ' ' ||

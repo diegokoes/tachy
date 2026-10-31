@@ -1,8 +1,9 @@
 <script lang="ts">
   import type { Entry } from "./chatState.svelte";
   import { shatter } from "../motion/motion";
-  import { Button, Panel } from "../tui";
+  import { Button, Field, Panel } from "../tui";
   import ApprovalField from "./ApprovalField.svelte";
+  import { approvalTitle } from "./approvalTitle";
   import { api } from "../api";
   import { parseUploadRef, uploadPreviewPath } from "@tachy/contract";
   import type { WorkItemSchema } from "@tachy/contract";
@@ -152,7 +153,7 @@
 
 <div class="wrap">
   <Panel
-    title={entry.tool}
+    title={approvalTitle(entry.tool, entry.input)}
     tone={entry.status === "denied"
       ? "danger"
       : entry.status === "approved"
@@ -222,15 +223,18 @@
 
     {#if pending}
       {#if denying}
-        <input
-          class="reason"
-          placeholder="why? (optional, the assistant reads this)"
-          bind:value={reason}
-          onkeydown={(e) => {
-            if (e.key === "Enter") ondecide(false, reason.trim() || undefined);
-            if (e.key === "Escape") denying = false;
-          }}
-        />
+        <div class="reason">
+          <Field label="reason" info="optional; the assistant reads it">
+            <input
+              bind:value={reason}
+              onkeydown={(e) => {
+                if (e.key === "Enter")
+                  ondecide(false, reason.trim() || undefined);
+                if (e.key === "Escape") denying = false;
+              }}
+            />
+          </Field>
+        </div>
       {/if}
       {#if adoptNote}<p class="missing">{adoptNote}</p>{/if}
       <div class="acts">
@@ -246,28 +250,23 @@
         <Button
           variant="ghost"
           size="sm"
-          aria-label={raw ? "back to fields" : "edit raw JSON"}
-          onclick={toggleRaw}>{raw ? "fields" : "{ }"}</Button
-        >
+          square
+          icon="json"
+          aria-pressed={raw}
+          title={raw ? "back to fields" : "raw input"}
+          onclick={toggleRaw}
+        />
         <Button
           variant="ghost"
-          square
           tone="ok"
           icon="approve"
           disabled={rawBad}
-          title={rawBad ? "fix the JSON first" : "approve"}
-          aria-label="approve"
           onclick={() => ondecide(true)}
-        />
-        <Button
-          variant="ghost"
-          square
-          tone="danger"
-          icon="reject"
-          title={denying ? "confirm deny" : "deny"}
-          aria-label="deny"
-          onclick={deny}
-        />
+          >{rawBad ? "fix the JSON first" : "approve"}</Button
+        >
+        <Button variant="ghost" tone="danger" icon="reject" onclick={deny}
+          >{denying ? "confirm deny" : "deny"}</Button
+        >
       </div>
     {/if}
   </Panel>
@@ -337,9 +336,7 @@
   }
 
   .reason {
-    width: 100%;
     margin-top: var(--pad-3);
-    font: inherit;
     font-size: var(--fs-sm);
   }
 

@@ -1,4 +1,4 @@
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 const CRON_FIELDS = 5;
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -26,6 +26,11 @@ export function describeSchedule(cron: string): string {
   if (step && hour === "*" && dow === "*")
     return `every ${Number(step[1])} min`;
   if (min === "*" && hour === "*" && dow === "*") return "every minute";
+  const hourStep = /^\*\/(\d+)$/.exec(hour);
+  if (hourStep && whole(min) && dow === "*") {
+    const every = `every ${Number(hourStep[1])} h`;
+    return Number(min) === 0 ? every : `${every} at :${pad(Number(min))}`;
+  }
   if (whole(min) && hour === "*" && dow === "*")
     return Number(min) === 0
       ? "every hour"

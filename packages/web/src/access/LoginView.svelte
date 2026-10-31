@@ -2,6 +2,7 @@
   import { session, login, logout } from "./session.svelte";
   import { errText } from "../resource.svelte";
   import AuthShell from "./AuthShell.svelte";
+  import Wordmark from "../motion/Wordmark.svelte";
   import { Button, Field, Note, Panel } from "../tui";
 
   let email = $state("");
@@ -27,7 +28,9 @@
 <AuthShell>
   <div class="login">
     <Panel>
-      <div class="wordmark">tachy</div>
+      <h1 class="brand" aria-label="tachy">
+        <Wordmark scale={1.6} lit align="center" />
+      </h1>
 
       {#if session.config?.passwordLogin}
         <form onsubmit={submit}>
@@ -52,21 +55,18 @@
             <Button
               type="submit"
               variant="primary"
-              square
               icon="login"
-              aria-label="sign in"
-              title="sign in"
               {busy}
-              disabled={!email.trim() || !password}
-            />
+              disabled={!email.trim() || !password}>sign in</Button
+            >
           </div>
         </form>
       {/if}
 
       {#if session.uninvited}
         <Note tone="warn">
-          {session.uninvited.email ?? "This account"} is signed in with SSO but has
-          not been added to tachy. Ask an app admin to add it under Admin › access.
+          {session.uninvited.email ?? "this account"} is signed in with SSO but has
+          not been added to tachy. ask an app admin to add it under console › users
         </Note>
         <button class="sso" onclick={logout}>sign out of SSO</button>
       {:else if session.config?.sso}
@@ -75,8 +75,8 @@
 
       {#if !session.config?.passwordLogin && !session.config?.sso}
         <Note tone="warn">
-          No login method is configured. Set TACHY_API_TOKEN or OIDC_* in the
-          environment, or run the setup wizard.
+          no login method is configured. set TACHY_API_TOKEN or OIDC_* in the
+          environment, or run the setup wizard
         </Note>
       {/if}
     </Panel>
@@ -87,12 +87,10 @@
   .login {
     width: min(24rem, 100%);
   }
-  .wordmark {
-    font-family: var(--font-mono);
-    color: var(--accent);
-    font-size: 2rem;
-    letter-spacing: 0.04em;
-    margin-bottom: var(--pad-3);
+  .brand {
+    display: flex;
+    justify-content: center;
+    margin: 0 0 var(--pad-3);
   }
   form {
     display: flex;

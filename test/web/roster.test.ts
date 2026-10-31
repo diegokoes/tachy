@@ -56,13 +56,12 @@ describe("what a member is sent", () => {
 });
 
 describe("the tab bar", () => {
-  it("offers the console and settings to everyone", () => {
+  it("offers the console to everyone, and settings from the corner", () => {
     expect(navItems().map((n) => n.key)).toEqual([
       "chat",
       "board",
       "library",
       "console",
-      "settings",
     ]);
   });
 
@@ -72,7 +71,7 @@ describe("the tab bar", () => {
   });
 
   it("knows the sections an address can open, tab or not", () => {
-    for (const key of ["chat", "wiki", "feedback", "console"])
+    for (const key of ["chat", "wiki", "feedback", "console", "settings"])
       expect(isSection(key)).toBe(true);
     expect(isSection("admin")).toBe(false);
     expect(isSection("library-old")).toBe(false);

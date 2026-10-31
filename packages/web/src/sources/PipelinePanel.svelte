@@ -2,6 +2,8 @@
   import { onMount } from "svelte";
   import { fmtDate } from "../dates.svelte";
   import {
+    radarFits,
+    EMPTY,
     Bars,
     DataTable,
     Legend,
@@ -20,7 +22,8 @@
   import { activity } from "../admin/activity.svelte";
   import { pct, type Count } from "../admin/overview";
   import Detail from "../admin/Detail.svelte";
-  import { ago, col, seriesStats, signed, TILE_DAYS } from "../admin/detail";
+  import { col, seriesStats, signed, TILE_DAYS } from "../admin/detail";
+  import { ago } from "../dates.svelte";
   import { band, FRESHNESS_STATES, freshnessGroups } from "./freshness";
   import { freshness } from "./freshness.svelte";
   import Overview from "../admin/Overview.svelte";
@@ -109,7 +112,9 @@
     col<Connection>("auth", "auth refused", (c) => c.auth_failures, {
       end: true,
     }),
-    col<Connection>("last", "last refusal", (c) => c.last_auth_failure ?? "–"),
+    col<Connection>("last", "last refusal", (c) =>
+      c.last_auth_failure ? fmtDate(c.last_auth_failure) : EMPTY,
+    ),
   ];
   const connectionFigures = $derived<Count[]>([
     { key: "calls", label: "calls", text: compact(calls) },
@@ -151,7 +156,7 @@
       label: "busiest day",
       text: dayStats.peak
         ? `${dayStats.peak.label} · ${compact(dayStats.peak.value)}`
-        : "–",
+        : EMPTY,
     },
     { key: "change", label: "vs earlier half", text: signed(dayStats.change) },
     {
@@ -213,7 +218,7 @@
     },
     {
       key: "tickets",
-      label: "stored tickets",
+      label: "stored items",
       text: compact(sources.work_items),
       to: "tickets",
     },
@@ -222,13 +227,6 @@
       key: "files",
       label: "files",
       text: compact(repos.files),
-      to: "repos",
-      of: "repos",
-    },
-    {
-      key: "chunks",
-      label: "chunks",
-      text: compact(repos.chunks),
       to: "repos",
       of: "repos",
     },
@@ -267,7 +265,7 @@
 </script>
 
 {#snippet sourcesChart()}
-  {#if bySource.length >= 3}
+  {#if radarFits(bySource.length)}
     <Radar
       axes={bySource.map((b) => ({ key: b.key, label: b.label }))}
       series={[

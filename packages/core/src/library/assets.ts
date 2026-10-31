@@ -48,11 +48,11 @@ export async function saveAsset(input: {
 export async function getAsset(
   id: string,
 ): Promise<{ contentType: LibraryAssetType; bytes: Buffer }> {
-  if (!UUID_RE.test(id)) throw notFound(`No image '${id}'`);
+  if (!UUID_RE.test(id)) throw notFound(`no image '${id}'`);
   const [row] = await sql`
     select content_type, bytes from library_assets where id = ${id}
   `;
-  if (!row) throw notFound(`No image '${id}'`);
+  if (!row) throw notFound(`no image '${id}'`);
   return {
     contentType: row.content_type as LibraryAssetType,
     bytes: row.bytes as Buffer,

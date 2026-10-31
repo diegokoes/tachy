@@ -8,7 +8,6 @@ import { api } from "../api";
 import { componentOptions } from "../catalog/componentOptions";
 import { errText } from "../resource.svelte";
 import { canCurateScope } from "../access/session.svelte";
-import { t } from "../terms";
 
 /** The ids and slugs of the row being edited; `product_id` only when editing. */
 type FilingSeed = {
@@ -39,14 +38,14 @@ export class Filing {
   error = $state<string | null>(null);
 
   productOptions = $derived([
-    { value: "", label: `no ${t("product")}` },
+    { value: "", label: "none" },
     ...this.products
       .filter((p) => canCurateScope({ team_slug: p.team_slug }))
       .map((p) => ({ value: p.slug, label: `${p.name} (${p.team_slug})` })),
   ]);
   componentChoices = $derived(componentOptions(this.components));
   customerOptions = $derived([
-    { value: "", label: "none (general)" },
+    { value: "", label: "none" },
     ...this.customers.map((c) => ({ value: c.slug, label: c.name })),
   ]);
   unitOptions = $derived([

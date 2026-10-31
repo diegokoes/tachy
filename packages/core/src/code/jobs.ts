@@ -4,7 +4,7 @@ import { sql } from "../infra/db";
 import { count, num } from "../jobs/present";
 import { defineJob } from "../jobs/registry";
 import { indexRepo } from "./indexer";
-import { listRepos } from "./repos";
+import { listRepos, markIndexInterrupted, REINDEX_JOB } from "./repos";
 import { repoToken } from "./token";
 
 /** Each repo's queued or running reindex, by slug. */
@@ -33,10 +33,10 @@ export async function activeReindexes(): Promise<Map<string, RepoIndexRun>> {
 
 export function defineCodeJobs() {
   defineJob({
-    kind: "repo.reindex",
-    title: "Index repository",
+    kind: REINDEX_JOB,
+    title: "index repository",
     description:
-      "Fetches the repository's tracked lines and embeds the files that changed since the last index.",
+      "fetches the repository's tracked lines and embeds the files that changed since the last index",
     params: z.object({
       repo: z.string().min(1),
       line: z.string().min(1).optional(),
@@ -44,7 +44,7 @@ export function defineCodeJobs() {
         .boolean()
         .optional()
         .describe(
-          "Cut and embed every file again, not only what changed. For after a change of chunk size or embedding model.",
+          "cut and embed every file again, not only what changed. for after a change of chunk size or embedding model",
         ),
     }),
     queue: "index",
@@ -77,6 +77,7 @@ export function defineCodeJobs() {
         : lines.map((l, i) => `${l.ref}: ${said[i]}`).join(" · ");
     },
     timeout: "8h",
+    abandoned: (params) => markIndexInterrupted(params.repo),
     run: async (ctx, params) => {
       ctx.log(`indexing ${params.repo}${params.line ? ` ${params.line}` : ""}`);
       const indexed = await indexRepo(params.repo, {
@@ -96,16 +97,16 @@ export function defineCodeJobs() {
 
   defineJob({
     kind: "repos.refresh",
-    title: "Index all repositories",
+    title: "index all repositories",
     description:
-      "Queues a reindex of each linked repository not being indexed already, as runs of their own under this one. With scope 'indexed' (the nightly default) it skips repositories never indexed, which wait for someone to index them; 'all' takes those too. A repo with no new commits costs a fetch and a tree diff.",
+      "queues a reindex of each linked repository not being indexed already, as runs of their own under this one. with scope 'indexed' (the nightly default) it skips repositories never indexed, which wait for someone to index them; 'all' takes those too. a repo with no new commits costs a fetch and a tree diff",
     params: z.object({
       scope: z.enum(["indexed", "all"]).default("indexed"),
       full: z
         .boolean()
         .optional()
         .describe(
-          "Cut and embed every file of every repository again. For after a change of chunk size or embedding model; takes as long as the first index did.",
+          "cut and embed every file of every repository again. for after a change of chunk size or embedding model; takes as long as the first index did",
         ),
     }),
     defaultSchedule: "40 2 * * *",

@@ -1,4 +1,5 @@
 import type { Column } from "../tui";
+import { EMPTY } from "../tui/glyphs";
 
 /** Totals worth printing over a series of per-day counts. */
 export type SeriesStats = {
@@ -33,7 +34,7 @@ export function seriesStats(
 /** "+12%", "-8%", or a dash when there is nothing to compare. */
 export const signed = (fraction: number | null) =>
   fraction === null
-    ? "–"
+    ? EMPTY
     : `${fraction > 0 ? "+" : ""}${Math.round(fraction * 100)}%`;
 
 /** A column that prints a value, for the tables where nothing needs a snippet. */
@@ -49,21 +50,6 @@ export const col = <T>(
   width: o.width,
   align: o.end ? "end" : undefined,
 });
-
-const HOUR_MINUTES = 60;
-const HOURS_SHOWN_BELOW = 48;
-const ONE_DECIMAL_BELOW = 10;
-
-/** "3.2 h ago", "12 min ago", "never" - how stale a timestamp is. */
-export function ago(iso: string | null, now = Date.now()) {
-  if (!iso) return "never";
-  const min = Math.max(0, Math.round((now - Date.parse(iso)) / 60_000));
-  if (min < HOUR_MINUTES) return `${min} min ago`;
-  const h = min / HOUR_MINUTES;
-  if (h < HOURS_SHOWN_BELOW)
-    return `${h < ONE_DECIMAL_BELOW ? h.toFixed(1) : Math.round(h)} h ago`;
-  return `${Math.round(h / 24)} d ago`;
-}
 
 /** Age in whole hours, or null for one that never happened. */
 export const ageHours = (iso: string | null, now = Date.now()) =>

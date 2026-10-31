@@ -15,6 +15,7 @@ export { default as Rail, type RailItem } from "./Rail.svelte";
 export { default as FilterBar } from "./FilterBar.svelte";
 export { default as Badge } from "./Badge.svelte";
 export { default as Chip } from "./Chip.svelte";
+export { default as ValueList } from "./ValueList.svelte";
 export { default as Meter } from "./Meter.svelte";
 export { default as Dial } from "./Dial.svelte";
 export { default as Plot, getPlot, type Frame } from "./Plot.svelte";
@@ -29,6 +30,7 @@ export { default as Tooltip } from "./Tooltip.svelte";
 export { default as Waffle, type WaffleItem } from "./Waffle.svelte";
 export { default as WaffleBars } from "./WaffleBars.svelte";
 export { default as Radar } from "./Radar.svelte";
+export { radarFits } from "./radar";
 export { default as Figures, type FigureItem } from "./Figures.svelte";
 export { default as Units } from "./Units.svelte";
 export { default as LineChart } from "./LineChart.svelte";
@@ -69,6 +71,11 @@ export { default as Select } from "./AsciiSelect.svelte";
 export { default as Caret, caretSide } from "./Caret.svelte";
 export { default as CaretHost } from "./CaretHost.svelte";
 export { default as CaretInput } from "./CaretInput.svelte";
+export { default as SearchBox } from "./SearchBox.svelte";
+export { default as Choice } from "./Choice.svelte";
+export { default as Menu } from "./Menu.svelte";
+export type { MenuItem } from "./menu";
+export { default as BarField } from "./BarField.svelte";
 export { default as NoMatch } from "./NoMatch.svelte";
 export { default as Spinner } from "./Spinner.svelte";
 export { default as Scrollbar } from "./Scrollbar.svelte";
@@ -92,9 +99,11 @@ export {
   toneVar,
   type Stacked,
 } from "./scale";
-export { G, RAMP } from "./glyphs";
-export { compact, usd, dayOfMonth } from "./figures";
-export { toneOf, isActive, type Tone } from "./tone";
+export { EMPTY, G, RAMP } from "./glyphs";
+export { default as Lamp } from "./Lamp.svelte";
+export type { Lamp as LampState, LampLevel } from "./lamp";
+export { compact, usd, dayOfMonth, keepUnits } from "./figures";
+export { toneOf, lampOf, isActive, type Tone } from "./tone";
 export { ICONS, type IconName } from "./icons";
 export {
   blankDraft,

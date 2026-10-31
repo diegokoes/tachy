@@ -15,9 +15,12 @@ import {
   searchCode,
   readCodeFile,
   listCodeDir,
+  repoMap,
   codeChangesBetween,
   codeDiff,
+  codeHistory,
   codeReleasesContaining,
+  MAX_HISTORY_COMMITS,
   repoToken,
 } from "@tachy/core/code";
 import { badInput } from "@tachy/core/infra";
@@ -44,6 +47,51 @@ async function scopedRepoSlugs(scope: {
   const inProject = scope.project ? await reposInProject(scope.project) : [];
   const slugs = new Set([...named, ...inProject.map((r) => r.slug)]);
   return slugs.size ? [...slugs] : undefined;
+}
+
+/**
+ * Each repo and line the hits came from, once: every hit on it shares the
+ * component, customer, release and indexed commit. Unset fields are left out.
+ */
+function searchedLines(hits: any[]): Record<string, unknown>[] {
+  const byLine = new Map<string, Record<string, unknown>>();
+  for (const r of hits) {
+    const key = `${r.repo_slug}\u0000${r.line}`;
+    if (byLine.has(key)) continue;
+    const fields = {
+      repo: r.repo_slug,
+      component: r.component_slug,
+      customer: r.customer_slug,
+      line: r.line,
+      version_label: r.version_label,
+      indexed_commit: r.commit,
+      indexed_days_ago: r.indexed_days_ago,
+    };
+    byLine.set(
+      key,
+      Object.fromEntries(Object.entries(fields).filter(([, v]) => v != null)),
+    );
+  }
+  return [...byLine.values()];
+}
+
+/**
+ * A customer filter's id. A name that is no customer is often the repo's own
+ * ("the acme addon"), so the refusal names the repos whose slug holds it.
+ */
+async function customerIdOrRepoHint(customer: string): Promise<string> {
+  try {
+    return await getCustomerIdBySlug(customer);
+  } catch (err) {
+    const word = customer.toLowerCase();
+    const slugs = (await listRepos({}))
+      .map((r) => r.slug)
+      .filter((slug) => slug.toLowerCase().includes(word));
+    if (!slugs.length) throw err;
+    throw badInput(
+      `${(err as Error).message} repos whose slug holds '${customer}': ${slugs.join(", ")} - if one of them was meant, pass it as repo to search_code, read_code_file or list_code_tree`,
+    );
+  }
 }
 
 tool(
@@ -73,7 +121,7 @@ tool(
         productId && component
           ? (await resolveComponentStrict(productId, component)).id
           : undefined,
-      customerId: customer ? await getCustomerIdBySlug(customer) : undefined,
+      customerId: customer ? await customerIdOrRepoHint(customer) : undefined,
     });
     const rows = inProject
       ? listed.filter((r) => inProject.includes(r.slug))
@@ -107,7 +155,7 @@ tool(
 tool(
   "search_code",
   {
-    description: `Hybrid (semantic + trigram) search over the indexed code of linked repositories. Returns the top-matching chunks with path, line range, the line (branch) and the commit they were indexed at. Search with symptom terms, symbol names, or error strings; then use read_code_file to read narrowly around a hit. Results reflect the indexed commit, not necessarily the latest code - always cite path:start-end @ commit, and say so when indexed_days_ago is more than a few days; a hit with partial: true comes from an index still being written or interrupted. ${GRADE_NOTE}`,
+    description: `Hybrid (semantic + trigram) search over the indexed code of linked repositories. Returns the top-matching chunks with path and line range; \`repos\` gives once, for each repo the hits came from, the line (branch) and the commit it was indexed at, and when there are several each hit names its repo and line. A hit's excerpt is the chunk's lines holding the query words, numbered; defines names what the chunk declares. Search with symptom terms, symbol names, or error strings; then use read_code_file to read narrowly around a hit. Results reflect the indexed commit, not necessarily the latest code - always cite path:start-end @ commit, and say so when indexed_days_ago is more than a few days; a hit with partial: true comes from an index still being written or interrupted. ${GRADE_NOTE}`,
     inputSchema: {
       query: z.string(),
       repo: z.string().optional().describe("Repo slug from list_repos"),
@@ -172,7 +220,7 @@ tool(
         productId && component
           ? (await resolveComponentStrict(productId, component)).id
           : undefined,
-      customerId: customer ? await getCustomerIdBySlug(customer) : undefined,
+      customerId: customer ? await customerIdOrRepoHint(customer) : undefined,
       version,
       line,
       pathPrefix: path_prefix,
@@ -187,24 +235,22 @@ tool(
         hits: hits.length,
       },
     });
+    const linesHit = searchedLines(hits);
+    const several = linesHit.length > 1;
     return searchOut(
       hits.map((r: any) => ({
-        repo: r.repo_slug,
-        component: r.component_slug,
-        customer: r.customer_slug,
-        line: r.line,
-        version_label: r.version_label,
+        ...(several ? { repo: r.repo_slug, line: r.line } : {}),
         path: r.path,
         lines: `${r.start_line}-${r.end_line}`,
         lang: r.lang,
         relevance: r.relevance,
         grade: r.grade,
-        snippet: r.snippet,
-        indexed_commit: r.commit,
-        indexed_days_ago: r.indexed_days_ago,
+        excerpt: r.excerpt,
+        ...(r.defines.length ? { defines: r.defines } : {}),
         ...(r.index_status !== "ready" ? { partial: true } : {}),
       })),
       "search_code",
+      { repos: linesHit },
     );
   },
 );
@@ -280,6 +326,49 @@ tool(
 const CHANGES_NEXT =
   "For one of these commits: code_diff with its sha shows what it changed, and code_releases_containing names the first release it shipped in.";
 
+tool(
+  "code_history",
+  {
+    description:
+      "When and why a file or directory of a linked repo changed: the newest commits that touched it, newest first, or with symbol only those that change how often the symbol occurs there (git log -S: where it was added, removed or its uses changed), with the archived work items their messages reference. Pass the path of a search_code hit. Only the newest `searched` commits touching the path are read; truncated: true means older history exists, so narrow the path to reach further back.",
+    inputSchema: {
+      repo: z.string(),
+      path: z.string().describe("A file or directory in the repo."),
+      symbol: z
+        .string()
+        .max(200)
+        .optional()
+        .describe(
+          "A name or string, matched literally: keeps the commits that change its count under path.",
+        ),
+      ref: z
+        .string()
+        .optional()
+        .describe(
+          "A tracked line from list_repos `lines`, a branch or tag name, or a commit sha, instead of the default line.",
+        ),
+      limit: z.number().int().positive().max(MAX_HISTORY_COMMITS).optional(),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ repo, path, symbol, ref, limit }) => {
+    const history = await codeHistory(repo, {
+      path,
+      symbol,
+      ref,
+      limit,
+      token: await repoToken(repo, await resolveCurrentUserId()),
+    });
+    if (!history.searched) return out({ ...history, note: NO_PATH_HISTORY });
+    return out(
+      history.commits.length ? { ...history, next: CHANGES_NEXT } : history,
+    );
+  },
+);
+
+const NO_PATH_HISTORY =
+  "No commit on this line touches the path. Check its spelling with list_code_tree; a file that was renamed keeps its history under the old path.";
+
 const REVISION_FIELD =
   "A release (1.51.32), a branch or tag name, or a commit sha.";
 
@@ -331,11 +420,19 @@ tool(
   async ({ repo, commit }) => out(await codeReleasesContaining(repo, commit)),
 );
 
+/**
+ * Said with a repo map. Its names say what exists, not what the code does, and
+ * an answer written from names alone describes a repo nobody read. A repo's
+ * own docs may describe code that has since changed.
+ */
+const MAP_NEXT =
+  "The map names what exists, not what it does: before saying what the code does, read the files the question turns on (the entry file the rest hangs off, the libraries it calls) with read_code_file. Docs in the repo may be out of date; describe what the code does. A folder shown with only its file count is past the map's size: list_code_tree with its path lists it in full.";
+
 tool(
   "list_code_tree",
   {
     description:
-      "The entries of one directory in a linked repo, directories first: for finding where things live when a search has no term to start from, or for describing how a repo is laid out. One level per call; pass an entry's path to go deeper. Read files with read_code_file.",
+      "How a linked repo is laid out, for finding where things live when a search has no term to start from, or for describing what a repo holds. At the root (no path, no version) it returns the repo's map: its indexed folders as deep as the map's size allows, each with its file count, and the files with the names they define. With a path it lists that one directory, directories first. Read files with read_code_file.",
     inputSchema: {
       repo: z.string(),
       path: z
@@ -355,8 +452,12 @@ tool(
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ repo, path, version, ref }) =>
-    out(await listCodeDir(repo, path ?? "", { version, ref })),
+  async ({ repo, path, version, ref }) => {
+    const atRoot = !path?.replace(/^\/+|\/+$/g, "");
+    const map = atRoot && !version ? await repoMap(repo, { ref }) : null;
+    if (map) return outScrubbed({ ...map, next: MAP_NEXT });
+    return out(await listCodeDir(repo, path ?? "", { version, ref }));
+  },
 );
 
 const MAX_WALKTHROUGH_STEPS = 8;

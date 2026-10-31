@@ -7,7 +7,6 @@ const SECTIONS: NavItem[] = [
   { key: "board", label: "board", icon: "board" },
   { key: "library", label: "library", icon: "library" },
   { key: "console", label: "console", icon: "admin" },
-  { key: "settings", label: "settings", icon: "settings" },
 ];
 
 /** The tab bar's items, in hotkey order. */
@@ -24,8 +23,12 @@ export const tabOf = (section: string) => HOSTED[section] ?? section;
 /** Opens over the whole window, with no tab and no host. */
 const STANDALONE = ["feedback"];
 
+/** Opens in the window from the top bar's corner, with no tab. */
+const CORNERED = ["settings"];
+
 /** Whether `key` names a section the app renders, as a path's first segment. */
 export const isSection = (key: string) =>
   SECTIONS.some((s) => s.key === key) ||
   key in HOSTED ||
-  STANDALONE.includes(key);
+  STANDALONE.includes(key) ||
+  CORNERED.includes(key);

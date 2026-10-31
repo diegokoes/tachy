@@ -138,7 +138,7 @@
         );
         entries = rows.map((r) => ({
           insert: `entry:${r.id}`,
-          label: r.issue_summary ?? "(no summary)",
+          label: r.title,
           what: "entry",
         }));
       } catch {
@@ -413,8 +413,8 @@
       label="slug"
       required
       info={editing
-        ? "The article's address. Renaming it rewrites [[links]] to it, and the old address keeps working."
-        : "The article's address, and what [[links]] to it use."}
+        ? "the article's address. renaming it rewrites [[links]] to it, and the old address keeps working"
+        : "the article's address, and what [[links]] to it use"}
     >
       <input bind:value={slug} oninput={() => (slugTouched = true)} required />
     </Field>
@@ -424,7 +424,7 @@
     {#if hasComponents}
       <Field
         label="about"
-        info="Product part covered. Used by coverage and gap sweep."
+        info="product part covered. used by coverage and gap sweep"
       >
         <AsciiSelect
           bind:value={component}
@@ -439,7 +439,7 @@
   </div>
 
   <div class="cats">
-    <span class="lbl">categories</span>
+    <span class="lbl">sections</span>
     {#if laidOut.length}
       <div class="picker">
         {#each laidOut as { cat, depth } (cat.id)}
@@ -453,9 +453,7 @@
         {/each}
       </div>
     {:else}
-      <span class="muted sm">
-        No categories in this wiki yet. The article lands in Uncategorised.
-      </span>
+      <span class="muted sm"> no sections in this wiki yet </span>
     {/if}
   </div>
 

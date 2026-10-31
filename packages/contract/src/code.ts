@@ -40,6 +40,10 @@ export const DEFAULT_CODE_EXTENSIONS = [
   "proto",
 ] as const;
 
+/** The largest file the indexer reads, in KB, when a repo sets no
+ *  `config.max_file_kb`; the admin form shows it in the empty field. */
+export const DEFAULT_MAX_FILE_KB = 200;
+
 export const REPO_INDEX_STATUSES = [
   "idle",
   "cloning",

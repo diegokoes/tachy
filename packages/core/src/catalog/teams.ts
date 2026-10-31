@@ -12,9 +12,7 @@ export async function getTeamIdBySlug(slug: string): Promise<string> {
     select id from teams where slug = ${slug}
   `;
   if (!row)
-    throw badInput(
-      `Unknown team '${slug}'. Call list_teams or add_team first.`,
-    );
+    throw badInput(`unknown team '${slug}'. call list_teams or add_team first`);
   return row.id;
 }
 
@@ -33,7 +31,7 @@ export async function updateTeam(
 ) {
   const [current] =
     await sql`select id, slug, name from teams where slug = ${currentSlug}`;
-  if (!current) throw notFound(`Team '${currentSlug}' not found`);
+  if (!current) throw notFound(`team '${currentSlug}' not found`);
   try {
     const [row] = await sql`
       update teams set
@@ -54,7 +52,7 @@ export async function updateTeam(
 
 export async function deleteTeam(slug: string) {
   const [team] = await sql`select id from teams where slug = ${slug}`;
-  if (!team) throw notFound(`Team '${slug}' not found`);
+  if (!team) throw notFound(`team '${slug}' not found`);
   const [ref] =
     await sql`select count(*)::int as n from products where team_id = ${team.id}`;
   if (ref.n > 0)

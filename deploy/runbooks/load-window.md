@@ -16,7 +16,28 @@ weekends.
    (`LEVELS=1,5,10,15`). It reports memory per turn from api-load's cgroup.
 3. Search: run `smoke.js` and `search.js` against `http://api-load:8787` on the
    `tachy-load` network with k6.
-4. `docker compose -f load/turns.compose.yml down -v`.
-5. Write the numbers in DEPLOYMENT-ARCHITECTURE.md §3 with the date and commit.
+4. The embedding model. The load stack has no embedder, so this times the
+   production one, which nobody uses in the window. The runtime image has no
+   tsx, so the script runs from the image's build stage, at the running
+   commit, on the stack's network:
+   ```sh
+   C="docker compose -f docker-compose.yml -f deploy/compose.prod.yml"
+   docker build --target build -t tachy-bench .
+   SECRET=$(grep '^TACHY_INTERNAL_SECRET=' .env | cut -d= -f2-)
+   bench() {
+     docker run --rm --network tachy -e TACHY_INTERNAL_SECRET="$SECRET" \
+       -e TACHY_EMBED_URL=http://embedder:8790/internal/embed \
+       tachy-bench npx tsx scripts/bench-embedder.ts "$@"
+   }
+   bench
+   bench --heaviest
+   $C exec -T embedder cat /sys/fs/cgroup/memory.peak
+   $C restart embedder
+   ```
+   A host that sets `TACHY_EMBED_MODEL` passes it to `bench` too. The peak plus
+   800 MiB is what `TACHY_EMBEDDER_MEM_LIMIT` needs (§3.2). The restart drops
+   the arena the heaviest round grew.
+5. `docker compose -f load/turns.compose.yml down -v`.
+6. Write the numbers in DEPLOYMENT-ARCHITECTURE.md §3 with the date and commit.
    If a Claude turn stays under 0.35 GB at p95, raise `agent_slot_cap` to 15
    (§3.2).

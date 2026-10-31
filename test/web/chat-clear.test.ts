@@ -24,6 +24,7 @@ describe("clearing the conversation", () => {
     chat.sessionId = "s1";
     chat.mode = "analyze";
     chat.debug = true;
+    chat.dismissedRepos = ["addon-acme"];
   });
 
   it("empties it at once and keeps nothing behind", () => {
@@ -32,6 +33,7 @@ describe("clearing the conversation", () => {
     expect(chat.sessionId).toBeUndefined();
     expect(chat.mode).toBeUndefined();
     expect(chat.debug).toBe(false);
+    expect(chat.dismissedRepos).toEqual([]);
     expect(canRestore()).toBe(true);
   });
 
@@ -42,6 +44,7 @@ describe("clearing the conversation", () => {
     expect(chat.sessionId).toBe("s1");
     expect(chat.mode).toBe("analyze");
     expect(chat.debug).toBe(true);
+    expect(chat.dismissedRepos).toEqual(["addon-acme"]);
     expect(canRestore()).toBe(false);
   });
 

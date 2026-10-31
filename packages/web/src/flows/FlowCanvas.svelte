@@ -158,7 +158,7 @@
   class="viewport"
   bind:this={viewport}
   role="application"
-  aria-label="Flow"
+  aria-label="flow"
   {onwheel}
   {onpointerdown}
   {onpointermove}
@@ -211,7 +211,7 @@
       style:top={`${drawn.addTrigger.y}px`}
       style:width={`${SLOT}px`}
       style:height={`${SLOT}px`}
-      aria-label="Add a trigger"
+      aria-label="add a trigger"
       use:tip={"add a trigger"}
       onclick={(e) => onaddtrigger(e.currentTarget)}
       ><Icon name="plus" size="0.85em" /></button
@@ -244,7 +244,7 @@
           style:top={`${placed.y}px`}
           style:width={`${placed.w}px`}
           style:height={`${placed.h}px`}
-          aria-label="Add a step here"
+          aria-label="add a step here"
           use:tip={"add a step"}
           onclick={(e) => onslot(slot, e.currentTarget)}
           ><Icon name="plus" size="0.85em" /></button
@@ -281,15 +281,15 @@
   </div>
 
   <div class="zoom">
-    <button aria-label="Zoom in" use:tip={"zoom in"} onclick={() => zoom(1.2)}
+    <button aria-label="zoom in" use:tip={"zoom in"} onclick={() => zoom(1.2)}
       ><Icon name="zoomIn" size="0.9em" /></button
     >
     <button
-      aria-label="Zoom out"
+      aria-label="zoom out"
       use:tip={"zoom out"}
       onclick={() => zoom(1 / 1.2)}><Icon name="zoomOut" size="0.9em" /></button
     >
-    <button aria-label="Fit" use:tip={"fit the flow"} onclick={fit}
+    <button aria-label="fit" use:tip={"fit the flow"} onclick={fit}
       ><Icon name="fit" size="0.9em" /></button
     >
   </div>

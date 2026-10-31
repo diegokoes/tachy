@@ -276,12 +276,12 @@ describe("the fact resolution ladder", () => {
 describe("unit-aware search", () => {
   beforeEach(resetData);
 
-  const entry = async (unit: string | null, summary: string) => {
+  const entry = async (unit: string | null, title: string) => {
     const customerId = await getCustomerIdBySlug("ivk");
     const row = await saveKnowledgeEntry({
       productId: await tqxProductId(),
       customerSlug: "ivk",
-      issueSummary: summary,
+      title,
       resolution: "spooler queue overruns on the labeller",
     });
     if (unit)
@@ -369,7 +369,7 @@ describe("unit attribution on tickets and entries", () => {
     const otherId = await getCustomerIdBySlug("other");
     const id = await ticket();
     await expect(setWorkItemCustomer(id, otherId, "pln191")).rejects.toThrow(
-      /Unknown unit/,
+      /unknown unit/,
     );
   });
 
@@ -384,7 +384,7 @@ describe("unit attribution on tickets and entries", () => {
     const entry = await saveKnowledgeEntry({
       workItemId: id,
       customerSlug: "ivk",
-      issueSummary: "learned here",
+      title: "learned here",
     });
     const [row] =
       await sql`select customer_unit_id from knowledge_entries where id = ${entry.id}`;
@@ -400,7 +400,7 @@ describe("unit attribution on tickets and entries", () => {
 
     const entry = await saveKnowledgeEntry({
       workItemId: id,
-      issueSummary: "general lesson",
+      title: "general lesson",
     });
     const [row] =
       await sql`select customer_id, customer_unit_id from knowledge_entries where id = ${entry.id}`;
@@ -417,7 +417,7 @@ describe("unit attribution on tickets and entries", () => {
     const entry = await saveKnowledgeEntry({
       workItemId: id,
       customerSlug: "other",
-      issueSummary: "about someone else",
+      title: "about someone else",
     });
     const [row] =
       await sql`select customer_unit_id from knowledge_entries where id = ${entry.id}`;
@@ -430,7 +430,7 @@ describe("unit attribution on tickets and entries", () => {
       productId: await tqxProductId(),
       customerSlug: "ivk",
       unit: "pln191",
-      issueSummary: "stated directly",
+      title: "stated directly",
     });
     const [row] =
       await sql`select customer_unit_id from knowledge_entries where id = ${entry.id}`;
@@ -442,7 +442,7 @@ describe("unit attribution on tickets and entries", () => {
       saveKnowledgeEntry({
         productId: await tqxProductId(),
         unit: "pln191",
-        issueSummary: "no customer",
+        title: "no customer",
       }),
     ).rejects.toThrow(/needs its customer/);
   });
@@ -454,7 +454,7 @@ describe("unit attribution on tickets and entries", () => {
       productId: await tqxProductId(),
       customerSlug: "ivk",
       unit: "pln191",
-      issueSummary: "x",
+      title: "x",
     });
     await updateKnowledgeEntry(entry.id, { customerSlug: "other" });
     const [row] =

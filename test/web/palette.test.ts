@@ -209,7 +209,7 @@ describe("places", () => {
 
   it("lists every section with the key that opens it", () => {
     expect(byId("section:chat")).toMatchObject({ kind: "go", hotkey: "1" });
-    expect(byId("section:settings")?.hotkey).toBe("5");
+    expect(byId("section:settings")?.hotkey).toBe("ctrl+,");
     expect(byId("section:feedback")?.hotkey).toBe("ctrl+.");
     setNavKey("chat", "c");
     expect(byId("section:chat")?.hotkey).toBe("c");
@@ -218,6 +218,8 @@ describe("places", () => {
   it("opens a section where it was left", () => {
     byId("section:wiki")!.run();
     expect(router.path).toBe("/wiki");
+    byId("section:settings")!.run();
+    expect(router.path).toBe("/settings");
   });
 
   it("notes where feedback was asked for", () => {
@@ -235,6 +237,12 @@ describe("places", () => {
     expect(repos.trail).toEqual(["console", "integrations"]);
     repos.run();
     expect(router.path).toBe("/console/integrations/repos");
+  });
+
+  it("goes to the usage page, which has an overview and no sections", () => {
+    expect(byId("console:usage")?.label).toBe("usage overview");
+    byId("console:usage")!.run();
+    expect(router.path).toBe("/console/usage");
   });
 
   it("leaves out a page that only opens its first section", () => {
@@ -310,7 +318,7 @@ describe("places", () => {
     ] as unknown as typeof wikis.rows;
     wikis.loaded = true;
 
-    expect(byId("wiki:general")?.label).toBe("General (org-wide)");
+    expect(byId("wiki:general")?.label).toBe("general (org-wide)");
     const gaps = byId("wiki-gaps:billing")!;
     expect(gaps.trail).toEqual(["wiki", "Billing"]);
     gaps.run();

@@ -8,9 +8,9 @@ import { scheduledItems } from "./triggers";
 export function defineFlowJobs(): void {
   defineJob({
     kind: "flow.run",
-    title: "Run flow",
+    title: "run flow",
     description:
-      "One pass of a flow over one item, or a schedule's pass that queues one per matching item.",
+      "one pass of a flow over one item, or a schedule's pass that queues one per matching item",
     queue: "flows",
     params: z.object({
       flow_id: z.string().uuid(),

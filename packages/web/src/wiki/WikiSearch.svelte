@@ -2,7 +2,8 @@
   import { api } from "../api";
   import { navigate } from "../shell/router.svelte";
   import { createSequence } from "../resource.svelte";
-  import { Badge, Modal } from "../tui";
+  import { Lamp, Modal, SearchBox } from "../tui";
+  import { statusLamp } from "../library/status";
   import type { WikiSearchHit } from "@tachy/contract";
   import { wikiPath } from "./paths";
 
@@ -67,16 +68,14 @@
 
 <Modal title="search this wiki" width="42rem" onCancel={onClose}>
   <div class="search">
-    <input
-      bind:this={inputEl}
+    <SearchBox
+      bind:el={inputEl}
       bind:value={query}
-      class="q"
-      placeholder="find an article…"
       aria-label="search this wiki"
       onkeydown={onKeydown}
     />
     {#if query.trim() && hits.length === 0}
-      <p class="empty">Nothing here matches.</p>
+      <p class="empty">nothing here matches</p>
     {/if}
     {#if hits.length}
       <ul>
@@ -85,8 +84,10 @@
             <button class="hit" class:on={i === cursor} onclick={() => open(h)}>
               <span class="head">
                 <span class="title">{h.title}</span>
-                {#if h.status === "draft"}<Badge tone="accent">draft</Badge
-                  >{/if}
+                {#if h.status === "draft"}<Lamp
+                    lamp={statusLamp("draft")}
+                    word="draft"
+                  />{/if}
               </span>
               {#if h.snippet}<span class="snip">{h.snippet}</span>{/if}
             </button>
@@ -102,9 +103,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--pad-2);
-  }
-  .q {
-    width: 100%;
   }
   .empty {
     margin: 0;

@@ -11,8 +11,9 @@ import { firstJsonObject, runAdvisory } from "./advisory";
 
 const SYSTEM = `You summarise one support ticket for the colleague who picks it up
 next. You get the thread as a de-duplicated script, oldest first. Report only
-what the thread says; where it does not say, leave it out. Write in the
-language the agents on the ticket write in. Plain sentences, no markdown.
+what the thread says; where it does not say, leave it out. Write in English,
+whatever language the thread is in, and quote error messages as they appear.
+Plain sentences, no markdown.
 The script names the files on each message; you cannot open them, so say what
 one shows only where the thread itself says it.
 Answer with one JSON object matching the schema and nothing else.`;

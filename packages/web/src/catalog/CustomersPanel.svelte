@@ -11,7 +11,9 @@
     Chip,
     CrudTable,
     DeleteButton,
+    Field,
     FilterBar,
+    GroupHead,
     Note,
     Select,
     type Column,
@@ -64,6 +66,10 @@
     unit: "",
   });
   let compForm = $state({ product: "", component: "" });
+
+  const unitKinds = (slug: string) => [
+    ...new Set((units[slug] ?? []).map((unit) => unit.kind)),
+  ];
 
   async function loadProfile(slug: string) {
     try {
@@ -301,6 +307,7 @@
   const columns: Column<Customer>[] = $derived([
     {
       key: "name",
+      face: "ui",
       label: t("customer"),
       width: "16rem",
       edit: "text",
@@ -334,7 +341,7 @@
       info: INFO.aliases.customer,
       value: (r) => (r.aliases ?? []).join(", "),
     },
-    { key: "notes", label: "notes", edit: "textarea" },
+    { key: "notes", face: "ui", label: "notes", edit: "textarea" },
   ]);
 
   onMount(() => {
@@ -402,7 +409,7 @@
   {#if error}<Note tone="danger">{error}</Note>{/if}
   <div class="profile">
     <div class="block wide">
-      <span class="dim">estate</span>
+      <GroupHead label="estate" />
       {#each unitTree(units[customer.slug] ?? []) as { unit, depth } (unit.id)}
         <div class="frow" style="--depth: {depth}">
           <span class="indent"></span>
@@ -434,49 +441,49 @@
         {#if editUnit[customer.slug] === unit.slug}
           <div class="frow add" style="--depth: {depth}">
             <span class="indent"></span>
-            <input
-              aria-label="unit name"
-              placeholder="name"
-              bind:value={editForm.name}
-            />
-            <input
-              aria-label="unit kind"
-              placeholder="kind"
-              bind:value={editForm.kind}
-            />
-            <Select
-              bind:value={editForm.parent}
-              aria-label="inside"
-              options={[
-                { value: "", label: "top level" },
-                ...(units[customer.slug] ?? [])
-                  .filter(
-                    (x) =>
-                      !unitSubtree(units[customer.slug] ?? [], unit).includes(
-                        x.slug,
-                      ),
-                  )
-                  .map((x) => ({ value: x.slug, label: `inside ${x.slug}` })),
-              ]}
-            />
-            <Select
-              bind:value={editForm.profile}
-              aria-label="conforms to"
-              options={[
-                { value: "", label: "no shared profile" },
-                ...(units[customer.slug] ?? [])
-                  .filter((x) => x.slug !== unit.slug)
-                  .map((x) => ({
-                    value: x.slug,
-                    label: `conforms to ${x.slug}`,
-                  })),
-              ]}
-            />
-            <input
-              aria-label="unit aliases"
-              placeholder="aliases"
-              bind:value={editForm.aliases}
-            />
+            <Field label="name">
+              <input aria-label="unit name" bind:value={editForm.name} />
+            </Field>
+            <Field label="kind">
+              <Select
+                bind:value={editForm.kind}
+                options={unitKinds(customer.slug)}
+                creatable
+                aria-label="unit kind"
+              />
+            </Field>
+            <Field label="inside">
+              <Select
+                bind:value={editForm.parent}
+                aria-label="inside"
+                options={[
+                  { value: "", label: "top level" },
+                  ...(units[customer.slug] ?? [])
+                    .filter(
+                      (x) =>
+                        !unitSubtree(units[customer.slug] ?? [], unit).includes(
+                          x.slug,
+                        ),
+                    )
+                    .map((x) => x.slug),
+                ]}
+              />
+            </Field>
+            <Field label="conforms to">
+              <Select
+                bind:value={editForm.profile}
+                aria-label="conforms to"
+                options={[
+                  { value: "", label: "none" },
+                  ...(units[customer.slug] ?? [])
+                    .filter((x) => x.slug !== unit.slug)
+                    .map((x) => x.slug),
+                ]}
+              />
+            </Field>
+            <Field label="aliases">
+              <input aria-label="unit aliases" bind:value={editForm.aliases} />
+            </Field>
             <Button
               size="sm"
               variant="primary"
@@ -496,49 +503,43 @@
         {/if}
       {/each}
       {#if !(units[customer.slug] ?? []).length}
-        <span class="dim sm">
-          Not broken down. Every fact below is true of the whole account.
-        </span>
+        <span class="dim sm"> not broken down </span>
       {/if}
       <div class="frow add">
-        <input
-          aria-label="unit slug"
-          placeholder="slug"
-          bind:value={unitForm.slug}
-        />
-        <input
-          aria-label="unit name"
-          placeholder="name"
-          bind:value={unitForm.name}
-        />
-        <input
-          aria-label="unit kind"
-          placeholder="kind"
-          list="unit-kinds"
-          bind:value={unitForm.kind}
-        />
-        <Select
-          bind:value={unitForm.parent}
-          aria-label="inside"
-          options={[
-            { value: "", label: "top level" },
-            ...(units[customer.slug] ?? []).map((u) => ({
-              value: u.slug,
-              label: `inside ${u.slug}`,
-            })),
-          ]}
-        />
-        <Select
-          bind:value={unitForm.profile}
-          aria-label="conforms to"
-          options={[
-            { value: "", label: "no shared profile" },
-            ...(units[customer.slug] ?? []).map((u) => ({
-              value: u.slug,
-              label: `conforms to ${u.slug}`,
-            })),
-          ]}
-        />
+        <Field label="slug">
+          <input aria-label="unit slug" bind:value={unitForm.slug} />
+        </Field>
+        <Field label="name">
+          <input aria-label="unit name" bind:value={unitForm.name} />
+        </Field>
+        <Field label="kind">
+          <Select
+            bind:value={unitForm.kind}
+            options={unitKinds(customer.slug)}
+            creatable
+            aria-label="unit kind"
+          />
+        </Field>
+        <Field label="inside">
+          <Select
+            bind:value={unitForm.parent}
+            aria-label="inside"
+            options={[
+              { value: "", label: "top level" },
+              ...(units[customer.slug] ?? []).map((u) => u.slug),
+            ]}
+          />
+        </Field>
+        <Field label="conforms to">
+          <Select
+            bind:value={unitForm.profile}
+            aria-label="conforms to"
+            options={[
+              { value: "", label: "none" },
+              ...(units[customer.slug] ?? []).map((u) => u.slug),
+            ]}
+          />
+        </Field>
         <Button
           variant="ghost"
           tone="ok"
@@ -553,15 +554,10 @@
           onclick={() => addUnit(customer.slug)}
         />
       </div>
-      <datalist id="unit-kinds">
-        {#each [...new Set((units[customer.slug] ?? []).map((u) => u.kind))] as kind}
-          <option value={kind}></option>
-        {/each}
-      </datalist>
     </div>
 
     <div class="block wide">
-      <span class="dim">specifics</span>
+      <GroupHead label="specifics" />
       {#if (units[customer.slug] ?? []).length}
         <div class="frow">
           <span class="dim sm">showing</span>
@@ -596,7 +592,7 @@
           </div>
         {/each}
         {#if !(resolved[`${customer.slug}:${viewUnit[customer.slug]}`] ?? []).length}
-          <span class="dim sm">Nothing applies to this unit yet.</span>
+          <span class="dim sm">nothing applies to this unit yet</span>
         {/if}
       {:else}
         {#each facts[customer.slug] ?? [] as fact (fact.id)}
@@ -611,30 +607,28 @@
           </div>
         {/each}
         {#if !(facts[customer.slug] ?? []).length}
-          <span class="dim sm">
-            Nothing recorded. An answer for them is only as good as what is
-            here.
-          </span>
+          <span class="dim sm"> nothing recorded yet </span>
         {/if}
       {/if}
       <div class="frow add">
-        <input
-          aria-label="kind"
-          list="fact-kinds"
-          placeholder="version"
-          bind:value={factForm.kind}
-        />
-        <input
-          aria-label="label"
-          placeholder="which product / line (optional)"
-          bind:value={factForm.label}
-        />
-        <input
-          aria-label="value"
-          placeholder="value"
-          bind:value={factForm.value}
-          onkeydown={(e) => e.key === "Enter" && addFact(customer.slug)}
-        />
+        <Field label="kind">
+          <Select
+            bind:value={factForm.kind}
+            options={kinds.map((factKind) => factKind.kind)}
+            creatable
+            aria-label="kind"
+          />
+        </Field>
+        <Field label="about">
+          <input aria-label="label" bind:value={factForm.label} />
+        </Field>
+        <Field label="value">
+          <input
+            aria-label="value"
+            bind:value={factForm.value}
+            onkeydown={(e) => e.key === "Enter" && addFact(customer.slug)}
+          />
+        </Field>
         <Button
           variant="ghost"
           tone="ok"
@@ -649,67 +643,60 @@
       </div>
       <!-- Where it was learned is what makes a handover fact auditable later. -->
       <div class="frow add">
-        <input
-          aria-label="source"
-          placeholder="ticket URL, wiki page, person"
-          bind:value={factForm.source}
-        />
-        <input
-          aria-label="notes"
-          placeholder="notes (optional)"
-          bind:value={factForm.notes}
-        />
-        <Select
-          bind:value={factForm.product}
-          aria-label="fact product"
-          options={[
-            { value: "", label: "any product" },
-            ...products.data.map((pr) => ({ value: pr.slug, label: pr.name })),
-          ]}
-          onchange={(v) => {
-            factForm.component = "";
-            components.load(String(v));
-          }}
-        />
-        {#if (units[customer.slug] ?? []).length}
+        <Field label="learned from">
+          <input aria-label="source" bind:value={factForm.source} />
+        </Field>
+        <Field label="notes">
+          <input aria-label="notes" bind:value={factForm.notes} />
+        </Field>
+        <Field label={t("product")}>
           <Select
-            bind:value={factForm.unit}
-            aria-label="fact unit"
+            bind:value={factForm.product}
+            aria-label="fact product"
             options={[
-              { value: "", label: "whole customer" },
-              ...(units[customer.slug] ?? []).map((u) => ({
-                value: u.slug,
-                label: `true of ${u.slug}`,
+              { value: "", label: "any" },
+              ...products.data.map((pr) => ({
+                value: pr.slug,
+                label: pr.name,
+              })),
+            ]}
+            onchange={(v) => {
+              factForm.component = "";
+              components.load(String(v));
+            }}
+          />
+        </Field>
+        {#if (units[customer.slug] ?? []).length}
+          <Field label="unit">
+            <Select
+              bind:value={factForm.unit}
+              aria-label="fact unit"
+              options={[
+                { value: "", label: "whole customer" },
+                ...(units[customer.slug] ?? []).map((u) => u.slug),
+              ]}
+            />
+          </Field>
+        {/if}
+        <Field label="component">
+          <Select
+            bind:value={factForm.component}
+            aria-label="fact component"
+            disabled={!factForm.product}
+            options={[
+              { value: "", label: "whole product" },
+              ...components.of(factForm.product).map((c) => ({
+                value: c.slug,
+                label: c.name,
               })),
             ]}
           />
-        {/if}
-        <Select
-          bind:value={factForm.component}
-          aria-label="fact component"
-          disabled={!factForm.product}
-          options={[
-            { value: "", label: "whole product" },
-            ...components.of(factForm.product).map((c) => ({
-              value: c.slug,
-              label: c.name,
-            })),
-          ]}
-        />
+        </Field>
       </div>
-      <datalist id="fact-kinds">
-        {#each kinds as factKind}<option value={factKind.kind}></option>{/each}
-      </datalist>
-      {#if kinds.length}
-        <span class="dim sm">
-          already in use: {kinds.map((k) => k.kind).join(", ")}. Reuse one
-          rather than coining a near-duplicate.
-        </span>
-      {/if}
     </div>
 
     <div class="block">
-      <span class="dim">components they run</span>
+      <GroupHead label="components they run" />
       <div class="chips">
         {#each profile?.components ?? [] as component (component.product_slug + component.slug)}
           <Chip
@@ -726,26 +713,30 @@
         {/if}
       </div>
       <div class="frow add">
-        <Select
-          bind:value={compForm.product}
-          aria-label="product"
-          options={products.data.map((pr) => ({
-            value: pr.slug,
-            label: pr.name,
-          }))}
-          onchange={(v) => components.load(String(v))}
-        />
-        <Select
-          bind:value={compForm.component}
-          aria-label="component"
-          options={[
-            { value: "", label: "component…" },
-            ...components.of(compForm.product).map((c) => ({
-              value: c.slug,
-              label: c.name,
-            })),
-          ]}
-        />
+        <Field label={t("product")}>
+          <Select
+            bind:value={compForm.product}
+            aria-label="product"
+            options={products.data.map((pr) => ({
+              value: pr.slug,
+              label: pr.name,
+            }))}
+            onchange={(v) => components.load(String(v))}
+          />
+        </Field>
+        <Field label="component">
+          <Select
+            bind:value={compForm.component}
+            aria-label="component"
+            options={[
+              { value: "", label: "none" },
+              ...components.of(compForm.product).map((c) => ({
+                value: c.slug,
+                label: c.name,
+              })),
+            ]}
+          />
+        </Field>
         <Button
           variant="ghost"
           tone="ok"
@@ -760,7 +751,7 @@
     </div>
 
     <div class="block">
-      <span class="dim">their records</span>
+      <GroupHead label="their records" />
       <div class="chips">
         {#each profile?.repos ?? [] as repo (repo.slug)}
           <Chip>{repo.slug}</Chip>
@@ -770,8 +761,8 @@
         {/each}
         {#if !(profile?.repos ?? []).length && !(profile?.projects ?? []).length}
           <span class="dim sm">
-            no repo or project is filed under them. Set those on the repo and
-            project rows.
+            no repo or project is filed under them; set those on the repo and
+            project rows
           </span>
         {/if}
       </div>
@@ -801,8 +792,13 @@
   rowKey={(r) => r.slug}
   loading={customers.loading}
   error={customers.error}
-  emptyTitle={`No ${t("customers")} yet.`}
-  emptyDetail={`Attributed by requester email domain. List domains.`}
+  emptyTitle={customers.data.length
+    ? `no ${t("customers")} match the filter`
+    : `no ${t("customers")} yet`}
+  emptyArt={customers.data.length ? "noMatch" : "empty"}
+  emptyDetail={customers.data.length
+    ? undefined
+    : "attributed by requester email domain: list domains"}
   addLabel={`add ${t("customer")}`}
   noun={t("customer")}
   editTitle={(r) => r.name}
@@ -878,9 +874,14 @@
   }
   .frow.add {
     margin-top: var(--pad-2);
+    align-items: end;
+    flex-wrap: wrap;
   }
-  .frow.add input {
+  .frow.add :global(.field) {
     min-width: 9rem;
+  }
+  .frow.add :global(.field .asel) {
+    flex: 1;
   }
   .lbl {
     color: var(--muted);

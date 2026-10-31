@@ -100,6 +100,11 @@ describe("the /model rows", () => {
     expect(modelOptions(LISTED, "gpt")).toEqual([]);
   });
 
+  it("shows no id beside a model labelled by its id", () => {
+    const bare = { id: "claude-opus-5", label: "claude-opus-5", efforts: [] };
+    expect(modelOptions([bare], "")[0].hint).toBe("");
+  });
+
   it("offers the efforts the model accepts and marks the settings effort", () => {
     expect(effortOptions(OPUS, "", "medium")).toEqual([
       { value: "low", label: "low", hint: "", desc: "" },

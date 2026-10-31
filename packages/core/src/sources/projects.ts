@@ -106,7 +106,7 @@ export async function getSourceProject(id: string): Promise<SourceProjectRow> {
   const [row] = await sql`
     select ${projectColumns()} ${projectJoins()} where sp.id = ${id}
   `;
-  if (!row) throw notFound(`Source project '${id}' not found`);
+  if (!row) throw notFound(`source project '${id}' not found`);
   return row as SourceProjectRow;
 }
 
@@ -132,7 +132,7 @@ export async function resolveSourceProject(
     ? ` Registered projects: ${nearest.map((r) => `'${r.external_key}'`).join(", ")}.`
     : "";
   throw badInput(
-    `'${externalKey}' is not registered on source '${sourceSlug}'.${hint} Call list_source_projects, or add_source_project to register it.`,
+    `'${externalKey}' is not registered on source '${sourceSlug}'.${hint} call list_source_projects, or add_source_project to register it`,
   );
 }
 
@@ -226,7 +226,7 @@ export async function addSourceProject(
     await sql`select id from source_connections where slug = ${input.sourceSlug}`;
   if (!conn)
     throw badInput(
-      `Unknown source connection '${input.sourceSlug}'. Call list_source_connections first.`,
+      `unknown source '${input.sourceSlug}'. call list_source_connections first`,
     );
   if (!input.externalKey.trim()) throw badInput("external_key is required");
   const scope = await resolveScope(input.productSlug, input.teamSlug);
@@ -332,7 +332,7 @@ export async function deleteSourceProject(id: string) {
 export async function sourceProjectScope(id: string): Promise<EntryScope> {
   const [row] =
     await sql`select product_id, team_id from source_projects where id = ${id}`;
-  if (!row) throw notFound(`Source project '${id}' not found`);
+  if (!row) throw notFound(`source project '${id}' not found`);
   return { productId: row.product_id, teamId: row.team_id };
 }
 
@@ -379,7 +379,7 @@ export async function setProjectAreaMap(input: AreaMapInput) {
 export async function deleteProjectAreaMap(id: string) {
   const [row] =
     await sql`delete from project_area_map where id = ${id} returning id`;
-  if (!row) throw notFound(`Area mapping '${id}' not found`);
+  if (!row) throw notFound(`area mapping '${id}' not found`);
   return { deleted: true, id };
 }
 
@@ -472,7 +472,7 @@ export async function resolveProjectContext(
       select source_project_id, product_id, observed_version
       from work_items where id = ${query.workItemId}
     `;
-    if (!item) throw notFound(`Work item '${query.workItemId}' not found`);
+    if (!item) throw notFound(`work item '${query.workItemId}' not found`);
     observedVersion = item.observed_version ?? null;
     if (!projectId) {
       if (item.source_project_id) projectId = item.source_project_id as string;
@@ -601,13 +601,13 @@ export async function resolveProjectContextStrict(
   const found = await resolveProjectContext(query);
   if (!found.length)
     throw badInput(
-      "No registered project matches. Call list_source_projects, or register it in Admin > integrations > projects.",
+      "no registered project matches. call list_source_projects, or register it in console › integrations › projects",
     );
   if (found.length > 1)
     throw badInput(
-      `That matches ${found.length} projects (${found
+      `that matches ${found.length} projects (${found
         .map((c) => `'${c.project.external_key}'`)
-        .join(", ")}); name one.`,
+        .join(", ")}); name one`,
     );
   return found[0];
 }

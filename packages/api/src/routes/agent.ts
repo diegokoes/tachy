@@ -11,7 +11,11 @@ import {
   env,
   unavailable,
 } from "@tachy/core/infra";
-import { recordRun } from "@tachy/core/analytics";
+import {
+  lastSessionCostUsd,
+  recordRun,
+  turnCostUsd,
+} from "@tachy/core/analytics";
 import {
   effectiveSettings,
   dateFormatOf,
@@ -39,6 +43,7 @@ import {
   effectiveModel,
   startTurn,
   type AgentConfig,
+  type AgentEvent,
   type AgentTurn,
 } from "@tachy/agent";
 import { isAdminIdentity, requireCaller } from "../authz";
@@ -107,6 +112,32 @@ const approveSchema = z.object({
   message: z.string().optional(),
   updatedInput: z.record(z.string(), z.any()).optional(),
 });
+
+/**
+ * One run per chat turn. `session_cost_usd` keeps the running total the SDK
+ * reports for a resumed session, from which the next turn's own cost is taken.
+ */
+async function recordChatTurn(
+  result: Extract<AgentEvent, { type: "result" }>,
+  turn: { turnId: string; userId: string | null; model: string },
+) {
+  const previousUsd = await lastSessionCostUsd(result.sessionId);
+  await recordRun({
+    mode: "chat",
+    userId: turn.userId,
+    model: turn.model,
+    inputTokens: result.usage?.inputTokens,
+    outputTokens: result.usage?.outputTokens,
+    cacheReadTokens: result.usage?.cacheReadTokens,
+    cacheWriteTokens: result.usage?.cacheWriteTokens,
+    meta: {
+      turn_id: turn.turnId,
+      session_id: result.sessionId,
+      session_cost_usd: result.costUsd,
+      cost_usd: turnCostUsd(result.costUsd, previousUsd),
+    },
+  });
+}
 
 /** `turnId` is the turn already running, for the client to resume or stop. */
 const turnInProgress = (c: Context, turnId: string | undefined) =>
@@ -330,20 +361,12 @@ export const agent = new Hono()
           leave,
         });
         for await (const event of turn.events()) {
-          if (event.type === "result") {
-            await recordRun({
-              mode: "chat",
+          if (event.type === "result")
+            await recordChatTurn(event, {
+              turnId,
               userId: user?.id ?? null,
               model: event.models[0] ?? effectiveModel(config),
-              inputTokens: event.usage?.inputTokens ?? undefined,
-              outputTokens: event.usage?.outputTokens ?? undefined,
-              meta: {
-                turn_id: turnId,
-                session_id: event.sessionId,
-                cost_usd: event.costUsd,
-              },
             }).catch(() => {});
-          }
           if (event.type === "session" && !debugging) continue;
           await send(event.type, event);
         }

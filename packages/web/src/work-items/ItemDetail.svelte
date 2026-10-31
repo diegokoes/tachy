@@ -199,7 +199,7 @@
               variant="ghost"
               icon="history"
               aria-pressed={showHistory}
-              aria-label={showHistory ? "Hide the history" : "Show the history"}
+              aria-label={showHistory ? "hide the history" : "show the history"}
               onclick={() => (showHistory = !showHistory)}
               >history · {view.history.length}</Button
             >
@@ -219,7 +219,7 @@
             <div class="prose">{@html html(comment.html)}</div>
           </article>
         {:else}
-          <p class="dim">No comments yet.</p>
+          <p class="dim">no comments yet</p>
         {/each}
       </section>
     </div>

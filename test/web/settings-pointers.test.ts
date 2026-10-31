@@ -5,30 +5,29 @@ describe("settings pointers", () => {
   it("links the settings tab a message names", () => {
     expect(
       settingsPointers(
-        "No Claude credential is set for your account. Add one under Settings › agent.",
+        "no Claude credential is set for your account. add one under settings › agent",
       ),
     ).toEqual([
-      { text: "No Claude credential is set for your account. Add one under " },
-      { text: "Settings › agent", href: "/settings/agent" },
-      { text: "." },
+      { text: "no Claude credential is set for your account. add one under " },
+      { text: "settings › agent", href: "/settings/agent" },
     ]);
   });
 
   it("leaves a name no tab carries as plain text", () => {
-    const text = "Add one under Settings › Keys.";
+    const text = "add one under settings › keys";
     expect(settingsPointers(text)).toEqual([{ text }]);
   });
 
-  it("links each pointer in a message", () => {
+  it("links each pointer in a message, in either case", () => {
     const parts = settingsPointers(
-      "Settings › theme, then Settings › keybinds",
+      "settings › theme, then Settings › keybinds",
     );
     expect(parts.filter((p) => p.href).map((p) => p.href)).toEqual([
       "/settings/theme",
       "/settings/keybinds",
     ]);
     expect(parts.map((p) => p.text).join("")).toBe(
-      "Settings › theme, then Settings › keybinds",
+      "settings › theme, then Settings › keybinds",
     );
   });
 });

@@ -2,6 +2,7 @@
   import { AGENT_KEY_LABELS, agentKeyError } from "./credentials";
   import { API_KEY_EXAMPLE, OAUTH_PREFIX } from "@tachy/contract";
   import { Button, DeleteButton, InfoMark, Note } from "../tui";
+  import { isGlobalAdmin } from "../access/session.svelte";
   import { agentPrefs, origin, removeKey, saveKey } from "./prefs.svelte";
   import Origin from "./Origin.svelte";
   import Row from "./Row.svelte";
@@ -30,11 +31,15 @@
   }
 </script>
 
-{#if creds && !creds.vault_enabled}
+{#if creds && !creds.vault_enabled && isGlobalAdmin()}
   <Note tone="warn">
-    Credential storage disabled. Set <code>TACHY_SECRET_KEY</code> (32 bytes
-    base64) for per-user keys. Until then: <code>.env</code>.
+    credential storage disabled. set <code>TACHY_SECRET_KEY</code> (32 bytes
+    base64) for per-user keys. until then: <code>.env</code>
   </Note>
+{:else if creds && !creds.vault_enabled}
+  <Note
+    >personal keys are off on this deployment; an app admin can turn them on</Note
+  >
 {:else if creds}
   <Rows>
     {#each ordered as name (name)}
@@ -51,7 +56,6 @@
             aria-label="{keyLabel(name)}{from ? ', set' : ''}"
             class:bad
             bind:value={drafts[name]}
-            placeholder={from ? "" : "paste a key"}
           />
           {#if from && !draft}
             <span class="dots" class:shared={!mine.has(name)} aria-hidden="true"
@@ -85,13 +89,13 @@
           <Origin of={origin(from, "key")} />
           {#if name === "anthropic_oauth_token"}
             <InfoMark label="how to get a Claude subscription token">
-              Run <code>claude setup-token</code> and paste the
-              <code>{OAUTH_PREFIX}…</code> value it prints.
+              run <code>claude setup-token</code> and paste the
+              <code>{OAUTH_PREFIX}…</code> value it prints
             </InfoMark>
           {:else if name === "anthropic_api_key"}
             <InfoMark label="what an Anthropic API key looks like">
-              Starts with <code>{API_KEY_EXAMPLE}…</code>, from
-              console.anthropic.com.
+              starts with <code>{API_KEY_EXAMPLE}…</code>, from
+              console.anthropic.com
             </InfoMark>
           {/if}
         {/snippet}

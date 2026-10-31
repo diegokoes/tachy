@@ -8,6 +8,7 @@
   import { renderMarkdown, markBrokenLinks } from "../markdown/markdown";
   import { LinkTargets } from "./wikilinks.svelte";
   import {
+    Lamp,
     Badge,
     Button,
     Checkbox,
@@ -16,6 +17,7 @@
     Note,
     Select,
   } from "../tui";
+  import { statusLamp } from "../library/status";
   import type {
     Coverage,
     CoverageNode,
@@ -95,7 +97,7 @@
   });
 
   const leadOptions = $derived([
-    { value: "", label: "- no lead page -" },
+    { value: "", label: "none" },
     ...articles.map((a) => ({ value: a.slug as string, label: a.title })),
   ]);
 
@@ -310,17 +312,14 @@
       onclick={() => navigate(wikiPath(scope, "new"))}>article</Button
     >
   {/if}
-  <Button
-    variant="ghost"
-    size="sm"
-    icon="gaps"
-    onclick={() => navigate(wikiPath(scope, "gaps"))}>gaps</Button
-  >
 {/snippet}
 
 {#snippet article(ref: WikiArticleRef)}
   <button class="art" onclick={() => openArticle(ref)}>{ref.title}</button>
-  {#if ref.status === "draft"}<Badge tone="accent">draft</Badge>{/if}
+  {#if ref.status === "draft"}<Lamp
+      lamp={statusLamp("draft")}
+      word="draft"
+    />{/if}
   {#if ref.stale}
     <Badge tone="warn">{ref.stale} changed</Badge>
   {/if}
@@ -416,9 +415,9 @@
         </div>
       {:else if toc}
         <EmptyState
-          icon="file"
-          title="No intro yet."
-          detail="A short landing: what this product is, and where to start."
+          art="wiki"
+          title="no intro yet"
+          detail="a short landing: what this product is, and where to start"
         >
           {#if isCurator()}
             <Button
@@ -435,31 +434,41 @@
     {#if isCurator() && editing !== null}
       <div class="catform">
         <div class="row">
-          <input
-            aria-label="section name"
-            placeholder="Portal"
-            bind:value={form.name}
-            oninput={() => {
-              if (!slugTouched) form.slug = slugify(form.name);
-            }}
-          />
-          <input
-            aria-label="section slug"
-            placeholder="portal"
-            bind:value={form.slug}
-            oninput={() => (slugTouched = true)}
-          />
-          <Select
-            bind:value={form.parent}
-            aria-label="parent section"
-            options={parentOptions}
-          />
-          <input
-            aria-label="order"
-            type="number"
-            class="ord"
-            bind:value={form.ordinal}
-          />
+          <label class="pair">
+            <span class="lbl">name</span>
+            <input
+              aria-label="section name"
+              bind:value={form.name}
+              oninput={() => {
+                if (!slugTouched) form.slug = slugify(form.name);
+              }}
+            />
+          </label>
+          <label class="pair">
+            <span class="lbl">slug</span>
+            <input
+              aria-label="section slug"
+              bind:value={form.slug}
+              oninput={() => (slugTouched = true)}
+            />
+          </label>
+          <span class="pair">
+            <span class="lbl">inside</span>
+            <Select
+              bind:value={form.parent}
+              aria-label="parent section"
+              options={parentOptions}
+            />
+          </span>
+          <label class="pair">
+            <span class="lbl">order</span>
+            <input
+              aria-label="order"
+              type="number"
+              class="ord"
+              bind:value={form.ordinal}
+            />
+          </label>
         </div>
         <div class="row">
           <span class="lbl">lead page</span>
@@ -505,7 +514,7 @@
 
     {#if toc}
       <section class="sections">
-        <h3>Sections</h3>
+        <h3>sections</h3>
         {#if toc.categories.length}
           <ul class="tree">
             {#each toc.categories as node (node.id)}
@@ -515,16 +524,16 @@
         {:else}
           <EmptyState
             icon="overview"
-            title="No sections yet."
+            title="no sections yet"
             detail={hasComponents
-              ? "Seed them from the components, top right, or add one by hand."
-              : "Add one top right, or let the agent propose them."}
+              ? "seed them from the components, top right, or add one by hand"
+              : "add one top right, or let the agent propose them"}
           />
         {/if}
 
         {#if toc.uncategorised.length}
           <div class="loose">
-            <h4>Uncategorised ({toc.uncategorised.length})</h4>
+            <h4>in no section ({toc.uncategorised.length})</h4>
             <span class="arts">
               {#each toc.uncategorised as ref, i (ref.id)}
                 {#if i > 0}<span class="dot">·</span>{/if}
@@ -540,7 +549,7 @@
       {#if coverage && componentList.length}
         <section class="strip">
           <h3>
-            Components
+            components
             {#if isCurator()}
               <a
                 class="mapl"
@@ -548,7 +557,7 @@
                 onclick={(e) => {
                   e.preventDefault();
                   navigate("/console/structure/components");
-                }}>open in Components map →</a
+                }}>open in components map →</a
               >
             {/if}
           </h3>
@@ -557,7 +566,7 @@
               <li>
                 <span class="cname">{n.name}</span>
                 <span class="counts">
-                  {n.subtree.entries} lessons · {n.subtree.docs} docs · {n
+                  {n.subtree.entries} entries · {n.subtree.docs} docs · {n
                     .subtree.articles} articles
                 </span>
               </li>
@@ -776,6 +785,12 @@
     align-items: center;
     gap: 0.4rem;
     flex-wrap: wrap;
+  }
+  /* A label wraps with its control, never away from it. */
+  .pair {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
   }
   .catform .lbl,
   .comps .lbl {

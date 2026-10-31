@@ -18,7 +18,7 @@ export async function adoClientFor(
     select id, source_type, slug, base_url, config
     from source_connections where slug = ${slug}
   `;
-  if (!conn) throw notFound(`Unknown source connection: ${slug}`);
+  if (!conn) throw notFound(`unknown source: ${slug}`);
   if (conn.source_type !== "azure-devops")
     throw new Error(`'${slug}' is a ${conn.source_type} connection`);
   const token = await resolveCredential(
@@ -37,7 +37,7 @@ export async function adoClientFor(
     // The env fallback's message names server variables the person cannot set.
     if (!token && e instanceof Error && e.message.startsWith("Missing"))
       throw badInput(
-        `No Azure DevOps token for '${slug}'. Add your PAT under Settings › agent, or ask an admin to set the connection's.`,
+        `no Azure DevOps token for '${slug}'. add your PAT under settings › agent, or ask an app admin to set one on the source`,
       );
     throw e;
   }

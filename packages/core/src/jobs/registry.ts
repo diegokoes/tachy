@@ -51,6 +51,11 @@ export interface JobKind<P extends z.ZodType = z.ZodType> {
     ctx: JobContext,
     params: z.infer<P>,
   ): Promise<Record<string, unknown> | void>;
+  /**
+   * Called when the reaper takes a run back from a worker that stopped
+   * heartbeating, for state the run left half-written.
+   */
+  abandoned?: (params: z.infer<P>) => Promise<void>;
 }
 
 const kinds = new Map<string, JobKind>();

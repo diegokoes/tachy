@@ -1,7 +1,7 @@
 import type { JobRunListed, JobStatus, JobTrigger } from "@tachy/contract";
 import type { Tone } from "../tui";
 import type { IconName } from "../tui/icons";
-import { span } from "../admin/overview";
+import { span } from "../dates.svelte";
 
 const MINUTE_MS = 60_000;
 
