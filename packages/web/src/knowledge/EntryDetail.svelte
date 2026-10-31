@@ -412,75 +412,79 @@
     {#if creating && extra}<div class="kind">{@render extra()}</div>{/if}
     <div class="page">
       <header class="head">
-        {#if canEdit}
-          <input
-            class="title"
-            class:empty={!draft.title}
-            class:unsaved={unsaved.has("title")}
-            aria-label="title"
-            maxlength={MAX_ENTRY_TITLE_CHARS}
-            bind:value={draft.title}
-          />
-          {#if attempted && problems.title}
-            <p class="problem">{problems.title}</p>
-          {/if}
-        {:else}
-          <h2>{draft.title}</h2>
-        {/if}
-
-        <div class="status-line">
-          <StatusMenu
-            status={draft.status}
-            statuses={creating ? NEW_ENTRY_STATUSES : KNOWLEDGE_STATUSES}
-            searched={SEARCHED_ENTRY_STATUSES}
-            onpick={canEdit
-              ? (status) => (draft = withStatus(draft, status))
-              : undefined}
-          />
-          {#if entry?.status === "deprecated" && entry.superseded_by && onOpen}
-            {@const replacement = entry.superseded_by}
-            <button class="replaced" onclick={() => onOpen(replacement)}
-              >replaced by ›</button
-            >
-          {/if}
-          {#if entry}
-            <span class="sep" aria-hidden="true">·</span>
-            <Versions
-              base="knowledge"
-              id={entry.id}
-              at={entry.updated_at}
-              version={entry.version}
-              canEdit={canEdit && !dirty}
-              onReverted={refresh}
+        <div class="title-block">
+          {#if canEdit}
+            <input
+              class="title"
+              class:empty={!draft.title}
+              class:unsaved={unsaved.has("title")}
+              aria-label="title"
+              maxlength={MAX_ENTRY_TITLE_CHARS}
+              bind:value={draft.title}
             />
-            <span class="sep" aria-hidden="true">·</span>
-            <Reads
-              base="knowledge"
-              id={entry.id}
-              version={entry.version}
-              inline
-            />
+            {#if attempted && problems.title}
+              <p class="problem">{problems.title}</p>
+            {/if}
+          {:else}
+            <h2>{draft.title}</h2>
           {/if}
         </div>
 
-        {#if deprecating && entry}
-          <DeprecatePanel
-            entryId={entry.id}
-            bind:reason={deprecationReason}
-            bind:supersededBy={draft.supersededBy}
-          />
-        {/if}
-        {#if conflict}
-          <Note tone="danger">
-            someone else saved this entry meanwhile; reload keeps your changes
-            on top
-            {#snippet action()}
-              <Button size="sm" onclick={reloadKeepingEdits}>reload</Button>
-            {/snippet}
-          </Note>
-        {:else if saveError}
-          <Note tone="danger">{saveError}</Note>
-        {/if}
+        <div class="status-block">
+          <div class="status-line">
+            <StatusMenu
+              status={draft.status}
+              statuses={creating ? NEW_ENTRY_STATUSES : KNOWLEDGE_STATUSES}
+              searched={SEARCHED_ENTRY_STATUSES}
+              onpick={canEdit
+                ? (status) => (draft = withStatus(draft, status))
+                : undefined}
+            />
+            {#if entry?.status === "deprecated" && entry.superseded_by && onOpen}
+              {@const replacement = entry.superseded_by}
+              <button class="replaced" onclick={() => onOpen(replacement)}
+                >replaced by ›</button
+              >
+            {/if}
+            {#if entry}
+              <span class="sep" aria-hidden="true">·</span>
+              <Versions
+                base="knowledge"
+                id={entry.id}
+                at={entry.updated_at}
+                version={entry.version}
+                canEdit={canEdit && !dirty}
+                onReverted={refresh}
+              />
+              <span class="sep" aria-hidden="true">·</span>
+              <Reads
+                base="knowledge"
+                id={entry.id}
+                version={entry.version}
+                inline
+              />
+            {/if}
+          </div>
+
+          {#if deprecating && entry}
+            <DeprecatePanel
+              entryId={entry.id}
+              bind:reason={deprecationReason}
+              bind:supersededBy={draft.supersededBy}
+            />
+          {/if}
+          {#if conflict}
+            <Note tone="danger">
+              someone else saved this entry meanwhile; reload keeps your changes
+              on top
+              {#snippet action()}
+                <Button size="sm" onclick={reloadKeepingEdits}>reload</Button>
+              {/snippet}
+            </Note>
+          {:else if saveError}
+            <Note tone="danger">{saveError}</Note>
+          {/if}
+        </div>
       </header>
 
       <div class="side">
@@ -689,9 +693,9 @@
     margin-bottom: var(--pad-3);
   }
 
-  /* Facts and lists beside the text from the title down; on a narrow window
-     the facts go above the summary and the lists below the text. ch tracks
-     the reading face, so the measure holds in any font. */
+  /* Facts and lists beside the text from under the title down; on a narrow
+     window the facts go above the summary and the lists below the text. ch
+     tracks the reading face, so the measure holds in any font. */
   .page {
     display: grid;
     grid-template-columns: minmax(0, 76ch);
@@ -701,25 +705,30 @@
     font-family: var(--font-prose);
   }
   @media (min-width: 72rem) {
-    /* The text's row is flexible, so a long side column grows it rather than
-       the title's row, which would push the text down. */
+    /* The header lends the page its title and status rows, so the side column
+       starts under the title. A long side column grows the flexible text row,
+       not the status row, which would push the text down. */
     .page {
       grid-template-columns: minmax(0, 76ch) 22rem;
-      grid-template-rows: auto 1fr;
+      grid-template-rows: auto auto 1fr;
     }
     .head {
+      display: grid;
+      grid-template-rows: subgrid;
       grid-column: 1;
-      grid-row: 1;
+      grid-row: 1 / span 2;
     }
     .content {
       grid-column: 1;
-      grid-row: 2;
+      grid-row: 3;
     }
+    /* The status text sits in a button padded by --pad-1; the same padding
+       keeps the first fact level with it. */
     .side {
       grid-column: 2;
-      grid-row: 1 / span 2;
+      grid-row: 2 / span 2;
       align-self: start;
-      padding-top: var(--pad-2);
+      padding-top: var(--pad-1);
     }
   }
   @media (max-width: 72rem) {
