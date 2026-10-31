@@ -125,14 +125,14 @@
       <input bind:value={source} />
     </Field>
   </div>
-  <Field label="tags" info="Comma-separated.">
+  <Field label="tags" info="comma-separated">
     <input bind:value={tags} />
   </Field>
   <Field label="body" required>
     <textarea rows="14" bind:value={body} required></textarea>
   </Field>
   {#if supersedes}
-    <p class="hint">New version. Current doc is archived as predecessor.</p>
+    <p class="hint">new version. current doc is archived as predecessor</p>
   {/if}
 
   {#if error ?? filing.error}<p class="error">{error ?? filing.error}</p>{/if}
@@ -150,10 +150,14 @@
     padding-bottom: var(--pad-2);
     border-bottom: var(--panel-line);
   }
+  /* Held to the entry form's reading width. */
   .ref-form {
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
+    width: 100%;
+    max-width: 48rem;
+    margin-inline: auto;
   }
   input,
   textarea {

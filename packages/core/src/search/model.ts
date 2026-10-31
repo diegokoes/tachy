@@ -68,6 +68,12 @@ export interface EmbeddingModelSpec {
    * meaningless queries score higher against it than against tickets.
    */
   codeSemFloor: number;
+  /**
+   * Cosine from which one knowledge entry is a near-copy of another. Entry
+   * against entry is a distribution of its own, measured by
+   * `scripts/eval-embeddings.ts`. Unset, a save is not checked for one.
+   */
+  duplicateFloor?: number;
 }
 
 /**
@@ -130,6 +136,7 @@ const MDENSEON: EmbeddingModelSpec = {
   semFloor: 0.41,
   semCeil: 0.6,
   codeSemFloor: 0.4,
+  duplicateFloor: 0.88,
 };
 
 /**

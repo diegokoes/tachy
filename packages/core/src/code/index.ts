@@ -1,4 +1,5 @@
 export { chunkCode } from "./chunk-code";
+export { codeExcerpt } from "./excerpt";
 export { chunkSymbols, definedSymbols, fileStem } from "./symbols";
 export type { CodeChunk } from "./chunk-code";
 export {
@@ -41,16 +42,21 @@ export type { IndexResult, LineIndexResult } from "./indexer";
 export type { IndexPreview, PreviewDir, PreviewType } from "@tachy/contract";
 export { fileIconOf, fileIconPath } from "./file-icons";
 export { searchCode, readCodeFile, listCodeDir } from "./search";
+export { repoMap, drawRepoTree, MAX_MAP_CHARS } from "./map";
+export type { RepoMap } from "./map";
 export type { CodeSearchOptions, ReadCodeOptions } from "./search";
 export {
   resolveVersion,
   codeChangesBetween,
   codeDiff,
+  codeHistory,
   codeReleasesContaining,
+  MAX_HISTORY_COMMITS,
 } from "./versions";
 export type {
   ResolvedVersion,
   CodeChanges,
+  CodeHistory,
   CodeDiff,
   CodeDiffRange,
   ReleasesContaining,

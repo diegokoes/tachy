@@ -15,6 +15,7 @@ afterAll(() => sql.end());
 const entry = async (over: Record<string, unknown> = {}) =>
   saveKnowledgeEntry({
     productId: await tpdProductId(),
+    title: "Printer stalls on error 023",
     issueSummary: "printer stalls at 023",
     rootCause: "buffer overrun",
     resolution: "restart the spooler",
@@ -32,6 +33,7 @@ describe("library revisions", () => {
     expect(revs[0].version).toBe(1);
     expect(revs[0].changed_fields).toEqual([]);
     const { snapshot } = await getRevision({ entryId: saved.id }, 1);
+    expect(snapshot.title).toBe("Printer stalls on error 023");
     expect(snapshot.issue_summary).toBe("printer stalls at 023");
   });
 
@@ -64,7 +66,7 @@ describe("library revisions", () => {
         resolution: "nope",
         expectedVersion: 99,
       }),
-    ).rejects.toThrow(/Version conflict/);
+    ).rejects.toThrow(/version conflict/);
     const revs = await listRevisions({ entryId: saved.id });
     expect(revs).toHaveLength(1);
   });
@@ -124,6 +126,39 @@ describe("library revisions", () => {
     expect(
       (await getRevision({ entryId: saved.id }, 3)).snapshot.resolution,
     ).toBe("worse turn");
+  });
+
+  it("names a title edit, and a revert brings the old title back", async () => {
+    const saved = await entry();
+    await updateKnowledgeEntry(saved.id, { title: "Spooler halts on 023" });
+    const [latest] = await listRevisions({ entryId: saved.id });
+    expect(latest.changed_fields).toEqual(["title"]);
+
+    await revertKnowledgeEntry(saved.id, 1);
+    expect((await getKnowledgeEntry(saved.id)).title).toBe(
+      "Printer stalls on error 023",
+    );
+  });
+
+  it("keeps the fields a reverted revision predates", async () => {
+    const saved = await entry({
+      investigation: "1. Checked the spooler log.",
+      relatedLinks: ["https://docs.example.invalid/spooler"],
+    });
+    await updateKnowledgeEntry(saved.id, { resolution: "wrong turn" });
+    await sql`
+      update library_revisions
+      set snapshot = snapshot - 'investigation' - 'related_links'
+      where knowledge_entry_id = ${saved.id} and version = 1
+    `;
+
+    await revertKnowledgeEntry(saved.id, 1);
+    const live = await getKnowledgeEntry(saved.id);
+    expect(live.resolution).toBe("restart the spooler");
+    expect(live.investigation).toBe("1. Checked the spooler log.");
+    expect(live.related_links).toEqual([
+      "https://docs.example.invalid/spooler",
+    ]);
   });
 
   it("goes away with the entry", async () => {

@@ -18,7 +18,7 @@ export async function getComposeConfig(
   const [row] = await sql`
     select config -> ${KEY} as compose from source_projects where id = ${sourceProjectId}
   `;
-  if (!row) throw notFound(`Source project '${sourceProjectId}' not found`);
+  if (!row) throw notFound(`source project '${sourceProjectId}' not found`);
   return (row.compose ?? {}) as ComposeConfig;
 }
 
@@ -33,7 +33,7 @@ export async function setComposeConfig(
     where id = ${sourceProjectId}
     returning config -> ${KEY} as compose
   `;
-  if (!row) throw notFound(`Source project '${sourceProjectId}' not found`);
+  if (!row) throw notFound(`source project '${sourceProjectId}' not found`);
   return row.compose as ComposeConfig;
 }
 

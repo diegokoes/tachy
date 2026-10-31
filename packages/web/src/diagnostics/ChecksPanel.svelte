@@ -1,7 +1,7 @@
 <script lang="ts">
   import { fmtTime } from "../dates.svelte";
   import { onMount } from "svelte";
-  import { Badge, Button, DataTable, Note, toneOf, type Column } from "../tui";
+  import { Lamp, lampOf, Button, DataTable, Note, type Column } from "../tui";
   import {
     probes,
     probeTally,
@@ -25,7 +25,7 @@
 </script>
 
 {#snippet stateCell(probe: Probe)}
-  <Badge tone={toneOf(probe.state)}>{probe.state}</Badge>
+  <Lamp lamp={lampOf(probe.state)} word={probe.state} />
 {/snippet}
 
 {#snippet detailCell(probe: Probe)}
@@ -59,8 +59,8 @@
   rows={probes.checks ?? []}
   rowKey={(p) => p.name}
   loading={probes.running}
-  emptyTitle="Not run yet."
-  emptyDetail="Run the checks to probe this deployment."
+  emptyTitle="not run yet"
+  emptyDetail="run the checks to probe this deployment"
 />
 
 <style>

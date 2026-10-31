@@ -4,7 +4,10 @@
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
   import { navigate } from "../shell/router.svelte";
+  import { presetScope } from "../library/filters";
   import {
+    radarFits,
+    EMPTY,
     Bars,
     Columns,
     DataTable,
@@ -115,7 +118,7 @@
       (x) =>
         knowledge.entries
           ? `${Math.round((x.value / knowledge.entries) * 100)}%`
-          : "–",
+          : EMPTY,
       { end: true },
     ),
   ];
@@ -213,7 +216,7 @@
       label: "busiest day",
       text: readStats.peak
         ? `${readStats.peak.label} · ${compact(readStats.peak.value)}`
-        : "–",
+        : EMPTY,
     },
     {
       key: "fixes",
@@ -257,6 +260,11 @@
   const approved = $derived(knowledge.by_status.approved ?? 0);
   const share = (n: number, of: number) =>
     of ? Math.round((n / of) * 100) : 0;
+  function openDrafts() {
+    presetScope({ status: "draft" });
+    navigate("/library");
+  }
+
   const backlogFigures = $derived<FigureItem[]>([
     {
       key: "drafts",
@@ -264,6 +272,7 @@
       label: "drafts waiting > 30 d",
       note: `${oldDrafts} of ${draftTotal} drafts`,
       tone: "warn",
+      onclick: openDrafts,
     },
     {
       key: "untouched",
@@ -333,18 +342,22 @@
 </script>
 
 {#snippet statusChart()}
-  <Radar
-    axes={statuses.map((x) => ({ key: x.key, label: x.label, tone: x.tone }))}
-    series={[
-      {
-        key: "entries",
-        label: "entries",
-        tone: "accent",
-        values: statuses.map((x) => x.value),
-      },
-    ]}
-    format={compact}
-  />
+  {#if radarFits(statuses.length)}
+    <Radar
+      axes={statuses.map((x) => ({ key: x.key, label: x.label, tone: x.tone }))}
+      series={[
+        {
+          key: "entries",
+          label: "entries",
+          tone: "accent",
+          values: statuses.map((x) => x.value),
+        },
+      ]}
+      format={compact}
+    />
+  {:else}
+    <Bars rows={statuses} format={compact} />
+  {/if}
 {/snippet}
 {#snippet statusTable()}
   <DataTable columns={statusColumns} rows={statuses} rowKey={(x) => x.key} />
@@ -391,7 +404,7 @@
     columns={weakColumns}
     rows={stale.data.weakest}
     rowKey={(w) => w.id}
-    emptyTitle="No entry has been rated yet."
+    emptyTitle="no entry has been rated yet"
     onrowclick={(w) => navigate(`/library/entries/${w.id}`)}
   />
 {/snippet}

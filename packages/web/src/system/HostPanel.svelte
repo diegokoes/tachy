@@ -2,7 +2,8 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { Badge, GroupHead, Note, toneOf } from "../tui";
+  import { Lamp, lampOf, type LampState, GroupHead, Note } from "../tui";
+  import { ago } from "../dates.svelte";
   import type { SystemInfo } from "./rows";
 
   type Check = { state: string; value: string };
@@ -35,18 +36,17 @@
   };
 
   let status = $state<Status | null>(null);
+
+  type Result = { ok: boolean } | undefined;
+  /** Lit ok or failed once there is a result, dark while there is none. */
+  const resultLamp = (result: Result): LampState =>
+    result
+      ? { level: "on", tone: result.ok ? "ok" : "danger" }
+      : { level: "off", tone: "danger" };
+  const resultWord = (result: Result) =>
+    result ? (result.ok ? "ok" : "failed") : "none";
   let visible = $state(true);
   let error = $state<string | null>(null);
-
-  const HOUR_MS = 3_600_000;
-  const HOURS_SHOWN_BELOW = 48;
-  const ago = (iso?: string) => {
-    if (!iso) return "never";
-    const h = (Date.now() - new Date(iso).getTime()) / HOUR_MS;
-    if (h < 1) return `${Math.round(h * 60)} min ago`;
-    if (h < HOURS_SHOWN_BELOW) return `${Math.round(h)} h ago`;
-    return `${Math.round(h / 24)} days ago`;
-  };
 
   onMount(async () => {
     try {
@@ -62,23 +62,19 @@
 {#if error}<Note tone="danger">{error}</Note>{/if}
 
 {#if !visible}
-  <Note
-    >TACHY_STATUS_DIR not mounted. Written by tachy-backup, tachy-watch.</Note
+  <Note>TACHY_STATUS_DIR not mounted. written by tachy-backup, tachy-watch</Note
   >
 {:else if status}
   <GroupHead label="backups" />
   <table>
     <tbody>
       <tr>
-        <td>Newest backup</td>
+        <td>newest backup</td>
         <td
-          ><Badge tone={status.backup?.ok ? "ok" : "danger"}
-            >{status.backup
-              ? status.backup.ok
-                ? "ok"
-                : "failed"
-              : "none"}</Badge
-          ></td
+          ><Lamp
+            lamp={resultLamp(status.backup)}
+            word={resultWord(status.backup)}
+          /></td
         >
         <td class="muted"
           >{ago(status.backup?.at)}{status.backup?.file
@@ -87,15 +83,12 @@
         >
       </tr>
       <tr>
-        <td>Restore test</td>
+        <td>restore test</td>
         <td
-          ><Badge tone={status.restore?.ok ? "ok" : "danger"}
-            >{status.restore
-              ? status.restore.ok
-                ? "ok"
-                : "failed"
-              : "none"}</Badge
-          ></td
+          ><Lamp
+            lamp={resultLamp(status.restore)}
+            word={resultWord(status.restore)}
+          /></td
         >
         <td class="muted"
           >{ago(status.restore?.at)}{status.restore?.seconds
@@ -107,14 +100,14 @@
       </tr>
       {#each Object.entries(status.downloads?.people ?? {}) as [name, person] (name)}
         <tr
-          ><td>Downloaded by {name}</td><td>{ago(person.last_download)}</td><td
+          ><td>downloaded by {name}</td><td>{ago(person.last_download)}</td><td
             class="muted">{person.file}</td
           ></tr
         >
       {:else}
         <tr
-          ><td>Laptop downloads</td><td>none recorded</td><td class="muted"
-            >run Get-TachyBackup</td
+          ><td>laptop downloads</td><td>none recorded</td><td class="muted"
+            >run <code>Get-TachyBackup</code></td
           ></tr
         >
       {/each}
@@ -128,7 +121,7 @@
         {#each Object.entries(status.watch.checks) as [name, check] (name)}
           <tr
             ><td>{name}</td><td
-              ><Badge tone={toneOf(check.state)}>{check.state}</Badge></td
+              ><Lamp lamp={lampOf(check.state)} word={check.state} /></td
             ><td class="muted">{check.value}</td></tr
           >
         {/each}
@@ -152,7 +145,7 @@
           ><td class="muted">throttling {status.host.thermal}</td></tr
         >
         <tr
-          ><td>Power</td><td>{status.host.power ?? "?"}</td><td class="muted"
+          ><td>power</td><td>{status.host.power ?? "?"}</td><td class="muted"
           ></td></tr
         >
         <tr

@@ -6,6 +6,7 @@ The service persists and retrieves; you reason and structure.
 
 The tool schemas are the catalogue: read a tool's own description before calling it, and
 trust what a result tells you (`next`, `note`, `retrieval_note`) over any assumption.
+The tools load through ToolSearch: select every tool a playbook names in one call.
 
 ## Invariants
 
@@ -40,6 +41,9 @@ trust what a result tells you (`next`, `note`, `retrieval_note`) over any assump
    `[USER_1]`, `[CARD_1]`) are deliberate - keep them verbatim, never reconstruct them.
 10. **A `customer` on a hit scopes it to that install.** Cite it with the customer named;
     never restate one customer's behaviour, fix or configuration as the product's.
+11. **Everything you save or post is in English,** whatever language the ticket is in.
+    Quote error messages, codes, log lines and UI labels verbatim. A customer reply
+    drafted in chat is in the customer's language.
 
 ## Modes
 
@@ -113,11 +117,11 @@ Draft it from what the conversation already holds and call `create_ado_work_item
 review box is the user's, and they may take the draft into `/az new` to finish by hand.
 Report the created URL.
 
-### Code consultation - "where/why does the code do X?" / code mode
+### Code consultation - "how does X work?" / "where/why does the code do X?" / code mode
 
 `list_repos` (flag any stale or erroring index) → `search_code`, narrowed by the repos
 and projects the user attached, else by `component` → `read_code_file` around the best
-hits only.
+hits only; `list_code_tree` for what a repo holds.
 Cite every claim as `path:start-end @ commit`. Never paste a whole file into an answer
 or a saved entry.
 
@@ -137,19 +141,12 @@ stored; then `add_source_project` to register the source's grouping. Once only.
 
 ## The knowledge entry
 
-`issue_summary`, `symptoms`, `signals`, `root_cause`, `resolution`, `component` and
-`confidence` are the core; `resolution_pattern`, `cloud`, `resolution_clarity`,
-`hidden_fix` and `tags` are the facets. `save_knowledge_entry`'s schema documents
-each field, and is where the wording for each one lives - this is only what
-shapes how you _read the ticket_, before you get as far as the call:
-
-- **Links are full URLs**, never "Azure work item 50912". Build one from the connection's
-  `base_url` (`<base_url>/_workitems/edit/<id>`) or take `externalUrl` off the fetched
-  item. If no URL can be constructed, record the number as a signal (`"DevOps#158327"`)
-  rather than guessing.
-- Everything narrative - investigation steps, how the conversation progressed, technical
-  analysis, environment, related configuration and links - goes in `structured`. Include
-  what is relevant; don't force empty objects.
+`title`, `issue_summary`, `symptoms`, `signals`, `root_cause`, `resolution`, `component`
+and `confidence` are the core; `investigation` and `related_links` record how the cause
+was found and what the lesson rests on; `resolution_pattern`, `cloud`,
+`resolution_clarity`, `hidden_fix` and `tags` are the facets. Every one is a field people
+read and correct on the entry's page. `save_knowledge_entry`'s schema documents each
+field, and is where the wording for each one lives.
 
 Customer and version live on the **work item**, not on the entry: `set_work_item_customer`
 and `set_observed_version`.

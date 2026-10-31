@@ -7,9 +7,27 @@
     ReviewFinding,
   } from "@tachy/contract";
   import { pushScope } from "../keys/keys.svelte";
-  import { Badge, Button, Chevron, Icon, Note, Select, tip } from "../tui";
+  import {
+    Badge,
+    BarField,
+    Button,
+    Chevron,
+    Icon,
+    InfoMark,
+    Note,
+    Select,
+    tip,
+  } from "../tui";
   import { typeColor, typeIcon } from "./ado-icons";
-  import { az, ensureProjects, ensureTypes, typesOf } from "./az.svelte";
+  import {
+    az,
+    ensureProjects,
+    ensureTypes,
+    retryTypes,
+    typesFailed,
+    typesNote,
+    typesOf,
+  } from "./az.svelte";
   import {
     applyTemplate,
     askReview,
@@ -27,6 +45,7 @@
   import {
     arrange,
     fieldForName,
+    helpOf,
     isBody,
     labelOf,
     missingRequired,
@@ -45,6 +64,9 @@
       project: ComposerProject,
     ) => void;
   } = $props();
+
+  /** The template last applied, while the form still offers it. */
+  let appliedTemplate = $state("");
 
   $effect(() => {
     ensureProjects();
@@ -95,8 +117,8 @@
   );
 
   function fieldName(ref: string) {
-    if (ref === TITLE) return "Title";
-    if (ref === "general") return "Overall";
+    if (ref === TITLE) return "title";
+    if (ref === "general") return "overall";
     return form?.labels[ref] ?? specs.get(ref)?.name ?? ref;
   }
 
@@ -203,6 +225,7 @@
 {#snippet label(field: FieldSpec)}
   {@const origin = composer.origins[field.reference_name]}
   {@const flagged = findingsFor.get(field.reference_name)}
+  {@const help = helpOf(field)}
   <span class="label">
     <label for={`f-${field.reference_name}`}>{labelOf(form, field)}</label>
     {#if field.required}<span class="req" aria-label="required">*</span>{/if}
@@ -212,7 +235,7 @@
         <Icon name="review" size="0.9em" />{flagged}
       </button>
     {/if}
-    {#if field.help_text}<span class="help" use:tip={field.help_text}
+    {#if help}<span class="help" use:tip={help}
         ><Icon name="info" size="0.9em" /></span
       >{/if}
   </span>
@@ -238,51 +261,67 @@
   </div>
 {/snippet}
 
-<section class="view" aria-label="New Azure DevOps work item" bind:this={root}>
+<section class="view" aria-label="new Azure DevOps work item" bind:this={root}>
   <header class="bar">
     <div class="where">
-      <Select
-        value={composer.project?.id ?? ""}
-        placeholder="project"
-        searchable
-        options={(az.projects ?? []).map((p) => ({
-          value: p.id,
-          label: p.name,
-        }))}
-        aria-label="Project"
-        onchange={(v) => {
-          const picked = az.projects?.find((x) => x.id === v);
-          if (picked && picked.id !== composer.project?.id) setProject(picked);
-        }}
-      />
-      {#if composer.project}
-        {#if composer.type}
-          <span
-            class="glyph"
-            style:color={typeColor(composer.type.color) ?? undefined}
-          >
-            <Icon name={typeIcon(composer.type.icon)} size="1.05em" />
-          </span>
-        {/if}
+      <BarField label="project">
         <Select
-          value={composer.type?.name ?? ""}
-          placeholder="type"
-          options={types.map((t) => ({ value: t.name, label: t.name }))}
-          aria-label="Work item type"
+          value={composer.project?.id ?? ""}
+          placeholder="none"
+          searchable
+          options={(az.projects ?? []).map((p) => ({
+            value: p.id,
+            label: p.name,
+          }))}
+          aria-label="project"
           onchange={(v) => {
-            const t = types.find((x) => x.name === v);
-            if (t && t.name !== composer.type?.name) setType(t);
+            const picked = az.projects?.find((x) => x.id === v);
+            if (picked && picked.id !== composer.project?.id)
+              setProject(picked);
           }}
         />
+      </BarField>
+      {#if composer.project}
+        <BarField label="type">
+          <span class="typed">
+            {#if composer.type}
+              <span
+                class="glyph"
+                style:color={typeColor(composer.type.color) ?? undefined}
+              >
+                <Icon name={typeIcon(composer.type.icon)} size="1.05em" />
+              </span>
+            {/if}
+            <Select
+              value={composer.type?.name ?? ""}
+              placeholder="none"
+              options={types.map((t) => ({ value: t.name, label: t.name }))}
+              aria-label="work item type"
+              onchange={(v) => {
+                const t = types.find((x) => x.name === v);
+                if (t && t.name !== composer.type?.name) setType(t);
+              }}
+            />
+          </span>
+        </BarField>
       {/if}
       {#if form?.templates.length}
-        <Select
-          value=""
-          placeholder="template"
-          options={form.templates.map((t) => ({ value: t.id, label: t.name }))}
-          aria-label="Apply a team template"
-          onchange={(v) => v && applyTemplate(String(v))}
-        />
+        <BarField label="template">
+          <Select
+            value={appliedTemplate}
+            placeholder="none"
+            options={form.templates.map((t) => ({
+              value: t.id,
+              label: t.name,
+            }))}
+            aria-label="apply a team template"
+            onchange={(v) => {
+              if (!v) return;
+              appliedTemplate = String(v);
+              void applyTemplate(appliedTemplate);
+            }}
+          />
+        </BarField>
       {/if}
     </div>
 
@@ -321,14 +360,14 @@
         variant={discardArmed ? "danger" : "ghost"}
         icon={discardArmed ? "confirm" : "delete"}
         morph
-        aria-label="Discard the draft"
+        aria-label="discard the draft"
         title={discardArmed ? "click again to discard" : "discard the draft"}
         onclick={discard}
       />
       <Button
         variant="ghost"
         icon="close"
-        aria-label="Close (the draft is kept)"
+        aria-label="close (the draft is kept)"
         title="close · the draft is kept"
         onclick={closeComposer}
       />
@@ -351,7 +390,7 @@
         <span class="bad">{composer.error}</span>
       {:else if composer.validation?.ok}
         <span class="good"
-          ><Icon name="success" size="1em" /> Azure DevOps accepts it as it is.</span
+          ><Icon name="success" size="1em" /> Azure DevOps accepts it as it is</span
         >
       {:else if composer.validation}
         <span class="bad">{composer.validation.message}</span>
@@ -365,12 +404,12 @@
     {:else if !composer.project}
       {#if az.projects && !az.projects.length}
         <Note tone="warn">
-          None of your teams has an Azure DevOps project registered. A team
-          admin registers one under Admin › integrations › projects.
+          none of your teams has an Azure DevOps project registered. a team
+          admin registers one under console › integrations › projects
         </Note>
       {:else}
         <div class="pick">
-          <p class="dim">Pick the project this goes into.</p>
+          <p class="dim">pick the project this goes into</p>
           <div class="cards">
             {#each az.projects ?? [] as project (project.id)}
               <button class="card" onclick={() => setProject(project)}>
@@ -384,8 +423,22 @@
         </div>
       {/if}
     {:else if !composer.type}
+      {@const projectId = composer.project.id}
       <div class="pick">
-        <p class="dim">What are you raising?</p>
+        <p class="dim">what are you raising?</p>
+        {#if typesFailed(projectId)}
+          <Note tone="danger">
+            {typesNote(projectId)}
+            {#snippet action()}
+              <Button
+                size="sm"
+                variant="ghost"
+                icon="refresh"
+                onclick={() => retryTypes(projectId)}>retry</Button
+              >
+            {/snippet}
+          </Note>
+        {/if}
         <div class="cards">
           {#each types as type (type.name)}
             <button class="card type" onclick={() => setType(type)}>
@@ -411,6 +464,9 @@
           <span class="label">
             <label for="f-title">{composer.type.name} title</label>
             <span class="req" aria-label="required">*</span>
+            <InfoMark label="about the title"
+              >one line a developer understands at a glance</InfoMark
+            >
             {#if findingsFor.get(TITLE)}
               <button class="flag" onclick={() => (side = "review")}
                 ><Icon name="review" size="0.9em" />{findingsFor.get(
@@ -423,7 +479,6 @@
             id="f-title"
             class:invalid={rejected.has(TITLE)}
             bind:value={composer.title}
-            placeholder="one line a developer understands at a glance"
           />
         </div>
         {#if composer.loading && !form}
@@ -529,7 +584,7 @@
     flex: none;
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: end;
     justify-content: space-between;
     gap: var(--pad-2) var(--pad-4);
     padding-bottom: var(--pad-2);
@@ -541,6 +596,15 @@
     align-items: center;
     gap: var(--pad-2);
     min-width: 0;
+  }
+  /* On the controls' line, under their caps. */
+  .where {
+    align-items: end;
+  }
+  .typed {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-1);
   }
   .rule {
     width: 1px;

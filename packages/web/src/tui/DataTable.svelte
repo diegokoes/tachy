@@ -1,5 +1,6 @@
 <script lang="ts" generics="T">
   import { cellText, type Column } from "./table";
+  import type { AsciiArt } from "./ascii";
   import EmptyState from "./EmptyState.svelte";
   import Note from "./Note.svelte";
 
@@ -11,6 +12,7 @@
     error = null,
     emptyTitle = "nothing here yet",
     emptyDetail,
+    emptyArt,
     rowClass,
     onrowclick,
     canOpen = () => true,
@@ -22,6 +24,8 @@
     error?: string | null;
     emptyTitle?: string;
     emptyDetail?: string;
+    /** Drawn over the empty state: a page's own list has one, a dialog's not. */
+    emptyArt?: AsciiArt;
     rowClass?: (row: T) => string | undefined;
     /** Opening a row is the row's own job, so the whole of it is the target. */
     onrowclick?: (row: T) => void;
@@ -81,19 +85,25 @@
           {#each columns as column}
             <td class={column.align === "end" ? "end" : ""}>
               {#if column.cell}{@render column.cell(row)}
-              {:else}<span class="v">{cellText(column, row)}</span>{/if}
+              {:else}<span class="v" class:ui={column.face === "ui"}
+                  >{cellText(column, row)}</span
+                >{/if}
             </td>
           {/each}
         </tr>
       {/each}
 
-      {#if !rows.length}
+      {#if !rows.length && !error}
         <tr class="none">
           <td colspan={columns.length}>
             {#if loading}
               <p class="loading">loading…</p>
             {:else}
-              <EmptyState title={emptyTitle} detail={emptyDetail} />
+              <EmptyState
+                art={emptyArt}
+                title={emptyTitle}
+                detail={emptyDetail}
+              />
             {/if}
           </td>
         </tr>
@@ -169,6 +179,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .v.ui {
+    font-family: var(--font-ui);
   }
 
   tr.none > td {

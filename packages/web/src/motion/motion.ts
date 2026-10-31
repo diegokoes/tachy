@@ -119,35 +119,6 @@ export function clearGlow(node: Element) {
 }
 
 /**
- * A few soft text-shadow pulses in the node's own colour, ending unlit. For a
- * tag that opens something and has to say so once, not keep saying it.
- * `loop` keeps it going until the node goes, for something still under way.
- */
-export function shadowPulse(node: HTMLElement, opts?: { loop?: boolean }) {
-  if (reducedMotion()) return;
-  const color = getComputedStyle(node).color;
-  const tween = gsap.fromTo(
-    node,
-    {
-      textShadow: opts?.loop
-        ? `0 0 0px ${color}, 0 0 0px ${color}`
-        : `0 0 0px ${color}`,
-    },
-    {
-      textShadow: opts?.loop
-        ? `0 0 8px ${color}, 0 0 14px ${color}`
-        : `0 0 6px ${color}`,
-      duration: 1.1,
-      yoyo: true,
-      repeat: opts?.loop ? -1 : 5,
-      ease: "sine.inOut",
-      clearProps: "textShadow",
-    },
-  );
-  return { destroy: () => void tween.kill() };
-}
-
-/**
  * Half-period of the grow/shrink pulse: the icon is at its biggest at PULSE,
  * 3·PULSE, 5·PULSE… Anything that wants to land on a peak - the thread's bead -
  * schedules itself off this, so both must be started in the same frame.
@@ -200,6 +171,25 @@ export function jolt(node: Element) {
       clearProps: "filter",
     },
   );
+}
+
+const BELL_PIVOT = "50% 12%";
+
+export function ring(node: Element) {
+  if (reducedMotion()) return null;
+  // A keyframed tween drops from-values and clearProps.
+  gsap.set(node, { transformOrigin: BELL_PIVOT });
+  return gsap.to(node, {
+    keyframes: {
+      rotation: [0, 18, -15, 11, -7, 4, 0],
+      easeEach: "sine.inOut",
+    },
+    duration: 0.7,
+    overwrite: true,
+    onComplete: () => {
+      gsap.set(node, { clearProps: "transform,transformOrigin" });
+    },
+  });
 }
 
 /**
@@ -704,25 +694,38 @@ export function reflow(
 
 /**
  * Takes `tile` to the size of the window, or back: the live node resizes
- * between its two boxes, so its chart redraws at each size on the way instead
- * of crossfading two pictures. `swap` changes the layout and returns when the
- * DOM shows it. `data-morphing` is on the tile while it moves, so it can clip
- * what does not fit yet.
+ * between its two boxes, so its chart redraws at each size on the way. `swap`
+ * changes the layout and returns when the DOM shows it. While the tile travels
+ * out of flow, `data-morphing` lets it clip what does not fit yet and an empty
+ * copy holds its place, so its neighbours stay put.
  */
 export async function morphTile(
   tile: HTMLElement | null | undefined,
   swap: () => void | Promise<void>,
 ) {
+  let slot: HTMLElement | undefined;
   if (tile) tile.dataset.morphing = "";
   const play = reflow([tile], {
     duration: 0.5,
     ease: "expo.out",
     onComplete: () => {
+      slot?.remove();
       if (tile) delete tile.dataset.morphing;
     },
   });
   await swap();
+  if (tile) slot = holdPlace(tile);
   play();
+}
+
+/** Puts an empty node that lays out like `node` right after it. */
+function holdPlace(node: HTMLElement): HTMLElement {
+  const slot = document.createElement(node.tagName);
+  slot.className = node.className;
+  slot.style.cssText = node.style.cssText;
+  slot.setAttribute("aria-hidden", "true");
+  node.after(slot);
+  return slot;
 }
 
 /**

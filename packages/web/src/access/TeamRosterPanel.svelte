@@ -32,7 +32,7 @@
   const headless = $derived(rows.filter((tm) => !admins(tm).length));
 
   const columns: Column<Team>[] = $derived([
-    { key: "name", label: t("team"), width: "14rem" },
+    { key: "name", face: "ui", label: t("team"), width: "14rem" },
     { key: "admins", label: roleLabel("team", "admin"), cell: adminsCell },
     {
       key: "members",
@@ -75,8 +75,8 @@
   rowKey={(tm) => tm.slug}
   loading={teams.loading}
   error={teams.error ?? memberships.error}
-  emptyTitle={`No ${t("teams")} yet.`}
-  emptyDetail={`Add them under structure.`}
+  emptyTitle={`no ${t("teams")} yet`}
+  emptyDetail="add them under structure"
 />
 
 <style>

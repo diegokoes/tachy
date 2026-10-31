@@ -41,8 +41,9 @@ import {
   shownText,
 } from "../results";
 import { mcpActor, requireCanEdit, referenceDocScope } from "../permissions";
-import { memberField, structuredField, textWindowFields } from "../fields";
+import { memberField, textWindowFields } from "../fields";
 import {
+  codeNextFor,
   componentIntoFilter,
   resolveScopeIds,
   loadContextSources,
@@ -127,7 +128,7 @@ tool(
   }) => {
     const sources = await loadContextSources({ text, paths, urls, member });
     if (!sources.length)
-      throw badInput("Provide at least one of: text, paths, urls");
+      throw badInput("provide at least one of: text, paths, urls");
 
     const window = {
       offset,
@@ -212,7 +213,6 @@ tool(
         ),
       tags: z.array(z.string()).optional(),
       status: referenceStatusSchema.optional(),
-      structured: structuredField,
       doc_version: z.string().optional(),
       supersedes: z.string().optional(),
       source_project_id: z
@@ -229,7 +229,7 @@ tool(
   },
   async (args) => {
     if (!args.body === !args.body_path)
-      throw badInput("Provide exactly one of body or body_path");
+      throw badInput("provide exactly one of body or body_path");
     const { productId, teamId } = await resolveScopeIds(args);
     if (productId || teamId || !args.supersedes)
       await requireCanEdit({ productId, teamId });
@@ -260,7 +260,6 @@ tool(
       externalKey: args.external_key,
       tags: args.tags,
       status: args.status ?? "approved",
-      structured: args.structured,
       docVersion: args.doc_version,
       supersedes: args.supersedes,
       component: args.component,
@@ -313,20 +312,20 @@ tool(
       product_slug,
       team_slug,
     });
-    return searchOut(
-      await searchReferenceDocs(query, {
-        productId,
-        teamId,
-        includeUnscoped: true,
-        ...(await componentIntoFilter(productId, component, tags)),
-        boostCustomerId: customer
-          ? await getCustomerIdBySlug(customer)
-          : undefined,
-        docVersion: doc_version,
-        limit,
-      }),
-      "search_reference",
-    );
+    const hits = await searchReferenceDocs(query, {
+      productId,
+      teamId,
+      includeUnscoped: true,
+      ...(await componentIntoFilter(productId, component, tags)),
+      boostCustomerId: customer
+        ? await getCustomerIdBySlug(customer)
+        : undefined,
+      docVersion: doc_version,
+      limit,
+    });
+    return searchOut(hits, "search_reference", {
+      next: await codeNextFor(productId, hits),
+    });
   },
 );
 
@@ -399,7 +398,6 @@ tool(
       tags: z.array(z.string()).optional(),
       status: referenceStatusSchema.optional(),
       source: z.string().nullable().optional(),
-      structured: structuredField,
       doc_version: z.string().nullable().optional(),
       customer_slug: z
         .string()
@@ -419,7 +417,6 @@ tool(
     if (args.tags !== undefined) patch.tags = args.tags;
     if (args.status !== undefined) patch.status = args.status;
     if (args.source !== undefined) patch.source = args.source;
-    if (args.structured !== undefined) patch.structured = args.structured;
     if (args.doc_version !== undefined) patch.docVersion = args.doc_version;
     if (args.customer_slug !== undefined)
       patch.customerSlug = args.customer_slug;

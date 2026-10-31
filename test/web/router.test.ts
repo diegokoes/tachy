@@ -11,6 +11,7 @@ import {
   segment,
   segments,
   setLanding,
+  setLeaveGuard,
   startRouter,
 } from "../../packages/web/src/shell/router.svelte";
 
@@ -165,6 +166,82 @@ describe("startRouter", () => {
     stop();
     history.replaceState({}, "", "/library");
     window.dispatchEvent(new PopStateEvent("popstate"));
+    expect(router.path).toBe("/settings");
+  });
+});
+
+describe("a leave guard", () => {
+  /** A guard that holds every move while `dirty`, keeping the last one asked. */
+  function holding() {
+    const guard = {
+      dirty: true,
+      pending: null as (() => void) | null,
+      blocks: () => guard.dirty,
+      ask: (leave: () => void) => {
+        guard.pending = leave;
+      },
+    };
+    return guard;
+  }
+
+  it("holds a navigation until the person chooses to leave", () => {
+    navigate("/library/entries/1");
+    const guard = holding();
+    const release = setLeaveGuard(guard);
+
+    navigate("/settings");
+    expect(router.path).toBe("/library/entries/1");
+
+    guard.pending?.();
+    expect(router.path).toBe("/settings");
+    release();
+  });
+
+  it("lets a navigation through once nothing is left to lose", () => {
+    navigate("/library/entries/1");
+    const guard = holding();
+    const release = setLeaveGuard(guard);
+    guard.dirty = false;
+
+    navigate("/settings");
+    expect(router.path).toBe("/settings");
+    expect(guard.pending).toBeNull();
+    release();
+  });
+
+  it("puts the address back on the back button, and follows it once left", () => {
+    const stop = startRouter();
+    navigate("/library/entries/1");
+    const guard = holding();
+    const release = setLeaveGuard(guard);
+
+    history.replaceState({}, "", "/library");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    expect(router.path).toBe("/library/entries/1");
+    expect(window.location.pathname).toBe("/library/entries/1");
+
+    guard.pending?.();
+    expect(router.path).toBe("/library");
+    release();
+    stop();
+  });
+
+  it("asks the browser to confirm a reload", () => {
+    const stop = startRouter();
+    const release = setLeaveGuard(holding());
+    const unload = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+    release();
+    stop();
+  });
+
+  it("stops guarding once released", () => {
+    navigate("/library/entries/1");
+    const guard = holding();
+    setLeaveGuard(guard)();
+
+    navigate("/settings");
     expect(router.path).toBe("/settings");
   });
 });

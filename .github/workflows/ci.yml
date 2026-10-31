@@ -39,6 +39,8 @@ jobs:
 
       - run: npm run comments:check
 
+      - run: npm run copy:check
+
       # The image runs these bundles; a bundling error should fail here, not in
       # production.
       - run: npm run build:server

@@ -1,0 +1,33 @@
+name: Dependabot auto-merge
+
+# Dependabot's pull requests into dev merge themselves once the required checks
+# pass; a major update waits for a person. The merge is made with GITHUB_TOKEN,
+# whose events start no workflow, so its commit gets no image of its own. That
+# is fine on dev, which no host deploys. Security updates go to main, which a
+# host follows, and stay manual. Needs "allow auto-merge" in the repo settings.
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  automerge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.base_ref == 'dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # update-type is the largest change in the pull request, so a group that
+      # holds one major update waits as a whole.
+      - if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        run: gh pr merge --auto --merge "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

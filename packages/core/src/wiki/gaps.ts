@@ -93,9 +93,7 @@ async function componentGaps(
       order by slug
     ` as unknown as Promise<Component[]>,
     db`
-      select 'entry' as kind, e.id,
-             coalesce(e.issue_summary, '(no summary)') as title,
-             e.component_id, e.created_at
+      select 'entry' as kind, e.id, e.title, e.component_id, e.created_at
       from knowledge_entries e
       join components c on c.id = e.component_id
       where c.product_id = ${productId} and e.status = 'approved'
@@ -219,7 +217,7 @@ export async function computeWikiGaps(
     ` as unknown as Promise<Article[]>,
     db`
       select l.from_doc_id as id, count(*)::int as changed,
-             (array_agg(coalesce(e.issue_summary, d.title)
+             (array_agg(coalesce(e.title, d.title)
                         order by coalesce(e.updated_at, d.updated_at) desc)
              )[1:${EVIDENCE_ITEMS}::int] as titles
       from library_links l
@@ -420,7 +418,7 @@ export async function dismissWikiGap(
   id: string,
   userId: string | null,
 ): Promise<{ dismissed: string }> {
-  const missing = () => notFound(`No open gap '${id}' in this wiki`);
+  const missing = () => notFound(`no open gap '${id}' in this wiki`);
   if (!UUID_RE.test(id)) throw missing();
   const [row] = await sql`
     update wiki_gaps

@@ -1,5 +1,6 @@
 import type { Snippet } from "svelte";
 import type { IconName } from "./icons";
+import { EMPTY } from "./glyphs";
 
 export type Opt = { value: string | number; label: string };
 
@@ -13,6 +14,9 @@ export type Column<T> = {
   /** A CSS width for <col>. Fixed tracks are what keep rows from resizing. */
   width?: string;
   align?: "start" | "end";
+  /** "ui" for display names and prose; a plain value is set in mono, for
+   *  identifiers and numbers read against the row above. */
+  face?: "ui";
   /**
    * Plain display value; ignored when `cell` is given. On an editable column
    * this also seeds the record form, so it returns the stored form: the
@@ -28,8 +32,8 @@ export type Column<T> = {
   options?: Opt[] | ((draft: Draft) => Opt[]);
   /** Offer a filter box on a select, for choices that run to hundreds. */
   searchable?: boolean;
-  /** Shown in the empty control. Only ever an example of the *shape* of the
-   *  value; what the field is for and the rules behind it go in `info`. */
+  /** Shown muted in the empty control: only the value the field takes when
+   *  left empty, such as an inherited default. Examples and rules go in `info`. */
   placeholder?: string | ((draft: Draft) => string);
   /** Everything the field has to say, behind an info mark beside its label.
    *  A function when it depends on another field, e.g. the source type. */
@@ -70,7 +74,16 @@ export function cellText<T>(c: Column<T>, row: T): string {
   const value = c.value
     ? c.value(row)
     : (row as Record<string, unknown>)[c.key];
-  return value == null || value === "" ? "-" : String(value);
+  return value == null || value === "" ? EMPTY : String(value);
+}
+
+/** Whether `after` differs from the draft it started as; an empty value and
+ *  a missing one are the same. */
+export function draftChanged(before: Draft, after: Draft): boolean {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return [...keys].some(
+    (key) => String(before[key] ?? "") !== String(after[key] ?? ""),
+  );
 }
 
 /** Seeds the record form from a row. See the note on `Column.value`. */

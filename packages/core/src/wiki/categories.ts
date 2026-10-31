@@ -1,4 +1,8 @@
-import { MAIN_PAGE_SLUG, SLUG_RE } from "@tachy/contract";
+import {
+  MAIN_PAGE_SLUG,
+  SEARCHED_ENTRY_STATUSES,
+  SLUG_RE,
+} from "@tachy/contract";
 import { sql } from "../infra/db";
 import { wouldCycle } from "../infra/hierarchy";
 import { badInput, conflict, notFound } from "../infra/errors";
@@ -40,7 +44,7 @@ export interface WikiCategoryPatch {
 function assertCategorySlug(slug: string): void {
   if (!SLUG_RE.test(slug))
     throw badInput(
-      `Invalid category slug '${slug}': lowercase letters, digits and hyphens only.`,
+      `invalid section slug '${slug}': lowercase letters, digits and hyphens only`,
     );
 }
 
@@ -90,7 +94,7 @@ export async function getWikiCategory(
   slug: string,
 ): Promise<WikiCategoryRow> {
   const [row] = await categoryRows(productId, slug);
-  if (!row) throw notFound(`No wiki category '${slug}' in this wiki`);
+  if (!row) throw notFound(`no wiki section '${slug}' in this wiki`);
   return row;
 }
 
@@ -209,7 +213,7 @@ export async function setCategoryComponents(
       select id from components
       where product_id = ${productId} and slug = ${slug}
     `;
-    if (!component) throw notFound(`No component '${slug}' in this product`);
+    if (!component) throw notFound(`no component '${slug}' in this product`);
     ids.push(component.id);
   }
   await sql.begin(async (tx) => {
@@ -410,7 +414,7 @@ export async function setArticleCategories(
 export async function findArticle(productId: string | null, slug: string) {
   const [row] = await sql`
     select d.id, d.product_id, d.team_id, d.component_id, d.product_area, d.source,
-           d.title, d.body, d.tags, d.status, d.structured, d.doc_version,
+           d.title, d.body, d.tags, d.status, d.doc_version,
            d.version, d.customer_id, cu.slug as customer_slug, d.kind, d.slug,
            d.created_at, d.updated_at
     from reference_docs d
@@ -423,7 +427,7 @@ export async function findArticle(productId: string | null, slug: string) {
     order by d.slug = ${slug} desc
     limit 1
   `;
-  if (!row) throw notFound(`No wiki article '${slug}' in this wiki`);
+  if (!row) throw notFound(`no wiki article '${slug}' in this wiki`);
   return row;
 }
 
@@ -518,7 +522,7 @@ export async function draftSources(
     select id from components
     where product_id = ${productId} and slug = ${componentSlug}
   `;
-  if (!root) throw notFound(`No component '${componentSlug}' in this product`);
+  if (!root) throw notFound(`no component '${componentSlug}' in this product`);
 
   const rows = await sql`
     with recursive subtree as (
@@ -526,16 +530,16 @@ export async function draftSources(
       union all
       select c.id from components c join subtree s on c.parent_id = s.id
     )
-    select e.id, 'entry' as kind,
-           coalesce(e.issue_summary, '(no summary)') as title,
+    select e.id, 'entry' as kind, e.title,
            concat_ws(E'\\n\\n',
+             nullif(e.issue_summary, ''),
              nullif(e.root_cause, ''),
              nullif(e.resolution, ''),
              nullif(array_to_string(e.symptoms, '; '), '')) as body,
            e.product_area as component, e.updated_at
     from knowledge_entries e
     where e.component_id in (select id from subtree)
-      and e.status in ('approved', 'deprecated')
+      and e.status = any(${[...SEARCHED_ENTRY_STATUSES]})
     union all
     select d.id, 'doc', d.title, left(d.body, 4000), d.product_area, d.updated_at
     from reference_docs d

@@ -14,14 +14,12 @@ import {
   ArrowDownWideNarrow,
   ArrowLeft,
   ArrowRight,
-  ArrowRightToLine,
   ArrowUpFromLine,
   ArrowUpNarrowWide,
   Asterisk,
   Ban,
   BookDashed,
   Bell,
-  BellDot,
   BellMinus,
   BellPlus,
   BellRing,
@@ -31,6 +29,7 @@ import {
   Bot,
   Braces,
   Bug,
+  Building2,
   CalendarClock,
   CalendarCog,
   CalendarSync,
@@ -72,6 +71,7 @@ import {
   FunnelPlus,
   FunnelX,
   Ghost,
+  Gauge,
   Gavel,
   Gift,
   GitBranch,
@@ -99,6 +99,7 @@ import {
   LogOut,
   Maximize2,
   Megaphone,
+  Menu,
   MessageSquare,
   MessageSquareQuote,
   MessagesSquare,
@@ -228,11 +229,11 @@ export const ICONS = {
   deprecate: FileExclamationPoint,
   newVersion: ArrowUpFromLine,
   history: RotateCcwClock,
-  /** The affected → fixed version arrow. */
-  versionArrow: ArrowRightToLine,
 
   // Navigation
   back: ArrowLeft,
+  /** Opens the list of places a corner menu goes to. */
+  menu: Menu,
   next: ArrowRight,
   /** A chart taken out of its tile to the whole window. */
   enlarge: Maximize2,
@@ -243,9 +244,9 @@ export const ICONS = {
   unfollow: BellMinus,
   /** An item the reader follows, in a list. */
   followed: BellRing,
-  /** What changed on followed items, with and without unread ones. */
+  /** Changes on followed items; ringing while some are unseen. */
   changes: Bell,
-  changesUnread: BellDot,
+  changesArrived: BellRing,
   conversation: MessagesSquare,
   sortAscending: ArrowUpNarrowWide,
   sortDescending: ArrowDownWideNarrow,
@@ -320,6 +321,8 @@ export const ICONS = {
   guidance: Signpost,
   structure: Layers,
   users: UserRoundGroup,
+  /** What the agent costs: turns, tokens, tools, by whom. */
+  usage: Gauge,
   workers: Terminal,
   /** One execution of a job, queued, running or finished. */
   runs: ListStart,
@@ -355,6 +358,8 @@ export const ICONS = {
   user: UserRound,
   team: UserRoundGroup,
   global: Globe,
+  /** A customer's install, on a library item that describes one. */
+  customer: Building2,
 
   // Marks
   alert: TriangleAlert,

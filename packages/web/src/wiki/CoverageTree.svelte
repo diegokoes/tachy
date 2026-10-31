@@ -88,21 +88,17 @@
 {/snippet}
 
 <section class="coverage">
-  <h3>Coverage</h3>
-  <p class="muted sm">
-    What this product is made of, and how much of it has been written about.
-    Counts are entries · docs · articles; a name opens what is recorded there.
-  </p>
+  <h3>coverage</h3>
 
   {#if error}<Note tone="danger">{error}</Note>{/if}
 
   {#if moving}
     <div class="mover">
-      Move <strong>{moving.name}</strong> under
+      move <strong>{moving.name}</strong> under
       <Select
         bind:value={moveTo}
         options={[
-          { value: "", label: "(top level)" },
+          { value: "", label: "top level" },
           ...all
             .filter(({ n }) => !subtreeSlugs(moving!).includes(n.slug))
             .map(({ n, depth }) => ({
@@ -124,13 +120,13 @@
     </ul>
   {:else}
     <p class="muted">
-      This product has no components yet, so there is nothing to measure
-      coverage against.
+      this product has no components yet, so there is nothing to measure
+      coverage against
     </p>
   {/if}
 
   <p class="unfiled" class:loud={coverage.unfiled.entries > 0}>
-    Filed under no component: {coverage.unfiled.entries} entries ·
+    filed under no component: {coverage.unfiled.entries} entries ·
     {coverage.unfiled.docs} docs · {coverage.unfiled.articles} articles
     <span class="muted">
       · a high count means the component tree is incomplete
@@ -217,8 +213,5 @@
   }
   .muted {
     color: var(--muted);
-  }
-  .sm {
-    font-size: var(--fs-sm);
   }
 </style>

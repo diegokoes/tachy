@@ -8,11 +8,13 @@
   import RecordModal from "./RecordModal.svelte";
   import {
     blankDraft,
+    draftChanged,
     draftFrom,
     missingRequired,
     type Column,
     type Draft,
   } from "./table";
+  import type { AsciiArt } from "./ascii";
 
   let {
     columns,
@@ -22,6 +24,7 @@
     error = null,
     emptyTitle = "nothing here yet",
     emptyDetail,
+    emptyArt = "empty",
     canEdit = () => true,
     canDelete = () => true,
     canCreate = true,
@@ -47,6 +50,8 @@
     error?: string | null;
     emptyTitle?: string;
     emptyDetail?: string;
+    /** "noMatch" while a filter hides every row. */
+    emptyArt?: AsciiArt;
     canEdit?: (row: T) => boolean;
     canDelete?: (row: T) => boolean;
     canCreate?: boolean;
@@ -100,7 +105,13 @@
   // Create and edit are the same form; only the commit differs.
   let form = $state<{ mode: "create" | "edit"; row: T | null } | null>(null);
   let draft = $state<Draft>({});
+  /** The draft as the form opened, to tell an edit from a look. */
+  let opened: Draft = {};
   let armed = $state<string | null>(null);
+  /** Closing would throw away a changed draft: the next close goes through. */
+  let discardArmed = $state(false);
+  let disarm: ReturnType<typeof setTimeout> | undefined;
+  const DISCARD_ARM_MS = 3000;
   let busy = $state<string | null>(null);
   let opError = $state<string | null>(null);
 
@@ -135,12 +146,14 @@
   });
 
   onDestroy(() => {
+    clearTimeout(disarm);
     if (sectionNow() === home) forget(memo);
   });
 
   function startEdit(row: T) {
     resume = null;
     draft = draftFrom(columns, row);
+    opened = { ...draft };
     form = { mode: "edit", row };
     armed = null;
     opError = null;
@@ -150,6 +163,7 @@
   function startAdd() {
     resume = null;
     draft = blankDraft(columns);
+    opened = { ...draft };
     form = { mode: "create", row: null };
     armed = null;
     opError = null;
@@ -157,10 +171,20 @@
   }
 
   function close() {
+    clearTimeout(disarm);
+    discardArmed = false;
     form = null;
     draft = {};
     opError = null;
     onform?.(null);
+  }
+
+  /** Esc, the scrim and ×: a changed draft asks once before it goes. */
+  function requestClose() {
+    if (discardArmed || !draftChanged(opened, draft)) return close();
+    discardArmed = true;
+    clearTimeout(disarm);
+    disarm = setTimeout(() => (discardArmed = false), DISCARD_ARM_MS);
   }
 
   async function run(key: string, action: () => Promise<void> | void) {
@@ -215,6 +239,7 @@
   {error}
   {emptyTitle}
   {emptyDetail}
+  {emptyArt}
   {rowClass}
   onrowclick={onopen ?? (onsave ? startEdit : undefined)}
   canOpen={canEdit}
@@ -248,13 +273,14 @@
     onConfirm={commit}
     destructive={open.row && ondelete && canDelete(open.row)
       ? {
-          label: armed === key ? "click again to confirm" : "delete",
+          label: armed === key ? "confirm delete" : "delete",
           icon: armed === key ? "confirm" : "delete",
           busy: busy === key,
           onclick: () => open.row && confirmDelete(open.row),
         }
       : undefined}
-    onCancel={close}
+    closeConfirm={discardArmed ? "discard?" : undefined}
+    onCancel={requestClose}
   >
     {#snippet barExtra()}
       {#if extraActions && open.row}{@render extraActions(open.row)}{/if}

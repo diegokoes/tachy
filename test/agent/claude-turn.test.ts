@@ -107,7 +107,7 @@ describe("a Claude turn the CLI could not start", () => {
         type: "error",
         kind: "no_credential",
         message:
-          "No Claude credential is set for your account. Add one under Settings › agent.",
+          "no Claude credential is set for your account. add one under settings › agent",
       },
     ]);
   });
@@ -163,6 +163,34 @@ describe("a Claude turn's own account of its model", () => {
     expect(events.at(-1)).toMatchObject({
       type: "result",
       models: ["claude-haiku-5-5", "claude-sonnet-5-5"],
+    });
+  });
+});
+
+describe("a Claude turn's usage", () => {
+  it("reports the turn's cache reads and writes apart from its input", async () => {
+    const events = await eventsOf(async function* () {
+      yield ANSWER;
+      yield {
+        ...RESULT,
+        total_cost_usd: 0.017,
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 100,
+          cache_read_input_tokens: 5000,
+          cache_creation_input_tokens: 2000,
+        },
+      };
+    });
+    expect(events.at(-1)).toMatchObject({
+      type: "result",
+      costUsd: 0.017,
+      usage: {
+        inputTokens: 1000,
+        outputTokens: 100,
+        cacheReadTokens: 5000,
+        cacheWriteTokens: 2000,
+      },
     });
   });
 });

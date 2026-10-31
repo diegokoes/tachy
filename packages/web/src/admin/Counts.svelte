@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { RAMP } from "../tui";
+  import { compact, keepUnits, RAMP } from "../tui";
   import { groupCounts, showSection, type Count } from "./overview";
 
   let {
@@ -18,24 +18,35 @@
     parts.every((p) => !p.to || p.to === head.to);
 </script>
 
-{#snippet figure(counter: Count)}
+<!-- A counter that opens its section ends its label on ›. -->
+{#snippet figure(counter: Count, linked: boolean)}
   {#if loading}
     <span class="n skeleton" aria-label="loading">{RAMP[0].repeat(4)}</span>
   {:else}
     <span class="n {counter.tone ?? 'accent'}"
-      >{counter.text ?? (counter.value ?? 0).toLocaleString()}</span
+      >{counter.text ?? compact(counter.value ?? 0)}</span
     >
   {/if}
-  <span class="lbl">{counter.label}</span>
+  <span class="lbl"
+    >{keepUnits(counter.label)}{#if linked}<span
+        class="go-mark"
+        aria-hidden="true">›</span
+      >{/if}</span
+  >
 {/snippet}
 
-{#snippet part(counter: Count)}
+{#snippet part(counter: Count, linked: boolean)}
   <span class="pn {counter.tone ?? 'accent'}"
     >{loading
       ? RAMP[0].repeat(2)
-      : (counter.text ?? (counter.value ?? 0).toLocaleString())}</span
+      : (counter.text ?? compact(counter.value ?? 0))}</span
   >
-  <span class="pl">{counter.label}</span>
+  <span class="pl"
+    >{keepUnits(counter.label)}{#if linked}<span
+        class="go-mark"
+        aria-hidden="true">›</span
+      >{/if}</span
+  >
 {/snippet}
 
 {#snippet parts(list: Count[])}
@@ -44,10 +55,10 @@
       {#if counter.to}
         {@const to = counter.to}
         <button class="part go" onclick={() => showSection(to)}
-          >{@render part(counter)}</button
+          >{@render part(counter, true)}</button
         >
       {:else}
-        <span class="part">{@render part(counter)}</span>
+        <span class="part">{@render part(counter, false)}</span>
       {/if}
     {/each}
   </span>
@@ -56,7 +67,7 @@
 {#snippet plain(list: Count[])}
   <span class="parts">
     {#each list as counter (counter.key)}
-      <span class="part">{@render part(counter)}</span>
+      <span class="part">{@render part(counter, false)}</span>
     {/each}
   </span>
 {/snippet}
@@ -72,17 +83,17 @@
     >
       {#if group.parts.length && to && merged(head, group.parts)}
         <button class="cell go" onclick={() => showSection(to)}>
-          <span class="main">{@render figure(head)}</span>
+          <span class="main">{@render figure(head, true)}</span>
           {@render plain(group.parts)}
         </button>
       {:else}
         {#if to}
           <button class="cell go" onclick={() => showSection(to)}>
-            <span class="main">{@render figure(head)}</span>
+            <span class="main">{@render figure(head, true)}</span>
           </button>
         {:else}
           <div class="cell">
-            <span class="main">{@render figure(head)}</span>
+            <span class="main">{@render figure(head, false)}</span>
           </div>
         {/if}
         {#if group.parts.length}{@render parts(group.parts)}{/if}
@@ -102,9 +113,11 @@
     min-width: 0;
   }
 
+  /* At least as wide as its figure, so a narrow window wraps labels rather
+     than cutting numbers. */
   .group {
     flex: var(--w) 1 0;
-    min-width: 0;
+    min-width: min-content;
     display: flex;
     align-items: stretch;
   }
@@ -125,7 +138,7 @@
     display: flex;
     align-items: flex-start;
     gap: var(--pad-3);
-    min-width: 0;
+    min-width: min-content;
     padding: var(--pad-1) var(--pad-2);
     margin-left: calc(var(--pad-2) * -1);
     border: none;
@@ -150,7 +163,7 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--pad-1);
-    min-width: 0;
+    min-width: min-content;
   }
   .cell.go,
   .part.go {
@@ -164,12 +177,9 @@
   }
 
   .n {
-    max-width: 100%;
     font-family: var(--font-mono);
     font-size: var(--fs-fig);
     line-height: 1.1;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
   .accent {
@@ -193,15 +203,21 @@
     user-select: none;
   }
 
-  .lbl {
-    max-width: 100%;
+  .go-mark {
+    margin-left: 0.3em;
+    color: var(--accent);
+  }
+  .lbl,
+  .pl {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
     font-size: var(--fs-xs);
     letter-spacing: var(--label-spacing);
     text-transform: uppercase;
     color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .parts {
@@ -232,15 +248,6 @@
     font-family: var(--font-mono);
     font-size: var(--fs-sm);
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-  .pl {
-    font-size: var(--fs-xs);
-    letter-spacing: var(--label-spacing);
-    text-transform: uppercase;
-    color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

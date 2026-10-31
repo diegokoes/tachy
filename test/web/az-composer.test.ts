@@ -11,6 +11,7 @@ import {
 import {
   arrange,
   fieldForName,
+  helpOf,
   layoutFields,
   missingRequired,
 } from "../../packages/web/src/work-items/layout";
@@ -146,6 +147,12 @@ describe("field layout", () => {
     );
     expect(fieldForName(fields, "System.AreaPath")).toBe("System.AreaPath");
     expect(fieldForName(fields, "Nope")).toBeNull();
+  });
+
+  it("says how tags are written where ADO gives no help text", () => {
+    expect(helpOf(field("System.Tags"))).toBe("tags, separated by ;");
+    expect(helpOf(field("System.Tags", { help_text: "ours" }))).toBe("ours");
+    expect(helpOf(field("Custom.Notes"))).toBe("");
   });
 });
 

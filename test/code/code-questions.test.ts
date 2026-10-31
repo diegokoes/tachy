@@ -30,6 +30,7 @@ import {
 import { server } from "../../packages/mcp/src/index";
 import { createApp } from "../../packages/api/src/app";
 import { loginCookie } from "../http";
+import { resetData } from "../database";
 
 let srcDir: string;
 let dataDir: string;
@@ -81,9 +82,64 @@ registerSource("fake-code-notes", () => ({
   },
 }));
 
+/**
+ * Tickets in the "Portal Tickets" project, by id: one about the code, one that
+ * names it only in a later message, and one not about it.
+ */
+const TICKETS: Record<
+  string,
+  { title: string; body: string; replies?: string[] }
+> = {
+  "t-login": {
+    title: "Users land on the wrong page after login",
+    body: "loginRedirectTarget sends a signed-in session to /dashboard instead of /home.",
+  },
+  "t-late": {
+    title: "Question after the portal rollout",
+    body: "Hello, our team has a question about the portal since the rollout last week. Could you call us back?",
+    replies: [
+      "Thanks for reaching out. Could you describe what you see, with a screenshot if you have one?",
+      "Our developer traced it: loginRedirectTarget returns the wrong page for a signed-in session.",
+    ],
+  },
+  "t-ink": {
+    title: "Ink cartridge rattles in transit",
+    body: "The cartridge box is loose in the parcel.",
+  },
+};
+
+registerSource("fake-code-tickets", () => ({
+  type: "fake-code-tickets",
+  capabilities: { postNote: false, incrementalSync: false },
+  async fetchItem(id: string) {
+    const { title, body, replies = [] } = TICKETS[id];
+    return {
+      externalId: id,
+      kind: "ticket" as const,
+      title,
+      groupKey: "Portal Tickets",
+      messages: [body, ...replies].map((bodyText, i) => ({
+        externalId: `${id}-${i + 1}`,
+        direction: i % 2 ? ("outgoing" as const) : ("incoming" as const),
+        visibility: "public" as const,
+        bodyText,
+      })),
+      raw: {},
+    };
+  },
+  async listItems() {
+    return { items: [] };
+  },
+}));
+
 const GENERATED_FILES = 45;
 /** In the history for the diff to be wide, and kept out of the index. */
 const UNINDEXED = { exclude: ["gen"] };
+
+interface SearchPage {
+  repos: Record<string, unknown>[];
+  results: { repo?: string; line?: string; path: string }[];
+}
 
 async function call(name: string, args: Record<string, unknown> = {}) {
   const answer = (await client.callTool({ name, arguments: args })) as {
@@ -102,6 +158,9 @@ async function call(name: string, args: Record<string, unknown> = {}) {
 
 // master: init (v2.0.0) -- #77 fix (v2.0.1) -- generated (v2.1.0) -- wip
 beforeAll(async () => {
+  // A worker's schema keeps what the file before this one left, and an admin
+  // among it would turn on the write gates this file's sessions do not pass.
+  await resetData();
   srcDir = await mkdtemp(join(tmpdir(), "tachy-q-src-"));
   dataDir = await mkdtemp(join(tmpdir(), "tachy-q-repos-"));
   process.env.TACHY_REPO_DIR = dataDir;
@@ -283,7 +342,7 @@ describe("scope", () => {
         "qrepo-mobile",
       ]);
     await expect(reposInProject("nothing-here")).rejects.toThrow(
-      "No linked repo",
+      "no linked repo",
     );
   });
 
@@ -318,9 +377,61 @@ describe("the tools", () => {
       query: "loginRedirectTarget",
       project: "Portal-Mobile",
     });
-    const repos = (hits.json as { repo: string }[]).map((h) => h.repo);
-    expect(repos.length).toBeGreaterThan(0);
-    expect(new Set(repos)).toEqual(new Set(["qrepo-mobile"]));
+    const found = hits.json as SearchPage;
+    expect(found.results.length).toBeGreaterThan(0);
+    expect(found.repos.map((r) => r.repo)).toEqual(["qrepo-mobile"]);
+  });
+
+  it("search_code names a repo's line and commit once, not on every hit", async () => {
+    const hits = await call("search_code", {
+      query: "loginRedirectTarget",
+      repo: "qrepo",
+    });
+    const found = hits.json as SearchPage;
+    expect(hits.text).not.toContain("\n");
+    expect(found.repos).toEqual([
+      {
+        repo: "qrepo",
+        line: "master",
+        version_label: "v2.1.0",
+        indexed_commit: headSha,
+        indexed_days_ago: 0,
+      },
+    ]);
+    expect(found.results[0]).toMatchObject({ path: "src/login.ts" });
+    expect(found.results[0]).not.toHaveProperty("repo");
+    expect(found.results[0]).not.toHaveProperty("indexed_commit");
+  });
+
+  it("search_code across repos says which repo each hit is from", async () => {
+    const hits = await call("search_code", {
+      query: "loginRedirectTarget",
+      repos: ["qrepo", "qrepo-mobile"],
+    });
+    const found = hits.json as SearchPage;
+    expect(found.repos.map((r) => r.repo).sort()).toEqual([
+      "qrepo",
+      "qrepo-mobile",
+    ]);
+    expect(new Set(found.results.map((h) => h.repo))).toEqual(
+      new Set(["qrepo", "qrepo-mobile"]),
+    );
+    expect(found.results.every((h) => h.line === "master")).toBe(true);
+  });
+
+  it("a customer filter that names a repo points at the repo", async () => {
+    const named = await call("list_repos", { customer: "mobile" });
+    expect(named.isError).toBe(true);
+    expect(named.text).toContain("unknown customer 'mobile'");
+    expect(named.text).toContain("qrepo-mobile");
+
+    const unrelated = await call("search_code", {
+      query: "login",
+      customer: "acme",
+    });
+    expect(unrelated.isError).toBe(true);
+    expect(unrelated.text).toContain("unknown customer 'acme'");
+    expect(unrelated.text).not.toContain("qrepo");
   });
 
   it("search_code refuses a repo that is not linked", async () => {
@@ -330,6 +441,105 @@ describe("the tools", () => {
     });
     expect(answer.isError).toBe(true);
     expect(answer.text).toContain("not-linked");
+  });
+
+  it("get_context and fetch_work_item point at the code of the ticket's project", async () => {
+    await addSourceConnection({
+      sourceType: "fake-code-tickets",
+      slug: "code-tickets",
+      baseUrl: "https://example.invalid",
+    });
+    const project = await addSourceProject({
+      sourceSlug: "code-tickets",
+      externalKey: "Portal Tickets",
+      productSlug: "tpd",
+    });
+    await sql`update repos set source_project_id = ${project.id} where slug = 'qrepo'`;
+    try {
+      const login = await call("get_context", {
+        source: "code-tickets",
+        external_id: "t-login",
+      });
+      const pointers = (
+        login.json as {
+          code: {
+            repo: string;
+            path: string;
+            grade: string;
+            defines?: string[];
+          }[];
+        }
+      ).code;
+      expect(pointers[0]).toMatchObject({
+        repo: "qrepo",
+        path: "src/login.ts",
+      });
+      expect(pointers[0].defines).toContain("loginRedirectTarget");
+      expect(pointers.every((p) => p.grade !== "weak")).toBe(true);
+      expect(login.text).not.toContain("'/dashboard'");
+
+      const fetched = await call("fetch_work_item", {
+        source: "code-tickets",
+        external_id: "t-login",
+      });
+      expect((fetched.json as { code: { path: string }[] }).code[0].path).toBe(
+        "src/login.ts",
+      );
+
+      const late = await call("get_context", {
+        source: "code-tickets",
+        external_id: "t-late",
+      });
+      expect((late.json as { code: { path: string }[] }).code[0].path).toBe(
+        "src/login.ts",
+      );
+
+      const ink = await call("get_context", {
+        source: "code-tickets",
+        external_id: "t-ink",
+      });
+      expect(ink.json).not.toHaveProperty("code");
+    } finally {
+      await sql`update repos set source_project_id = null where slug = 'qrepo'`;
+    }
+  });
+
+  it("list_code_tree at the root returns the repo's map", async () => {
+    const answer = await call("list_code_tree", { repo: "qrepo" });
+    const map = answer.json as {
+      ref: string;
+      commit: string;
+      indexed_files: number;
+      tree: string;
+      next: string;
+    };
+    expect(map).toMatchObject({ ref: "master", commit: headSha });
+    expect(map.tree).toContain("src/ (3 files)");
+    expect(map.tree).toContain("login.ts: loginRedirectTarget");
+    expect(map.tree).toContain("session.ts: Session");
+    expect(map.tree).not.toContain("gen/");
+    expect(map.next).toContain("list_code_tree with its path");
+    expect(answer.text).not.toContain("# portal");
+
+    const released = await call("list_code_tree", {
+      repo: "qrepo",
+      version: "v2.0.0",
+    });
+    expect(
+      (released.json as { entries: { name: string }[] }).entries.map(
+        (e) => e.name,
+      ),
+    ).toEqual(["src", "README.md"]);
+
+    const untracked = await call("list_code_tree", {
+      repo: "qrepo",
+      ref: "v2.1.0",
+    });
+    expect(
+      (untracked.json as { entries: { name: string }[] }).entries.map(
+        (e) => e.name,
+      ),
+    ).toContain("gen");
   });
 
   it("list_code_tree, code_diff and code_releases_containing answer", async () => {
@@ -348,6 +558,64 @@ describe("the tools", () => {
     expect((releases.json as { first_release: string }).first_release).toBe(
       "v2.0.1",
     );
+  });
+
+  it("code_history lists the commits that touched a path, newest first", async () => {
+    const history = await call("code_history", {
+      repo: "qrepo",
+      path: "src/login.ts",
+    });
+    const body = history.json as {
+      commits: { subject: string }[];
+      searched: number;
+      truncated: boolean;
+      next: string;
+    };
+    expect(body.commits.map((c) => c.subject)).toEqual([
+      "#77 fix login loop",
+      "init",
+    ]);
+    expect(body).toMatchObject({ searched: 2, truncated: false });
+    expect(body.next).toContain("code_diff");
+  });
+
+  it("code_history with a symbol keeps the commits that change its count", async () => {
+    const subjects = async (symbol: string) =>
+      (
+        (
+          await call("code_history", {
+            repo: "qrepo",
+            path: "src",
+            symbol,
+          })
+        ).json as { commits: { sha: string; subject: string }[] }
+      ).commits.map((c) => c.subject);
+    expect(await subjects("/dashboard")).toEqual(["#77 fix login loop"]);
+    expect(await subjects("loginRedirectTarget")).toEqual(["init"]);
+    expect(await subjects("neverWritten")).toEqual([]);
+  });
+
+  it("code_history reads only the newest commits it is allowed", async () => {
+    const history = await call("code_history", {
+      repo: "qrepo",
+      path: "/src/",
+      limit: 1,
+    });
+    expect(history.json).toMatchObject({
+      path: "src",
+      searched: 1,
+      truncated: true,
+      commits: [{ subject: "wip" }],
+    });
+  });
+
+  it("code_history says when no commit touches the path", async () => {
+    const history = await call("code_history", {
+      repo: "qrepo",
+      path: "src/missing.ts",
+    });
+    expect(history.json).toMatchObject({ searched: 0, commits: [] });
+    expect((history.json as { note: string }).note).toMatch(/list_code_tree/);
   });
 
   it("code_changes_between points at the tools that read a commit", async () => {

@@ -15,7 +15,7 @@ import {
   globalRedactionEnabled,
   redactionPolicy,
 } from "@tachy/core/compliance";
-import { estimateCostUsd } from "@tachy/core/analytics";
+import { estimateCostUsd, turnCostUsd } from "@tachy/core/analytics";
 import { type RawWorkItem } from "@tachy/core/sources";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
@@ -200,7 +200,7 @@ describe("scrubDeep", () => {
       signals: ["token=abc123secret", "HTTP 503"],
       version: 3,
       created_at: created,
-      structured: { conversation_summary: "call from ops@acme.com" },
+      similar: [{ investigation: "call from ops@acme.com" }],
     };
     const scrubbed = scrubDeep(row, map);
     expect(scrubbed.issue_summary).toBe("mail [EMAIL_1]");
@@ -208,9 +208,7 @@ describe("scrubDeep", () => {
     expect(scrubbed.signals[1]).toBe("HTTP 503");
     expect(scrubbed.version).toBe(3);
     expect(scrubbed.created_at).toBe(created);
-    expect(scrubbed.structured.conversation_summary).toBe(
-      "call from [EMAIL_1]",
-    );
+    expect(scrubbed.similar[0].investigation).toBe("call from [EMAIL_1]");
     expect(row.issue_summary).toBe("mail ops@acme.com");
   });
 });
@@ -533,10 +531,46 @@ describe("redactNormalized name scrubbing", () => {
 });
 
 describe("estimateCostUsd", () => {
-  it("prices by model tier and ignores unknown models", () => {
-    expect(estimateCostUsd("claude-sonnet-5", 1_000_000, 0)).toBeCloseTo(3);
-    expect(estimateCostUsd("claude-opus-4-8", 0, 1_000_000)).toBeCloseTo(25);
-    expect(estimateCostUsd("some-other-llm", 1_000_000, 0)).toBeUndefined();
-    expect(estimateCostUsd(null, 100, 100)).toBeUndefined();
+  const MILLION = 1_000_000;
+
+  it("prices by model at list price and ignores unknown models", () => {
+    expect(estimateCostUsd("claude-sonnet-5", { input: MILLION })).toBeCloseTo(
+      2,
+    );
+    expect(estimateCostUsd("claude-opus-4-8", { output: MILLION })).toBeCloseTo(
+      25,
+    );
+    expect(
+      estimateCostUsd("some-other-llm", { input: MILLION }),
+    ).toBeUndefined();
+    expect(estimateCostUsd(null, { input: 100 })).toBeUndefined();
+    expect(estimateCostUsd("claude-sonnet-5", {})).toBeUndefined();
+  });
+
+  it("prices cache reads at the model's own rate and writes at 1.25 times input", () => {
+    expect(
+      estimateCostUsd("claude-opus-5-5", { cacheRead: MILLION }),
+    ).toBeCloseTo(0.2);
+    expect(
+      estimateCostUsd("claude-sonnet-5-5", { cacheRead: MILLION }),
+    ).toBeCloseTo(0.1);
+    expect(
+      estimateCostUsd("claude-sonnet-5", { cacheRead: MILLION }),
+    ).toBeCloseTo(0.2);
+    expect(
+      estimateCostUsd("claude-opus-5-5", { cacheWrite: MILLION }),
+    ).toBeCloseTo(5);
+  });
+});
+
+describe("turnCostUsd", () => {
+  it("takes a turn's own cost from the session's running totals", () => {
+    expect(turnCostUsd(0.0085, null)).toBe(0.0085);
+    expect(turnCostUsd(0.017, 0.0085)).toBeCloseTo(0.0085, 9);
+  });
+
+  it("reads a total below the previous one as a count that restarted", () => {
+    expect(turnCostUsd(0.004, 0.0255)).toBe(0.004);
+    expect(turnCostUsd(0, 0.0255)).toBe(0);
   });
 });

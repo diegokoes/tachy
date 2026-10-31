@@ -15,7 +15,7 @@ afterAll(() => sql.end());
 const entry = async () =>
   saveKnowledgeEntry({
     productId: await tpdProductId(),
-    issueSummary: "printer stalls at 023",
+    title: "printer stalls at 023",
     resolution: "restart the spooler",
   });
 

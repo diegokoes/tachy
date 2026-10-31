@@ -153,12 +153,36 @@ describe("library links", () => {
     const target = await article("spooler-stalls");
     const entry = await saveKnowledgeEntry({
       productId: await tpdProductId(),
-      issueSummary: "printer stalls",
+      title: "Printer stalls mid-batch",
+      issueSummary: "The printer stops halfway through long batches.",
       resolution: "Follow [[spooler-stalls]].",
     });
     const back = await backlinks({ docId: target.id });
     expect(back.map((b) => b.from_entry_id)).toEqual([entry.id]);
     expect(back[0].from_kind).toBe("entry");
+    expect(back[0].from_title).toBe("Printer stalls mid-batch");
+  });
+
+  it("links from a knowledge entry's summary", async () => {
+    const target = await article("spooler-stalls");
+    const entry = await saveKnowledgeEntry({
+      productId: await tpdProductId(),
+      title: "Printer stalls on line 4",
+      issueSummary: "The same stall as [[spooler-stalls]], on line 4 only.",
+    });
+    const back = await backlinks({ docId: target.id });
+    expect(back.map((b) => b.from_entry_id)).toEqual([entry.id]);
+  });
+
+  it("links from a knowledge entry's investigation", async () => {
+    const target = await article("spooler-stalls");
+    const entry = await saveKnowledgeEntry({
+      productId: await tpdProductId(),
+      title: "Printer stalls on line 2",
+      investigation: "1. Ruled out [[spooler-stalls]] first.",
+    });
+    const back = await backlinks({ docId: target.id });
+    expect(back.map((b) => b.from_entry_id)).toEqual([entry.id]);
   });
 
   it("re-derives an entry's links when its resolution changes", async () => {
@@ -166,7 +190,7 @@ describe("library links", () => {
     await article("b");
     const entry = await saveKnowledgeEntry({
       productId: await tpdProductId(),
-      issueSummary: "x",
+      title: "x",
       resolution: "See [[a]].",
     });
     expect(await backlinks({ docId: a.id })).toHaveLength(1);
@@ -178,7 +202,8 @@ describe("library links", () => {
   it("points at a knowledge entry by id", async () => {
     const entry = await saveKnowledgeEntry({
       productId: await tpdProductId(),
-      issueSummary: "SSO loop after token refresh",
+      title: "SSO loop after token refresh",
+      issueSummary: "Sign-in bounces between the portal and the IdP forever.",
     });
     const source = await article(
       "auth",
@@ -186,6 +211,7 @@ describe("library links", () => {
     );
     const links = await outboundLinks({ docId: source.id });
     expect(links[0].to_entry_id).toBe(entry.id);
+    expect(links[0].to_title).toBe("SSO loop after token refresh");
     expect(links[0].label).toBe("the SSO case");
     expect(
       (await backlinks({ entryId: entry.id })).map((b) => b.from_doc_id),

@@ -115,8 +115,8 @@
       });
       toast(
         type === "bug"
-          ? "bug report filed - thank you!"
-          : "feature request filed - thank you!",
+          ? "bug report filed · thank you"
+          : "feature request filed · thank you",
         "ok",
       );
       leave();
@@ -164,8 +164,8 @@
 
         {#if review && held}
           <Note tone="warn">
-            A few things that would help whoever picks this up - add them, or
-            send as it is:
+            a few things would help whoever picks this up; add them or send it
+            as it is:
             <ul class="tips">
               {#each review.suggestions as suggestion}
                 <li>{suggestion}</li>

@@ -4,10 +4,13 @@
  */
 import { z } from "zod";
 import {
-  saveKnowledgeEntry,
+  insertKnowledgeEntry,
+  nearDuplicateEntries,
+  prepareKnowledgeEntry,
   searchKnowledge,
   addFeedback,
   cloudSchema,
+  entryTitleSchema,
   resolutionClaritySchema,
   knowledgeStatusSchema,
   confidenceSchema,
@@ -19,6 +22,7 @@ import {
 } from "@tachy/core/knowledge";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import { getCustomerIdBySlug } from "@tachy/core/catalog";
+import { DUPLICATE_FLOOR } from "@tachy/core/search";
 import type { KnowledgeUpdateInput } from "@tachy/core/knowledge";
 import { tool } from "../server";
 import { GRADE_NOTE, out, searchOut, outScrubbed } from "../results";
@@ -29,13 +33,14 @@ import {
   requireCanEdit,
 } from "../permissions";
 import {
+  investigationField,
   knowledgeFilterFields,
+  relatedLinksField,
   signalsField,
-  structuredField,
   symptomsField,
   tagsField,
 } from "../fields";
-import { componentIntoFilter, resolveScopeIds } from "../context";
+import { codeNextFor, componentIntoFilter, resolveScopeIds } from "../context";
 
 tool(
   "search_knowledge",
@@ -83,15 +88,21 @@ tool(
       fixedVersion: fixed_version,
       limit,
     });
-    return searchOut(hits, "search_knowledge");
+    return searchOut(hits, "search_knowledge", {
+      next: await codeNextFor(productId, hits),
+    });
   },
 );
+
+/** The way on from a save refused for a near-copy. */
+const DUPLICATE_NEXT =
+  "Not saved: an entry with nearly the same content exists. If it is the same lesson, add what this ticket adds to it with update_knowledge_entry (on a deprecated one, to its superseded_by). If it is a different case, save again with confirm_new: true. Say which in one line.";
 
 tool(
   "save_knowledge_entry",
   {
     description:
-      "Persist a structured knowledge entry. The call is gated by a review box the user can edit before it runs, so draft it and call - do not ask for approval in prose first. resolution_pattern must be an existing slug from list_resolution_patterns (or omitted) - it is not free text. component must be an existing slug/alias from list_components; if the ticket's area is missing from the glossary, call add_component first - it gets its own review box - then save. product_area is derived automatically from the component hierarchy - it is not an input. For manual entries (no work_item_id) that set component, pass product_slug - component slugs resolve within a product.",
+      "Persist a knowledge entry. The call is gated by a review box the user can edit before it runs, so draft it and call - do not ask for approval in prose first. resolution_pattern must be an existing slug from list_resolution_patterns (or omitted) - it is not free text. component must be an existing slug/alias from list_components; if the ticket's area is missing from the glossary, call add_component first - it gets its own review box - then save. product_area is derived automatically from the component hierarchy - it is not an input. For manual entries (no work_item_id) that set component, pass product_slug - component slugs resolve within a product.",
     inputSchema: {
       work_item_id: z.string().optional(),
       product_slug: z
@@ -125,6 +136,9 @@ tool(
           "Which part of that customer's estate it was learned on - a unit slug from list_customer_units. Needs customer_slug. When the entry comes from a ticket already filed against a unit AND you name that same customer, it is inherited automatically, so pass this only to override.",
         ),
       status: knowledgeStatusSchema.optional(),
+      title: entryTitleSchema.describe(
+        'The one line the library lists the entry by: what fails and where, in under ten words, e.g. "Printer error 023 on labels with many variable fields".',
+      ),
       issue_summary: z
         .string()
         .optional()
@@ -137,12 +151,15 @@ tool(
         .string()
         .optional()
         .describe(
-          "The underlying technical cause, stated precisely. Omit rather than guess - an unknown cause means confidence 'low'.",
+          "The underlying technical cause, stated precisely, with the rule or limit it comes from. Omit rather than guess - an unknown cause means confidence 'low'.",
         ),
       resolution: z
         .string()
         .optional()
-        .describe("What was done, or should be done, to fix it."),
+        .describe(
+          "What was done, or should be done, to fix it, naming the settings it changes and the conditions it needs.",
+        ),
+      investigation: investigationField,
       resolution_pattern: z
         .string()
         .optional()
@@ -189,7 +206,13 @@ tool(
         .describe(
           "Product version the fix landed in  only when actually known.",
         ),
-      structured: structuredField,
+      related_links: relatedLinksField,
+      confirm_new: z
+        .boolean()
+        .optional()
+        .describe(
+          "Only after a save came back with possible_duplicates and the user says this is a different case.",
+        ),
     },
   },
   async (args) => {
@@ -199,7 +222,7 @@ tool(
     await requireCanEdit(
       await newEntryScope({ productId, teamId, workItemId: args.work_item_id }),
     );
-    const saved = await saveKnowledgeEntry({
+    const prepared = await prepareKnowledgeEntry({
       workItemId: args.work_item_id,
       productId,
       teamId,
@@ -208,22 +231,35 @@ tool(
       createdById: await resolveCurrentUserId(),
       actor: await mcpActor(),
       status: args.status ?? "approved",
+      title: args.title,
       issueSummary: args.issue_summary,
       symptoms: args.symptoms,
       signals: args.signals,
       rootCause: args.root_cause,
       resolution: args.resolution,
+      investigation: args.investigation,
       resolutionPattern: args.resolution_pattern,
       component: args.component,
       confidence: args.confidence,
       tags: args.tags,
+      relatedLinks: args.related_links,
       cloud: args.cloud,
       resolutionClarity: args.resolution_clarity,
       hiddenFix: args.hidden_fix,
       affectedVersion: args.affected_version,
       fixedVersion: args.fixed_version,
-      structured: args.structured,
     });
+    const duplicates =
+      DUPLICATE_FLOOR === undefined || args.confirm_new
+        ? []
+        : await nearDuplicateEntries(prepared, DUPLICATE_FLOOR);
+    if (duplicates.length)
+      return outScrubbed({
+        saved: false,
+        possible_duplicates: duplicates,
+        next: DUPLICATE_NEXT,
+      });
+    const saved = await insertKnowledgeEntry(prepared);
     return out({ saved: true, id: saved.id, status: saved.status });
   },
 );
@@ -268,13 +304,16 @@ tool(
     inputSchema: {
       id: z.string(),
       status: knowledgeStatusSchema.optional(),
+      title: entryTitleSchema.optional(),
       issue_summary: z.string().nullable().optional(),
       root_cause: z.string().nullable().optional(),
       resolution: z.string().nullable().optional(),
+      investigation: investigationField,
       resolution_pattern: z.string().nullable().optional(),
       symptoms: symptomsField,
       signals: signalsField,
       tags: tagsField,
+      related_links: relatedLinksField,
       component: z.string().nullable().optional(),
       customer_slug: z
         .string()
@@ -303,7 +342,6 @@ tool(
         .nullable()
         .optional()
         .describe("Product version the fix landed in; null clears it."),
-      structured: structuredField,
       expected_version: z.number().int().optional(),
     },
   },
@@ -311,15 +349,20 @@ tool(
     await requireCanEdit(await knowledgeEntryScope(args.id));
     const patch: KnowledgeUpdateInput = {};
     if (args.status !== undefined) patch.status = args.status;
+    if (args.title !== undefined) patch.title = args.title;
     if (args.issue_summary !== undefined)
       patch.issueSummary = args.issue_summary;
     if (args.root_cause !== undefined) patch.rootCause = args.root_cause;
     if (args.resolution !== undefined) patch.resolution = args.resolution;
+    if (args.investigation !== undefined)
+      patch.investigation = args.investigation;
     if (args.resolution_pattern !== undefined)
       patch.resolutionPattern = args.resolution_pattern;
     if (args.symptoms !== undefined) patch.symptoms = args.symptoms;
     if (args.signals !== undefined) patch.signals = args.signals;
     if (args.tags !== undefined) patch.tags = args.tags;
+    if (args.related_links !== undefined)
+      patch.relatedLinks = args.related_links;
     if (args.component !== undefined) patch.component = args.component;
     if (args.customer_slug !== undefined)
       patch.customerSlug = args.customer_slug;
@@ -334,7 +377,6 @@ tool(
       patch.affectedVersion = args.affected_version;
     if (args.fixed_version !== undefined)
       patch.fixedVersion = args.fixed_version;
-    if (args.structured !== undefined) patch.structured = args.structured;
     if (args.expected_version !== undefined)
       patch.expectedVersion = args.expected_version;
     const row = await updateKnowledgeEntry(args.id, patch, await mcpActor());
@@ -351,7 +393,7 @@ tool(
   "get_knowledge_entry",
   {
     description:
-      "Fetch a single knowledge entry by id, including its current version and full structured field. Use before update_knowledge_entry / add_knowledge_feedback when you have an id but not the latest version.",
+      "Fetch a single knowledge entry by id, including its current version. Use before update_knowledge_entry / add_knowledge_feedback when you have an id but not the latest version.",
     inputSchema: { id: z.string() },
     annotations: { readOnlyHint: true },
   },

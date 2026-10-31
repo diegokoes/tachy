@@ -3,8 +3,9 @@
   import { api } from "../api";
   import { errText } from "../resource.svelte";
   import { refreshNotifications, toast } from "../notifications/notify.svelte";
-  import { Badge, Button, Note, Icon, EmptyState } from "../tui";
-  import { age } from "../admin/overview";
+  import { Lamp, Badge, Button, Note, Icon, EmptyState, Field } from "../tui";
+  import { reportLamp } from "./status";
+  import { ago } from "../dates.svelte";
   import { census } from "../admin/census.svelte";
   import {
     REPORT_STATUSES,
@@ -21,13 +22,6 @@
   let reply = $state("");
   let busy = $state(false);
 
-  const STATUS_TONE: Record<ReportStatus, "warn" | "accent" | "ok" | "muted"> =
-    {
-      open: "warn",
-      in_progress: "accent",
-      resolved: "ok",
-      closed: "muted",
-    };
   const typeTone = (t: ReportType) => (t === "bug" ? "danger" : "accent");
 
   async function loadList() {
@@ -62,7 +56,7 @@
     try {
       await api.post(`/reports/${selected.id}/reply`, { body: reply.trim() });
       await open(selected.id);
-      toast("reply sent - the reporter will be notified", "ok");
+      toast("reply sent · the reporter is notified", "ok");
       // An admin answering their own report is the reporter it notifies.
       void refreshNotifications();
     } catch (e) {
@@ -118,7 +112,7 @@
     {#if loading}
       <p class="dim">loading…</p>
     {:else if reports.length === 0}
-      <EmptyState icon="flag" title="nothing here" />
+      <EmptyState art="reports" title="nothing here" />
     {:else}
       <ul class="rows">
         {#each reports as report (report.id)}
@@ -140,12 +134,13 @@
                   >{report.title || report.body_text.slice(0, 60)}</span
                 >
                 <span class="meta">
-                  {report.reporter_name ?? "someone"} · {age(report.created_at)} ago
+                  {report.reporter_name ?? "someone"} · {ago(report.created_at)}
                 </span>
               </span>
-              <Badge tone={STATUS_TONE[report.status]}
-                >{report.status.replace("_", " ")}</Badge
-              >
+              <Lamp
+                lamp={reportLamp(report.status)}
+                word={report.status.replace("_", " ")}
+              />
             </button>
           </li>
         {/each}
@@ -163,7 +158,7 @@
         <h3 class="ttl">{open.title || "untitled report"}</h3>
       </div>
       <p class="sub">
-        from {open.reporter_name ?? "someone"} · {age(open.created_at)} ago
+        from {open.reporter_name ?? "someone"} · {ago(open.created_at)}
       </p>
 
       <p class="body">{open.body_text}</p>
@@ -192,10 +187,9 @@
       {#if error}<Note tone="danger">{error}</Note>{/if}
 
       <div class="reply">
-        <textarea
-          rows="3"
-          placeholder="reply to the reporter…"
-          bind:value={reply}></textarea>
+        <Field label="reply">
+          <textarea rows="3" bind:value={reply}></textarea>
+        </Field>
         <div class="actions">
           <div class="statuses">
             {#each REPORT_STATUSES as status}

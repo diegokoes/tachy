@@ -15,8 +15,10 @@ import {
 } from "./tools";
 import {
   effectiveModel,
+  turnUsage,
   type AgentConfig,
   type AgentErrorKind,
+  type SdkUsage,
   type SessionFacts,
 } from "./backend";
 import { TurnBase, type ApprovalGate } from "./turn";
@@ -69,21 +71,21 @@ export function explainFailure(raw: string): {
   if (/session limit/i.test(raw))
     return {
       kind: "rate_limit",
-      message: `Your Claude subscription has hit its usage limit${
+      message: `your Claude subscription has hit its usage limit${
         resets ? `, which resets ${resets}` : ""
-      }. The turn was not lost - send it again once the limit resets.`,
+      }. the turn was not lost; send it again once the limit resets`,
     };
   if (/not logged in|run \/login/i.test(raw))
     return {
       kind: "no_credential",
       message:
-        "No Claude credential is set for your account. Add one under Settings › agent.",
+        "no Claude credential is set for your account. add one under settings › agent",
     };
   if (/invalid api key|fix external api key/i.test(raw))
     return {
       kind: "bad_credential",
       message:
-        "Your saved Claude credential was rejected. It may be expired, revoked, or saved in the wrong field - re-add it under Settings › agent.",
+        "your saved Claude credential was rejected. it may be expired, revoked, or saved in the wrong field; re-add it under settings › agent",
     };
   return { kind: "other", message: raw };
 }
@@ -339,7 +341,7 @@ export class ClaudeTurn extends TurnBase {
             result?: string;
             total_cost_usd?: number;
             session_id: string;
-            usage?: { input_tokens?: number; output_tokens?: number };
+            usage?: SdkUsage;
           };
           resulted = true;
           this.queue.push({
@@ -347,10 +349,7 @@ export class ClaudeTurn extends TurnBase {
             result: resultMessage.result ?? "",
             costUsd: resultMessage.total_cost_usd ?? 0,
             sessionId: resultMessage.session_id,
-            usage: {
-              inputTokens: resultMessage.usage?.input_tokens ?? null,
-              outputTokens: resultMessage.usage?.output_tokens ?? null,
-            },
+            usage: turnUsage(resultMessage.usage),
             models: [...answeredBy],
           });
         }

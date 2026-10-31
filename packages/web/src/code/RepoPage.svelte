@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onDestroy, untrack } from "svelte";
-  import type { IndexPreview } from "@tachy/contract";
+  import { DEFAULT_MAX_FILE_KB, type IndexPreview } from "@tachy/contract";
   import { api } from "../api";
+  import { ago } from "../dates.svelte";
   import { csv } from "../tui/fields";
   import { ComponentCache } from "../library/filing.svelte";
   import { createResource, createSequence, errText } from "../resource.svelte";
@@ -15,16 +16,18 @@
   import Row from "../settings/Row.svelte";
   import Rows from "../settings/Rows.svelte";
   import {
-    Badge,
+    Lamp,
     Button,
     DeleteButton,
     ErrorMark,
     Icon,
+    InfoMark,
     Meter,
     Note,
     Select,
     Spinner,
   } from "../tui";
+  import { indexLamp } from "./status";
   import type { Customer, Product } from "../catalog/rows";
   import type { Repo } from "./rows";
   import type { SourceProject } from "../sources/rows";
@@ -316,17 +319,7 @@
     navigate("/console/workers/runs");
   }
 
-  const freshness = (at: string | null) => {
-    if (!at) return "never";
-    const days = Math.floor((Date.now() - new Date(at).getTime()) / 86_400_000);
-    return days === 0 ? "today" : `${days}d ago`;
-  };
   const fmt = (n: number) => n.toLocaleString();
-  const STATUS_TONES: Record<string, "ok" | "danger"> = {
-    ready: "ok",
-    error: "danger",
-  };
-  const tone = (status: string) => STATUS_TONES[status] ?? "muted";
 
   const projectOptions = $derived([
     { value: "", label: `(none, scope by ${t("product")})` },
@@ -379,14 +372,14 @@
     <Spinner />
   {:else if !repo || !draft}
     <Note>
-      No repo named {slug}.
-      <button class="link" onclick={() => navigate(LIST)}>All repos</button>
+      no repo named {slug}.
+      <button class="link" onclick={() => navigate(LIST)}>all repos</button>
     </Note>
   {:else}
     {@const edited = draft}
     <div class="layout">
       <div class="wide">
-        <Group label="source" icon="source">
+        <Group label="source">
           {#snippet action()}
             {#if canEdit}
               <span class="loud">
@@ -455,7 +448,6 @@
       <div class="col">
         <Group
           label="branches"
-          icon="branch"
           hint={refsHere
             ? `${fmt(refsHere.branches.length)} branches · ${fmt(refsHere.releases.length)} releases on the remote`
             : undefined}
@@ -505,9 +497,10 @@
                   {#if line.version_label}<span class="quiet"
                       >{line.version_label}</span
                     >{/if}
-                  <Badge tone={tone(line.index_status)}
-                    >{line.index_status}</Badge
-                  >
+                  <Lamp
+                    lamp={indexLamp(line.index_status)}
+                    word={line.index_status}
+                  />
                   {#if canEdit && !busy && !dirty}
                     <Button
                       variant="ghost"
@@ -544,7 +537,7 @@
           {/if}
         </Group>
 
-        <Group label="index" icon="index">
+        <Group label="index">
           <Rows>
             {#each repo.lines.filter((l) => l.ref === repo.default_branch) as line (line.id)}
               <Row label="status">
@@ -552,9 +545,10 @@
                   {#if line.version_label}<span class="quiet"
                       >{line.version_label}</span
                     >{/if}
-                  <Badge tone={tone(line.index_status)}
-                    >{line.index_status}</Badge
-                  >
+                  <Lamp
+                    lamp={indexLamp(line.index_status)}
+                    word={line.index_status}
+                  />
                   {#if line.index_error}
                     <ErrorMark
                       message={line.index_error}
@@ -593,7 +587,7 @@
               </Row>
             {/if}
             <Row label="last indexed">
-              <span class="quiet">{freshness(repo.last_indexed_at)}</span>
+              <span class="quiet">{ago(repo.last_indexed_at)}</span>
             </Row>
             <Row label="in the index">
               <span class="quiet"
@@ -606,7 +600,7 @@
                   class="kb"
                   type="number"
                   min="1"
-                  placeholder="200"
+                  placeholder={String(DEFAULT_MAX_FILE_KB)}
                   bind:value={edited.max_file_kb}
                   disabled={!canEdit}
                   aria-label="max file size in KB"
@@ -625,9 +619,9 @@
       </div>
 
       <div class="col">
-        <Group label="files" icon="folder">
+        <Group label="files">
           {#if !canEdit}
-            <p class="quiet">Only editors of this repo see its files.</p>
+            <p class="quiet">only editors of this repo see its files</p>
           {:else if previewError && !preview}
             <p class="quiet">
               <span class="bad">{previewError}</span>
@@ -655,9 +649,13 @@
             />
             <Rows>
               <Row label="patterns">
+                {#snippet mark()}
+                  <InfoMark label="about patterns"
+                    >paths or globs to leave out, comma-separated</InfoMark
+                  >
+                {/snippet}
                 <input
                   value={patternText}
-                  placeholder="scripts/**/*.json"
                   aria-label="exclude patterns"
                   spellcheck="false"
                   onfocus={startTyping}
@@ -672,10 +670,9 @@
         {#if canEdit && preview}
           <Group
             label="file types"
-            icon="fileTypes"
             hint={edited.extensions
-              ? "Found in this repo. This repo's own set is on."
-              : "Found in this repo. The built-in set is on."}
+              ? "found in this repo. this repo's own set is on"
+              : "found in this repo. the built-in set is on"}
           >
             {#snippet action()}
               {#if edited.extensions}

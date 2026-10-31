@@ -61,12 +61,12 @@ describe("taxonomy", () => {
   it("filters search by tag overlap", async () => {
     await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "printer jams on label batch",
+      title: "printer jams on label batch",
       tags: ["printing", "lc"],
     });
     await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "printer jams on label batch",
+      title: "printer jams on label batch",
       tags: ["network"],
     });
 
@@ -78,11 +78,11 @@ describe("taxonomy", () => {
   it("makes tags full-text searchable via the generated search column", async () => {
     await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "intermittent timeout",
+      title: "intermittent timeout",
       tags: ["manual-aggregation-station"],
     });
     const rows = await searchKnowledge("manual-aggregation-station");
-    expect(rows[0].issue_summary).toBe("intermittent timeout");
+    expect(rows[0].title).toBe("intermittent timeout");
   });
 
   it("curates an advisory label vocabulary per product (upsert, not enforced)", async () => {
@@ -134,7 +134,7 @@ describe("component-anchored knowledge entries", () => {
     const row = await saveKnowledgeEntry({
       status: "approved",
       productId: tpd,
-      issueSummary: "print head jam",
+      title: "print head jam",
       component: "lc",
     });
     const stored = await getKnowledgeEntry(row.id);
@@ -146,12 +146,12 @@ describe("component-anchored knowledge entries", () => {
     await expect(
       saveKnowledgeEntry({
         productId: tpd,
-        issueSummary: "x",
+        title: "x",
         component: "made-up",
       }),
-    ).rejects.toThrow(/Unknown component/);
+    ).rejects.toThrow(/unknown component/);
     await expect(
-      saveKnowledgeEntry({ issueSummary: "x", component: "lc" }),
+      saveKnowledgeEntry({ title: "x", component: "lc" }),
     ).rejects.toThrow(/requires a product/);
   });
 
@@ -160,7 +160,7 @@ describe("component-anchored knowledge entries", () => {
     const row = await saveKnowledgeEntry({
       status: "approved",
       productId: tpd,
-      issueSummary: "x",
+      title: "x",
       component: "printing",
     });
 
@@ -182,19 +182,19 @@ describe("component-anchored knowledge entries", () => {
     await saveKnowledgeEntry({
       status: "approved",
       productId: tpd,
-      issueSummary: "printer jams on batch",
+      title: "printer jams on batch",
       component: "lc",
     });
     await saveKnowledgeEntry({
       status: "approved",
       productId: tpd,
-      issueSummary: "printer jams on batch",
+      title: "printer jams on batch",
       tags: ["lc"],
     });
     await saveKnowledgeEntry({
       status: "approved",
       productId: tpd,
-      issueSummary: "printer jams on batch",
+      title: "printer jams on batch",
       tags: ["network"],
     });
 
@@ -211,11 +211,11 @@ describe("component-anchored knowledge entries", () => {
     await saveKnowledgeEntry({
       status: "approved",
       productId: tpd,
-      issueSummary: "intermittent timeout",
+      title: "intermittent timeout",
       component: "lc",
     });
     const rows = await searchKnowledge("Line Controller");
-    expect(rows[0].issue_summary).toBe("intermittent timeout");
+    expect(rows[0].title).toBe("intermittent timeout");
   });
 });
 
@@ -245,7 +245,7 @@ describe("taxonomy edit/delete with reference guards", () => {
 
     await saveKnowledgeEntry({
       productId: tpd,
-      issueSummary: "x",
+      title: "x",
       component: "lc",
     });
     await expect(deleteComponent(tpd, "lc")).rejects.toThrow(/knowledge entr/);
@@ -280,7 +280,7 @@ describe("taxonomy edit/delete with reference guards", () => {
 
     await saveKnowledgeEntry({
       productId: prod.id as string,
-      issueSummary: "y",
+      title: "y",
     });
     await expect(deleteProduct(prod.id as string)).rejects.toThrow(
       /knowledge entr/,
@@ -353,7 +353,7 @@ describe("taxonomy edit/delete with reference guards", () => {
 
     await addResolutionPattern("config-fix", "fix the config");
     await saveKnowledgeEntry({
-      issueSummary: "z",
+      title: "z",
       resolutionPattern: "config-fix",
     });
     await expect(deleteResolutionPattern("config-fix")).rejects.toMatchObject({

@@ -88,6 +88,22 @@ describe("morphTile", () => {
     expect(el.dataset.morphing).toBeUndefined();
   });
 
+  it("holds the tile's place in the new layout until it lands", async () => {
+    const from = vi.spyOn(Flip, "from");
+    const el = tile();
+    el.style.setProperty("--span", "2");
+    await morphTile(el, () => el.classList.remove("open"));
+    const slot = el.nextElementSibling as HTMLElement;
+    expect(slot.tagName).toBe("SECTION");
+    expect(slot.className).toBe("tile");
+    expect(slot.style.getPropertyValue("--span")).toBe("2");
+    expect(slot.getAttribute("aria-hidden")).toBe("true");
+    expect(slot.childNodes).toHaveLength(0);
+
+    (from.mock.calls[0][1]!.onComplete as () => void)();
+    expect(el.nextElementSibling).toBeNull();
+  });
+
   it("changes the layout at once under reduced motion", async () => {
     media.reduced = true;
     const from = vi.spyOn(Flip, "from");
@@ -97,6 +113,7 @@ describe("morphTile", () => {
     expect(swap).toHaveBeenCalledOnce();
     expect(from).not.toHaveBeenCalled();
     expect(el.dataset.morphing).toBeUndefined();
+    expect(el.nextElementSibling).toBeNull();
   });
 
   it("still swaps with no tile to move", async () => {

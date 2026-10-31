@@ -23,7 +23,6 @@
 
   type Section = {
     label: string;
-    hint?: string;
     view: Component;
     /** Left out while it returns false. */
     shown?: () => boolean;
@@ -35,7 +34,6 @@
 
   const ORG_DEFAULTS: Section = {
     label: "org defaults",
-    hint: "What a person sees until they pick their own.",
     view: OrgDefaults,
   };
 
@@ -52,14 +50,12 @@
       left: [
         {
           label: "runtime",
-          hint: "Each setting follows your team, then your org, until you pick your own.",
           view: Agent,
         },
       ],
       right: [
         {
           label: "keys",
-          hint: "Stored encrypted. A shared key answers until you paste your own.",
           view: Credentials,
         },
         {
@@ -140,8 +136,8 @@
       variant="ghost"
       square
       icon="logout"
-      title="log out"
-      aria-label="log out"
+      title="sign out"
+      aria-label="sign out"
       onclick={logout}
     />
   {/if}
@@ -150,7 +146,7 @@
 {#snippet column(sections: Section[])}
   {#each sections.filter((s) => !s.shown || s.shown()) as section (section.label)}
     {@const View = section.view}
-    <Group label={section.label} hint={section.hint}><View /></Group>
+    <Group label={section.label}><View /></Group>
   {/each}
 {/snippet}
 

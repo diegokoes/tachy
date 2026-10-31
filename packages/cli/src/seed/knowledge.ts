@@ -2,6 +2,7 @@ import {
   CONFIDENCES,
   FEEDBACK_KINDS,
   KNOWLEDGE_STATUSES,
+  MAX_ENTRY_TITLE_CHARS,
   REFERENCE_STATUSES,
   RESOLUTION_CLARITIES,
 } from "@tachy/core";
@@ -88,6 +89,7 @@ export async function seedKnowledge(
       "created_by",
       "status",
       "superseded_by",
+      "title",
       "issue_summary",
       "symptoms",
       "root_cause",
@@ -103,7 +105,8 @@ export async function seedKnowledge(
       "hidden_fix",
       "affected_version",
       "fixed_version",
-      "structured",
+      "investigation",
+      "related_links",
       "embedding",
       "created_at",
       "updated_at",
@@ -138,13 +141,22 @@ export async function seedKnowledge(
       const unit =
         mineUnits.length && chance(rng, 0.66) ? pick(rng, mineUnits) : null;
 
+      const place = component ? component.slug : product.slug;
+      const coded = `${symptom} on ${place} (${errorCode})`;
+      // The longest symptom beside the longest component slug leaves no room
+      // for the code; the summary still carries it.
+      const title =
+        coded.length <= MAX_ENTRY_TITLE_CHARS
+          ? coded
+          : `${symptom} on ${place}`;
       const summary = component
-        ? `${symptom} on ${product.slug} ${component.slug} (${errorCode})`
-        : `${symptom} on ${product.slug} (${errorCode})`;
+        ? `${symptom} on ${product.slug} ${component.slug} ${context}, with error ${errorCode}; ${impact}.`
+        : `${symptom} on ${product.slug} ${context}, with error ${errorCode}; ${impact}.`;
       // The diagnostic is an observation, not a claim about the cause, so it goes
       // in signals rather than being asserted as part of the explanation.
       const rootCause = `${cause}. Seen ${context}.`;
       const resolution = `${fix}. Until then ${impact}. Confirmed on ${affected}.`;
+      const investigation = `1. Reproduced ${context}.\n2. Checked the logs: ${diagnostic}.`;
 
       return {
         id: entries[i],
@@ -162,6 +174,7 @@ export async function seedKnowledge(
         status: pick(rng, KNOWLEDGE_STATUSES),
         // superseded_by is a second pass: see `supersede`.
         superseded_by: null,
+        title,
         issue_summary: summary,
         symptoms: pickMany(rng, SYMPTOMS, intBetween(rng, 1, 3)),
         root_cause: rootCause,
@@ -185,11 +198,14 @@ export async function seedKnowledge(
         fixed_version: chance(rng, 0.6)
           ? `${intBetween(rng, 9, 11)}.${intBetween(rng, 0, 6)}`
           : null,
-        structured: tx.json({ seeded: true }),
+        investigation,
+        related_links: [
+          `https://docs.example.invalid/${product.slug}/${place}`,
+        ],
         // The embed text is the row's own prose, so distinct rows get distinct
         // vectors. The column holds it until the window's fill swaps in the
         // vector.
-        embedding: `${summary} ${rootCause} ${resolution}`,
+        embedding: `${title} ${summary} ${rootCause} ${resolution} ${investigation}`,
         created_at: created,
         updated_at: created,
       };
@@ -301,7 +317,6 @@ async function seedReference(
       "title",
       "body",
       "tags",
-      "structured",
       "status",
       "doc_version",
       "superseded_by",
@@ -339,7 +354,6 @@ async function seedReference(
         title: meta[i].fullTitle,
         body: docBody,
         tags: pickMany(rng, TAGS, intBetween(rng, 1, 3)),
-        structured: tx.json({ seeded: true }),
         status: pick(rng, REFERENCE_STATUSES),
         doc_version: `${intBetween(rng, 1, 9)}.0`,
         superseded_by: null,

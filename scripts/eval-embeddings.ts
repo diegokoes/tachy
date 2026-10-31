@@ -16,8 +16,10 @@ import {
   EMBEDDING_SPEC,
   SEM_FLOOR,
   SEM_CEIL,
+  DUPLICATE_FLOOR,
 } from "@tachy/core/search";
 import {
+  DUPLICATES,
   GOLDEN,
   KNOWLEDGE,
   NONSENSE,
@@ -28,8 +30,12 @@ const cos = (a: number[], b: number[]) =>
   a.reduce((s, x, i) => s + x * b[i], 0);
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
+/** Golden kinds the keyword legs answer; their cosine is no evidence for SEM_FLOOR. */
+const KEYWORD_KINDS = new Set(["identifier", "title"]);
+
 const passageText = (e: (typeof KNOWLEDGE)[number]) =>
   [
+    e.title,
     e.issueSummary,
     e.symptoms.join(" "),
     e.rootCause,
@@ -89,7 +95,7 @@ for (const golden of GOLDEN) {
   const { rank, cosine: mine } = await placeOf(golden.q, golden.expect);
   if (rank === 0) top1++;
   mrrSum += 1 / (rank + 1);
-  if (golden.why !== "identifier") {
+  if (!KEYWORD_KINDS.has(golden.why)) {
     if (mine < semanticMin) {
       semanticMin = mine;
       semanticAt = `${JSON.stringify(golden.q)} -> ${golden.expect}`;
@@ -147,6 +153,38 @@ console.log(`  top-1  ${germanTop1}/${leads}  (${pct(germanTop1 / leads)})`);
 console.log(`  MRR    ${(germanMrrSum / leads).toFixed(3)}`);
 console.log(
   `  above the suggested floor  ${germanCleared}/${leads}   lowest ${germanMin.toFixed(3)}`,
+);
+
+// Entry against entry, the distribution the duplicate floor is set on. A
+// missed near-copy costs what a save costs today, a false one a review box,
+// so the floor sits nearer the copies than the related entries.
+let lowestSame = 1;
+let highestDifferent = 0;
+console.log(
+  "\nnear-copies of an entry, and a related entry of another lesson:",
+);
+for (const { of, same, different } of DUPLICATES) {
+  const own = docs[keys.indexOf(of)];
+  const sameCos = cos(
+    await embedPassage(passageText({ key: of, ...same })),
+    own,
+  );
+  const differentCos = cos(
+    await embedPassage(passageText({ key: of, ...different })),
+    own,
+  );
+  lowestSame = Math.min(lowestSame, sameCos);
+  highestDifferent = Math.max(highestDifferent, differentCos);
+  console.log(
+    `  same ${sameCos.toFixed(3)}  different ${differentCos.toFixed(3)}  ${of}`,
+  );
+}
+const duplicateGap = lowestSame - highestDifferent;
+console.log(
+  `  lowest same ${lowestSame.toFixed(3)}, highest different ${highestDifferent.toFixed(3)}${duplicateGap <= 0 ? "   *** NO SEPARATION ***" : ""}`,
+);
+console.log(
+  `  suggested duplicateFloor = ${(Math.floor((lowestSame - duplicateGap / 4) * 100) / 100).toFixed(2)}   in use: ${DUPLICATE_FLOOR ?? "unset"}`,
 );
 
 const ok = SEM_FLOOR > noiseMax && SEM_FLOOR < semanticMin;

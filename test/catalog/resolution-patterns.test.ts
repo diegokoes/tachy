@@ -31,18 +31,18 @@ describe("resolution_patterns", () => {
   it("rejects an unknown resolution_pattern with a clear error, not a raw FK violation", async () => {
     await expect(
       saveKnowledgeEntry({
-        issueSummary: "x",
+        title: "x",
         resolutionPattern: "made-up-slug",
       }),
     ).rejects.toThrow(
-      /Unknown resolution_pattern 'made-up-slug'.*list_resolution_patterns/,
+      /unknown resolution_pattern 'made-up-slug'.*list_resolution_patterns/,
     );
   });
 
   it("accepts a seeded slug", async () => {
     await addResolutionPattern("config-mismatch", "desc");
     const row = await saveKnowledgeEntry({
-      issueSummary: "x",
+      title: "x",
       resolutionPattern: "config-mismatch",
       status: "approved",
     });
@@ -52,7 +52,7 @@ describe("resolution_patterns", () => {
   });
 
   it("leaves resolution_pattern null when omitted, never invents one", async () => {
-    const row = await saveKnowledgeEntry({ issueSummary: "x" });
+    const row = await saveKnowledgeEntry({ title: "x" });
     const [stored] =
       await sql`select resolution_pattern from knowledge_entries where id = ${row.id}`;
     expect(stored.resolution_pattern).toBeNull();
@@ -61,12 +61,12 @@ describe("resolution_patterns", () => {
   it("renaming a pattern slug cascades to referencing entries and reports the count", async () => {
     await addResolutionPattern("config-mismatch", "desc");
     const a = await saveKnowledgeEntry({
-      issueSummary: "a",
+      title: "a",
       resolutionPattern: "config-mismatch",
       status: "approved",
     });
     const b = await saveKnowledgeEntry({
-      issueSummary: "b",
+      title: "b",
       resolutionPattern: "config-mismatch",
       status: "approved",
     });

@@ -109,9 +109,15 @@
       edit: "text",
       required: true,
       editable: () => false,
-      info: "Sign-in identity. Immutable.",
+      info: "sign-in identity. cannot change",
     },
-    { key: "display_name", label: "name", width: "12rem", edit: "text" },
+    {
+      key: "display_name",
+      face: "ui",
+      label: "name",
+      width: "12rem",
+      edit: "text",
+    },
     // A toggle, not a two-option select: the question is whether this person is
     // an app admin, and a list of two is a longer way to ask it. The draft
     // carries the role string the API wants; `value` and the commit convert.
@@ -131,7 +137,7 @@
       width: "8rem",
       formOnly: true,
       edit: "text",
-      info: "Min 10 characters. Blank: SSO only, or keep current.",
+      info: "min 10 characters. blank: SSO only, or keep current",
     },
     {
       key: "disabled",
@@ -139,21 +145,21 @@
       formOnly: true,
       only: "edit",
       edit: "checkbox",
-      info: "Blocks sign-in. Activity stays attributed.",
+      info: "blocks sign-in. activity stays attributed",
     },
     {
       key: "password_login_allowed",
       label: "password under SSO",
       formOnly: true,
       edit: "checkbox",
-      info: "Password sign-in allowed under SSO. For break-glass and load-test accounts.",
+      info: "password sign-in allowed under SSO. for break-glass and load-test accounts",
     },
     {
       key: "service_account",
       label: "service account",
       formOnly: true,
       edit: "checkbox",
-      info: "Non-human. Excluded from engagement figures.",
+      info: "non-human. left out of engagement figures",
     },
     ...(seesSignIn()
       ? [
@@ -317,10 +323,9 @@
   rowKey={(u) => u.id}
   loading={users.loading}
   error={users.error ?? memberships.error}
-  emptyTitle={users.data.length
-    ? "No users match the filter."
-    : "No users yet."}
-  emptyDetail={users.data.length ? undefined : "Run setup, or add one."}
+  emptyTitle={users.data.length ? "no users match the filter" : "no users yet"}
+  emptyArt={users.data.length ? "noMatch" : "empty"}
+  emptyDetail={users.data.length ? undefined : "run setup, or add one"}
   canEdit={() => admin}
   canDelete={() => false}
   canCreate={admin}

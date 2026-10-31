@@ -38,8 +38,9 @@ many from a source connection. Linking queues a `repo.reindex` run in
 `worker-heavy`, which clones into the `tachy-repo-data` volume and embeds what
 it finds. `repos.refresh` reindexes every linked repo nightly at 02:40 UTC.
 
-- The first index of a large repo takes long on the laptop: about 13 chunks a
-  second. It holds 3 chat slots while it runs, so link large repos outside
+- The first index of a large repo takes long on the laptop: about one full
+  code chunk a second, so a repo of a few thousand chunks takes an hour or
+  more. It holds 3 chat slots while it runs, so link large repos outside
   working hours.
 - A private repo needs the connection's token to carry read access to it.
 - Folders and file types to leave out are set on the repo's page.

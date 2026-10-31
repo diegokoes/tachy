@@ -35,7 +35,9 @@ import {
   type ArchiveMember,
   type StoredFile,
 } from "@tachy/core/files";
+import { listRepos } from "@tachy/core/code";
 import { openSource } from "./extract";
+import { searchCodeNext } from "./results";
 
 /**
  * Tool results have a size ceiling that a whole transcript exceeds, so turns
@@ -322,6 +324,23 @@ export async function resolveScopeIds(opts: {
   };
 }
 
+/**
+ * The `next` toward code search for an archive search with no hit better than
+ * weak, when repos with an index are linked in its scope; undefined otherwise.
+ */
+export async function codeNextFor(
+  productId: string | undefined,
+  hits: Record<string, unknown>[],
+): Promise<string | undefined> {
+  if (hits.some((hit) => hit.grade !== "weak")) return undefined;
+  const indexed = (await listRepos({ productId })).filter(
+    (repo) => repo.chunk_count > 0,
+  );
+  return indexed.length
+    ? searchCodeNext(indexed.map((repo) => repo.slug))
+    : undefined;
+}
+
 export async function componentIntoFilter(
   productId: string | undefined,
   component: string | undefined,
@@ -386,7 +405,7 @@ export async function loadContextSources(input: {
   for (const url of input.urls ?? []) {
     const response = await fetchUntrustedUrl("ingest_context", url);
     if (!response.ok)
-      throw badInput(`Failed to fetch ${url}: HTTP ${response.status}`);
+      throw badInput(`failed to fetch ${url}: HTTP ${response.status}`);
     const raw = await response.text();
     const contentType = response.headers.get("content-type") ?? "";
     sources.push({

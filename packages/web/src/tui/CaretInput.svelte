@@ -6,21 +6,18 @@
   /**
    * A bare text input that draws its own caret and keeps it at the end of the
    * text while unfocused, so a filter reads as writeable before it is clicked.
-   * The box around it belongs to whoever mounts it. With `icon` and `hint` it
-   * stands in for a placeholder: empty and unfocused it shows the mark and the
-   * word, and the caret morphs out of the mark on focus.
+   * The box around it belongs to whoever mounts it. With `icon`, empty and
+   * unfocused it shows the mark, and the caret morphs out of it on focus.
    */
   let {
     value = $bindable(""),
     el = $bindable(),
     icon,
-    hint,
     ...rest
   }: Omit<HTMLInputAttributes, "value" | "placeholder" | "type"> & {
     value?: string;
     el?: HTMLInputElement;
     icon?: IconName;
-    hint?: string;
   } = $props();
 
   let at = $state(0);
@@ -79,8 +76,6 @@
       ><span class="typed">{value.slice(0, at)}</span>{#if !ranged}<span
           class="mark"
           class:dim><Caret {beat} {side} {icon} {idle} /></span
-        >{/if}{#if hint && value === ""}<span class="hint" class:idle
-          >{hint}</span
         >{/if}</span
     >
   </span>
@@ -148,19 +143,8 @@
   .mark {
     transition: opacity 0.16s ease;
   }
-  .hint {
-    /* Past the mark, which has no width of its own to push it. */
-    margin-left: 1.3em;
-    color: var(--muted);
-    opacity: 0;
-    transition: opacity 0.16s ease;
-  }
-  .hint.idle {
-    opacity: 1;
-  }
   @media (prefers-reduced-motion: reduce) {
-    .mark,
-    .hint {
+    .mark {
       transition: none;
     }
   }

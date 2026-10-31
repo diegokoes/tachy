@@ -89,6 +89,7 @@
     { key: "kind", label: "read-only", width: "7rem", cell: kindCell },
     {
       key: "description",
+      face: "ui",
       label: "description",
       cell: descriptionCell,
       head: descriptionHead,
@@ -156,8 +157,8 @@
     rowKey={(tool) => tool.name}
     loading={tools.loading}
     error={tools.error}
-    emptyTitle="No tools listed yet."
-    emptyDetail="Save a token, then list the server's tools."
+    emptyTitle="no tools listed yet"
+    emptyDetail="save a token, then list the server's tools"
     onrowclick={(tool) =>
       (expanded = expanded === tool.name ? null : tool.name)}
   />

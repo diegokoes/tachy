@@ -114,16 +114,16 @@
     rowKey={(credential) => credential.label}
     loading={pool.loading}
     error={pool.error}
-    emptyTitle="No tokens in the pool."
-    emptyDetail="No tools in chat until one is added."
+    emptyTitle="no tokens in the pool"
+    emptyDetail="no tools in chat until one is added"
   />
   <form class="add" onsubmit={(e) => (e.preventDefault(), add())}>
-    <Field label="label" info="Lowercase letters, digits and hyphens.">
+    <Field label="label" info="lowercase letters, digits and hyphens">
       <input bind:value={label} />
     </Field>
     <Field
       label="token"
-      info="Least used token goes first; a rate-limited one rests until its window ends."
+      info="least used token goes first; a rate-limited one rests until its window ends"
     >
       <input type="password" autocomplete="off" bind:value />
     </Field>

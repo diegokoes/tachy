@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createUser } from "@tachy/core/access";
+import { agentUsageCensus } from "@tachy/core/analytics";
 import type { AgentConfig, AgentEvent, AgentTurn } from "@tachy/agent";
 import { createApp } from "../../packages/api/src/app";
 import { json, loginCookie } from "../http";
@@ -14,12 +15,18 @@ const SESSION: AgentEvent = {
   skills: [],
   plugins: [],
 };
-const RESULT: AgentEvent = {
+type ResultEvent = Extract<AgentEvent, { type: "result" }>;
+const RESULT: ResultEvent = {
   type: "result",
   result: "done",
   costUsd: 0,
   sessionId: "session-1",
-  usage: { inputTokens: 1, outputTokens: 2 },
+  usage: {
+    inputTokens: 1,
+    outputTokens: 2,
+    cacheReadTokens: null,
+    cacheWriteTokens: null,
+  },
   models: ["claude-haiku-5-5-20261001"],
 };
 
@@ -32,10 +39,12 @@ class ScriptedTurn implements AgentTurn {
   abort() {}
   async *events(): AsyncGenerator<AgentEvent> {
     yield SESSION;
-    yield RESULT;
+    yield turnResult;
     this.finished = true;
   }
 }
+
+let turnResult: ResultEvent = RESULT;
 
 const configs: AgentConfig[] = [];
 vi.mock("@tachy/agent", async (importOriginal) => ({
@@ -71,6 +80,7 @@ beforeEach(async () => {
   await resetData();
   await sql`delete from settings where key = 'allowed_models'`;
   configs.length = 0;
+  turnResult = RESULT;
   for (const [who, role] of [
     ["ada", "admin"],
     ["mel", "member"],
@@ -141,6 +151,38 @@ describe("chat debug", () => {
   it("sends an admin no debug frames unasked", async () => {
     const frames = await framesOf("ada", {});
     expect(frames.map((f) => f.event)).toEqual(["start", "result"]);
+  });
+
+  it("records each resumed turn's own cost from the session's running total", async () => {
+    for (const sessionTotalUsd of [0.0085, 0.017, 0.0255]) {
+      turnResult = {
+        ...RESULT,
+        costUsd: sessionTotalUsd,
+        usage: {
+          inputTokens: 1000,
+          outputTokens: 100,
+          cacheReadTokens: 5000,
+          cacheWriteTokens: 2000,
+        },
+      };
+      await framesOf("mel", { sessionId: "session-1" });
+    }
+    const runs = await sql`
+      select meta from analysis_runs where mode = 'chat' order by created_at
+    `;
+    expect(runs.map((r) => r.meta.session_cost_usd)).toEqual([
+      0.0085, 0.017, 0.0255,
+    ]);
+    for (const run of runs) {
+      expect(run.meta.cost_usd).toBeCloseTo(0.0085, 9);
+      expect(run.meta).toMatchObject({
+        cache_read_tokens: 5000,
+        cache_write_tokens: 2000,
+      });
+    }
+    const usage = await agentUsageCensus(30);
+    expect(usage.cost_usd).toBeCloseTo(0.0255, 9);
+    expect(usage.cached_tokens).toBe(21_000);
   });
 
   it("records the model that answered, not the one asked for", async () => {

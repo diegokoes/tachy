@@ -9,7 +9,12 @@ import {
   listEnvironments,
   listKnowledgeFacets,
 } from "@tachy/core/knowledge";
-import { addCustomer, getCustomerIdBySlug } from "@tachy/core/catalog";
+import {
+  addComponent,
+  addCustomer,
+  getCustomerIdBySlug,
+} from "@tachy/core/catalog";
+import { MAX_ENTRY_TITLE_CHARS } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "../database";
 
 afterAll(() => sql.end());
@@ -20,6 +25,7 @@ describe("searchKnowledge", () => {
   it("ranks the relevant approved entry first and never returns drafts", async () => {
     await saveKnowledgeEntry({
       status: "approved",
+      title: "Scanner stays offline after a firmware update",
       issueSummary: "Barcode scanner stays offline after firmware update",
       symptoms: ["scanner offline", "error E-204"],
       rootCause: "firmware regression",
@@ -27,37 +33,41 @@ describe("searchKnowledge", () => {
     });
     await saveKnowledgeEntry({
       status: "approved",
+      title: "Invoice export is empty",
       issueSummary: "Invoice export produces empty PDF",
       resolution: "clear the export cache",
     });
     await saveKnowledgeEntry({
       status: "draft",
+      title: "Scanner offline draft",
       issueSummary: "scanner offline draft that must not surface",
     });
 
     const rows = await searchKnowledge("scanner offline E-204");
-    expect(rows[0].issue_summary).toMatch(/scanner/i);
+    expect(rows[0].title).toBe("Scanner stays offline after a firmware update");
     expect(rows.every((r) => r.status === "approved")).toBe(true);
-    expect(rows.some((r) => String(r.issue_summary).includes("draft"))).toBe(
-      false,
-    );
+    expect(rows.some((r) => String(r.title).includes("draft"))).toBe(false);
   });
 
   it("finds a semantic match even with no shared keywords", async () => {
     await saveKnowledgeEntry({
       status: "approved",
+      title: "Handheld reader will not connect after an upgrade",
       issueSummary:
         "Handheld barcode reader will not connect after a software upgrade",
       resolution: "reinstall the device driver",
     });
     await saveKnowledgeEntry({
       status: "approved",
+      title: "Monthly invoice is blank",
       issueSummary: "Monthly invoice PDF is blank",
       resolution: "clear the export cache",
     });
 
     const rows = await searchKnowledge("scanner offline");
-    expect(rows[0].issue_summary).toMatch(/barcode reader/i);
+    expect(rows[0].title).toBe(
+      "Handheld reader will not connect after an upgrade",
+    );
   });
 
   it("scopes by product_id", async () => {
@@ -65,22 +75,22 @@ describe("searchKnowledge", () => {
     await saveKnowledgeEntry({
       status: "approved",
       productId: tpd,
-      issueSummary: "tpd tracking gap",
+      title: "tpd tracking gap",
     });
     await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "tracking gap elsewhere",
+      title: "tracking gap elsewhere",
     });
 
     const scoped = await searchKnowledge("tracking gap", { productId: tpd });
     expect(scoped.length).toBe(1);
-    expect(scoped[0].issue_summary).toBe("tpd tracking gap");
+    expect(scoped[0].title).toBe("tpd tracking gap");
 
     const withUnscoped = await searchKnowledge("tracking gap", {
       productId: tpd,
       includeUnscoped: true,
     });
-    expect(withUnscoped.map((r) => r.issue_summary).sort()).toEqual([
+    expect(withUnscoped.map((r) => r.title).sort()).toEqual([
       "tpd tracking gap",
       "tracking gap elsewhere",
     ]);
@@ -89,16 +99,16 @@ describe("searchKnowledge", () => {
   it("finds an entry by a signal (error code) with no other keyword overlap", async () => {
     await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "Label printing fails during rework",
+      title: "Label printing fails during rework",
       signals: ["023", "TOO_MANY_STRINGS", "application-provisioning.yml"],
     });
     await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "Unrelated invoice export bug",
+      title: "Unrelated invoice export bug",
     });
 
     const rows = await searchKnowledge("TOO_MANY_STRINGS");
-    expect(rows[0].issue_summary).toMatch(/Label printing/i);
+    expect(rows[0].title).toBe("Label printing fails during rework");
     expect(rows[0].signals).toContain("TOO_MANY_STRINGS");
   });
 });
@@ -108,7 +118,7 @@ describe("knowledge_entries constraints", () => {
 
   it("normalizes confidence case so filtering by lowercase always works", async () => {
     const row = await saveKnowledgeEntry({
-      issueSummary: "x",
+      title: "x",
       confidence: "HIGH",
     });
     const [stored] =
@@ -118,14 +128,109 @@ describe("knowledge_entries constraints", () => {
 
   it("rejects an invalid confidence value at the DB level", async () => {
     await expect(
-      sql`insert into knowledge_entries (issue_summary, confidence) values ('x', 'super-high')`,
-    ).rejects.toThrow();
+      sql`insert into knowledge_entries (title, confidence) values ('x', 'super-high')`,
+    ).rejects.toThrow(/knowledge_entries_confidence_check/);
   });
 
   it("rejects an invalid status value at the DB level", async () => {
     await expect(
-      sql`insert into knowledge_entries (issue_summary, status) values ('x', 'not-a-status')`,
-    ).rejects.toThrow();
+      sql`insert into knowledge_entries (title, status) values ('x', 'not-a-status')`,
+    ).rejects.toThrow(/knowledge_entries_status_check/);
+  });
+
+  it("requires a title at the DB level", async () => {
+    await expect(
+      sql`insert into knowledge_entries (issue_summary) values ('no title')`,
+    ).rejects.toThrow(/null value in column "title"/);
+  });
+
+  it("rejects an empty or over-long title at the DB level", async () => {
+    for (const title of ["", "x".repeat(MAX_ENTRY_TITLE_CHARS + 1)])
+      await expect(
+        sql`insert into knowledge_entries (title) values (${title})`,
+      ).rejects.toThrow(/knowledge_entries_title_check/);
+    await expect(
+      sql`insert into knowledge_entries (title) values (${"x".repeat(MAX_ENTRY_TITLE_CHARS)})`,
+    ).resolves.toBeDefined();
+  });
+});
+
+describe("titles", () => {
+  beforeEach(resetData);
+
+  it("stores a title as one line, and refuses a blank or over-long one", async () => {
+    const row = await saveKnowledgeEntry({
+      title: "  Spooler   stalls\n on long batches ",
+    });
+    expect((await getKnowledgeEntry(row.id)).title).toBe(
+      "Spooler stalls on long batches",
+    );
+    await expect(saveKnowledgeEntry({ title: " \n " })).rejects.toThrow(
+      /title is empty/,
+    );
+    await expect(
+      saveKnowledgeEntry({ title: "x".repeat(MAX_ENTRY_TITLE_CHARS + 1) }),
+    ).rejects.toThrow(/at most 80/);
+    await expect(
+      updateKnowledgeEntry(row.id, {
+        title: "y".repeat(MAX_ENTRY_TITLE_CHARS + 1),
+      }),
+    ).rejects.toThrow(/at most 80/);
+  });
+
+  it("returns the title beside the summary from get, list and search", async () => {
+    const row = await saveKnowledgeEntry({
+      status: "approved",
+      title: "Spooler stalls on long batches",
+      issueSummary:
+        "The print spooler halts once a batch passes 500 labels, and the queue never drains.",
+    });
+    const fromGet = await getKnowledgeEntry(row.id);
+    const [fromList] = await listKnowledgeEntries();
+    const [fromSearch] = await searchKnowledge("spooler stalls");
+    for (const found of [fromGet, fromList, fromSearch]) {
+      expect(found.title).toBe("Spooler stalls on long batches");
+      expect(found.issue_summary).toMatch(/^The print spooler halts/);
+    }
+  });
+
+  it("finds an entry by a word only its title holds, on the keyword and the fuzzy leg", async () => {
+    const titled = await saveKnowledgeEntry({
+      status: "approved",
+      title: "Zebrafix overlay hides the reprint button",
+      issueSummary: "Operators cannot reach the reprint control on line 4.",
+    });
+    await saveKnowledgeEntry({
+      status: "approved",
+      title: "Invoice export is empty",
+      issueSummary: "The monthly export produces an empty file.",
+    });
+
+    const [exact] = await searchKnowledge("zebrafix");
+    expect(exact.id).toBe(titled.id);
+    expect(Number(exact.fts_rank)).toBeGreaterThan(0);
+
+    const [misspelt] = await searchKnowledge("zebrafx");
+    expect(misspelt.id).toBe(titled.id);
+    expect(Number(misspelt.trgm_sim)).toBeGreaterThan(0);
+  });
+
+  it("re-embeds an entry when only its title changes", async () => {
+    const row = await saveKnowledgeEntry({
+      title: "Spooler stalls on long batches",
+      issueSummary: "The print spooler halts once a batch passes 500 labels.",
+    });
+    const vector = async () => {
+      const [stored] = await sql`
+        select embedding::text as embedding from knowledge_entries where id = ${row.id}
+      `;
+      return stored.embedding as string;
+    };
+    const before = await vector();
+    await updateKnowledgeEntry(row.id, {
+      title: "Label queue never drains past 500 labels",
+    });
+    expect(await vector()).not.toBe(before);
   });
 });
 
@@ -135,13 +240,13 @@ describe("promoted facets (cloud / quality)", () => {
   it("stores and filters approved entries by cloud", async () => {
     await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "prod outage in pipeline",
+      title: "prod outage in pipeline",
       cloud: "prod",
       resolutionClarity: "clear",
     });
     await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "qa pipeline flake",
+      title: "qa pipeline flake",
       cloud: "qa",
     });
 
@@ -153,7 +258,7 @@ describe("promoted facets (cloud / quality)", () => {
 
   it("round-trips facets and lets update clear them with null", async () => {
     const row = await saveKnowledgeEntry({
-      issueSummary: "x",
+      title: "x",
       cloud: "on-prem",
       hiddenFix: true,
       resolutionClarity: "clear",
@@ -171,7 +276,7 @@ describe("promoted facets (cloud / quality)", () => {
   it("round-trips affected/fixed version, seeds from the work item, and filters on them", async () => {
     const row = await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "broken in 2.3",
+      title: "broken in 2.3",
       affectedVersion: "2.3.0",
       fixedVersion: "2.4.0",
     });
@@ -191,7 +296,7 @@ describe("promoted facets (cloud / quality)", () => {
     `;
     const seeded = await saveKnowledgeEntry({
       workItemId: workItem.id as string,
-      issueSummary: "seeded",
+      title: "seeded",
     });
     expect((await getKnowledgeEntry(seeded.id)).affected_version).toBe("1.9.2");
 
@@ -202,22 +307,22 @@ describe("promoted facets (cloud / quality)", () => {
   it("accepts deployment-specific environments and lists them with counts", async () => {
     await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "a",
+      title: "a",
       cloud: "demo/preprod",
     });
     await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "b",
+      title: "b",
       cloud: "demo/preprod",
     });
     await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "c",
+      title: "c",
       cloud: "dev",
     });
     await saveKnowledgeEntry({
       status: "archived",
-      issueSummary: "d",
+      title: "d",
       cloud: "gone",
     });
 
@@ -235,14 +340,17 @@ describe("deprecation lifecycle", () => {
   it("deprecated entries surface in search flagged, archived ones do not", async () => {
     const old = await saveKnowledgeEntry({
       status: "approved",
+      title: "Scanner offline after a firmware update",
       issueSummary: "scanner offline after firmware update",
     });
     const fresh = await saveKnowledgeEntry({
       status: "approved",
+      title: "Reflash an offline scanner with tool v2",
       issueSummary: "scanner offline: reflash with tool v2",
     });
     await saveKnowledgeEntry({
       status: "archived",
+      title: "Archived scanner lesson",
       issueSummary: "scanner offline lesson that must stay hidden",
     });
     await updateKnowledgeEntry(old.id, {
@@ -255,15 +363,13 @@ describe("deprecation lifecycle", () => {
     expect(deprecated).toBeDefined();
     expect(deprecated!.status).toBe("deprecated");
     expect(deprecated!.superseded_by).toBe(fresh.id);
-    expect(rows.some((r) => String(r.issue_summary).includes("hidden"))).toBe(
-      false,
-    );
+    expect(rows.some((r) => String(r.title).includes("Archived"))).toBe(false);
   });
 
   it("validates the supersede link: unknown target and self-reference are rejected", async () => {
     const row = await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "x",
+      title: "x",
     });
     await expect(
       updateKnowledgeEntry(row.id, {
@@ -282,11 +388,11 @@ describe("deprecation lifecycle", () => {
   it("clears the supersede link with null and allows re-approving", async () => {
     const old = await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "old lesson",
+      title: "old lesson",
     });
     const fresh = await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "new lesson",
+      title: "new lesson",
     });
     await updateKnowledgeEntry(old.id, {
       status: "deprecated",
@@ -305,7 +411,7 @@ describe("deprecation lifecycle", () => {
   it("accepts feedback kind 'deprecation' and rejects unknown kinds at the DB level", async () => {
     const row = await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "x",
+      title: "x",
     });
     const feedback = await addFeedback({
       knowledgeEntryId: row.id,
@@ -319,29 +425,92 @@ describe("deprecation lifecycle", () => {
   });
 });
 
-describe("structured validation", () => {
+describe("investigation and related links", () => {
   beforeEach(resetData);
 
-  it("rejects a malformed structured field with a bad_input error", async () => {
-    await expect(
-      saveKnowledgeEntry({
-        issueSummary: "x",
-        structured: { investigation_steps: "not-an-array" },
-      }),
-    ).rejects.toThrow(/Invalid structured field/i);
+  const TICKET_URL = "https://dev.azure.com/seed/_workitems/edit/50912";
+
+  const investigated = () =>
+    saveKnowledgeEntry({
+      status: "approved",
+      title: "Label printer drops jobs after a firmware rollout",
+      issueSummary: "Jobs vanish from the queue on line 2.",
+      investigation:
+        "1. Traced the spooler with quarnix.\n2. Compared the firmware builds.",
+      relatedLinks: [TICKET_URL],
+    });
+
+  it("returns both from get and search, and an update replaces or clears them", async () => {
+    const row = await investigated();
+    const fromGet = await getKnowledgeEntry(row.id);
+    const [fromSearch] = await searchKnowledge("printer drops jobs");
+    for (const found of [fromGet, fromSearch]) {
+      expect(found.investigation).toMatch(/^1\. Traced the spooler/);
+      expect(found.related_links).toEqual([TICKET_URL]);
+    }
+
+    await updateKnowledgeEntry(row.id, {
+      investigation: null,
+      relatedLinks: [],
+    });
+    const cleared = await getKnowledgeEntry(row.id);
+    expect(cleared.investigation).toBeNull();
+    expect(cleared.related_links).toEqual([]);
   });
 
-  it("keeps unknown structured keys (passthrough)", async () => {
-    const row = await saveKnowledgeEntry({
-      issueSummary: "x",
-      structured: {
-        conversation_summary: "summary",
-        custom_field: { nested: true },
-      },
+  it("finds an entry by a word only its investigation holds, on the keyword and the fuzzy leg", async () => {
+    const row = await investigated();
+    await saveKnowledgeEntry({
+      status: "approved",
+      title: "Invoice export is empty",
+      issueSummary: "The monthly export produces an empty file.",
     });
-    const stored = await getKnowledgeEntry(row.id);
-    expect(stored.structured.conversation_summary).toBe("summary");
-    expect(stored.structured.custom_field).toEqual({ nested: true });
+
+    const [exact] = await searchKnowledge("quarnix");
+    expect(exact.id).toBe(row.id);
+    expect(Number(exact.fts_rank)).toBeGreaterThan(0);
+
+    const [misspelt] = await searchKnowledge("quarnx");
+    expect(misspelt.id).toBe(row.id);
+    expect(Number(misspelt.trgm_sim)).toBeGreaterThan(0);
+  });
+
+  it("names its component and the work item it was learned from", async () => {
+    const productId = await tpdProductId();
+    await addComponent({ productId, slug: "spooler", name: "Spooler" });
+    const [conn] =
+      await sql`select id from source_connections where slug = 'test-freshdesk'`;
+    const [workItem] = await sql`
+      insert into work_items (source_connection_id, external_id, external_url)
+      values (${conn.id}, '4711', 'https://acme.freshdesk.com/a/tickets/4711')
+      returning id
+    `;
+    const row = await saveKnowledgeEntry({
+      productId,
+      workItemId: workItem.id as string,
+      component: "spooler",
+      title: "Spooler stalls on long batches",
+    });
+    expect(await getKnowledgeEntry(row.id)).toMatchObject({
+      component_slug: "spooler",
+      work_item_external_id: "4711",
+      work_item_url: "https://acme.freshdesk.com/a/tickets/4711",
+    });
+  });
+
+  it("re-embeds an entry when only its investigation changes", async () => {
+    const row = await investigated();
+    const vector = async () => {
+      const [stored] = await sql`
+        select embedding::text as embedding from knowledge_entries where id = ${row.id}
+      `;
+      return stored.embedding as string;
+    };
+    const before = await vector();
+    await updateKnowledgeEntry(row.id, {
+      investigation: "1. Swapped the print head; the drops stopped.",
+    });
+    expect(await vector()).not.toBe(before);
   });
 });
 
@@ -352,7 +521,7 @@ describe("listKnowledgeFacets", () => {
     Promise.all([
       saveKnowledgeEntry({
         status: "approved",
-        issueSummary: "printer truncates labels",
+        title: "printer truncates labels",
         confidence: "high",
         resolutionClarity: "clear",
         hiddenFix: true,
@@ -360,14 +529,14 @@ describe("listKnowledgeFacets", () => {
       }),
       saveKnowledgeEntry({
         status: "approved",
-        issueSummary: "scanner drops packets",
+        title: "scanner drops packets",
         confidence: "low",
         resolutionClarity: "clear",
         tags: ["printing"],
       }),
       saveKnowledgeEntry({
         status: "approved",
-        issueSummary: "cache stampede",
+        title: "cache stampede",
         confidence: "low",
         resolutionClarity: "unclear",
         tags: ["caching"],
@@ -421,27 +590,27 @@ describe("knowledge filters", () => {
   it("filters on confidence and hidden_fix, which the library exposes via +", async () => {
     await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "obvious fix",
+      title: "obvious fix",
       confidence: "high",
       hiddenFix: false,
     });
     await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "non-obvious fix",
+      title: "non-obvious fix",
       confidence: "low",
       hiddenFix: true,
     });
 
     const high = await listKnowledgeEntries({ confidence: "high" });
-    expect(high.map((r) => r.issue_summary)).toEqual(["obvious fix"]);
+    expect(high.map((r) => r.title)).toEqual(["obvious fix"]);
 
     const hidden = await listKnowledgeEntries({ hiddenFix: true });
-    expect(hidden.map((r) => r.issue_summary)).toEqual(["non-obvious fix"]);
+    expect(hidden.map((r) => r.title)).toEqual(["non-obvious fix"]);
 
     // A null hidden_fix means "not marked", so it must match the false filter.
-    await saveKnowledgeEntry({ status: "approved", issueSummary: "unmarked" });
+    await saveKnowledgeEntry({ status: "approved", title: "unmarked" });
     const notHidden = await listKnowledgeEntries({ hiddenFix: false });
-    expect(notHidden.map((r) => r.issue_summary).sort()).toEqual([
+    expect(notHidden.map((r) => r.title).sort()).toEqual([
       "obvious fix",
       "unmarked",
     ]);
@@ -457,12 +626,14 @@ describe("customer scoping", () => {
     await addCustomer({ name: "Villiger", slug: "villiger" });
     await saveKnowledgeEntry({
       status: "approved",
+      title: "Codes stay unlocked as the quantity grows",
       issueSummary: "Codes are not locked when the quantity increases",
       resolution: "reset the aggregation counter",
       customerSlug: "logista",
     });
     await saveKnowledgeEntry({
       status: "approved",
+      title: "Codes stay unlocked as the quantity grows",
       issueSummary: "Codes are not locked when the quantity increases",
       resolution: "reset the aggregation counter",
     });
@@ -509,7 +680,7 @@ describe("customer scoping", () => {
     const general = await saveKnowledgeEntry({
       status: "approved",
       workItemId: workItem.id,
-      issueSummary: "true of the product, found on their ticket",
+      title: "true of the product, found on their ticket",
     });
     expect((await getKnowledgeEntry(general.id)).customer_slug).toBeNull();
 
@@ -517,7 +688,7 @@ describe("customer scoping", () => {
       status: "approved",
       workItemId: workItem.id,
       customerSlug: "logista",
-      issueSummary: "only true of their install",
+      title: "only true of their install",
     });
     expect((await getKnowledgeEntry(theirs.id)).customer_slug).toBe("logista");
   });
@@ -526,7 +697,7 @@ describe("customer scoping", () => {
     await addCustomer({ name: "Logista", slug: "logista" });
     const row = await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "some lesson",
+      title: "some lesson",
     });
     await updateKnowledgeEntry(row.id, { customerSlug: "logista" });
     expect((await getKnowledgeEntry(row.id)).customer_slug).toBe("logista");

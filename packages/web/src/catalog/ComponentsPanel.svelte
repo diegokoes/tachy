@@ -12,6 +12,7 @@
     Modal,
     Note,
     RecordModal,
+    SearchBox,
     Select,
     blankDraft,
     draftFrom,
@@ -108,11 +109,11 @@
       edit: "select",
       required: true,
       only: "create",
-      info: "Which product this component belongs to. Fixed once created.",
+      info: "which product this component belongs to. fixed once created",
       options: picked.products,
       initial: filters.product || undefined,
     },
-    { key: "name", label: "name", edit: "text", required: true },
+    { key: "name", face: "ui", label: "name", edit: "text", required: true },
     {
       key: "slug",
       label: "id",
@@ -135,7 +136,7 @@
       options: (draft) => {
         const blocked = subtree(form?.row ?? null);
         return [
-          { value: "", label: "(top level)" },
+          { value: "", label: "top level" },
           ...siblings(productOf(draft))
             .filter((c) => !blocked.has(c.id))
             .map((c) => ({ value: c.slug, label: c.name })),
@@ -152,6 +153,7 @@
     },
     {
       key: "description",
+      face: "ui",
       label: "description",
       edit: "textarea",
       span: "full",
@@ -349,11 +351,9 @@
         keepOpen
         aria-label={t("product")}
       />
-      <input
-        class="q"
-        bind:this={findEl}
+      <SearchBox
+        bind:el={findEl}
         bind:value={filters.query}
-        placeholder="find a component…"
         aria-label="find a component"
         onkeydown={(e) => e.key === "Enter" && (finding = false)}
       />
@@ -386,7 +386,7 @@
     extra={whereExtra}
     destructive={open.row && mayEdit(open.row)
       ? {
-          label: armed ? "click again to confirm" : "delete",
+          label: armed ? "confirm delete" : "delete",
           icon: armed ? "confirm" : "delete",
           busy,
           onclick: remove,
@@ -420,7 +420,7 @@
   >
     {#snippet message(impact, to)}
       <p>
-        Renaming <strong>{target.slug}</strong> to <strong>{to}</strong>
+        renaming <strong>{target.slug}</strong> to <strong>{to}</strong>
         rewrites
         {impact.entries} knowledge {impact.entries === 1 ? "entry" : "entries"}.
       </p>
@@ -453,10 +453,6 @@
     display: flex;
     align-items: center;
     gap: var(--pad-2);
-  }
-  .q {
-    flex: 1 1 12rem;
-    min-width: 0;
   }
   .dim {
     color: var(--muted);

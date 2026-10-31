@@ -3,7 +3,7 @@
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
   import { t } from "../terms";
-  import { CrudTable, Note, Select, type Column } from "../tui";
+  import { BarField, CrudTable, Note, Select, type Column } from "../tui";
   import { slugify } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import type { Label, Product } from "./rows";
@@ -54,7 +54,7 @@
       editable: () => false,
       action: { label: "rename…", onclick: (r) => (renaming = r) },
     },
-    { key: "description", label: "description", edit: "textarea" },
+    { key: "description", face: "ui", label: "description", edit: "textarea" },
   ];
 
   onMount(async () => {
@@ -71,31 +71,35 @@
 <!-- Team narrows the product list; the product itself is not optional,
      because a label only exists inside one. -->
 <div class="bar">
-  <Select
-    bind:value={team}
-    options={teamOptions}
-    placeholder={`any ${t("team")}`}
-    clearable
-    searchable
-    keepOpen
-    active={!!team}
-    aria-label={`filter by ${t("team")}`}
-    onchange={() => {
-      if (team && !productOptions.some((o) => o.value === product))
-        product = productOptions[0]?.value ?? "";
-    }}
-  />
-  <Select
-    bind:value={product}
-    options={productOptions}
-    placeholder={`pick a ${t("product")}`}
-    searchable
-    aria-label={t("product")}
-  />
+  <BarField label={t("team")}>
+    <Select
+      bind:value={team}
+      options={teamOptions}
+      placeholder="any"
+      clearable
+      searchable
+      keepOpen
+      active={!!team}
+      aria-label={`filter by ${t("team")}`}
+      onchange={() => {
+        if (team && !productOptions.some((o) => o.value === product))
+          product = productOptions[0]?.value ?? "";
+      }}
+    />
+  </BarField>
+  <BarField label={t("product")}>
+    <Select
+      bind:value={product}
+      options={productOptions}
+      placeholder="none"
+      searchable
+      aria-label={t("product")}
+    />
+  </BarField>
 </div>
 
 {#if !product}
-  <Note>Pick a {t("product")} to see its labels.</Note>
+  <Note>pick a {t("product")} to see its labels</Note>
 {:else}
   <CrudTable
     hoist={sectionHoist("labels")}
@@ -104,7 +108,7 @@
     rowKey={(r) => r.slug}
     loading={labels.loading}
     error={labels.error}
-    emptyTitle="No labels for this {t('product')} yet."
+    emptyTitle="no labels for this {t('product')} yet"
     addLabel="add label"
     noun="label"
     editTitle={(r) => r.slug}
@@ -148,7 +152,7 @@
   >
     {#snippet message(impact, to)}
       <p>
-        Renaming <strong>{target.slug}</strong> to <strong>{to}</strong>
+        renaming <strong>{target.slug}</strong> to <strong>{to}</strong>
         rewrites
         {impact.entries} entries{#if impact.docs != null}
           and {impact.docs} docs{/if}.
@@ -160,7 +164,7 @@
 <style>
   .bar {
     display: flex;
-    align-items: center;
+    align-items: end;
     gap: var(--pad-2);
     flex-wrap: wrap;
     margin-bottom: var(--pad-2);

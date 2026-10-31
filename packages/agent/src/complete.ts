@@ -1,7 +1,14 @@
 import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { ModelImage } from "@tachy/core/files";
 import { claudeEnv } from "./claude";
-import { effectiveModel, type AgentAuth, type AgentEffort } from "./backend";
+import {
+  effectiveModel,
+  turnUsage,
+  type AgentAuth,
+  type AgentEffort,
+  type SdkUsage,
+  type TurnUsage,
+} from "./backend";
 
 /**
  * The subset of a turn's config a bare completion needs: no MCP server, no cwd,
@@ -19,7 +26,7 @@ export interface CompletionConfig {
 export interface CompletionResult {
   text: string;
   costUsd: number;
-  usage: { inputTokens: number | null; outputTokens: number | null };
+  usage: TurnUsage;
 }
 
 /**
@@ -70,10 +77,7 @@ export async function completeOnce(
   try {
     let text = "";
     let costUsd = 0;
-    let usage: CompletionResult["usage"] = {
-      inputTokens: null,
-      outputTokens: null,
-    };
+    let usage = turnUsage(undefined);
     for await (const sdkMessage of query({
       prompt: opts.images?.length ? withImages(prompt, opts.images) : prompt,
       options: {
@@ -96,14 +100,11 @@ export async function completeOnce(
         const resultMessage = sdkMessage as {
           result?: string;
           total_cost_usd?: number;
-          usage?: { input_tokens?: number; output_tokens?: number };
+          usage?: SdkUsage;
         };
         text = resultMessage.result ?? "";
         costUsd = resultMessage.total_cost_usd ?? 0;
-        usage = {
-          inputTokens: resultMessage.usage?.input_tokens ?? null,
-          outputTokens: resultMessage.usage?.output_tokens ?? null,
-        };
+        usage = turnUsage(resultMessage.usage);
       }
     }
     return { text, costUsd, usage };

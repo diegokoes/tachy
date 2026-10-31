@@ -8,12 +8,7 @@
   import type { KnowledgeRow } from "../knowledge/rows";
   import type { ReferenceRow } from "../reference/rows";
   import type { ComponentRow, ProductRow } from "@tachy/contract";
-  import {
-    navigate,
-    openSection,
-    segment,
-    segments,
-  } from "../shell/router.svelte";
+  import { navigate, segment, segments } from "../shell/router.svelte";
   import { keep, recall } from "../shell/kept";
   import { setSubnav } from "../shell/subnav.svelte";
   import { pushScope } from "../keys/keys.svelte";
@@ -26,10 +21,12 @@
   import { errText } from "../resource.svelte";
   import { componentOptions } from "../catalog/componentOptions";
   import {
+    BarField,
     Button,
-    CaretInput,
+    Choice,
     EmptyState,
     Note,
+    SearchBox,
     Select,
     Spinner,
   } from "../tui";
@@ -50,7 +47,8 @@
   import EntryDetail from "../knowledge/EntryDetail.svelte";
   import DocDetail from "../reference/DocDetail.svelte";
   import { movedWikiPath, ORG_WIDE, wikiPath } from "../wiki/paths";
-  import EntryForm from "../knowledge/EntryForm.svelte";
+  import { landingScope, loadWikis, wikis } from "../wiki/wikis.svelte";
+  import { LIBRARY_TABS, libraryTabPath } from "./tabs";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
 
   // Entries, docs and articles are one corpus that search spans; narrowing to
@@ -101,21 +99,29 @@
     navigate("/library", { replace: true });
   });
 
-  // No tabs: the library is one list, and the wiki opens from its row. The
-  // subnav is registered for that row, which the detail views and forms put
-  // their actions in.
+  // The wiki shares these tabs; the detail views and forms put their own
+  // actions in the row beside them.
   $effect(() =>
     setSubnav({
-      items: [],
-      active: "",
-      onpick: () => {},
+      items: LIBRARY_TABS,
+      active: "all",
+      onpick: (tab) => void openTab(tab),
       // Only over a list. A detail view claims the row for itself, and a
       // create screen has nothing to create from.
       actions: listing ? listActions : undefined,
     }),
   );
+
+  async function openTab(tab: string) {
+    if (tab !== "all" && !wikis.loaded) await loadWikis();
+    navigate(libraryTabPath(tab, landingScope()));
+  }
   /** Which form the create screen shows - in the URL, so it deep-links. */
   const newKind = $derived(param === "doc" ? "doc" : "entry");
+  const NEW_KINDS = [
+    { value: "entry", label: "entry" },
+    { value: "doc", label: "doc" },
+  ] as const;
 
   /** The search and its scope, as the library was left. */
   const left = recall("library.search", {
@@ -379,23 +385,6 @@
       }
   }
 
-  /**
-   * A control never reads narrower than the cap naming it - the caps are what
-   * the row is scanned by. Measured rather than guessed at in `ch`: the cap is
-   * a different size and tracking from the control under it.
-   */
-  function capFloor(node: HTMLElement) {
-    const cap = node.querySelector<HTMLElement>(".cap");
-    if (!cap) return;
-    const apply = () => {
-      node.style.minWidth = `${Math.ceil(cap.offsetWidth * 1.25)}px`;
-    };
-    apply();
-    const observer = new ResizeObserver(apply);
-    observer.observe(cap);
-    return { destroy: () => observer.disconnect() };
-  }
-
   /** A status carried over from a type that does not have it matches nothing. */
   function onTypeChange() {
     const offered: readonly string[] = showDocFilters ? DOC_STATUSES : STATUSES;
@@ -440,11 +429,11 @@
         createSaving = false;
       }
     };
-  const createEntry = create("/knowledge", "entries");
   const createDoc = create("/reference", "docs");
 
   /** Opens narrowed to what another page asked for; see `presetScope`. */
   async function applyPreset(preset: ScopePreset) {
+    if (preset.status) status = preset.status;
     const id = products.find((x) => x.slug === preset.product)?.id as
       string | undefined;
     if (!id) return;
@@ -536,33 +525,15 @@
       onclick={() => navigate("/library/new/entry")}>new</Button
     >
   {/if}
-  <Button
-    variant="ghost"
-    size="sm"
-    icon="wiki"
-    onclick={() => openSection("wiki")}>wiki</Button
-  >
 {/snippet}
 
 {#snippet kindToggle()}
-  <span class="toggle">
-    <Button
-      variant={newKind === "entry" ? "primary" : "ghost"}
-      square
-      icon="knowledge"
-      title="knowledge entry"
-      aria-label="knowledge entry"
-      onclick={() => navigate("/library/new/entry")}
-    />
-    <Button
-      variant={newKind === "doc" ? "primary" : "ghost"}
-      square
-      icon="refDoc"
-      title="reference doc"
-      aria-label="reference doc"
-      onclick={() => navigate("/library/new/doc")}
-    />
-  </span>
+  <Choice
+    options={NEW_KINDS}
+    value={newKind}
+    label="new library item"
+    onpick={(picked) => navigate(`/library/new/${picked}`)}
+  />
 {/snippet}
 
 {#if kind === "wiki"}
@@ -586,12 +557,9 @@
       extra={kindToggle}
     />
   {:else}
-    <EntryForm
-      mode="create"
-      saving={createSaving}
-      error={createError}
-      onSubmit={createEntry}
-      onCancel={() => navigate("/library")}
+    <EntryDetail
+      onClose={backToList}
+      onCreated={(id) => navigate(`/library/entries/${id}`)}
       extra={kindToggle}
     />
   {/if}
@@ -600,28 +568,17 @@
        narrowed by (environment, confidence, clarity, pattern, hidden fix,
        versions, tags) is one `+` away and remembered per browser. -->
   <div class="bar">
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <span
-      class="box"
-      onpointerdown={(e) => {
-        if (e.target !== e.currentTarget) return;
-        e.preventDefault();
-        searchEl?.focus();
+    <SearchBox
+      bind:el={searchEl}
+      aria-label="search symptoms, error codes, root causes, docs"
+      bind:value={search}
+      onkeydown={(e) => {
+        if (e.key === "Enter") {
+          clearTimeout(timer);
+          run();
+        }
       }}
     >
-      <CaretInput
-        bind:el={searchEl}
-        icon="search"
-        hint="Search"
-        aria-label="Search symptoms, error codes, root causes, docs"
-        bind:value={search}
-        onkeydown={(e) => {
-          if (e.key === "Enter") {
-            clearTimeout(timer);
-            run();
-          }
-        }}
-      />
       <!-- Reset keeps its place whether or not it is there, so add never
            moves under the pointer. -->
       <span class="slot" class:off={!activeFilters}>
@@ -643,25 +600,23 @@
           onremove={removeFilter}
         />
       {/if}
-    </span>
+    </SearchBox>
 
-    <span class="field" use:capFloor>
-      <span class="cap">type</span>
+    <BarField label="type">
       <Select
         bind:value={type}
         active={!!type}
         keepOpen
-        aria-label="Type"
+        aria-label="type"
         placeholder="any"
         clearable
         options={TYPES}
         onchange={onTypeChange}
       />
-    </span>
+    </BarField>
     <!-- product and component scope entries AND docs, so they stay visible
          whatever the type. -->
-    <span class="field" use:capFloor>
-      <span class="cap">{t("product")}</span>
+    <BarField label={t("product")}>
       <Select
         bind:value={productId}
         active={!!productId}
@@ -673,15 +628,14 @@
         options={products.map((p) => ({ value: p.id, label: p.name }))}
         onchange={(v) => onProductChange(String(v))}
       />
-    </span>
-    <span class="field" use:capFloor>
-      <span class="cap">component</span>
+    </BarField>
+    <BarField label="component">
       <Select
         bind:value={component}
         active={!!component}
         keepOpen
         searchable
-        aria-label="Component"
+        aria-label="component"
         disabled={!productId || components.length === 0}
         placeholder="any"
         clearable
@@ -691,27 +645,26 @@
           void loadFacets();
         }}
       />
-    </span>
+    </BarField>
 
-    <span class="field" use:capFloor>
-      <span class="cap">status</span>
+    <BarField label="status">
       <Select
         bind:value={status}
         active={!!status}
         keepOpen
-        aria-label="Status"
+        aria-label="status"
         placeholder="any"
         clearable
         options={showDocFilters ? DOC_STATUSES : STATUSES}
       />
-    </span>
+    </BarField>
 
     {#if showEntryFilters}
       {#each shown as key (key)}
         {@const def = byKey(key)}
         {#if def}
-          <!-- No close button: the add menu toggles it off, and so does a
-               right click anywhere on it. -->
+          <!-- Taken off by its ×, by the add menu, or by a right click
+               anywhere on it. -->
           <span
             class="extra"
             role="group"
@@ -721,8 +674,7 @@
               removeFilter(key);
             }}
           >
-            <span class="field" use:capFloor>
-              <span class="cap">{def.label}</span>
+            <BarField label={def.label}>
               {#if def.kind === "tags"}
                 <TagFilter
                   value={extras[key] ?? ""}
@@ -752,7 +704,15 @@
                   onchange={(v) => setExtra(key, String(v))}
                 />
               {/if}
-            </span>
+            </BarField>
+            <Button
+              variant="ghost"
+              size="sm"
+              square
+              icon="close"
+              title="remove the {def.label} filter"
+              onclick={() => removeFilter(key)}
+            />
           </span>
         {/if}
       {/each}
@@ -799,19 +759,13 @@
     {#if !loading && !error && items.length === 0}
       <li>
         <EmptyState
-          icon={type === "docs"
-            ? "refDoc"
-            : type === "knowledge"
-              ? "knowledge"
-              : type === "wiki"
-                ? "wiki"
-                : "library"}
+          art={mode === "search" ? "noMatch" : "library"}
           title={mode === "search"
-            ? `No matches for “${search}”.`
-            : "The library is empty."}
+            ? `no matches for “${search}”`
+            : "the library is empty"}
           detail={mode === "search"
-            ? "Searches summaries, symptoms, signals, root causes, tags, doc bodies."
-            : "Analyze a ticket in chat, or add an entry."}
+            ? "searches titles, summaries, symptoms, signals, root causes, tags, doc bodies"
+            : "analyze a ticket in chat, or add an entry"}
         />
       </li>
     {/if}
@@ -819,11 +773,6 @@
 {/if}
 
 <style>
-  .toggle {
-    display: inline-flex;
-    gap: var(--pad-1);
-  }
-
   /* Pinned: the list scrolls under it, so the query and its filters stay on
      screen. It needs its own ground over the opaque cards. Bottom-aligned: a
      cap is one line, a tag box is not. */
@@ -852,22 +801,9 @@
     background: var(--panel-bg);
   }
   /* Half the bar: the filters take the other half, then the rows below. */
-  .box {
+  .bar :global(.searchbox) {
     flex: 0 1 50%;
     min-width: 16rem;
-    min-height: var(--control-h);
-    display: flex;
-    align-items: stretch;
-    gap: var(--pad-1);
-    padding-left: var(--pad-3);
-    border: 1px solid var(--border-bare);
-    border-radius: var(--radius-control);
-    background: var(--panel-bg);
-    cursor: text;
-  }
-  .box:has(:global(input:focus-visible)) {
-    border-color: var(--accent);
-    box-shadow: inset 0 0 0 1px var(--accent);
   }
   .slot {
     display: flex;
@@ -875,35 +811,16 @@
   .slot.off {
     visibility: hidden;
   }
-  .box :global(.menu) {
+  .bar :global(.searchbox .menu) {
     display: flex;
   }
-  .box :global(.btn) {
+  .bar :global(.searchbox .btn) {
     min-height: 0;
   }
   /* Cased in CSS, not in the copy - a screen reader still hears a word. */
   .lbl {
     text-transform: uppercase;
     letter-spacing: var(--label-spacing);
-  }
-
-  .field {
-    display: inline-flex;
-    flex-direction: column;
-    gap: var(--pad-1);
-  }
-  /* Its own width, not the column's, so `capFloor` can measure the text and
-     the auto margins can centre it over the control. */
-  .cap {
-    width: max-content;
-    max-width: 100%;
-    margin-inline: auto;
-    font-size: var(--fs-xs);
-    line-height: 1;
-    letter-spacing: var(--label-spacing);
-    text-transform: uppercase;
-    text-align: center;
-    color: var(--muted);
   }
 
   /* An added filter travels with its remove button, so the pair wraps as

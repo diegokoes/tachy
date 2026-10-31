@@ -158,14 +158,14 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     ownEntryId = (
       await saveKnowledgeEntry({
         productId: await tpdProductId(),
-        issueSummary: "own-team entry",
+        title: "own-team entry",
         status: "approved",
       })
     ).id;
     otherEntryId = (
       await saveKnowledgeEntry({
         teamId: other.id as string,
-        issueSummary: "other-team entry",
+        title: "other-team entry",
         status: "approved",
       })
     ).id;
@@ -265,7 +265,7 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     );
     expect(patch.status).toBe(403);
     const post = await request(devCookie, "/knowledge", "POST", {
-      issueSummary: "y",
+      title: "y",
     });
     expect(post.status).toBe(403);
   });
@@ -273,7 +273,7 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
   it("team admin creates entries and products in their team, not org-wide", async () => {
     const entry = await request(leadCookie, "/knowledge", "POST", {
       productId: await tpdProductId(),
-      issueSummary: "lead-created",
+      title: "lead-created",
     });
     expect(entry.status).toBe(200);
     const product = await request(leadCookie, "/products", "POST", {
@@ -358,7 +358,7 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
   it("attributes HTTP knowledge posts and feedback to the session user", async () => {
     const response = await request(leadCookie, "/knowledge", "POST", {
       productId: await tpdProductId(),
-      issueSummary: "attributed entry",
+      title: "attributed entry",
     });
     expect(response.status).toBe(200);
     const { id } = await response.json();
@@ -398,14 +398,14 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     expect(comp.status).toBe(200);
     const inComp = await request(adminCookie, "/knowledge", "POST", {
       productId,
-      issueSummary: "lc jam",
+      title: "lc jam",
       component: "line-controller",
     });
     expect(inComp.status).toBe(200);
     const inCompId = (await inComp.json()).id as string;
     const outComp = await request(adminCookie, "/knowledge", "POST", {
       productId,
-      issueSummary: "printer offline",
+      title: "printer offline",
     });
     expect(outComp.status).toBe(200);
 

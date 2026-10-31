@@ -2,7 +2,7 @@
  * A fixed corpus + golden query set for measuring retrieval quality.
  *
  * The point is not that these entries are realistic prose - it is that the
- * queries exercise the four ways someone searches, and that each one has one
+ * queries exercise the five ways someone searches, and that each one has one
  * right answer:
  *
  *   - paraphrase   the query shares no keywords with the entry (vector leg)
@@ -11,10 +11,12 @@
  *                  in the embedded text)
  *   - facet        an environment or version word typed into the query, which
  *                  only works because they are part of search_text
+ *   - title        a word only the entry's title holds
  */
 
 export interface CorpusEntry {
   key: string;
+  title: string;
   issueSummary: string;
   symptoms: string[];
   signals: string[];
@@ -28,6 +30,7 @@ export interface CorpusEntry {
 export const KNOWLEDGE: CorpusEntry[] = [
   {
     key: "printer-023",
+    title: "Printer error 023 on labels with many variable fields",
     issueSummary:
       "Printer error 023 TOO_MANY_STRINGS when printing a label with many variable fields",
     symptoms: ["error 023 on printer display", "label job rejected"],
@@ -41,6 +44,7 @@ export const KNOWLEDGE: CorpusEntry[] = [
   },
   {
     key: "scanner-pairing",
+    title: "Handheld scanner will not pair after an upgrade",
     issueSummary:
       "Handheld barcode reader will not connect after a software upgrade",
     symptoms: ["scanner shows offline", "no pairing dialog appears"],
@@ -54,6 +58,7 @@ export const KNOWLEDGE: CorpusEntry[] = [
   },
   {
     key: "lc-template-cache",
+    title: "Line controller stops the template fan-out",
     issueSummary:
       "Line controller stops distributing templates to downstream machines",
     symptoms: ["machines sit idle", "no template handoff"],
@@ -67,6 +72,7 @@ export const KNOWLEDGE: CorpusEntry[] = [
   },
   {
     key: "export-empty-pdf",
+    title: "Monthly invoice export comes out empty",
     issueSummary: "Monthly invoice export produces an empty PDF",
     symptoms: ["zero-byte PDF", "export completes without error"],
     signals: ["PDF_EMPTY"],
@@ -78,6 +84,7 @@ export const KNOWLEDGE: CorpusEntry[] = [
   },
   {
     key: "queue-backlog",
+    title: "Ingest queue floods after a RabbitMQ restart",
     issueSummary: "Ingest queue grows without bound after a broker restart",
     symptoms: ["queue depth climbing", "consumers idle"],
     signals: ["AMQP_RECONNECT"],
@@ -91,6 +98,7 @@ export const KNOWLEDGE: CorpusEntry[] = [
   },
   {
     key: "cert-expiry",
+    title: "Agents disconnect nightly on an expired client certificate",
     issueSummary: "Machine agents disconnect every night at midnight UTC",
     symptoms: ["agents drop simultaneously", "reconnect loop"],
     signals: ["TLS_CERT_EXPIRED", "HTTP 495"],
@@ -154,6 +162,8 @@ export const GOLDEN: { q: string; expect: string; why: string }[] = [
   },
   { q: "prod printer error", expect: "printer-023", why: "facet" },
   { q: "2.3.7 empty pdf", expect: "export-empty-pdf", why: "facet" },
+  { q: "rabbitmq", expect: "queue-backlog", why: "title" },
+  { q: "template fan-out", expect: "lc-template-cache", why: "title" },
 ];
 
 /** Queries that must return nothing. */
@@ -197,5 +207,105 @@ export const TICKET_LEADS_DE: { q: string; expect: string }[] = [
   {
     q: "Maschinenagenten verlieren jede Nacht die Verbindung Jede Nacht um Mitternacht trennen sich alle Agenten gleichzeitig vom Server und versuchen danach endlos, sich neu zu verbinden.",
     expect: "cert-expiry",
+  },
+];
+
+/**
+ * For entries of `KNOWLEDGE`, the same lesson as another ticket's entry would
+ * put it, and a related entry that is not the same lesson: the same area, a
+ * different cause. The duplicate floor sits between the two.
+ */
+export const DUPLICATES: {
+  of: string;
+  same: Omit<CorpusEntry, "key">;
+  different: Omit<CorpusEntry, "key">;
+}[] = [
+  {
+    of: "printer-023",
+    same: {
+      title: "Printer refuses 023 TOO_MANY_STRINGS labels",
+      issueSummary:
+        "Label printer refuses jobs with 023 TOO_MANY_STRINGS on templates with lots of variable text",
+      symptoms: ["printer shows error 023", "print job is refused"],
+      signals: ["023 TOO_MANY_STRINGS"],
+      rootCause:
+        "The template holds more variable strings than the printer's buffer allows.",
+      resolution:
+        "Cut down the variable fields in the label template, or print the label in two passes.",
+    },
+    different: {
+      title: "Blank labels after a ribbon change",
+      issueSummary: "Label printer prints blank labels after a ribbon change",
+      symptoms: ["labels come out blank", "no error on the display"],
+      signals: [],
+      rootCause: "The new ribbon was loaded with the ink side facing away.",
+      resolution: "Reload the ribbon with the ink side towards the labels.",
+    },
+  },
+  {
+    of: "scanner-pairing",
+    same: {
+      title: "Scanner offline and unpairable after an update",
+      issueSummary:
+        "Barcode scanner stays offline after the software update and cannot be paired",
+      symptoms: ["scanner offline", "pairing dialog missing"],
+      signals: ["ECONNREFUSED"],
+      rootCause: "The software update cleared the Bluetooth pairing table.",
+      resolution:
+        "Pair the scanner again in the device settings and restart the ingest service.",
+    },
+    different: {
+      title: "Scanner types the wrong characters",
+      issueSummary: "Barcode scanner enters the wrong characters",
+      symptoms: ["Y and Z swapped in scanned codes", "scans otherwise work"],
+      signals: [],
+      rootCause:
+        "The scanner emulates a US keyboard while the station uses a German layout.",
+      resolution: "Set the scanner's keyboard language to German.",
+    },
+  },
+  {
+    of: "cert-expiry",
+    same: {
+      title: "Every agent drops at midnight UTC",
+      issueSummary: "All machine agents lose their connection at midnight UTC",
+      symptoms: ["every agent disconnects at once", "agents keep reconnecting"],
+      signals: ["TLS_CERT_EXPIRED"],
+      rootCause:
+        "The agents' client certificate expired, and automatic renewal was switched off.",
+      resolution:
+        "Issue a new client certificate and switch automatic renewal back on.",
+    },
+    different: {
+      title: "Single agents drop out during the day",
+      issueSummary: "Single machine agents drop out at random during the day",
+      symptoms: [
+        "one agent at a time disconnects",
+        "reconnects after a minute",
+      ],
+      signals: [],
+      rootCause:
+        "The agents roam between wifi access points and lose their session on each switch.",
+      resolution: "Pin the agents to one access point, or wire them.",
+    },
+  },
+  {
+    of: "export-empty-pdf",
+    same: {
+      title: "Invoice export writes an empty PDF",
+      issueSummary: "The monthly invoice export writes an empty PDF file",
+      symptoms: ["PDF of zero bytes", "the export reports success"],
+      signals: ["PDF_EMPTY"],
+      rootCause: "A stale, empty render was left in the export cache.",
+      resolution: "Clear the export cache, then run the monthly export again.",
+    },
+    different: {
+      title: "Invoice export totals are wrong",
+      issueSummary: "The monthly invoice export shows wrong totals",
+      symptoms: ["totals off by a few cents", "line items correct"],
+      signals: [],
+      rootCause: "Totals are rounded per line instead of per invoice.",
+      resolution: "Set the export's rounding to round per invoice.",
+    },
   },
 ];

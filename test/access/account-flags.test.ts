@@ -18,7 +18,7 @@ describe("service accounts", () => {
       serviceAccount: true,
     });
     const [entry] = await sql`
-      insert into knowledge_entries (status, issue_summary)
+      insert into knowledge_entries (status, title)
       values ('approved', 'printer queue stalls') returning id
     `;
     for (const user of [person, robot]) {

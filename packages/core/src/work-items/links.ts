@@ -76,7 +76,7 @@ export async function listWorkItemLinks(workItemId: string) {
 export async function deleteWorkItemLink(id: string) {
   const [row] =
     await sql`delete from work_item_links where id = ${id} returning id`;
-  if (!row) throw notFound(`Work item link '${id}' not found`);
+  if (!row) throw notFound(`work item link '${id}' not found`);
   return { deleted: true, id };
 }
 

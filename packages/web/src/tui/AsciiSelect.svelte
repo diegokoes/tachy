@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import CaretInput from "./CaretInput.svelte";
   import NoMatch from "./NoMatch.svelte";
   import Scrollbar from "./Scrollbar.svelte";
@@ -20,6 +21,7 @@
     placeholder,
     clearable,
     placement,
+    face,
     onchange,
     "aria-label": ariaLabel,
   }: {
@@ -54,6 +56,11 @@
     clearable?: boolean;
     /** Where the list opens. Below the trigger unless told otherwise. */
     placement?: Placement;
+    /**
+     * Draws the trigger as this instead of a framed box, given the picked
+     * option's label: for a value that reads as text until it is clicked.
+     */
+    face?: Snippet<[string]>;
     onchange?: (value: Val) => void;
     "aria-label"?: string;
   } = $props();
@@ -227,6 +234,8 @@
     type="button"
     class="trigger"
     class:active
+    class:blank={label === ""}
+    class:bare={Boolean(face)}
     bind:this={trigger}
     {disabled}
     role="combobox"
@@ -238,8 +247,12 @@
     onclick={() => (open ? close() : openPanel())}
     onkeydown={onKeydown}
   >
-    <span class="label">{label}</span>
-    <span class="arrow" aria-hidden="true">▼</span>
+    {#if face}
+      {@render face(label)}
+    {:else}
+      <span class="label">{label}</span>
+      <span class="arrow" aria-hidden="true">▼</span>
+    {/if}
   </button>
 
   {#if open}
@@ -325,6 +338,11 @@
     cursor: pointer;
     text-align: left;
   }
+  /* Nothing picked and no word for it, as a list that takes typed values can
+     be: still as wide as a control, not a lone ▼. */
+  .trigger.blank {
+    min-width: 8rem;
+  }
   .trigger.active {
     border-color: var(--accent);
     background: var(--accent-dim);
@@ -341,6 +359,21 @@
   .trigger:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+  .trigger.bare {
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+  }
+  .trigger.bare:hover,
+  .trigger.bare:focus-visible {
+    box-shadow: none;
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
   }
 
   .label {

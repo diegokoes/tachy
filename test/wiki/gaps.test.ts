@@ -41,7 +41,8 @@ async function lessons(productId: string, component: string, n: number) {
         await saveKnowledgeEntry({
           productId,
           component,
-          issueSummary: `${component} lesson ${i}`,
+          title: `${component} lesson ${i}`,
+          issueSummary: `What the ${component} team learned, number ${i}.`,
         })
       ).id as string,
     );
@@ -85,7 +86,9 @@ describe("unwritten parts of the product", () => {
       entries: 3,
       docs: 0,
     });
-    expect((gap.evidence as any).items).toHaveLength(3);
+    expect(
+      (gap.evidence as any).items.map((i: { title: string }) => i.title).sort(),
+    ).toEqual(["coding lesson 0", "coding lesson 1", "coding lesson 2"]);
   });
 
   it("stays quiet below the threshold", async () => {
@@ -135,7 +138,7 @@ describe("unwritten parts of the product", () => {
     await saveKnowledgeEntry({
       productId,
       component: "coding",
-      issueSummary: "not yet",
+      title: "not yet",
       status: "draft",
     });
     expect(ofKind(await gaps(productId), "unwritten")).toEqual([]);
@@ -306,10 +309,10 @@ describe("gap lifecycle", () => {
     await lessons(productId, "coding", 3);
     const [gap] = await gaps(productId);
     await expect(dismissWikiGap(null, gap.id, null)).rejects.toThrow(
-      /No open gap/,
+      /no open gap/,
     );
     await expect(dismissWikiGap(productId, "nope", null)).rejects.toThrow(
-      /No open gap/,
+      /no open gap/,
     );
   });
 

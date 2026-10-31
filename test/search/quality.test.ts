@@ -1,10 +1,26 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { saveKnowledgeEntry, searchKnowledge } from "@tachy/core/knowledge";
+import {
+  prepareKnowledgeEntry,
+  saveKnowledgeEntry,
+  searchKnowledge,
+} from "@tachy/core/knowledge";
 import { saveReferenceDoc, searchReferenceDocs } from "@tachy/core/reference";
-import { relevance, SEM_FLOOR, SEM_CEIL } from "@tachy/core/search";
+import {
+  DUPLICATE_FLOOR,
+  EMBEDDING_SPEC,
+  embedQueryLiteral,
+  exactTerms,
+  fuzzyMatch,
+  nearestToAny,
+  queryWindows,
+  relevance,
+  SEM_FLOOR,
+  SEM_CEIL,
+} from "@tachy/core/search";
 import { grade, GOOD, STRONG } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "../database";
 import {
+  DUPLICATES,
   GOLDEN,
   KNOWLEDGE,
   NONSENSE,
@@ -23,6 +39,7 @@ beforeAll(async () => {
     const row = await saveKnowledgeEntry({
       productId,
       status: "approved",
+      title: entry.title,
       issueSummary: entry.issueSummary,
       symptoms: entry.symptoms,
       signals: entry.signals,
@@ -94,6 +111,190 @@ describe("a ticket in German", () => {
     const [top] = await searchKnowledge(q);
     expect(top?.id).toBe(idByKey.get(key));
     expect(Number(top.cos_sim)).toBeGreaterThan(SEM_FLOOR);
+  });
+});
+
+/** Sentences about a site visit: no entry covers any of it. */
+const VISIT_TALK = [
+  "Hello team, thank you for the call this morning, it was good to hear from you again after the summer.",
+  "As agreed we are looking forward to your visit to our site in Leipzig next Thursday, and the whole team will be there.",
+  "Please register at the gate with an identity card, as the security desk will not let anyone in without one.",
+  "Parking for visitors is behind building C, next to the bicycle shelter, and it is free for the whole day.",
+  "The security desk hands out badges from eight o'clock, and they are needed to open the doors on every floor.",
+  "Lunch will be served in the canteen on the ground floor at half past twelve, with a choice of three menus.",
+  "Let us know about any dietary wishes by Tuesday so the kitchen can plan the meals for everyone on the day.",
+  "In the afternoon our colleagues from purchasing would like to walk you through the new office wing upstairs.",
+  "Afterwards there is time for coffee and cake on the terrace before your train back to the city in the evening.",
+  "We have also booked the large meeting room on the second floor for the whole day, with a projector and a whiteboard.",
+  "That should leave enough room in case you want to present the plans for next year to the department heads as well.",
+  "If the date does not suit you after all, just reply to this message and we will find another day in the same week.",
+  "Our reception is open until five in the afternoon, and the phone number is on the invitation we sent last week.",
+  "The nearest hotel is a ten minute walk from the main entrance, and our travel office can book a room for you.",
+  "Taxis wait at the station square, and the ride to the site takes about twenty minutes outside the rush hour.",
+  "We will send directions and a map of the buildings by email on Monday, together with the agenda for the day.",
+  "Several colleagues from the other sites will join by video, so the room is set up for a call in the afternoon.",
+  "Thank you again for making the time, and do not hesitate to reach out if anything else comes up before then.",
+  "Our managing director hopes to join you for lunch, although her calendar for that week is still quite full.",
+  "The weather forecast promises sunshine, so the tour of the grounds can take place outside as planned.",
+  "Please bring sturdy shoes for the walk across the yard, since some of the paths are still being paved.",
+  "Photos are allowed in the office wing and the canteen, but not in the archive rooms in the basement.",
+  "The visitor wifi is called Guest and the password is printed on the back of the badge you receive.",
+  "We are happy to arrange a short city tour on Friday morning if you decide to stay one more night.",
+];
+
+const windowChars = EMBEDDING_SPEC.codeChunkChars;
+
+/** One long opening message of visit talk, as long as a window. */
+const fullWindowOfTalk = VISIT_TALK.reduce(
+  (message, sentence) =>
+    message.length + sentence.length + 1 > windowChars
+      ? message
+      : `${message} ${sentence}`.trim(),
+  "",
+);
+
+/** One vector per window and the exact terms, as the ticket tools search. */
+async function searchThread(turns: string[]) {
+  const thread = turns.join("\n\n");
+  const windows = queryWindows(turns);
+  const queryVectors: string[] = [];
+  for (const window of windows)
+    queryVectors.push(await embedQueryLiteral(window));
+  const opening = turns[0].slice(0, 1000);
+  const rows = await searchKnowledge(opening, {
+    queryVectors,
+    exactTerms: exactTerms(thread),
+  });
+  return { windows, opening, rows };
+}
+
+const SUPPORT_REPLY =
+  "Thanks for writing in. Could you describe what you see on your side, with a screenshot if you have one, and since when?";
+
+const SYMPTOM =
+  "Since the software upgrade our handheld barcode reader shows offline, and the pairing dialog never appears.";
+
+describe("a whole ticket", () => {
+  it("finds an entry from a symptom stated after a long opening", async () => {
+    const { windows, opening, rows } = await searchThread([
+      fullWindowOfTalk,
+      SUPPORT_REPLY,
+      SYMPTOM,
+    ]);
+    expect(windows).toEqual([fullWindowOfTalk, SUPPORT_REPLY, SYMPTOM]);
+    expect(rows[0]?.id).toBe(idByKey.get("scanner-pairing"));
+    expect(rows[0].grade).not.toBe("weak");
+
+    const fromOpening = await searchKnowledge(opening);
+    const scanner = fromOpening.find(
+      (row) => row.id === idByKey.get("scanner-pairing"),
+    );
+    expect(scanner?.grade ?? "weak").toBe("weak");
+  });
+
+  it("matches an error code quoted deep in a long ticket on the keyword leg", async () => {
+    const { rows } = await searchThread([
+      fullWindowOfTalk,
+      SUPPORT_REPLY,
+      "The service log keeps repeating ECONNREFUSED since this morning.",
+    ]);
+    const scanner = rows.find(
+      (row) => row.id === idByKey.get("scanner-pairing"),
+    );
+    expect(Number(scanner?.fts_rank)).toBeGreaterThan(0);
+  });
+
+  it("keeps a long ticket on a subject no entry covers weak", async () => {
+    const { windows, rows } = await searchThread([
+      fullWindowOfTalk,
+      SUPPORT_REPLY,
+      VISIT_TALK.slice(-6).join(" "),
+    ]);
+    expect(windows).toHaveLength(3);
+    for (const row of rows) expect(row.grade).toBe("weak");
+  });
+});
+
+describe("exact terms", () => {
+  /** Each row's keyword-leg signals, by fixture key. */
+  const signalsOf = (rows: Record<string, unknown>[]) =>
+    new Map(
+      [...idByKey].map(([key, id]) => {
+        const row = rows.find((r) => r.id === id);
+        return [
+          key,
+          { fts: Number(row?.fts_rank ?? 0), trgm: Number(row?.trgm_sim ?? 0) },
+        ];
+      }),
+    );
+
+  it("match an entry for any one of several terms, on the keyword and the fuzzy leg", async () => {
+    const signals = signalsOf(
+      await searchKnowledge("a long ticket about the plant", {
+        exactTerms: ["LC_TIMEOUT", "PDF_EMPTY"],
+      }),
+    );
+    for (const key of ["lc-template-cache", "export-empty-pdf"]) {
+      expect(signals.get(key)!.fts, key).toBeGreaterThan(0);
+      expect(signals.get(key)!.trgm, key).toBeGreaterThan(0);
+    }
+    for (const key of ["printer-023", "scanner-pairing", "cert-expiry"])
+      expect(signals.get(key)!.fts, key).toBe(0);
+  });
+
+  it("match a quoted message with an 'or' in it as a phrase", async () => {
+    const signals = signalsOf(
+      await searchKnowledge("a long ticket about the plant", {
+        exactTerms: ['"in the template, or split the label"'],
+      }),
+    );
+    expect(signals.get("printer-023")!.fts).toBeGreaterThan(0);
+    expect(signals.get("lc-template-cache")!.fts).toBe(0);
+  });
+
+  it("match a doc for any one of several terms", async () => {
+    const signals = signalsOf(
+      await searchReferenceDocs("a long ticket about the plant", {
+        exactTerms: ['"dead-letter topic"', '"template revision"'],
+      }),
+    );
+    for (const key of ["deploy-runbook", "arch-overview"]) {
+      expect(signals.get(key)!.fts, key).toBeGreaterThan(0);
+      expect(signals.get(key)!.trgm, key).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("near-copies of an entry", () => {
+  /** Cosine between a stored entry and one prepared from `entry`, in SQL. */
+  async function similarityTo(
+    key: string,
+    entry: (typeof DUPLICATES)[number]["same"],
+  ) {
+    const prepared = await prepareKnowledgeEntry({
+      productId: await tpdProductId(),
+      ...entry,
+    });
+    const [{ similarity }] = await sql`
+      select 1 - (embedding <=> ${prepared.embedding}::vector) as similarity
+      from knowledge_entries where id = ${idByKey.get(key)!}
+    `;
+    return Number(similarity);
+  }
+
+  it("score at the duplicate floor or above, and related entries of another lesson under it", async () => {
+    let lowestSame = 1;
+    let highestDifferent = 0;
+    for (const { of, same, different } of DUPLICATES) {
+      lowestSame = Math.min(lowestSame, await similarityTo(of, same));
+      highestDifferent = Math.max(
+        highestDifferent,
+        await similarityTo(of, different),
+      );
+    }
+    expect(DUPLICATE_FLOOR).toBeDefined();
+    expect(lowestSame).toBeGreaterThanOrEqual(DUPLICATE_FLOOR!);
+    expect(highestDifferent).toBeLessThan(DUPLICATE_FLOOR!);
   });
 });
 
@@ -180,5 +381,43 @@ describe("index usage", () => {
     );
     await sql`reset enable_seqscan`;
     expect(plan).toContain("knowledge_trgm_idx");
+  });
+
+  /** The plan of `fragment` as the search composes it, seqscan off. */
+  const planOfFragment = (fragment: ReturnType<typeof nearestToAny>) =>
+    sql.begin(async (tx) => {
+      await tx`set local enable_seqscan = off`;
+      return JSON.stringify(await tx`explain (format json) ${fragment}`);
+    });
+
+  const occurrences = (text: string, part: string) =>
+    text.split(part).length - 1;
+
+  it("keeps the HNSW index for every window of a long query", async () => {
+    const vectors = await Promise.all(
+      ["scanner offline", "empty invoice export", "agents disconnect"].map(
+        embedQueryLiteral,
+      ),
+    );
+    const plan = await planOfFragment(
+      nearestToAny(
+        vectors,
+        (qvec) => sql`
+          select id from knowledge_entries where embedding is not null
+          order by embedding <=> ${qvec}::vector limit 50`,
+      ),
+    );
+    expect(occurrences(plan, "knowledge_embedding_idx")).toBe(vectors.length);
+  });
+
+  it("keeps the trigram index for several exact terms", async () => {
+    const plan = await planOfFragment(
+      sql`select id from knowledge_entries where ${fuzzyMatch(
+        ["LC_TIMEOUT", "PDF_EMPTY", "TLS_CERT_EXPIRED"],
+        sql`search_text`,
+      )}`,
+    );
+    expect(plan).toContain("BitmapOr");
+    expect(occurrences(plan, "knowledge_trgm_idx")).toBe(3);
   });
 });

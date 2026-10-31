@@ -16,6 +16,7 @@ beforeAll(async () => {
   const row = await saveKnowledgeEntry({
     productId: await tpdProductId(),
     status: "approved",
+    title: "Label printer stops mid-batch",
     issueSummary: "Label printer stops in the middle of a batch",
     symptoms: ["half the labels print, then nothing"],
     rootCause: "The printer buffer overflows on long jobs",

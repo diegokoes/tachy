@@ -45,6 +45,7 @@
   const columns: Column<Bucket>[] = $derived([
     {
       key: "name",
+      face: "ui",
       label: "bucket",
       width: "16rem",
       edit: "text",
@@ -62,10 +63,11 @@
     },
     {
       key: "description",
+      face: "ui",
       label: "description",
       edit: "textarea",
       formOnly: true,
-      info: "What the bucket holds, in a sentence. The agent reads it to decide whether a question belongs here.",
+      info: "what the bucket holds, in a sentence. the agent reads it to decide whether a question belongs here",
     },
     {
       key: "teams",
@@ -149,7 +151,7 @@
         <span>{team.name}</span>
       </label>
     {:else}
-      <Note>No {t("teams")} yet: only app admins will see this bucket.</Note>
+      <Note>no {t("teams")} yet: only app admins will see this bucket</Note>
     {/each}
   </div>
 {/snippet}
@@ -172,7 +174,7 @@
   rowKey={(b) => b.slug}
   loading={buckets.loading}
   error={buckets.error ?? teams.error}
-  emptyTitle="No buckets yet."
+  emptyTitle="no buckets yet"
   addLabel="add bucket"
   noun="bucket"
   editTitle={(b) => b.name}
@@ -215,7 +217,7 @@
   >
     <p class="line warn">
       <Icon name="alert" size="1em" />
-      Copy it now. It won't be shown again.
+      copy it now. it is not shown again
     </p>
     <div class="secret">
       <code>{token}</code>
@@ -229,7 +231,7 @@
     </div>
     <p class="line dim">
       <Icon name="token" size="1em" />
-      Bearer token
+      bearer token
     </p>
     <div class="secret">
       <pre>{request(bucket.slug, token)}</pre>

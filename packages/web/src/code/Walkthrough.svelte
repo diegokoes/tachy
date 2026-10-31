@@ -99,7 +99,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <section
   class="walk"
-  aria-label={`Code walkthrough: ${title}`}
+  aria-label={`code walkthrough: ${title}`}
   tabindex="0"
   onkeydown={onKeydown}
 >
@@ -132,7 +132,7 @@
             href={links[at]}
             target="_blank"
             rel="noopener noreferrer"
-            title="Open the whole file on the repo's host">{where}</a
+            title="open the whole file on the repo's host">{where}</a
           >
         {:else}
           {where}
@@ -162,8 +162,8 @@
       size="sm"
       square
       icon="back"
-      title="Previous step (←)"
-      aria-label="Previous step"
+      title="previous step (←)"
+      aria-label="previous step"
       disabled={at === 0}
       onclick={() => go(-1)}
     />
@@ -172,8 +172,8 @@
       size="sm"
       square
       icon="next"
-      title="Next step (→)"
-      aria-label="Next step"
+      title="next step (→)"
+      aria-label="next step"
       disabled={at === steps.length - 1}
       onclick={() => go(1)}
     />

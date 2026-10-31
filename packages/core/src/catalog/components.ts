@@ -46,7 +46,7 @@ export async function addComponent(input: AddComponentInput) {
       await sql`select id from components where product_id = ${input.productId} and slug = ${input.parentSlug}`;
     if (!parent)
       throw badInput(
-        `Unknown parent component '${input.parentSlug}' for this product`,
+        `unknown parent component '${input.parentSlug}' for this product`,
       );
     parentId = parent.id;
   }
@@ -91,7 +91,7 @@ export async function updateComponent(
     where product_id = ${productId} and slug = ${slug}
   `;
   if (!current)
-    throw notFound(`Component '${slug}' not found for this product`);
+    throw notFound(`component '${slug}' not found for this product`);
 
   let parentId: string | null = current.parent_id;
   if ("parentSlug" in patch) {
@@ -104,7 +104,7 @@ export async function updateComponent(
         await sql`select id from components where product_id = ${productId} and slug = ${patch.parentSlug}`;
       if (!parent)
         throw badInput(
-          `Unknown parent component '${patch.parentSlug}' for this product`,
+          `unknown parent component '${patch.parentSlug}' for this product`,
         );
       // Walking up from the proposed parent must not arrive back here, or the
       // branch detaches into a ring that product_area paths never terminate on.
@@ -144,7 +144,7 @@ export async function deleteComponent(productId: string, slug: string) {
   const [current] =
     await sql`select id from components where product_id = ${productId} and slug = ${slug}`;
   if (!current)
-    throw notFound(`Component '${slug}' not found for this product`);
+    throw notFound(`component '${slug}' not found for this product`);
   const [children] =
     await sql`select count(*)::int as n from components where parent_id = ${current.id}`;
   if (children.n > 0)
@@ -186,7 +186,7 @@ export async function resolveComponentStrict(
     id: productId,
   });
   throw badInput(
-    `Unknown component '${slugOrAlias}' for this product.${hint} Pick an existing slug/alias from list_components, or propose add_component in the review step and call it after user approval.`,
+    `unknown component '${slugOrAlias}' for this product.${hint} pick an existing slug/alias from list_components, or propose add_component in the review step and call it after user approval`,
   );
 }
 
@@ -213,7 +213,7 @@ export async function getComponentPath(componentId: string): Promise<string> {
         string_agg(name, ' / ' order by depth desc) as path
     from chain
   `;
-  if (!row?.path) throw badInput(`Unknown component id '${componentId}'`);
+  if (!row?.path) throw badInput(`unknown component id '${componentId}'`);
   return row.path;
 }
 

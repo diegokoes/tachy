@@ -328,7 +328,7 @@
       { value: "manual", label: "a person" },
       { value: "event", label: "an event" },
     ]}
-    placeholder="started by"
+    placeholder="anyone"
     clearable
     keepOpen
     active={!!trigger}
@@ -338,8 +338,8 @@
 
 {#if parent}
   <Note>
-    Runs queued by {nameOf(parent)}, started
-    <Time at={parent.created_at} />.
+    runs queued by {nameOf(parent)}, started
+    <Time at={parent.created_at} /> ·
     <button class="link" onclick={() => (parent = null)}>show all runs</button>
   </Note>
 {/if}
@@ -350,7 +350,8 @@
   rowKey={(r) => r.id}
   {loading}
   rowClass={(r) => (isActive(r.status) ? "active" : undefined)}
-  emptyTitle={rows.length ? "No runs match." : "No runs yet."}
+  emptyTitle={rows.length ? "no runs match" : "no runs yet"}
+  emptyArt={rows.length ? "noMatch" : "empty"}
 />
 
 {#if more}

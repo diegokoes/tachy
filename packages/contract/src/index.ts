@@ -1,6 +1,7 @@
 export {
   RESOLUTION_CLARITIES,
   KNOWLEDGE_STATUSES,
+  SEARCHED_ENTRY_STATUSES,
   REFERENCE_STATUSES,
   REFERENCE_KINDS,
   LINK_KINDS,
@@ -99,6 +100,7 @@ export type {
 } from "./azure-devops";
 export {
   DEFAULT_CODE_EXTENSIONS,
+  DEFAULT_MAX_FILE_KB,
   REPO_INDEX_STATUSES,
   RELEASE_TAG_RE,
   releaseMinor,
@@ -201,6 +203,11 @@ export {
 } from "./buckets";
 export type { BucketRow, BucketWithToken } from "./buckets";
 export type { AgentUsage, ToolUsage } from "./analytics";
+export {
+  MAX_ENTRY_TITLE_CHARS,
+  RELATED_LINK_HINT,
+  isRelatedLink,
+} from "./knowledge";
 export type {
   ComponentKnowledge,
   KnowledgeCensus,

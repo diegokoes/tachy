@@ -51,7 +51,7 @@ function parseRef(externalId: string): { repo: string; number: string } {
   const [repo, number] = externalId.split("#");
   if (!repo || !number || !OWNER_REPO_RE.test(repo) || !/^\d+$/.test(number))
     throw badInput(
-      `Invalid GitHub ref '${externalId}', expected 'owner/repo#123'`,
+      `invalid GitHub ref '${externalId}', expected 'owner/repo#123'`,
     );
   return { repo, number };
 }
@@ -247,7 +247,7 @@ export const createGithubSource: SourceFactory = (
       let repoIndex = Number(at);
       let pageNumber = Number(page);
       if (!Number.isInteger(repoIndex) || !Number.isInteger(pageNumber))
-        throw badInput(`Invalid GitHub sync cursor '${opts.cursor}'`);
+        throw badInput(`invalid GitHub sync cursor '${opts.cursor}'`);
 
       // An empty page mid-walk is not the end of the sync, only the end of one
       // repo, so this advances until it has something or has run out of repos.

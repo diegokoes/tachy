@@ -83,7 +83,7 @@ describe("components", () => {
         name: "X",
         parentSlug: "does-not-exist",
       }),
-    ).rejects.toThrow(/Unknown parent component/);
+    ).rejects.toThrow(/unknown parent component/);
   });
 
   it("upserts on (product_id, slug) instead of duplicating", async () => {
@@ -108,13 +108,13 @@ describe("components", () => {
     await addComponent({ productId: tpd, slug: "lc", name: "Line Controller" });
     const tagged = await saveKnowledgeEntry({
       productId: tpd,
-      issueSummary: "x",
+      title: "x",
       tags: ["lc", "printing"],
       status: "approved",
     });
     const untagged = await saveKnowledgeEntry({
       productId: tpd,
-      issueSummary: "y",
+      title: "y",
       tags: ["printing"],
       status: "approved",
     });

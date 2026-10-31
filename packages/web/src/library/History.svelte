@@ -9,7 +9,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../api";
-  import { Badge, Button, Chip, Time } from "../tui";
+  import { EMPTY, Badge, Button, Chip, Time } from "../tui";
 
   /**
    * Edit history for one library item. `base` is the collection route
@@ -91,8 +91,8 @@
   }
 
   function show(value: unknown): string {
-    if (value == null) return "-";
-    if (Array.isArray(value)) return value.join(", ") || "-";
+    if (value == null) return EMPTY;
+    if (Array.isArray(value)) return value.join(", ") || EMPTY;
     return typeof value === "object"
       ? JSON.stringify(value, null, 2)
       : String(value);
@@ -142,7 +142,7 @@
                   </Button>
                 {/if}
               {:else}
-                <p class="muted sm">Loading…</p>
+                <p class="muted sm">loading…</p>
               {/if}
             </div>
           {/if}
@@ -151,8 +151,8 @@
     </ul>
   {:else}
     <p class="muted">
-      No history recorded. This item predates version tracking. The next edit
-      starts it.
+      no history recorded. this item predates version tracking. the next edit
+      starts it
     </p>
   {/if}
 </section>

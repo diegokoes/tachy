@@ -16,7 +16,9 @@ describe("API knowledge round-trip", () => {
       "/api/knowledge",
       json({
         status: "approved",
-        issueSummary: "Printer queue stalls after reboot",
+        title: "Printer queue stalls after a reboot",
+        issueSummary:
+          "Jobs pile up in the printer queue once the host restarts.",
         symptoms: ["queue stalled"],
         cloud: "prod",
         resolutionClarity: "clear",
@@ -28,7 +30,11 @@ describe("API knowledge round-trip", () => {
 
     const got = await app.request(`/api/knowledge/${id}`);
     expect(got.status).toBe(200);
-    expect((await got.json()).issue_summary).toMatch(/Printer queue/);
+    expect(await got.json()).toMatchObject({
+      title: "Printer queue stalls after a reboot",
+      issue_summary:
+        "Jobs pile up in the printer queue once the host restarts.",
+    });
 
     const search = await app.request(
       "/api/knowledge/search?q=printer%20queue%20stalls&cloud=prod",
@@ -40,7 +46,7 @@ describe("API knowledge round-trip", () => {
   it("records and lists feedback", async () => {
     const created = await app.request(
       "/api/knowledge",
-      json({ status: "approved", issueSummary: "x" }),
+      json({ status: "approved", title: "x" }),
     );
     const { id } = await created.json();
 
@@ -77,9 +83,72 @@ describe("API error paths", () => {
   it("rejects a schema violation with 400", async () => {
     const response = await app.request(
       "/api/knowledge",
-      json({ issueSummary: "x", cloud: "Not A Slug" }),
+      json({ title: "x", cloud: "Not A Slug" }),
     );
     expect(response.status).toBe(400);
+    expect((await response.json()).detail).toMatch(/cloud/);
+  });
+
+  it("refuses an entry with no title, or one over the limit", async () => {
+    for (const body of [
+      { issueSummary: "no title" },
+      { title: "x".repeat(81) },
+    ]) {
+      const response = await app.request("/api/knowledge", json(body));
+      expect(response.status).toBe(400);
+      expect((await response.json()).detail).toMatch(/title/);
+    }
+  });
+
+  it("changes a title on PATCH, and never clears it", async () => {
+    const created = await app.request(
+      "/api/knowledge",
+      json({ status: "approved", title: "Spooler stalls" }),
+    );
+    const { id } = await created.json();
+    const patch = (body: Record<string, unknown>) =>
+      app.request(`/api/knowledge/${id}`, { ...json(body), method: "PATCH" });
+
+    expect(
+      (await patch({ title: "Spooler stalls on long batches" })).status,
+    ).toBe(200);
+    expect((await patch({ title: null })).status).toBe(400);
+    expect((await patch({ title: "y".repeat(81) })).status).toBe(400);
+    const got = await app.request(`/api/knowledge/${id}`);
+    expect((await got.json()).title).toBe("Spooler stalls on long batches");
+  });
+
+  it("keeps a related link only when it is a full web address", async () => {
+    const created = await app.request(
+      "/api/knowledge",
+      json({ title: "Spooler stalls", relatedLinks: ["DevOps#158327"] }),
+    );
+    expect(created.status).toBe(400);
+    expect((await created.json()).detail).toMatch(/related link/);
+
+    const saved = await app.request(
+      "/api/knowledge",
+      json({
+        title: "Spooler stalls",
+        relatedLinks: ["https://dev.azure.com/seed/_workitems/edit/158327"],
+      }),
+    );
+    const { id } = await saved.json();
+    const patch = (relatedLinks: string[]) =>
+      app.request(`/api/knowledge/${id}`, {
+        ...json({ relatedLinks }),
+        method: "PATCH",
+      });
+    expect((await patch(["ftp://files.example.invalid/log.txt"])).status).toBe(
+      400,
+    );
+    expect((await patch(["https://user:secret@example.invalid"])).status).toBe(
+      400,
+    );
+    const got = await app.request(`/api/knowledge/${id}`);
+    expect((await got.json()).related_links).toEqual([
+      "https://dev.azure.com/seed/_workitems/edit/158327",
+    ]);
   });
 
   it("rejects malformed JSON with 400", async () => {
@@ -98,6 +167,23 @@ describe("API error paths", () => {
     expect(response.status).toBe(404);
   });
 
+  it("finds nothing for an id that is no uuid, rather than failing", async () => {
+    const response = await app.request("/api/knowledge/new");
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ detail: "not found" });
+  });
+
+  it("refuses a write that names an id that is no uuid", async () => {
+    const response = await app.request(
+      "/api/knowledge/new/feedback",
+      json({ kind: "rating", rating: 5 }),
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      detail: "a value in the request is malformed",
+    });
+  });
+
   it("returns 400 for an unknown referenced slug (bad_input)", async () => {
     const response = await app.request(
       "/api/products",
@@ -109,7 +195,7 @@ describe("API error paths", () => {
   it("returns 409 on a stale optimistic-lock version", async () => {
     const created = await app.request(
       "/api/knowledge",
-      json({ status: "approved", issueSummary: "v" }),
+      json({ status: "approved", title: "v" }),
     );
     const { id } = await created.json();
     const response = await app.request(`/api/knowledge/${id}`, {
@@ -204,11 +290,26 @@ describe("API auth", () => {
 });
 
 describe("SPA hosting", () => {
+  const withWeb = createApp({ webRoot: "test/fixtures-web" });
+
   it("serves index.html as a fallback for non-API routes when webRoot is set", async () => {
-    const withWeb = createApp({ webRoot: "test/fixtures-web" });
     const response = await withWeb.request("/some/client/route");
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("tachy-spa-fixture");
+  });
+
+  it("has the shell revalidated on every visit", async () => {
+    const response = await withWeb.request("/console/integrations");
+    expect(response.headers.get("cache-control")).toBe("no-cache");
+  });
+
+  it("caches a built asset for good, and a missing one not at all", async () => {
+    const found = await withWeb.request("/assets/app-fixture.js");
+    expect(found.status).toBe(200);
+    expect(found.headers.get("cache-control")).toContain("immutable");
+    const missing = await withWeb.request("/assets/gone.js");
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get("cache-control")).toBeNull();
   });
 });
 
@@ -218,7 +319,7 @@ describe("API library history and reads", () => {
   const create = async () => {
     const response = await app.request(
       "/api/knowledge",
-      json({ status: "approved", issueSummary: "spooler stalls" }),
+      json({ status: "approved", title: "spooler stalls" }),
     );
     return (await response.json()).id as string;
   };
