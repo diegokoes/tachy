@@ -1,6 +1,11 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
   import type { LinkTargets } from "../wiki/wikilinks.svelte";
+  import {
+    shownSelection,
+    sourceSpan,
+    type SourceSpan,
+  } from "../markdown/source";
   import EntrySection from "./EntrySection.svelte";
 
   let {
@@ -30,27 +35,34 @@
   let editing = $state(untrack(() => open));
   let field = $state<HTMLTextAreaElement>();
 
+  /** Where `field-sizing` is missing, the editor is grown by script. */
   function fitHeight() {
-    if (!field) return;
+    if (!field || CSS.supports("field-sizing", "content")) return;
     field.style.height = "auto";
     field.style.height = `${field.scrollHeight}px`;
   }
 
-  async function startEditing() {
+  async function startEditing(span?: SourceSpan) {
     editing = true;
     await tick();
-    field?.focus();
+    if (!field) return;
+    if (span) field.setSelectionRange(span.start, span.end);
+    field.focus({ preventScroll: true });
   }
 
   /**
-   * A click on the text edits it, except on a link, which is followed, and at
-   * the end of a drag that selected some of it to copy.
+   * A press on the text edits it once released, with the caret where it was
+   * or the dragged-over words selected. A press on a link follows the link.
    */
-  function onTextClick(e: MouseEvent) {
-    links.onClick(e);
-    if (!onchange || (e.target as Element).closest("a")) return;
-    if (window.getSelection()?.toString()) return;
-    void startEditing();
+  function onTextPress(e: PointerEvent) {
+    if (!onchange || e.button !== 0 || (e.target as Element).closest("a"))
+      return;
+    const shown = e.currentTarget as HTMLElement;
+    const release = () => {
+      const picked = shownSelection(shown, window.getSelection());
+      void startEditing(picked ? sourceSpan(text, picked) : undefined);
+    };
+    window.addEventListener("pointerup", release, { once: true });
   }
 
   $effect(() => {
@@ -63,6 +75,7 @@
     {#if editing && onchange}
       <textarea
         class="frame"
+        rows="1"
         bind:this={field}
         value={text}
         aria-label={label}
@@ -73,18 +86,19 @@
         onblur={() => (editing = false)}></textarea>
     {:else}
       {#if onchange}
-        <button class="start" type="button" onclick={startEditing}
+        <button class="start" type="button" onclick={() => startEditing()}
           >edit {label}</button
         >
       {/if}
       <!-- svelte-ignore a11y_click_events_have_key_events -- links are focusable
            anchors, and the hidden button before it is the keyboard's way in -->
       <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
-           wrapper; a click is a shortcut for that button -->
+           wrapper; a press is a shortcut for that button -->
       <div
         class="md prose"
         class:frame={Boolean(onchange)}
-        onclick={onTextClick}
+        onclick={links.onClick}
+        onpointerdown={onTextPress}
         onkeydown={links.onKeydown}
       >
         {@html render(text)}
@@ -105,18 +119,37 @@
     box-sizing: border-box;
     width: calc(100% + 2 * var(--reach-x));
     min-height: calc(1lh + 2 * var(--reach-y));
-    margin: calc(-1 * var(--reach-y)) calc(-1 * var(--reach-x));
+    /* No reach upward: the heading's margin stays as room under its rule. */
+    margin: 0 calc(-1 * var(--reach-x)) calc(-1 * var(--reach-y));
     padding: var(--reach-y) var(--reach-x);
     border: 0;
     border-radius: var(--radius-control);
     line-height: 1.6;
   }
-  /* Paragraph spacing stays between paragraphs; the frame owns the edges. */
-  .md > :global(:first-child) {
-    margin-top: 0;
+  /* Blocks sit where their markdown does in the editor: one blank line
+     apart, list numbers and dashes inline at the text's own edge. */
+  .md > :global(*) {
+    margin-block: 0;
   }
-  .md > :global(:last-child) {
-    margin-bottom: 0;
+  .md > :global(* + *) {
+    margin-block-start: 1lh;
+  }
+  .md :global(:is(ol, ul)) {
+    padding-left: 0;
+    list-style-position: inside;
+  }
+  .md :global(ul) {
+    list-style-type: "- ";
+  }
+  .md :global(li > p) {
+    display: inline;
+  }
+  /* A loose list, its items written a blank line apart, keeps that line. */
+  .md :global(li:has(> p) + li) {
+    margin-block-start: 1lh;
+  }
+  .md :global(li :is(ol, ul)) {
+    padding-left: 2ch;
   }
   div.frame {
     cursor: text;
@@ -128,6 +161,7 @@
     box-shadow: inset 0 0 0 1px var(--accent);
   }
   textarea.frame {
+    field-sizing: content;
     overflow: hidden;
     resize: none;
     font: inherit;
