@@ -145,7 +145,7 @@
     </div>
   {/if}
 
-  {#if showCustomer() && (canEdit || draft.unit)}
+  {#if showCustomer() && draft.customerSlug && (canEdit || draft.unit)}
     <div class="row" class:unsaved={unsaved.has("unit")}>
       <dt>unit</dt>
       <dd class="wide">
@@ -154,7 +154,6 @@
             face={text}
             value={draft.unit}
             options={unitOptions}
-            disabled={!draft.customerSlug}
             aria-label="unit"
             onchange={(slug) => (draft.unit = String(slug))}
           />
