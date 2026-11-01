@@ -7,7 +7,7 @@
     "@tachy/source-freshdesk": "*",
     "@tachy/source-github": "*",
     "@tachy/source-azure-devops": "*",
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "zod": "^4.6.7"
   }
 }
