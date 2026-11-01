@@ -1,4 +1,4 @@
-FROM node:26.12.1-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec AS base
+FROM node:26.13.0-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS base
 
 # postgresql-client-16: `npm run sync backup`/`restore` run pg_dump/pg_restore.
 # From the PGDG apt repo, so the client's major matches the server's
@@ -18,10 +18,10 @@ WORKDIR /app
 RUN npm i -g npm@12.0.2
 
 # k6, for the load runs an admin starts from the tests page (§11.3).
-FROM grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34 AS k6
+FROM grafana/k6:2.3.0@sha256:2dd4756ec6e14e62778916e1eb850108e4b499304c02df56760fa0bdb0fba0b8 AS k6
 
 # The schema diff tool tachy-deploy runs from the new image (§5.10).
-FROM golang:1.27@sha256:f20d83a83e18dbd2a4714b8ffd4b30b287b6243962dd75608e86abcc63ba4efc AS schema-diff
+FROM golang:1.27@sha256:2920bb124f1a2e12a1d39f0cab756ae0068441ee1da7655dec7f5e374944095b AS schema-diff
 RUN CGO_ENABLED=0 go install github.com/stripe/pg-schema-diff/cmd/pg-schema-diff@v1.0.9
 
 # Build stage: devDependencies, the model download, the SPA and the bundles.
