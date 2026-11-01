@@ -51,7 +51,6 @@ export async function openPdf(bytes: Uint8Array): Promise<OpenedPdf> {
         data: Uint8Array.from(image.data),
         widthPx: image.width,
         heightPx: image.height,
-        channels: image.channels,
       }));
       // pdf.js keeps every decoded picture of a page it has read. Released
       // here, a document of scans costs one page of memory and not all of them.

@@ -21,14 +21,15 @@ export interface ModelImage {
   heightPx: number;
 }
 
-/** Decoded pixels, row by row, as a PDF hands over a picture it holds. */
+/** Decoded pixels as a PDF hands over a picture it holds. */
 export interface RawImage {
+  /** RGBA, four bytes a pixel, row by row from the top. */
   data: Uint8Array;
   widthPx: number;
   heightPx: number;
-  /** 1 grey, 3 RGB, 4 RGBA. */
-  channels: 1 | 3 | 4;
 }
+
+const RGBA_CHANNELS = 4;
 
 let loading: Promise<typeof import("sharp")> | undefined;
 
@@ -123,7 +124,7 @@ export async function rawImageForModel(image: RawImage): Promise<ModelImage> {
     raw: {
       width: image.widthPx,
       height: image.heightPx,
-      channels: image.channels,
+      channels: RGBA_CHANNELS,
     },
     limitInputPixels: IMAGE_MAX_PIXELS,
   })
