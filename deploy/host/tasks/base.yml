@@ -7,6 +7,13 @@
     update_cache: true
     cache_valid_time: 3600
 
+# The service cannot start while its socket stays masked.
+- name: avahi's socket is not masked
+  ansible.builtin.systemd_service:
+    name: avahi-daemon.socket
+    masked: false
+    enabled: true
+
 - name: mDNS answers for <hostname>.local on the LAN
   ansible.builtin.systemd_service:
     name: avahi-daemon
