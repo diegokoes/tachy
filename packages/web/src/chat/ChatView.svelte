@@ -741,6 +741,21 @@
     chat.entries.filter((e) => e.kind === "assistant" && e.code).at(-1)?.key,
   );
 
+  /** Key of the answer just put on the clipboard, while its mark confirms. */
+  let copiedKey = $state<number | null>(null);
+
+  async function copyAnswer(key: number, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      copiedKey = key;
+      setTimeout(() => {
+        if (copiedKey === key) copiedKey = null;
+      }, 1200);
+    } catch {
+      copiedKey = null;
+    }
+  }
+
   async function startTurn(
     message: string,
     command?: { name: string; args: string },
@@ -1101,15 +1116,27 @@
             <div class="body">{entry.text}</div>
           </div>
         {:else if entry.kind === "assistant"}
+          {@const streaming = chat.busy && i === chat.entries.length - 1}
           <div class="turn">
             <span class="who"
               ><span class="mk" aria-hidden="true">{G.marker}</span>tachy</span
             >
-            <div
-              class="body md"
-              class:streaming={chat.busy && i === chat.entries.length - 1}
-            >
+            <div class="body md" class:streaming class:copyable={!streaming}>
               {@html renderMarkdown(entry.text)}
+              {#if !streaming}
+                <span class="copy">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    square
+                    icon={copiedKey === entry.key ? "confirm" : "copy"}
+                    title={copiedKey === entry.key
+                      ? "copied"
+                      : "copy the reply"}
+                    onclick={() => copyAnswer(entry.key, entry.text)}
+                  />
+                </span>
+              {/if}
             </div>
             {#if entry.key === walkableKey && !chat.busy}
               <Button
@@ -1638,6 +1665,18 @@
   }
   .turn .body.md {
     white-space: normal;
+  }
+  /* The copy mark sits in the plate's bottom-right corner, on a row the
+     padding keeps clear of the last line. */
+  .turn .body.copyable {
+    position: relative;
+    padding-bottom: calc(var(--row-h) + var(--pad-1));
+  }
+  .turn .body .copy {
+    display: flex;
+    position: absolute;
+    right: var(--pad-1);
+    bottom: var(--pad-1);
   }
   .turn .body.err {
     color: var(--danger);
