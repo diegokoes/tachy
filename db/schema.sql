@@ -591,6 +591,37 @@ create index customer_facts_customer_idx on customer_facts(customer_id);
 create index customer_facts_unit_idx     on customer_facts(unit_id);
 create index customer_facts_kind_idx     on customer_facts(kind);
 
+-- A customer's record as it was before and after each write: the customer, the
+-- products it uses, its units, facts and component links. One action is one
+-- batch, and restoring a batch writes its `before` rows back as a new batch.
+-- Append-only for the app roles (db/roles.sql).
+create table customer_changes (
+    id           bigint generated always as identity primary key,
+    batch_id     uuid not null,
+    -- No foreign key: the change outlives the customer it describes.
+    customer_id  uuid not null,
+    record       text not null
+                     check (record in ('customer','product','unit','fact','component')),
+    -- The row's id; for a product or component link, the product's or the
+    -- component's.
+    record_id    uuid not null,
+    -- Null when the change added the record.
+    before       jsonb,
+    -- Null when the change deleted it.
+    after        jsonb,
+    user_id      uuid references users(id) on delete set null,
+    actor        text not null check (actor in ('web','agent','mcp','api','ingest')),
+    turn_id      text,
+    -- The batch this one undid.
+    restores     uuid,
+    created_at   timestamptz not null default now(),
+    check (before is not null or after is not null)
+);
+
+create index customer_changes_customer_idx on customer_changes(customer_id, id desc);
+create index customer_changes_batch_idx    on customer_changes(batch_id);
+create index customer_changes_record_idx   on customer_changes(record_id, id desc);
+
 -- Azure DevOps System.AreaPath prefix -> component, so an ingested item lands on
 -- the right component instead of being guessed at. A table rather than jsonb on
 -- source_projects: a component rename rewrites an FK, it cannot rewrite a slug

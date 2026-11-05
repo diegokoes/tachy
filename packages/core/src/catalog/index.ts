@@ -8,3 +8,4 @@ export * from "./components";
 export * from "./resolution-patterns";
 export * from "./units";
 export * from "./blueprints";
+export * from "./customer-history";
