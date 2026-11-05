@@ -1,4 +1,5 @@
 import type { RawWorkItem } from "../work-items/raw";
+import { badInput } from "../infra/errors";
 
 /** Stable per-item tokens: the same value always maps to the same `[KIND_n]`. */
 export class TokenMap {
@@ -14,6 +15,11 @@ export class TokenMap {
     const token = `[${kind}_${n}]`;
     this.seen.set(key, token);
     return token;
+  }
+
+  /** How many distinct values of `kind` have been tokenized. */
+  issued(kind: string): number {
+    return this.counts.get(kind) ?? 0;
   }
 }
 
@@ -106,6 +112,31 @@ export function scrubText(text: string | undefined, map: TokenMap): string {
   scrubbed = scrubbed.replace(EMAIL_RE, (m) => map.token("EMAIL", m));
   scrubbed = scrubbed.replace(PHONE_RE, (m) => map.token("PHONE", m));
   return scrubbed;
+}
+
+/** Token kinds for what stored customer data must never hold. */
+const SECRET_TOKEN_KINDS = ["SECRET", "CARD"];
+
+/**
+ * Whether `scrubText` would replace a credential, a key or a card number in
+ * `text`. An existing placeholder such as `[SECRET_1]` does not count.
+ */
+export function containsSecret(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const tokens = new TokenMap();
+  scrubText(text, tokens);
+  return SECRET_TOKEN_KINDS.some((kind) => tokens.issued(kind) > 0);
+}
+
+/** Throws, naming the field, when any of `fields` holds a secret. */
+export function assertNoSecrets(
+  fields: Record<string, string | null | undefined>,
+): void {
+  for (const [field, text] of Object.entries(fields))
+    if (containsSecret(text))
+      throw badInput(
+        `${field} looks like a credential or a card number, which customer data never holds: record where the secret is kept instead`,
+      );
 }
 
 /** What stands in for the customer's own name in redacted text. */
