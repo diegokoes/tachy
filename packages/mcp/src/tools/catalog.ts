@@ -367,6 +367,14 @@ tool(
         .describe(
           "Pin the fact to one component. Needs product_slug on a customer-wide fact; a unit's product is used otherwise.",
         ),
+      doc: z
+        .string()
+        .uuid()
+        .nullable()
+        .optional()
+        .describe(
+          "Id of the library doc that details this fact - a drawing, an interface spec. null removes the link.",
+        ),
     },
   },
   async (args) => {
@@ -389,6 +397,7 @@ tool(
             productId: args.product_slug
               ? await getProductIdBySlug(args.product_slug)
               : null,
+            ...("doc" in args ? { docId: args.doc } : {}),
           },
           await mcpActor(),
         ),

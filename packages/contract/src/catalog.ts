@@ -129,6 +129,9 @@ export interface ResolvedFact {
   origin_kind: string | null;
   /** True when it came from somewhere above, not from the unit itself. */
   inherited: boolean;
+  /** The library doc that details the fact. */
+  doc_id: string | null;
+  doc_title: string | null;
 }
 
 export interface CustomerFactRow {
@@ -143,6 +146,8 @@ export interface CustomerFactRow {
   source: string | null;
   component_id: string | null;
   component_slug: string | null;
+  doc_id: string | null;
+  doc_title: string | null;
   updated_at: string;
 }
 
@@ -174,6 +179,8 @@ export interface CustomerProfile {
     origin?: string | null;
     origin_kind?: string | null;
     inherited?: boolean;
+    /** The library doc that details the fact. */
+    doc?: { id: string; title: string } | null;
   }[];
   units: {
     slug: string;

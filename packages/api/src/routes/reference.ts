@@ -1,6 +1,11 @@
+import { basename } from "node:path";
 import { Hono } from "hono";
 import { validate } from "../validation";
 import { z } from "zod";
+import { fileFamily, uploadLimitBytes } from "@tachy/core";
+import { uploadLimits } from "@tachy/core/chat";
+import { extractFile, inspectFile } from "@tachy/core/files";
+import { badInput, notFound, sql } from "@tachy/core/infra";
 import {
   listReferenceDocs,
   getReferenceDoc,
@@ -18,6 +23,9 @@ import {
   outboundLinks,
   viewStats,
   viewHistory,
+  getDocFile,
+  keepsOriginal,
+  saveLibraryFile,
 } from "@tachy/core/library";
 import { referenceStatusSchema } from "@tachy/core/knowledge";
 import {
@@ -26,6 +34,23 @@ import {
 } from "@tachy/core/catalog";
 import { assertScopeEditor, callerActor, callerUserId } from "../authz";
 import { csv } from "../query";
+import { contentDisposition, INERT_HEADERS } from "../downloads";
+import { problem } from "../problems";
+import { requestLimitBytes, tooLarge } from "../upload-limit";
+
+/** The filing fields an uploaded file's doc takes, beside the file itself. */
+const uploadFilingSchema = z.object({
+  title: z.string().min(1).optional(),
+  productId: z.string().uuid(),
+  teamId: z.string().uuid().optional(),
+  component: z.string().min(1).optional(),
+  customerSlug: z.string().min(1).optional(),
+  unit: z.string().min(1).optional(),
+});
+
+/** The name a doc takes from its file when none is given: the name without its extension. */
+const titleOf = (filename: string) =>
+  filename.replace(/\.[^.]+$/, "") || filename;
 
 const referenceInputSchema = z.object({
   title: z.string().min(1),
@@ -144,6 +169,76 @@ export const reference = new Hono()
       viewHistory(target),
     ]);
     return c.json({ ...stats, history });
+  })
+  // A PDF or Office file becomes a doc whose body is its text, and the file is
+  // kept as the doc's original.
+  .post("/files", async (c) => {
+    const declared = Number(c.req.header("content-length") ?? 0);
+    if (declared > requestLimitBytes()) throw tooLarge(declared);
+    const form = await c.req.parseBody();
+    const file = form.file;
+    if (!(file instanceof File)) throw badInput("expected a 'file' field");
+    const filing = uploadFilingSchema.safeParse(
+      Object.fromEntries(
+        Object.entries(form).filter(([key]) => key !== "file"),
+      ),
+    );
+    if (!filing.success)
+      throw badInput(filing.error.issues.map((i) => i.message).join("; "));
+    await assertScopeEditor(c, {
+      productId: filing.data.productId,
+      teamId: filing.data.teamId,
+    });
+    const filename = basename(file.name || "upload");
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const check = inspectFile(filename, bytes);
+    if ("refusal" in check) return problem(c, 415, { detail: check.refusal });
+    if (!keepsOriginal(check.contentType))
+      return problem(c, 415, {
+        detail: "a doc keeps the original of a PDF, Word or Excel file",
+      });
+    const family = fileFamily(check.contentType);
+    const limitBytes = uploadLimitBytes(family, uploadLimits());
+    if (bytes.byteLength > limitBytes)
+      throw tooLarge(bytes.byteLength, limitBytes, family);
+    const extracted = await extractFile({
+      filename,
+      contentType: check.contentType,
+      bytes,
+    });
+    if (!extracted.text.trim())
+      throw badInput(`no text could be read out of '${filename}'`);
+    const createdById = await callerUserId(c);
+    const fileId = await saveLibraryFile(sql, {
+      filename,
+      contentType: check.contentType,
+      bytes,
+      createdBy: createdById,
+    });
+    return c.json(
+      await saveReferenceDoc({
+        title: filing.data.title ?? titleOf(filename),
+        body: extracted.text,
+        productId: filing.data.productId,
+        teamId: filing.data.teamId,
+        component: filing.data.component,
+        customerSlug: filing.data.customerSlug,
+        unit: filing.data.unit,
+        source: filename,
+        fileId,
+        createdById,
+        actor: await callerActor(c),
+      }),
+    );
+  })
+  .get("/:id/file", async (c) => {
+    const file = await getDocFile(c.req.param("id"));
+    if (!file) throw notFound("this doc keeps no original file");
+    return c.body(new Uint8Array(file.bytes), 200, {
+      ...INERT_HEADERS,
+      "Content-Type": file.content_type,
+      "Content-Disposition": contentDisposition(file.filename),
+    });
   })
   .get("/:id", async (c) => {
     const id = c.req.param("id");

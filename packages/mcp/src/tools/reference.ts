@@ -18,16 +18,18 @@ import {
   referenceDocLineage,
   queueDocExtraction,
 } from "@tachy/core/reference";
-import { badInput } from "@tachy/core/infra";
+import { badInput, sql } from "@tachy/core/infra";
 import {
+  extractFile,
   imageForModel,
   type ExtractedFile,
   type ModelImage,
   type StoredFile,
 } from "@tachy/core/files";
+import { keepsOriginal, saveLibraryFile } from "@tachy/core/library";
 import { referenceStatusSchema } from "@tachy/core/knowledge";
 import type { ReferenceDocUpdate } from "@tachy/core/reference";
-import { extractSource } from "../extract";
+import { openSource } from "../extract";
 import { tool } from "../server";
 import {
   GRADE_NOTE,
@@ -190,7 +192,7 @@ tool(
   "save_reference_doc",
   {
     description:
-      "Persist an APPROVED reference doc - freeform project context (docs, runbooks, architecture notes) that doesn't fit the issue→root_cause→resolution shape of a knowledge entry. The body is chunked and embedded so it surfaces in consult-mode search. Provide EITHER body (inline text) OR body_path (a local file - e.g. a large PDF - extracted server-side so the full text is saved without echoing it). Scope it with product_slug, and add component when the doc is about one part of that product (leave it off for general product docs). Pass doc_version when the source document carries a version label; pass supersedes with the id of the doc this replaces - the predecessor is archived and linked automatically, and search returns only the latest version. The call is gated by a review box the user can edit, so draft it and call rather than asking first.",
+      "Persist an APPROVED reference doc - freeform project context (docs, runbooks, architecture notes) that doesn't fit the issue→root_cause→resolution shape of a knowledge entry. The body is chunked and embedded so it surfaces in consult-mode search. Provide EITHER body (inline text) OR body_path (a local file - e.g. a large PDF - extracted server-side so the full text is saved without echoing it; a PDF, Word or Excel file is also kept as the doc's original for people to open). Scope it with product_slug, and add component when the doc is about one part of that product (leave it off for general product docs). Pass doc_version when the source document carries a version label; pass supersedes with the id of the doc this replaces - the predecessor is archived and linked automatically, and search returns only the latest version. The call is gated by a review box the user can edit, so draft it and call rather than asking first.",
     inputSchema: {
       title: z.string(),
       body: z.string().optional(),
@@ -237,8 +239,14 @@ tool(
 
     let body = args.body;
     let extracted: (ExtractedFile & { redact: boolean }) | undefined;
+    let original: StoredFile | undefined;
     if (args.body_path) {
-      extracted = await extractSource(args.body_path);
+      const opened = await openSource(args.body_path);
+      extracted = {
+        ...(await extractFile(opened.file)),
+        redact: opened.redact,
+      };
+      original = opened.file;
       if (extracted.members)
         throw badInput(
           "body_path names an archive, which is a list of files and not a document; attach the file itself",
@@ -248,6 +256,15 @@ tool(
         : extracted.text;
     }
     const userId = await resolveCurrentUserId();
+    const fileId =
+      original?.contentType && keepsOriginal(original.contentType)
+        ? await saveLibraryFile(sql, {
+            filename: original.filename,
+            contentType: original.contentType,
+            bytes: original.bytes,
+            createdBy: userId,
+          })
+        : null;
     const saved = await saveReferenceDoc({
       title: args.title,
       body: body!,
@@ -264,6 +281,7 @@ tool(
       supersedes: args.supersedes,
       component: args.component,
       customerSlug: args.customer_slug,
+      fileId,
     });
     return out({
       saved: true,
@@ -271,6 +289,7 @@ tool(
       status: saved.status,
       chunks: saved.chunks,
       body_chars: body!.length,
+      ...(fileId ? { original: "kept" } : {}),
       ...pageFacts(extracted ?? {}),
       ...(await pdfCompletion(saved.id, args.body_path, extracted, userId)),
     });

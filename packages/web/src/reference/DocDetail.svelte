@@ -292,6 +292,17 @@
         <Icon name="search" size="1em" weight={7} />
         <span class:muted={!doc.source}>{doc.source || "n/a"}</span>
       </span>
+      {#if doc.file_name}
+        <a
+          class="source"
+          href={`/api/reference/${doc.id}/file`}
+          download={doc.file_name}
+          aria-label="download the original"
+        >
+          <Icon name="download" size="1em" weight={7} />
+          <span>original</span>
+        </a>
+      {/if}
     </div>
 
     <div class="meta">

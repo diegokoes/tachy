@@ -879,7 +879,12 @@ describe("reading one attached file", () => {
       saved: true,
       pages: 3,
       scanned_pages: [2],
+      original: "kept",
     });
+    const [kept] = await sql`
+      select f.filename from reference_docs d join library_files f on f.id = d.file_id
+      where d.id = ${(saved.json as { id: string }).id}`;
+    expect(kept.filename).toBe("manual.pdf");
     const pages = await sql`
       select page from reference_doc_chunks
       where doc_id = ${(saved.json as { id: string }).id} order by ordinal`;
