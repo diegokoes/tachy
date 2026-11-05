@@ -4,6 +4,7 @@ import { CONFIDENCES, RESOLUTION_CLARITIES } from "../vocab";
 export type FacetKey =
   | "tags"
   | "customer"
+  | "unit"
   | "cloud"
   | "confidence"
   | "resolution_clarity"
@@ -60,6 +61,13 @@ export const EXTRA_FILTERS: ExtraFilter[] = [
     key: "customer",
     label: "customer",
     param: "customer",
+    kind: "facet",
+  },
+  // Counted only within the chosen customer, so it offers nothing until one is.
+  {
+    key: "unit",
+    label: "unit",
+    param: "unit",
     kind: "facet",
   },
   {

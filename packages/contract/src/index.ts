@@ -140,6 +140,7 @@ export type {
   CustomerChangeRecord,
   DeletedCustomer,
   CustomerSearchHits,
+  CustomerRights,
 } from "./catalog";
 export { CUSTOMER_CHANGE_RECORDS } from "./catalog";
 export {

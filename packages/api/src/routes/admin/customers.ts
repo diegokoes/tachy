@@ -29,14 +29,23 @@ import {
   listCustomerChanges,
   listDeletedCustomers,
   restoreCustomerBatch,
+  listProducts,
 } from "@tachy/core/catalog";
 import { badInput } from "@tachy/core/infra";
+import {
+  canEditCustomer,
+  canEditScope,
+  isAnyTeamAdmin,
+} from "@tachy/core/access";
+import type { CustomerRights } from "@tachy/core";
 import { audited } from "../../audit";
 import {
   assertAnyTeamAdminApi,
   assertCustomerEditor,
   assertScopeEditor,
   callerActor,
+  callerUserId,
+  isAdminIdentity,
 } from "../../authz";
 import { slugField } from "./catalog";
 
@@ -100,6 +109,28 @@ const customerPatchSchema = z.object({
 
 const productIdOrNull = async (slug: string | null | undefined) =>
   slug ? getProductIdBySlug(slug) : null;
+
+/** What the caller may edit of a customer, for the page to offer only that. */
+async function customerRights(
+  c: Context,
+  customerId: string,
+): Promise<CustomerRights> {
+  const products = await listProducts();
+  if (isAdminIdentity(c))
+    return { customer: true, products: products.map((p) => p.slug) };
+  const userId = await callerUserId(c);
+  if (!userId) return { customer: false, products: [] };
+  const editable: string[] = [];
+  for (const product of products)
+    if (await canEditScope(userId, { productId: product.id }))
+      editable.push(product.slug);
+  return {
+    customer:
+      (await isAnyTeamAdmin(userId)) &&
+      (await canEditCustomer(userId, customerId)),
+    products: editable,
+  };
+}
 
 /**
  * A part of a customer tied to a product is edited under that product's scope;
@@ -225,6 +256,11 @@ export const customers = new Hono()
         await getCustomerIdBySlug(c.req.param("slug")),
         c.req.query("unit") ?? null,
       ),
+    ),
+  )
+  .get("/customers/:slug/rights", async (c) =>
+    c.json(
+      await customerRights(c, await getCustomerIdBySlug(c.req.param("slug"))),
     ),
   )
   .get("/customers/:slug/units", async (c) =>

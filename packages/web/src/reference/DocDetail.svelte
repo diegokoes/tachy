@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { link } from "../shell/router.svelte";
   import { fmtDate } from "../dates.svelte";
   import { statusLamp, type StatusAction } from "../library/status";
   import { patchLibraryItem } from "../library/edit";
@@ -272,7 +273,18 @@
       <span class="lifecycle">
         <Lamp lamp={statusLamp(doc.status)} word={doc.status} />
         {#if doc.customer_slug}
-          <Badge tone="accent">{doc.customer_slug}</Badge>
+          <a
+            class="customer"
+            href="/customers/{doc.customer_slug}{doc.customer_unit_slug
+              ? `/${doc.customer_unit_slug}`
+              : ''}"
+            use:link
+            ><Badge tone="accent"
+              >{doc.customer_slug}{doc.customer_unit_slug
+                ? ` · ${doc.customer_unit_slug}`
+                : ""}</Badge
+            ></a
+          >
         {/if}
       </span>
       <span class="when">
@@ -388,6 +400,9 @@
   .read {
     position: relative;
     flex-grow: 1;
+  }
+  .customer {
+    text-decoration: none;
   }
   .source {
     display: inline-flex;
