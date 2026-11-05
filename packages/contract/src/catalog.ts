@@ -70,18 +70,49 @@ export interface CustomerRow {
   aliases: string[] | null;
   email_domains: string[] | null;
   notes: string | null;
+  /** Slugs of the products the customer uses. */
+  products: string[];
 }
 
 export interface CustomerUnitRow {
   id: string;
   customer_id: string;
+  /** Null for a general unit, outside any product's blueprint. */
+  product_id: string | null;
+  product_slug: string | null;
   parent_id: string | null;
-  profile_id: string | null;
+  template_id: string | null;
   kind: string;
   slug: string;
   name: string;
   aliases: string[];
   notes: string | null;
+}
+
+export interface UnitKindFactRow {
+  kind: string;
+  description: string | null;
+  /** Every value the fact may take; empty for any value. */
+  choices: string[];
+  position: number;
+}
+
+export interface UnitKindRow {
+  slug: string;
+  name: string;
+  description: string | null;
+  /** The kind this one sits inside, by slug; null when it sits at the top. */
+  parent_kind: string | null;
+  /** The kind of template its units may follow, by slug. */
+  template_kind: string | null;
+  position: number;
+  facts: UnitKindFactRow[];
+}
+
+/** A product's blueprint. No kinds: the product has none, and its units are free form. */
+export interface ProductBlueprint {
+  product_slug: string;
+  kinds: UnitKindRow[];
 }
 
 export interface ResolvedFact {
@@ -100,6 +131,9 @@ export interface ResolvedFact {
 
 export interface CustomerFactRow {
   id: string;
+  /** Null for a fact true of the whole customer. */
+  unit_id: string | null;
+  unit_slug: string | null;
   kind: string;
   label: string;
   value: string;
@@ -124,13 +158,16 @@ export interface CustomerProfile {
   slug: string;
   name: string;
   notes: string | null;
+  products: string[];
   /** Present when the profile was read for one unit. */
-  unit?: { slug: string; name: string; kind: string };
+  unit?: { slug: string; name: string; kind: string; product: string | null };
   facts: {
     kind: string;
     label: string;
     value: string;
     component: string | null;
+    /** Flat reads only: the unit the fact is true of, null for the whole customer. */
+    unit?: string | null;
     /** Unit-resolved reads only: which level the fact came from. */
     origin?: string | null;
     origin_kind?: string | null;
@@ -140,8 +177,9 @@ export interface CustomerProfile {
     slug: string;
     name: string;
     kind: string;
+    product: string | null;
     parent: string | null;
-    profile: string | null;
+    template: string | null;
   }[];
   components: { slug: string; product_slug: string }[];
   repos: { slug: string; component: string | null; index_status: string }[];

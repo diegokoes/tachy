@@ -122,7 +122,7 @@ tool(
       source_project_id: item.sourceProjectId,
       product_id: item.productId,
       team_id: item.teamId,
-      ...(await workItemFacts(item, view.kept)),
+      ...(await workItemFacts(item, view.kept, { redact: view.redacted })),
       ...withGuidance(view),
       ...withCompaction(view.item),
       ...withFiles(view.item, conn.slug, src),
@@ -377,7 +377,7 @@ tool(
       ...(similar.length || reference.length
         ? {}
         : { retrieval_note: NO_MATCHES }),
-      ...(await workItemFacts(item, view.kept)),
+      ...(await workItemFacts(item, view.kept, { redact: view.redacted })),
       ...withGuidance(view),
       ...withFiles(view.item, conn.slug, src),
       ...(context.length ? { project_context: context } : {}),

@@ -109,7 +109,8 @@ export async function deleteProduct(productId: string) {
       (select count(*)::int from work_items where product_id = ${productId}) as work_items,
       (select count(*)::int from reference_docs where product_id = ${productId}) as docs,
       (select count(*)::int from source_projects where product_id = ${productId}) as projects,
-      (select count(*)::int from repos where product_id = ${productId}) as repos
+      (select count(*)::int from repos where product_id = ${productId}) as repos,
+      (select count(*)::int from customer_units where product_id = ${productId}) as units
   `;
   const parts = [
     refs.entries > 0 ? `${refs.entries} knowledge entr(y/ies)` : null,
@@ -117,10 +118,11 @@ export async function deleteProduct(productId: string) {
     refs.docs > 0 ? `${refs.docs} reference doc(s)` : null,
     refs.projects > 0 ? `${refs.projects} source project(s)` : null,
     refs.repos > 0 ? `${refs.repos} repo(s)` : null,
+    refs.units > 0 ? `${refs.units} customer unit(s)` : null,
   ].filter(Boolean);
   if (parts.length)
     throw conflict(
-      `product '${current.slug}' is referenced by ${parts.join(", ")} - re-scope or delete those first (its components and labels would also be removed)`,
+      `product '${current.slug}' is referenced by ${parts.join(", ")} - re-scope or delete those first (its components, labels and blueprint would also be removed)`,
     );
   await sql`delete from products where id = ${productId}`;
   return { deleted: true, slug: current.slug };

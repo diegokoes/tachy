@@ -137,7 +137,10 @@ export async function seedKnowledge(
       const created = pastDate(rng, 500);
 
       const customer = chance(rng, 0.5) ? pick(rng, customers) : null;
-      const mineUnits = customer ? (byCustomer.get(customer.id) ?? []) : [];
+      // A unit of one product's setup holds only that product's entries.
+      const mineUnits = (
+        customer ? (byCustomer.get(customer.id) ?? []) : []
+      ).filter((u) => !u.productId || u.productId === product.id);
       const unit =
         mineUnits.length && chance(rng, 0.66) ? pick(rng, mineUnits) : null;
 
@@ -167,8 +170,8 @@ export async function seedKnowledge(
         team_id: product.teamId,
         customer_id: customer ? customer.id : null,
         // Mirrors the product rule: a unit sits only beside its own customer.
-        // Most of the estate owner's entries land on a line, enough on the
-        // lines sharing a profile for the sibling boost to show.
+        // Most of the setup owner's entries in that product land on a line,
+        // enough on the lines sharing a template for the sibling boost to show.
         customer_unit_id: unit ? unit.id : null,
         created_by: users[i % users.length].id,
         status: pick(rng, KNOWLEDGE_STATUSES),

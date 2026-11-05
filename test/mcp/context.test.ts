@@ -163,6 +163,53 @@ describe("who a fetched ticket is about", () => {
     expect(body.customer_profile_note).toMatch(/THIS customer's install/);
   });
 
+  it("names the unit a unit's fact is true of", async () => {
+    await addCustomer({
+      name: "Acme",
+      slug: "acme",
+      emailDomains: ["acme.example"],
+    });
+    await addCustomerUnit({
+      customerSlug: "acme",
+      slug: "plant-north",
+      name: "North plant",
+      kind: "site",
+    });
+    await setCustomerFact({
+      customerSlug: "acme",
+      unit: "plant-north",
+      kind: "timezone",
+      value: "Europe/Berlin",
+    });
+    const body = await fetchTicket(ticket());
+    expect(body.customer_profile.specifics).toEqual([
+      "plant-north: timezone: Europe/Berlin",
+    ]);
+  });
+
+  it("scrubs the profile when the ticket's own read is redacted", async () => {
+    await addCustomer({
+      name: "Acme",
+      slug: "acme",
+      emailDomains: ["acme.example"],
+    });
+    await setCustomerFact({
+      customerSlug: "acme",
+      kind: "contact",
+      value: "night shift lead, lead@acme.example",
+    });
+    process.env.TACHY_REDACT = "true";
+    try {
+      const body = await fetchTicket(ticket());
+      expect(JSON.stringify(body.customer_profile)).not.toMatch(
+        /lead@acme\.example/,
+      );
+      expect(body.customer_profile.specifics[0]).toMatch(/\[EMAIL_1\]/);
+    } finally {
+      delete process.env.TACHY_REDACT;
+    }
+  });
+
   it("leaves the profile out for a customer nothing is recorded about", async () => {
     await addCustomer({
       name: "Acme",

@@ -18,6 +18,7 @@ import {
 } from "@tachy/core/work-items";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import { sql, badInput, errorText } from "@tachy/core/infra";
+import { scrubDeep, TokenMap } from "@tachy/core/compliance";
 import {
   resolveComponentFilter,
   getProductIdBySlug,
@@ -94,10 +95,12 @@ export function withGuidance(view: ModelRead): Record<string, unknown> {
 /**
  * The customer's own install, inline on the read that fetched their ticket.
  * Their version and addons decide whether a general answer applies, and the
- * model does not ask for them unprompted.
+ * model does not ask for them unprompted. Scrubbed when the ticket's own read
+ * is, since it reaches the same model.
  */
 export async function withCustomerProfile(
   customerId: string | null | undefined,
+  opts: { redact: boolean },
 ): Promise<Record<string, unknown>> {
   if (!customerId) return {};
   const profile = await getCustomerProfile(customerId);
@@ -108,27 +111,30 @@ export async function withCustomerProfile(
     profile.repos.length ||
     profile.projects.length;
   if (!hasContent) return {};
+  const attached = {
+    slug: profile.slug,
+    ...(profile.notes ? { notes: profile.notes } : {}),
+    ...(profile.facts.length
+      ? {
+          specifics: profile.facts.map((f) =>
+            [f.unit, f.kind, f.label, f.value].filter(Boolean).join(": "),
+          ),
+        }
+      : {}),
+    ...(profile.components.length
+      ? { components: profile.components.map((c) => c.slug) }
+      : {}),
+    ...(profile.repos.length
+      ? { repos: profile.repos.map((r) => r.slug) }
+      : {}),
+    ...(profile.projects.length
+      ? { projects: profile.projects.map((p) => p.external_key) }
+      : {}),
+  };
   return {
-    customer_profile: {
-      slug: profile.slug,
-      ...(profile.notes ? { notes: profile.notes } : {}),
-      ...(profile.facts.length
-        ? {
-            specifics: profile.facts.map((f) =>
-              [f.kind, f.label, f.value].filter(Boolean).join(": "),
-            ),
-          }
-        : {}),
-      ...(profile.components.length
-        ? { components: profile.components.map((c) => c.slug) }
-        : {}),
-      ...(profile.repos.length
-        ? { repos: profile.repos.map((r) => r.slug) }
-        : {}),
-      ...(profile.projects.length
-        ? { projects: profile.projects.map((p) => p.external_key) }
-        : {}),
-    },
+    customer_profile: opts.redact
+      ? scrubDeep(attached, new TokenMap())
+      : attached,
     customer_profile_note:
       "This is THIS customer's install, not the product in general. Check their version against an entry's affected_version/fixed_version before repeating its advice, and search their own repos for addon behaviour. Anything you learn here that is true only of them belongs on their profile (set_customer_fact), not in a knowledge entry.",
   };
@@ -151,7 +157,7 @@ export const unresolvedCustomer = (
       };
 
 /**
- * The units of a customer's estate a ticket names, offered without assigning
+ * The units of a customer's setup a ticket names, offered without assigning
  * one. A wrong attribution files the ticket, the entry learned from it and
  * every later search hit under a unit nobody chose.
  */
@@ -172,7 +178,7 @@ export async function unresolvedUnit(
   if (!named.length) return {};
   return {
     unit_note:
-      `This customer's estate is divided into units, and the ticket names ` +
+      `This customer's setup is divided into units, and the ticket names ` +
       `${named.map((u) => `'${u.slug}'`).join(", ")}. Facts recorded against a ` +
       `unit are NOT visible on the customer as a whole - call ` +
       `get_customer_profile with that unit before advising. If the ticket really ` +
@@ -219,6 +225,7 @@ const UNIT_SCAN_CHARS = 4000;
 export async function workItemFacts(
   item: IngestedItem,
   raw: RawWorkItem,
+  opts: { redact: boolean },
 ): Promise<Record<string, unknown>> {
   const text = `${raw.title ?? ""} ${raw.messages
     .map((m) => m.bodyText ?? "")
@@ -229,7 +236,7 @@ export async function workItemFacts(
     customer_name: await getCustomerName(item.customerId),
     ...unresolvedCustomer(item.customerId, item.customerAmbiguity),
     ...(await unresolvedUnit(item.customerId, item.customerUnitId, text)),
-    ...(await withCustomerProfile(item.customerId)),
+    ...(await withCustomerProfile(item.customerId, opts)),
     observed_version: item.observedVersion,
     ...(item.componentSlug ? { component: item.componentSlug } : {}),
   };

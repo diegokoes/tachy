@@ -1,9 +1,5 @@
 import { z } from "zod";
-import {
-  getCustomerIdBySlug,
-  getCustomerProfile,
-  setWorkItemCustomer,
-} from "../catalog/customers";
+import { getCustomerIdBySlug, setWorkItemCustomer } from "../catalog/customers";
 import { readableBucket } from "../buckets/access";
 import { searchBucket } from "../buckets/search";
 import { searchCode } from "../code/search";
@@ -23,7 +19,7 @@ import { recordAdoRefs } from "../work-items/links";
 import { readStoredRaw } from "../work-items/stored";
 import { defineFlowAction, type FlowActionContext } from "./actions";
 import { flowName } from "./definitions";
-import { customerProperties } from "./customer";
+import { customerProfileOf, customerProperties } from "./customer";
 import { applyIngest, getIngestConfig, ingestConfig } from "./ingest";
 import { applyFormConfig, getComposeConfig, typeConfig } from "./forms";
 import type { FlowSubject } from "./subject";
@@ -258,10 +254,7 @@ export function registerBuiltinFlowActions(): void {
       profile: z.record(z.string(), z.unknown()).nullable(),
     }),
     async run(ctx) {
-      const item = needItem(ctx);
-      const profile = item.customer_id
-        ? await getCustomerProfile(item.customer_id)
-        : null;
+      const profile = await customerProfileOf(needItem(ctx));
       return {
         found: !!profile,
         profile: profile as Record<string, unknown> | null,

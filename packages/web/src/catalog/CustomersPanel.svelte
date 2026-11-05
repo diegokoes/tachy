@@ -26,6 +26,7 @@
     CustomerFactRow,
     CustomerProfile,
     CustomerUnitRow,
+    ProductBlueprint,
     ResolvedFact,
   } from "@tachy/contract";
   import { INFO } from "../admin/help";
@@ -45,9 +46,13 @@
     slug: "",
     name: "",
     kind: "",
+    product: "",
     parent: "",
-    profile: "",
+    template: "",
   });
+  /** Each product's blueprint, by product slug, fetched when first picked. */
+  let blueprints = $state<Record<string, ProductBlueprint>>({});
+  let productPick = $state("");
   const components = new ComponentCache();
   let kinds = $state<{ kind: string; count: number }[]>([]);
   let error = $state<string | null>(null);
@@ -70,6 +75,33 @@
   const unitKinds = (slug: string) => [
     ...new Set((units[slug] ?? []).map((unit) => unit.kind)),
   ];
+
+  async function loadBlueprint(productSlug: string) {
+    if (!productSlug || blueprints[productSlug]) return;
+    try {
+      blueprints[productSlug] = await api.get<ProductBlueprint>(
+        `/products/${productSlug}/blueprint`,
+      );
+    } catch (e) {
+      error = errText(e);
+    }
+  }
+
+  /** A product's blueprint kinds when it has some; otherwise the kinds in use. */
+  const kindOptions = (customerSlug: string, productSlug: string) => {
+    const blueprintKinds = productSlug
+      ? (blueprints[productSlug]?.kinds ?? []).map((kind) => kind.slug)
+      : [];
+    return blueprintKinds.length ? blueprintKinds : unitKinds(customerSlug);
+  };
+
+  const hasBlueprint = (productSlug: string) =>
+    !!productSlug && (blueprints[productSlug]?.kinds.length ?? 0) > 0;
+
+  const productOptions = $derived([
+    { value: "", label: "general" },
+    ...products.data.map((pr) => ({ value: pr.slug, label: pr.name })),
+  ]);
 
   async function loadProfile(slug: string) {
     try {
@@ -153,10 +185,18 @@
         slug: unitForm.slug.trim(),
         name: unitForm.name.trim(),
         kind: unitForm.kind.trim(),
+        product: unitForm.product || undefined,
         parent: unitForm.parent || undefined,
-        profile: unitForm.profile || undefined,
+        template: unitForm.template || undefined,
       });
-      unitForm = { slug: "", name: "", kind: "", parent: "", profile: "" };
+      unitForm = {
+        slug: "",
+        name: "",
+        kind: "",
+        product: unitForm.product,
+        parent: "",
+        template: "",
+      };
       await loadProfile(slug);
     } catch (e) {
       error = errText(e);
@@ -170,8 +210,9 @@
   let editForm = $state({
     name: "",
     kind: "",
+    product: "",
     parent: "",
-    profile: "",
+    template: "",
     aliases: "",
   });
 
@@ -181,10 +222,12 @@
     editForm = {
       name: unit.name,
       kind: unit.kind,
+      product: unit.product_slug ?? "",
       parent: unitName(rows, unit.parent_id) ?? "",
-      profile: unitName(rows, unit.profile_id) ?? "",
+      template: unitName(rows, unit.template_id) ?? "",
       aliases: (unit.aliases ?? []).join(", "),
     };
+    void loadBlueprint(editForm.product);
   }
 
   async function saveUnit(slug: string) {
@@ -196,8 +239,9 @@
       await api.patch(`/customers/${slug}/units/${unit}`, {
         name: editForm.name.trim(),
         kind: editForm.kind.trim(),
+        product: editForm.product || null,
         parent: editForm.parent || null,
-        profile: editForm.profile || null,
+        template: editForm.template || null,
         aliases: csv(editForm.aliases),
       });
       editUnit[slug] = "";
@@ -209,7 +253,7 @@
     }
   }
 
-  /** A unit cannot sit under, or conform to, its own descendant. */
+  /** A unit cannot sit under, or follow, its own descendant. */
   function unitSubtree(
     rows: CustomerUnitRow[],
     root: CustomerUnitRow,
@@ -274,6 +318,35 @@
     }
   }
 
+  async function linkProduct(slug: string) {
+    if (!productPick) return;
+    busy = slug;
+    error = null;
+    try {
+      await customers.mutate(() =>
+        api.put(`/customers/${slug}/products/${productPick}`, {}),
+      );
+      productPick = "";
+      await loadProfile(slug);
+    } catch (e) {
+      error = errText(e);
+    } finally {
+      busy = null;
+    }
+  }
+
+  async function unlinkProduct(slug: string, productSlug: string) {
+    error = null;
+    try {
+      await customers.mutate(() =>
+        api.delete(`/customers/${slug}/products/${productSlug}`),
+      );
+      await loadProfile(slug);
+    } catch (e) {
+      error = errText(e);
+    }
+  }
+
   async function addComponent(slug: string) {
     if (!compForm.product || !compForm.component) return;
     busy = slug;
@@ -325,6 +398,11 @@
           slugify(String(d.name ?? "")),
           customers.data.map((c) => c.slug),
         ),
+    },
+    {
+      key: "products",
+      label: t("products"),
+      value: (r) => (r.products ?? []).join(", "),
     },
     {
       key: "email_domains",
@@ -409,7 +487,46 @@
   {#if error}<Note tone="danger">{error}</Note>{/if}
   <div class="profile">
     <div class="block wide">
-      <GroupHead label="estate" />
+      <GroupHead label={t("products")} />
+      <div class="chips">
+        {#each profile?.products ?? [] as productSlug (productSlug)}
+          <Chip onremove={() => unlinkProduct(customer.slug, productSlug)}
+            >{productSlug}</Chip
+          >
+        {/each}
+        {#if !(profile?.products ?? []).length}
+          <span class="dim sm">none linked</span>
+        {/if}
+      </div>
+      <div class="frow add">
+        <Field label={t("product")}>
+          <Select
+            bind:value={productPick}
+            aria-label="product to link"
+            options={[
+              { value: "", label: "none" },
+              ...products.data
+                .filter((pr) => !(profile?.products ?? []).includes(pr.slug))
+                .map((pr) => ({ value: pr.slug, label: pr.name })),
+            ]}
+          />
+        </Field>
+        <Button
+          variant="ghost"
+          tone="ok"
+          square
+          icon="plus"
+          title="link product"
+          aria-label="link product"
+          busy={busy === customer.slug}
+          disabled={!productPick}
+          onclick={() => linkProduct(customer.slug)}
+        />
+      </div>
+    </div>
+
+    <div class="block wide">
+      <GroupHead label="units" />
       {#each unitTree(units[customer.slug] ?? []) as { unit, depth } (unit.id)}
         <div class="frow" style="--depth: {depth}">
           <span class="indent"></span>
@@ -421,11 +538,14 @@
             {unit.name}
           </button>
           <span class="lbl">{unit.slug}</span>
-          {#if unit.profile_id}
+          {#if unit.product_slug}
+            <span class="dim sm">{unit.product_slug}</span>
+          {/if}
+          {#if unit.template_id}
             <span class="dim sm"
-              >conforms to {unitName(
+              >follows {unitName(
                 units[customer.slug] ?? [],
-                unit.profile_id,
+                unit.template_id,
               )}</span
             >
           {/if}
@@ -444,11 +564,19 @@
             <Field label="name">
               <input aria-label="unit name" bind:value={editForm.name} />
             </Field>
+            <Field label={t("product")}>
+              <Select
+                bind:value={editForm.product}
+                aria-label="unit product"
+                options={productOptions}
+                onchange={(v) => loadBlueprint(String(v))}
+              />
+            </Field>
             <Field label="kind">
               <Select
                 bind:value={editForm.kind}
-                options={unitKinds(customer.slug)}
-                creatable
+                options={kindOptions(customer.slug, editForm.product)}
+                creatable={!hasBlueprint(editForm.product)}
                 aria-label="unit kind"
               />
             </Field>
@@ -469,10 +597,10 @@
                 ]}
               />
             </Field>
-            <Field label="conforms to">
+            <Field label="template">
               <Select
-                bind:value={editForm.profile}
-                aria-label="conforms to"
+                bind:value={editForm.template}
+                aria-label="template"
                 options={[
                   { value: "", label: "none" },
                   ...(units[customer.slug] ?? [])
@@ -512,11 +640,19 @@
         <Field label="name">
           <input aria-label="unit name" bind:value={unitForm.name} />
         </Field>
+        <Field label={t("product")}>
+          <Select
+            bind:value={unitForm.product}
+            aria-label="unit product"
+            options={productOptions}
+            onchange={(v) => loadBlueprint(String(v))}
+          />
+        </Field>
         <Field label="kind">
           <Select
             bind:value={unitForm.kind}
-            options={unitKinds(customer.slug)}
-            creatable
+            options={kindOptions(customer.slug, unitForm.product)}
+            creatable={!hasBlueprint(unitForm.product)}
             aria-label="unit kind"
           />
         </Field>
@@ -530,10 +666,10 @@
             ]}
           />
         </Field>
-        <Field label="conforms to">
+        <Field label="template">
           <Select
-            bind:value={unitForm.profile}
-            aria-label="conforms to"
+            bind:value={unitForm.template}
+            aria-label="template"
             options={[
               { value: "", label: "none" },
               ...(units[customer.slug] ?? []).map((u) => u.slug),
@@ -557,7 +693,7 @@
     </div>
 
     <div class="block wide">
-      <GroupHead label="specifics" />
+      <GroupHead label="facts" />
       {#if (units[customer.slug] ?? []).length}
         <div class="frow">
           <span class="dim sm">showing</span>
@@ -597,11 +733,12 @@
       {:else}
         {#each facts[customer.slug] ?? [] as fact (fact.id)}
           <div class="frow">
+            {#if fact.unit_slug}<span class="lbl">{fact.unit_slug}</span>{/if}
             <Badge tone="muted">{fact.kind}</Badge>
             {#if fact.label}<span class="lbl">{fact.label}</span>{/if}
             <code>{fact.value}</code>
             <DeleteButton
-              label="remove specific"
+              label="remove fact"
               onclick={() => delFact(customer.slug, fact.id)}
             />
           </div>
@@ -619,7 +756,7 @@
             aria-label="kind"
           />
         </Field>
-        <Field label="about">
+        <Field label="label">
           <input aria-label="label" bind:value={factForm.label} />
         </Field>
         <Field label="value">
@@ -634,8 +771,8 @@
           tone="ok"
           square
           icon="plus"
-          title="add specific"
-          aria-label="add specific"
+          title="add fact"
+          aria-label="add fact"
           busy={busy === customer.slug}
           disabled={!factForm.kind.trim() || !factForm.value.trim()}
           onclick={() => addFact(customer.slug)}
