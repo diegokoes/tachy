@@ -62,7 +62,7 @@ export type {
   ReleasesContaining,
 } from "./versions";
 export { repoToken, connectionToken, tokenMaySendTo } from "./token";
-export { repoFileUrl } from "./web-url";
+export { repoFileUrl, repoPageUrl } from "./web-url";
 export type { FileRange } from "./web-url";
 export { activeReindexes } from "./jobs";
 export {

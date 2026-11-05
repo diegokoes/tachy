@@ -431,8 +431,27 @@
     };
   const createDoc = create("/reference", "docs");
 
+  /** The entries filed under a customer, or one unit of theirs, and nothing else. */
+  function narrowToCustomer(customer: string, unit?: string) {
+    const keys: FacetKey[] = unit ? ["customer", "unit"] : ["customer"];
+    search = "";
+    type = "knowledge";
+    productId = "";
+    component = "";
+    components = [];
+    status = "";
+    shown = [...shown, ...keys.filter((key) => !shown.includes(key))];
+    extras = unit ? { customer, unit } : { customer };
+    persist();
+    void loadFacets();
+  }
+
   /** Opens narrowed to what another page asked for; see `presetScope`. */
   async function applyPreset(preset: ScopePreset) {
+    if (preset.customer) {
+      narrowToCustomer(preset.customer, preset.unit);
+      return;
+    }
     if (preset.status) status = preset.status;
     const id = products.find((x) => x.slug === preset.product)?.id as
       string | undefined;

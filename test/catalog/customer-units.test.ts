@@ -11,6 +11,7 @@ import {
   getCustomerIdBySlug,
   setWorkItemCustomer,
   resolveCustomerFilter,
+  listCustomerFiled,
 } from "@tachy/core/catalog";
 import {
   saveKnowledgeEntry,
@@ -169,7 +170,7 @@ describe("customer units", () => {
       status: "approved",
     });
     await expect(deleteCustomerUnit(customerId, "pln191")).rejects.toThrow(
-      /'pln191' still has 1 entries filed under it/,
+      /'pln191' still has 1 entry filed under it/,
     );
   });
 
@@ -402,7 +403,7 @@ describe("unit-aware search", () => {
     expect(hits[0].customer_unit_slug).toBe("pln191");
   });
 
-  it("filters to a site and the lines inside it, and counts entries per unit", async () => {
+  it("filters to a site and the lines inside it, and counts the site's entries with theirs", async () => {
     const customerId = await buildSetup();
     const line = await entry("pln191", "spooler queue overrun on the labeller");
     const site = await entry(
@@ -417,15 +418,36 @@ describe("unit-aware search", () => {
       [line.id, site.id].sort(),
     );
     const facets = await listKnowledgeFacets({ customerId });
-    expect(facets.unit).toEqual(
-      expect.arrayContaining([
-        { value: "calderra", count: 1 },
-        { value: "pln191", count: 1 },
-      ]),
-    );
+    expect(facets.unit).toEqual([
+      { value: "calderra", count: 2 },
+      { value: "pln191", count: 1 },
+    ]);
     await expect(resolveCustomerFilter(undefined, "pln191")).rejects.toThrow(
       /needs its customer/,
     );
+  });
+
+  it("lists the live docs and entries filed under the customer, on a unit or not", async () => {
+    const customerId = await buildSetup();
+    await entry("pln191", "spooler queue overrun on the labeller");
+    await entry(null, "label printer offline");
+    const archived = await entry(null, "an old workaround");
+    await sql`update knowledge_entries set status = 'archived' where id = ${archived.id}`;
+    const doc = await saveReferenceDoc({
+      title: "Line manual",
+      body: "How the line is wired.",
+      productId: null,
+      customerSlug: "ivk",
+      unit: "pln191",
+    });
+    const filed = await listCustomerFiled(customerId);
+    expect(filed.entries.map((row) => [row.title, row.unit]).sort()).toEqual([
+      ["label printer offline", null],
+      ["spooler queue overrun on the labeller", "pln191"],
+    ]);
+    expect(filed.documents).toEqual([
+      { id: doc.id, title: "Line manual", unit: "pln191", original: false },
+    ]);
   });
 
   it("changes nothing when no unit is given", async () => {

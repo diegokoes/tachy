@@ -306,11 +306,24 @@ export type FiledUnder = {
 export const filedTotal = (filed: Record<string, number>) =>
   Object.values(filed).reduce((sum, n) => sum + n, 0);
 
+/** The noun for one of what `filedTotal` counts. */
+const ONE_FILED: Record<string, string> = {
+  work_items: "work item",
+  entries: "entry",
+  docs: "doc",
+  repos: "repo",
+  source_projects: "source project",
+};
+
 /** Names each count that is not zero, for the refusal a guard throws. */
 export function filedText(filed: Record<string, number>): string {
   return Object.entries(filed)
     .filter(([, n]) => n > 0)
-    .map(([what, n]) => `${n} ${what.replaceAll("_", " ")}`)
+    .map(([what, n]) =>
+      n === 1
+        ? `1 ${ONE_FILED[what] ?? what}`
+        : `${n} ${what.replaceAll("_", " ")}`,
+    )
     .join(", ");
 }
 
@@ -387,7 +400,7 @@ export async function deleteCustomerUnit(
 }
 
 /** Deep enough for any real setup; bounds a walk over a ring written before cycles were refused. */
-const MAX_UNIT_DEPTH = 64;
+export const MAX_UNIT_DEPTH = 64;
 
 /**
  * The units close to one, which a search lifts below the unit itself: those it

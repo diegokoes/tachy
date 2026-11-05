@@ -1,12 +1,15 @@
 import type {
   CustomerComponentRow,
   CustomerFactRow,
+  CustomerFiled,
   CustomerProfile,
   CustomerRow,
 } from "@tachy/contract";
 
 export type { CustomerProfile };
 import { sql } from "../infra/db";
+import { repoPageUrl } from "../code/web-url";
+import { projectPageUrl } from "../sources/web-url";
 import { nearestSlugsHint } from "./nearest";
 import { badInput, conflict, notFound } from "../infra/errors";
 import { assertNoSecrets } from "../compliance/redaction";
@@ -633,15 +636,27 @@ export async function getCustomerProfile(
     await Promise.all([
       listCustomerProducts(customerId),
       listCustomerComponents(customerId),
-      sql<CustomerProfile["repos"]>`
-        select r.slug, c.slug as component, coalesce(dl.index_status, 'idle') as index_status
+      sql<
+        (Omit<CustomerProfile["repos"][number], "url"> & {
+          clone_url: string;
+        })[]
+      >`
+        select r.slug, c.slug as component, coalesce(dl.index_status, 'idle') as index_status,
+               r.url as clone_url
         from repos r
         left join repo_lines dl on dl.repo_id = r.id and dl.ref = r.default_branch
         left join components c on c.id = r.component_id
         where r.customer_id = ${customerId} order by r.slug
       `,
-      sql<CustomerProfile["projects"]>`
-        select sc.slug as source_slug, sp.external_key
+      sql<
+        {
+          source_slug: string;
+          source_type: string;
+          base_url: string | null;
+          external_key: string;
+        }[]
+      >`
+        select sc.slug as source_slug, sc.source_type, sc.base_url, sp.external_key
         from source_projects sp
         join source_connections sc on sc.id = sp.source_connection_id
         where sp.customer_id = ${customerId} order by sp.external_key
@@ -669,10 +684,49 @@ export async function getCustomerProfile(
       slug: c.slug,
       product_slug: c.product_slug,
     })),
-    repos: [...repos],
-    projects: [...projects],
+    repos: repos.map(({ clone_url, ...repo }) => ({
+      ...repo,
+      url: repoPageUrl(clone_url),
+    })),
+    projects: projects.map((project) => ({
+      source_slug: project.source_slug,
+      external_key: project.external_key,
+      url: projectPageUrl(project, project.external_key),
+    })),
     conflicts,
   };
+}
+
+/** How many docs or entries the customer's page lists. */
+const FILED_ITEMS = 20;
+
+/**
+ * Live docs and entries filed under the customer, on any unit or none, newest
+ * first: the rows `customerReading` counts.
+ */
+export async function listCustomerFiled(
+  customerId: string,
+): Promise<CustomerFiled> {
+  const [documents, entries] = await Promise.all([
+    sql<CustomerFiled["documents"]>`
+      select d.id, d.title, un.slug as unit, (d.file_id is not null) as original
+      from reference_docs d
+      left join customer_units un on un.id = d.customer_unit_id
+      where d.customer_id = ${customerId} and d.status = 'approved'
+      order by d.updated_at desc
+      limit ${FILED_ITEMS}
+    `,
+    sql<CustomerFiled["entries"]>`
+      select e.id, e.title, un.slug as unit, e.status
+      from knowledge_entries e
+      left join customer_units un on un.id = e.customer_unit_id
+      where e.customer_id = ${customerId}
+        and e.status not in ('rejected', 'archived')
+      order by e.updated_at desc
+      limit ${FILED_ITEMS}
+    `,
+  ]);
+  return { documents: [...documents], entries: [...entries] };
 }
 
 /** A customer read: the customer-wide facts, and how much is filed under them. */
