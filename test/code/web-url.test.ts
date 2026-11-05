@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { repoFileUrl } from "../../packages/core/src/code/web-url";
+import { repoFileUrl, repoPageUrl } from "../../packages/core/src/code/web-url";
+import { projectPageUrl } from "../../packages/core/src/sources/web-url";
 
 const range = {
   path: "apps/fl-be/src/main/java/Baldur Forwarder.java",
@@ -48,5 +49,57 @@ describe("repoFileUrl", () => {
     expect(repoFileUrl("git@github.com:acme/portal.git", range)).toBeNull();
     expect(repoFileUrl("file:///tmp/repo", range)).toBeNull();
     expect(repoFileUrl("https://dev.azure.com/org/TnT", range)).toBeNull();
+  });
+});
+
+describe("repoPageUrl", () => {
+  it("is the clone URL without .git or the credentials in it", () => {
+    expect(repoPageUrl("https://token@github.com/acme/portal.git")).toBe(
+      "https://github.com/acme/portal",
+    );
+    expect(
+      repoPageUrl("https://org@dev.azure.com/org/TnT/_git/tnt-tpd-fl/"),
+    ).toBe("https://dev.azure.com/org/TnT/_git/tnt-tpd-fl");
+  });
+
+  it("has no page for an ssh or file remote", () => {
+    expect(repoPageUrl("git@github.com:acme/portal.git")).toBeNull();
+    expect(repoPageUrl("file:///tmp/repo")).toBeNull();
+    expect(repoPageUrl("not a url")).toBeNull();
+  });
+});
+
+describe("projectPageUrl", () => {
+  it("opens an Azure DevOps project under its organization", () => {
+    expect(
+      projectPageUrl(
+        { source_type: "azure-devops", base_url: "https://dev.azure.com/org/" },
+        "Track and Trace",
+      ),
+    ).toBe("https://dev.azure.com/org/Track%20and%20Trace");
+  });
+
+  it("opens a GitHub repo on github.com or on an Enterprise host", () => {
+    expect(
+      projectPageUrl({ source_type: "github", base_url: null }, "acme/portal"),
+    ).toBe("https://github.com/acme/portal");
+    expect(
+      projectPageUrl(
+        { source_type: "github", base_url: "https://git.example.com/api/v3" },
+        "acme/portal",
+      ),
+    ).toBe("https://git.example.com/acme/portal");
+  });
+
+  it("has no page for a Freshdesk group or a connection with no address", () => {
+    expect(
+      projectPageUrl(
+        { source_type: "freshdesk", base_url: "https://acme.freshdesk.com" },
+        "4200",
+      ),
+    ).toBeNull();
+    expect(
+      projectPageUrl({ source_type: "azure-devops", base_url: null }, "TnT"),
+    ).toBeNull();
   });
 });

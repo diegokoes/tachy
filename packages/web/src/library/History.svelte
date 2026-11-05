@@ -4,6 +4,12 @@
   /** Who made a revision, as far as the record can say. */
   export const revisionAuthor = (r: Revision) =>
     r.user_name || r.user_email || (r.user_id ? "someone" : "unattributed");
+
+  /** The door, not the person - an agent edit is still made by a human. */
+  export function actorTone(actor: string) {
+    if (actor === "agent") return "warn";
+    return actor === "web" ? "ok" : "muted";
+  }
 </script>
 
 <script lang="ts">
@@ -84,12 +90,6 @@
     }
   }
 
-  /** The door, not the person - an agent edit is still made by a human. */
-  function doorTone(actor: string) {
-    if (actor === "agent") return "warn";
-    return actor === "web" ? "ok" : "muted";
-  }
-
   function show(value: unknown): string {
     if (value == null) return EMPTY;
     if (Array.isArray(value)) return value.join(", ") || EMPTY;
@@ -110,7 +110,7 @@
         <li>
           <button class="rev-head" onclick={() => toggle(revision.version)}>
             <span class="v">v{revision.version}</span>
-            <Badge tone={doorTone(revision.actor)}>{revision.actor}</Badge>
+            <Badge tone={actorTone(revision.actor)}>{revision.actor}</Badge>
             <span class="who">{revisionAuthor(revision)}</span>
             <span class="at"><Time at={revision.created_at} /></span>
             {#if revision.changed_fields.length}

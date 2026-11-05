@@ -193,14 +193,19 @@ export function applyExtras(
 
 /**
  * What to open the list already narrowed to, handed over by a page elsewhere:
- * the wiki's coverage tree ("everything recorded under this part"), or the
- * review backlog (the drafts). The router carries paths only, so it travels
+ * the wiki's coverage tree ("everything recorded under this part"), the
+ * review backlog (the drafts), or a customer's page (the entries filed under
+ * the customer or one unit). The router carries paths only, so it travels
  * here; taken once, so the next visit opens unfiltered as usual.
  */
 export type ScopePreset = {
   product?: string;
   component?: string;
   status?: string;
+  /** Customer slug; opens the entries filed under them, nothing else narrowing them. */
+  customer?: string;
+  /** Unit slug, within `customer`. */
+  unit?: string;
 };
 
 let preset: ScopePreset | null = null;

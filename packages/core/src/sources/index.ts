@@ -7,3 +7,4 @@ export * from "./traffic";
 export * from "./html";
 export * from "./sync";
 export * from "./tags";
+export * from "./web-url";

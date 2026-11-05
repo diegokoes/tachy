@@ -51,7 +51,7 @@ import {
   type FiledRow,
 } from "../library/filing";
 import { syncLinks } from "../library/links";
-import { unitNeighbourhood } from "../catalog/units";
+import { MAX_UNIT_DEPTH, unitNeighbourhood } from "../catalog/units";
 
 const searchedStatuses = [...SEARCHED_ENTRY_STATUSES];
 
@@ -673,19 +673,31 @@ export async function listKnowledgeFacets(
     `;
   };
 
-  /** Unit slugs repeat across customers, so they are counted only within one. */
+  /**
+   * Unit slugs repeat across customers, so they are counted only within one.
+   * An entry counts for its unit and each unit that one sits inside, because
+   * the filter takes in the units inside the one picked.
+   */
   const unitRows = async (): Promise<FacetCount[]> => {
     if (!opts.customerId) return [];
-    // A subquery rather than a join, as in listKnowledgeEntries: customer_units
-    // has a customer_id of its own, which `facetSql` names unqualified.
+    // `filed` reads knowledge_entries alone, as in listKnowledgeEntries:
+    // customer_units has a customer_id of its own, which `facetSql` names unqualified.
     return sql<FacetCount[]>`
-      select (select un.slug from customer_units un
-              where un.id = knowledge_entries.customer_unit_id) as value,
-             count(*)::int as count
-      from knowledge_entries
-      ${scope("unit")}
-        and customer_unit_id is not null
-      group by 1
+      with recursive filed as (
+        select id as entry_id, customer_unit_id as unit_id
+        from knowledge_entries
+        ${scope("unit")}
+          and customer_unit_id is not null
+      ), up as (
+        select entry_id, unit_id, 0 as depth from filed
+        union all
+        select up.entry_id, un.parent_id, up.depth + 1
+        from up join customer_units un on un.id = up.unit_id
+        where un.parent_id is not null and up.depth < ${MAX_UNIT_DEPTH}
+      )
+      select un.slug as value, count(distinct up.entry_id)::int as count
+      from up join customer_units un on un.id = up.unit_id
+      group by un.slug
       order by count desc, value
     `;
   };
