@@ -135,7 +135,12 @@ export type {
   CustomerFactRow,
   CustomerComponentRow,
   CustomerProfile,
+  CustomerChange,
+  CustomerChangeBatch,
+  CustomerChangeRecord,
+  DeletedCustomer,
 } from "./catalog";
+export { CUSTOMER_CHANGE_RECORDS } from "./catalog";
 export {
   API_TOKEN_PREFIX,
   DEFAULT_TOKEN_DAYS,

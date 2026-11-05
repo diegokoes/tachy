@@ -1,3 +1,5 @@
+import type { LibraryActor } from "./vocabulary";
+
 export interface CatalogCensus {
   teams: number;
   products: number;
@@ -184,4 +186,46 @@ export interface CustomerProfile {
   components: { slug: string; product_slug: string }[];
   repos: { slug: string; component: string | null; index_status: string }[];
   projects: { source_slug: string; external_key: string }[];
+}
+
+/** What a customer_changes row is about. */
+export const CUSTOMER_CHANGE_RECORDS = [
+  "customer",
+  "product",
+  "unit",
+  "fact",
+  "component",
+] as const;
+export type CustomerChangeRecord = (typeof CUSTOMER_CHANGE_RECORDS)[number];
+
+export interface CustomerChange {
+  record: CustomerChangeRecord;
+  /** The row's id; for a product or component link, the product's or component's. */
+  record_id: string;
+  /** Null when the change added the record. */
+  before: Record<string, unknown> | null;
+  /** Null when the change deleted it. */
+  after: Record<string, unknown> | null;
+}
+
+/** One action on a customer's record, as history lists it. */
+export interface CustomerChangeBatch {
+  batch_id: string;
+  at: string;
+  actor: LibraryActor;
+  user_email: string | null;
+  user_name: string | null;
+  /** The batch this one undid. */
+  restores: string | null;
+  changes: CustomerChange[];
+}
+
+/** A deleted customer, and the batch whose restore brings it back. */
+export interface DeletedCustomer {
+  batch_id: string;
+  at: string;
+  slug: string;
+  name: string;
+  user_email: string | null;
+  user_name: string | null;
 }

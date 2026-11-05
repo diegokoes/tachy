@@ -539,6 +539,93 @@ describe("customer product links and edit rights", () => {
   });
 });
 
+describe("customer history routes", () => {
+  it("lists what changed and restores a batch", async () => {
+    await requestAs("/api/customers", "POST", {
+      name: "Northwind",
+      slug: "northwind",
+    });
+    await requestAs("/api/customers/northwind/facts", "PUT", {
+      kind: "contract",
+      value: "annual",
+    });
+    await requestAs("/api/customers/northwind/facts", "PUT", {
+      kind: "contract",
+      value: "monthly",
+    });
+    const history = await (
+      await get("/api/customers/northwind/history")
+    ).json();
+    expect(history[0]).toMatchObject({
+      actor: "web",
+      user_email: "admin@example.com",
+    });
+    expect(history[0].changes[0].after.value).toBe("monthly");
+
+    const restored = await requestAs(
+      `/api/customer-history/${history[0].batch_id}/restore`,
+      "POST",
+    );
+    expect(restored.status).toBe(200);
+    const facts = await (await get("/api/customers/northwind/facts")).json();
+    expect(facts[0].value).toBe("annual");
+  });
+
+  it("lists a deleted customer with the batch that brings it back", async () => {
+    await requestAs("/api/customers", "POST", {
+      name: "Northwind",
+      slug: "northwind",
+    });
+    await requestAs("/api/customers/northwind", "DELETE");
+    const [deleted] = await (await get("/api/customer-history/deleted")).json();
+    expect(deleted.slug).toBe("northwind");
+    await requestAs(
+      `/api/customer-history/${deleted.batch_id}/restore`,
+      "POST",
+    );
+    expect((await get("/api/customers/northwind/profile")).status).toBe(200);
+  });
+
+  it("refuses a batch id that is not one, and a restore without the product's rights", async () => {
+    expect(
+      (await requestAs("/api/customer-history/not-a-batch/restore", "POST"))
+        .status,
+    ).toBe(400);
+
+    await requestAs("/api/customers", "POST", {
+      name: "Northwind",
+      slug: "northwind",
+    });
+    await requestAs("/api/customers/northwind/units", "PUT", {
+      slug: "line-1",
+      name: "Line 1",
+      kind: "line",
+      product: "tqx",
+    });
+    const [batch] = await (
+      await get("/api/customers/northwind/history")
+    ).json();
+    await addTeam("other-team", "Other Team");
+    await createUser({
+      email: "other@example.com",
+      password: "a-long-password",
+      role: "member",
+    });
+    await setTeamMember("other-team", "other@example.com", "admin");
+    clearPermissionCache();
+    const other = await loginCookie(
+      app,
+      "other@example.com",
+      "a-long-password",
+    );
+    const response = await app.request(
+      `/api/customer-history/${batch.batch_id}/restore`,
+      { method: "POST", headers: { Cookie: other } },
+    );
+    expect(response.status).toBe(403);
+  });
+});
+
 describe("blueprint routes", () => {
   it("builds a blueprint, renames a kind and refuses to delete one in use", async () => {
     const site = await requestAs("/api/products/tqx/blueprint/kinds", "PUT", {
