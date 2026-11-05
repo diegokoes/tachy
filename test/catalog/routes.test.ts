@@ -626,6 +626,45 @@ describe("customer history routes", () => {
   });
 });
 
+describe("library lists by customer and unit", () => {
+  it("narrows entries and docs to a site and the lines inside it", async () => {
+    const productId = await tpdProductId();
+    await requestAs("/api/customers", "POST", {
+      name: "Northwind",
+      slug: "northwind",
+    });
+    for (const [slug, parent] of [
+      ["plant", null],
+      ["line-1", "plant"],
+      ["line-9", null],
+    ])
+      await requestAs("/api/customers/northwind/units", "PUT", {
+        slug,
+        name: slug,
+        kind: parent ? "line" : "site",
+        parent,
+      });
+    for (const unit of ["line-1", "line-9"])
+      await saveKnowledgeEntry({
+        productId,
+        title: `Printer stops on ${unit}`,
+        issueSummary: "The printer stops mid-batch.",
+        customerSlug: "northwind",
+        unit,
+        status: "approved",
+      });
+    const entries = await (
+      await get("/api/knowledge?customer=northwind&unit=plant")
+    ).json();
+    expect(entries.map((e: { title: string }) => e.title)).toEqual([
+      "Printer stops on line-1",
+    ]);
+    const docs = await get("/api/reference?customer=northwind&unit=plant");
+    expect(docs.status).toBe(200);
+    expect((await get("/api/knowledge?unit=plant")).status).toBe(400);
+  });
+});
+
 describe("blueprint routes", () => {
   it("builds a blueprint, renames a kind and refuses to delete one in use", async () => {
     const site = await requestAs("/api/products/tpd/blueprint/kinds", "PUT", {

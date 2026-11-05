@@ -306,6 +306,10 @@ const MENTION_USE: Record<MentionKind, { label: string; use: string }> = {
     use: "pass as `project` to search_code and list_repos",
   },
   bucket: { label: "buckets", use: "search_bucket and get_bucket_doc" },
+  customer: {
+    label: "customers",
+    use: "read get_customer_profile for each first (a unit follows the slash); pass customer and unit to search_knowledge and search_reference",
+  },
 };
 
 /** One line per kind attached, naming the tool argument each one goes into. */

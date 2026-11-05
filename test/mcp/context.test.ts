@@ -163,7 +163,7 @@ describe("who a fetched ticket is about", () => {
     expect(body.customer_profile_note).toMatch(/THIS customer's install/);
   });
 
-  it("names the unit a unit's fact is true of", async () => {
+  it("carries the customer-wide facts, and a ticket's own unit resolved", async () => {
     await addCustomer({
       name: "Acme",
       slug: "acme",
@@ -175,15 +175,37 @@ describe("who a fetched ticket is about", () => {
       name: "North plant",
       kind: "site",
     });
+    await addCustomerUnit({
+      customerSlug: "acme",
+      slug: "line-2",
+      name: "Line 2",
+      kind: "line",
+      parentSlug: "plant-north",
+    });
     await setCustomerFact({
       customerSlug: "acme",
       unit: "plant-north",
       kind: "timezone",
       value: "Europe/Berlin",
     });
-    const body = await fetchTicket(ticket());
-    expect(body.customer_profile.specifics).toEqual([
-      "plant-north: timezone: Europe/Berlin",
+    await setCustomerFact({
+      customerSlug: "acme",
+      kind: "contract",
+      value: "annual",
+    });
+    const plain = await fetchTicket(ticket());
+    expect(plain.customer_profile.specifics).toEqual(["contract: annual"]);
+
+    await sql`
+      update work_items set customer_unit_id =
+        (select id from customer_units where slug = 'line-2')
+      where external_id = 't-1'
+    `;
+    const onLine = await fetchTicket(ticket());
+    expect(onLine.customer_profile.unit).toBe("line-2 (line)");
+    expect(onLine.customer_profile.specifics).toEqual([
+      "contract: annual",
+      "timezone: Europe/Berlin (from plant-north)",
     ]);
   });
 

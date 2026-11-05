@@ -47,6 +47,7 @@ import {
   type FiledRow,
 } from "../library/filing";
 import { relinkBySlug, syncLinks } from "../library/links";
+import { unitNeighbourhood } from "../catalog/units";
 import { log } from "../infra/log";
 import { linkersBySlug, releaseSlug, rememberOldSlug } from "../wiki/aliases";
 
@@ -310,6 +311,8 @@ export async function listReferenceDocs(
     componentId?: string;
     componentTags?: string[];
     customerId?: string;
+    /** A unit and the units inside it (`unitWithDescendants`). */
+    unitIds?: string[];
     docVersion?: string;
     /**
      * Which shelf to list. Defaults to imported docs only: wiki articles have
@@ -325,10 +328,12 @@ export async function listReferenceDocs(
   return sql`
     select d.id, d.product_id, d.team_id, d.component_id, d.product_area, d.source,
            d.title, d.tags, d.status, d.doc_version, d.superseded_by,
-           d.customer_id, cu.slug as customer_slug, d.kind, d.slug,
+           d.customer_id, cu.slug as customer_slug,
+           d.customer_unit_id, un.slug as customer_unit_slug, d.kind, d.slug,
            d.version, d.created_at, d.updated_at, left(d.body, 400) as snippet
     from reference_docs d
     left join customers cu on cu.id = d.customer_id
+    left join customer_units un on un.id = d.customer_unit_id
     where 1=1
       ${kind === "any" ? sql`` : sql`and d.kind = ${kind}`}
       ${opts.status ? sql`and d.status     = ${opts.status}` : sql``}
@@ -336,6 +341,7 @@ export async function listReferenceDocs(
       ${opts.teamId ? sql`and d.team_id    = ${opts.teamId}` : sql``}
       ${opts.componentId ? sql`and (d.component_id = ${opts.componentId} or d.tags && ${opts.componentTags ?? []})` : sql``}
       ${opts.customerId ? sql`and d.customer_id = ${opts.customerId}` : sql``}
+      ${opts.unitIds?.length ? sql`and d.customer_unit_id = any(${opts.unitIds}::uuid[])` : sql``}
       ${opts.docVersion ? sql`and d.doc_version = ${opts.docVersion}` : sql``}
       ${opts.tags && opts.tags.length ? sql`and d.tags && ${opts.tags}` : sql``}
     order by d.updated_at desc
@@ -476,6 +482,10 @@ export interface ReferenceSearchOptions {
   exactTerms?: string[];
   /** Rank this customer's docs first without excluding the general ones. */
   boostCustomerId?: string;
+  /** Lifts this unit's docs, and less those of the units near it. Needs boostCustomerId. */
+  boostUnitId?: string | null;
+  /** A unit and the units inside it (`unitWithDescendants`). */
+  unitIds?: string[];
   /**
    * Narrow to imported docs or to wiki articles. Unlike the list, search spans
    * both by default: a curated article is findable beside, and can outrank, the
@@ -494,6 +504,9 @@ export async function searchReferenceDocs(
     ? opts.queryVectors
     : [await embedQueryLiteral(query)];
   const keywords = keywordInputs(query, opts.exactTerms);
+  const relatedUnitIds = opts.boostUnitId
+    ? await unitNeighbourhood(opts.boostUnitId)
+    : [];
 
   const inProduct = (id: string) =>
     opts.includeUnscoped
@@ -510,6 +523,7 @@ export async function searchReferenceDocs(
     ${opts.teamId ? inTeam(opts.teamId) : sql``}
     ${opts.componentId ? sql`and (d.component_id = ${opts.componentId} or d.tags && ${opts.componentTags ?? []})` : sql``}
     ${opts.customerId ? sql`and d.customer_id = ${opts.customerId}` : sql``}
+    ${opts.unitIds?.length ? sql`and d.customer_unit_id = any(${opts.unitIds}::uuid[])` : sql``}
     ${opts.docVersion ? sql`and d.doc_version = ${opts.docVersion}` : sql``}
     ${opts.tags && opts.tags.length ? sql`and d.tags && ${opts.tags}` : sql``}
   `;
@@ -564,17 +578,24 @@ export async function searchReferenceDocs(
     ),
     ${fusedCte(
       opts.boostCustomerId
-        ? { table: "reference_docs", customerId: opts.boostCustomerId }
+        ? {
+            table: "reference_docs",
+            customerId: opts.boostCustomerId,
+            unitId: opts.boostUnitId ?? null,
+            relatedUnitIds,
+          }
         : null,
     )}
     select d.id, d.title, d.tags, d.product_id, d.team_id, d.component_id, d.product_area,
            d.status, d.doc_version, d.version, d.source, d.created_at, d.updated_at,
-           d.customer_id, cu.slug as customer_slug, d.kind, d.slug,
+           d.customer_id, cu.slug as customer_slug,
+           d.customer_unit_id, un.slug as customer_unit_slug, d.kind, d.slug,
            coalesce(b.snippet, left(d.body, 400)) as snippet, b.page,
            f.cos_sim, f.fts_rank, f.trgm_sim, f.rrf
     from fused f
     join reference_docs d on d.id = f.id
     left join customers cu on cu.id = d.customer_id
+    left join customer_units un on un.id = d.customer_unit_id
     left join best_chunk b on b.id = f.id
     order by f.rrf desc, d.updated_at desc
     limit ${limit}

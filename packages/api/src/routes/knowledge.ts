@@ -34,7 +34,7 @@ import { recordRun } from "@tachy/core/analytics";
 import { sql, notFound } from "@tachy/core/infra";
 import {
   resolveComponentFilter,
-  getCustomerIdBySlug,
+  resolveCustomerFilter,
 } from "@tachy/core/catalog";
 import type { EntryScope } from "@tachy/core/access";
 import type { RunInput } from "@tachy/core/analytics";
@@ -112,10 +112,8 @@ function boolParam(value: string | undefined): boolean | undefined {
 }
 
 /** The library filters by slug; the query wants the id. */
-async function customerFilter(c: QueryCtx) {
-  const slug = c.req.query("customer");
-  return slug ? { customerId: await getCustomerIdBySlug(slug) } : {};
-}
+const customerFilter = (c: QueryCtx) =>
+  resolveCustomerFilter(c.req.query("customer"), c.req.query("unit"));
 
 async function listFilters(c: QueryCtx) {
   return {

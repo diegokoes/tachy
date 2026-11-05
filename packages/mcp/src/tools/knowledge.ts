@@ -21,7 +21,7 @@ import {
   listEnvironments,
 } from "@tachy/core/knowledge";
 import { resolveCurrentUserId } from "@tachy/core/access";
-import { getCustomerIdBySlug } from "@tachy/core/catalog";
+import { resolveCustomerFilter } from "@tachy/core/catalog";
 import { DUPLICATE_FLOOR } from "@tachy/core/search";
 import type { KnowledgeUpdateInput } from "@tachy/core/knowledge";
 import { tool } from "../server";
@@ -40,7 +40,12 @@ import {
   symptomsField,
   tagsField,
 } from "../fields";
-import { codeNextFor, componentIntoFilter, resolveScopeIds } from "../context";
+import {
+  codeNextFor,
+  componentIntoFilter,
+  customerBoost,
+  resolveScopeIds,
+} from "../context";
 
 tool(
   "search_knowledge",
@@ -56,6 +61,12 @@ tool(
         .describe(
           "Customer slug from list_customers. Ranks that customer's own material first WITHOUT hiding the rest - a fix found on one install is often the answer for the next.",
         ),
+      unit: z
+        .string()
+        .optional()
+        .describe(
+          "Unit slug or alias from list_customer_units, with customer: lifts what was learned on that part of their setup, and less the site above it, the lines in it and the layout it shares.",
+        ),
     },
     annotations: { readOnlyHint: true },
   },
@@ -66,6 +77,7 @@ tool(
     tags,
     component,
     customer,
+    unit,
     cloud,
     affected_version,
     fixed_version,
@@ -80,9 +92,7 @@ tool(
       teamId,
       includeUnscoped: true,
       ...(await componentIntoFilter(productId, component, tags)),
-      boostCustomerId: customer
-        ? await getCustomerIdBySlug(customer)
-        : undefined,
+      ...(await customerBoost(customer, unit)),
       cloud,
       affectedVersion: affected_version,
       fixedVersion: fixed_version,
@@ -404,7 +414,7 @@ tool(
   "list_knowledge_entries",
   {
     description:
-      "List knowledge entries (newest first), optionally filtered by status (e.g. 'draft' to find pending entries, 'deprecated' to review outdated ones), product_slug / team_slug (slug or alias), or tags. Useful for review and curation - not semantic search; use search_knowledge for consult.",
+      "List knowledge entries (newest first), optionally filtered by status (e.g. 'draft' to find pending entries, 'deprecated' to review outdated ones), product_slug / team_slug (slug or alias), tags, or a customer and one part of their setup. Useful for review and curation - not semantic search; use search_knowledge for consult.",
     inputSchema: {
       status: knowledgeStatusSchema.optional(),
       ...knowledgeFilterFields,
@@ -413,6 +423,13 @@ tool(
         .optional()
         .describe(
           "Component slug/alias: matches the entry's linked component or its slug/aliases in tags. Needs product_slug.",
+        ),
+      customer: z.string().optional().describe("Slug from list_customers"),
+      unit: z
+        .string()
+        .optional()
+        .describe(
+          "Unit slug or alias, with customer: entries filed under it or under a unit inside it.",
         ),
     },
     annotations: { readOnlyHint: true },
@@ -423,6 +440,8 @@ tool(
     team_slug,
     tags,
     component,
+    customer,
+    unit,
     cloud,
     affected_version,
     fixed_version,
@@ -437,6 +456,7 @@ tool(
       productId,
       teamId,
       ...(await componentIntoFilter(productId, component, tags)),
+      ...(await resolveCustomerFilter(customer, unit)),
       cloud,
       affectedVersion: affected_version,
       fixedVersion: fixed_version,

@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   addCustomer,
+  addCustomerUnit,
   getCustomerIdBySlug,
   setCustomerFact,
   setWorkItemCustomer,
@@ -257,6 +258,31 @@ describe("customer.profile", () => {
     const text = JSON.stringify(scrubbed.steps[0].output);
     expect(text).not.toContain("jane.doe@acme.example");
     expect(text).toContain("[EMAIL_");
+  });
+});
+
+describe("customer.profile for an item filed under a unit", () => {
+  it("reads the profile for that unit", async () => {
+    const item = await acmeItem();
+    await addCustomerUnit({
+      customerSlug: "acme",
+      slug: "line-3",
+      name: "Line 3",
+      kind: "line",
+    });
+    await setWorkItemCustomer(
+      item.id,
+      await getCustomerIdBySlug("acme"),
+      "line-3",
+    );
+    const { steps } = await run(
+      [{ id: "who", kind: "action", action: "customer.profile", params: {} }],
+      item.id,
+    );
+    expect(
+      (steps[0].output as { profile: { unit: { slug: string } } }).profile.unit
+        .slug,
+    ).toBe("line-3");
   });
 });
 
