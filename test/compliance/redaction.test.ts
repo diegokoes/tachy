@@ -14,6 +14,8 @@ import {
   globalImagesAllowed,
   globalRedactionEnabled,
   redactionPolicy,
+  containsSecret,
+  assertNoSecrets,
 } from "@tachy/core/compliance";
 import { estimateCostUsd, turnCostUsd } from "@tachy/core/analytics";
 import { type RawWorkItem } from "@tachy/core/sources";
@@ -128,6 +130,30 @@ describe("scrubText", () => {
     expect(scrubText("ref 4111 1111 1111 1112 in DevOps", map)).toBe(
       "ref 4111 1111 1111 1112 in DevOps",
     );
+  });
+});
+
+describe("containsSecret", () => {
+  it("finds credentials, keys and card numbers", () => {
+    expect(containsSecret("password: hunter2")).toBe(true);
+    expect(containsSecret("Authorization: Bearer abcdefgh12345678")).toBe(true);
+    expect(containsSecret("key ghp_" + "a".repeat(36))).toBe(true);
+    expect(containsSecret("card 4111 1111 1111 1111")).toBe(true);
+  });
+
+  it("passes plain configuration, contacts, and placeholders already scrubbed", () => {
+    expect(containsSecret("SAP IDoc over RFC, nightly")).toBe(false);
+    expect(containsSecret("10.4.12.31")).toBe(false);
+    expect(containsSecret("ops@example.com")).toBe(false);
+    expect(containsSecret("password: [SECRET_1]")).toBe(false);
+    expect(containsSecret(null)).toBe(false);
+  });
+
+  it("names the first field that holds one", () => {
+    expect(() =>
+      assertNoSecrets({ value: "fine", notes: "token=abc123" }),
+    ).toThrow(/^notes looks like a credential/);
+    expect(() => assertNoSecrets({ value: "fine", notes: null })).not.toThrow();
   });
 });
 
