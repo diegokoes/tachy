@@ -515,6 +515,24 @@ describe("customer product links and edit rights", () => {
     expect(theirs).toEqual({ customer: false, products: ["op"] });
   });
 
+  it("lists what is filed under the customer for its page", async () => {
+    await requestAs("/api/reference", "POST", {
+      title: "Northwind setup guide",
+      body: "How the lines are wired.",
+      productId: await tpdProductId(),
+      customerSlug: "northwind",
+    });
+    const filed = await (await get("/api/customers/northwind/filed")).json();
+    expect(filed.entries).toEqual([]);
+    expect(filed.documents).toEqual([
+      expect.objectContaining({
+        title: "Northwind setup guide",
+        unit: null,
+        original: false,
+      }),
+    ]);
+  });
+
   it("keeps a product's units with that product's team", async () => {
     const other = await otherTeamAdmin();
     await as(other, "/api/customers/northwind/products/op", "PUT", {});
@@ -545,7 +563,7 @@ describe("customer product links and edit rights", () => {
     const response = await requestAs("/api/customers/northwind", "DELETE");
     expect(response.status).toBe(409);
     const body = await response.json();
-    expect(body.detail).toMatch(/1 entries/);
+    expect(body.detail).toMatch(/1 entry filed/);
     expect(body.filed).toMatchObject({ entries: 1, work_items: 0 });
   });
 });

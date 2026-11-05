@@ -22,6 +22,11 @@ import {
   setWorkItemCustomer,
 } from "@tachy/core/catalog";
 import { linkRepo, listRepos } from "@tachy/core/code";
+import {
+  addSourceConnection,
+  addSourceProject,
+  deleteSourceConnection,
+} from "@tachy/core/sources";
 import { saveKnowledgeEntry } from "@tachy/core/knowledge";
 import { saveReferenceDoc } from "@tachy/core/reference";
 import { resetData, sql, tpdProductId } from "../database";
@@ -229,7 +234,14 @@ describe("customer profile", () => {
       "aggregation",
       "printer",
     ]);
-    expect(profile?.repos.map((r) => r.slug)).toEqual(["addon-logista"]);
+    expect(profile?.repos).toEqual([
+      {
+        slug: "addon-logista",
+        component: null,
+        index_status: "idle",
+        url: null,
+      },
+    ]);
     expect(profile?.facts).toEqual([
       {
         kind: "version",
@@ -250,6 +262,48 @@ describe("customer profile", () => {
       await getCustomerIdBySlug("logista"),
     );
     expect(after?.components.map((c) => c.slug)).toEqual(["aggregation"]);
+  });
+});
+
+describe("the customer's sources", () => {
+  beforeEach(resetData);
+
+  it("links each repo and project to its own page", async () => {
+    await addCustomer({ name: "Logista", slug: "logista" });
+    await linkRepo({
+      slug: "addon-portal",
+      url: "https://github.com/acme/portal.git",
+      customerSlug: "logista",
+    });
+    // Connections outlive resetData, and other files list them: this one goes again.
+    await addSourceConnection({
+      sourceType: "azure-devops",
+      slug: "customer-pages-ado",
+      baseUrl: "https://dev.azure.com/acme",
+    });
+    try {
+      await addSourceProject({
+        sourceSlug: "customer-pages-ado",
+        externalKey: "Logista Addons",
+        productSlug: "tpd",
+        customerSlug: "logista",
+      });
+      const profile = (await getCustomerProfile(
+        await getCustomerIdBySlug("logista"),
+      ))!;
+      expect(profile.repos.map((repo) => repo.url)).toEqual([
+        "https://github.com/acme/portal",
+      ]);
+      expect(profile.projects).toEqual([
+        {
+          source_slug: "customer-pages-ado",
+          external_key: "Logista Addons",
+          url: "https://dev.azure.com/acme/Logista%20Addons",
+        },
+      ]);
+    } finally {
+      await deleteSourceConnection("customer-pages-ado");
+    }
   });
 });
 
@@ -376,7 +430,7 @@ describe("deleting a customer", () => {
       customerSlug: "logista",
     });
     await expect(deleteCustomer("logista")).rejects.toThrow(
-      /1 entries, 1 docs filed under it/,
+      /1 entry, 1 doc filed under it/,
     );
   });
 
