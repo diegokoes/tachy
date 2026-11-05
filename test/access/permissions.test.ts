@@ -3,6 +3,8 @@ import { createApp } from "../../packages/api/src/app";
 import {
   createUser,
   setTeamMember,
+  canEditCustomer,
+  assertCanEditCustomer,
   canEditScope,
   canManageTeamBySlug,
   isAnyTeamAdmin,
@@ -11,7 +13,12 @@ import {
   assertGlobalAdmin,
   clearPermissionCache,
 } from "@tachy/core/access";
-import { addTeam, addProduct } from "@tachy/core/catalog";
+import {
+  addTeam,
+  addProduct,
+  addCustomer,
+  linkCustomerProduct,
+} from "@tachy/core/catalog";
 import { saveKnowledgeEntry } from "@tachy/core/knowledge";
 import { AppError } from "@tachy/core/infra";
 import { loginCookie } from "../http";
@@ -106,6 +113,58 @@ describe("core permissions", () => {
     await expect(
       sql`insert into team_members (team_id, user_id, role) values (${otherTeamId}, ${member}, 'lead')`,
     ).rejects.toThrow(/team_members_role_check/);
+  });
+});
+
+describe("who may edit a customer", () => {
+  let globalAdmin: string;
+  let ownAdmin: string;
+  let otherAdmin: string;
+  let member: string;
+  let customerId: string;
+  let otherProductId: string;
+
+  beforeAll(async () => {
+    await resetData();
+    globalAdmin = (
+      await createUser({ email: "root@example.com", role: "admin" })
+    ).id;
+    ownAdmin = (await createUser({ email: "lead@example.com", role: "member" }))
+      .id;
+    otherAdmin = (
+      await createUser({ email: "other@example.com", role: "member" })
+    ).id;
+    member = (await createUser({ email: "dev@example.com", role: "member" }))
+      .id;
+    await setTeamMember("test-team", "lead@example.com", "admin");
+    await setTeamMember("test-team", "dev@example.com", "member");
+    await addTeam("other-team", "Other Team");
+    await setTeamMember("other-team", "other@example.com", "admin");
+    otherProductId = (await addProduct("other-team", "op", "Other Product")).id;
+    customerId = (await addCustomer({ name: "Losvane", slug: "losvane" })).id;
+  });
+
+  beforeEach(() => clearPermissionCache());
+
+  it("lets any team admin edit a customer no product claims yet", async () => {
+    expect(await canEditCustomer(ownAdmin, customerId)).toBe(true);
+    expect(await canEditCustomer(otherAdmin, customerId)).toBe(true);
+    expect(await canEditCustomer(member, customerId)).toBe(false);
+  });
+
+  it("narrows to the teams of the products it uses once one is linked", async () => {
+    await linkCustomerProduct(customerId, await tqxProductId());
+    expect(await canEditCustomer(ownAdmin, customerId)).toBe(true);
+    expect(await canEditCustomer(otherAdmin, customerId)).toBe(false);
+    expect(await canEditCustomer(globalAdmin, customerId)).toBe(true);
+    await expect(
+      assertCanEditCustomer(otherAdmin, customerId),
+    ).rejects.toMatchObject({ code: "forbidden" });
+  });
+
+  it("lets a second team in when its product is linked too", async () => {
+    await linkCustomerProduct(customerId, otherProductId);
+    expect(await canEditCustomer(otherAdmin, customerId)).toBe(true);
   });
 });
 

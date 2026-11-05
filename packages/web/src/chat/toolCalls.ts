@@ -36,6 +36,7 @@ const TOOL_WORDS: Record<string, string> = {
   get_reference_doc: "read a doc",
   get_bucket_doc: "read a bucket doc",
   get_customer_profile: "read the customer",
+  get_product_blueprint: "read the blueprint",
   get_project_context: "read the project",
   get_ado_wiki_page: "read a wiki page",
   get_ado_work_item_schema: "read the item's form",
@@ -54,6 +55,9 @@ const TOOL_WORDS: Record<string, string> = {
   record_analysis_run: "recorded the analysis",
   add_knowledge_feedback: "left feedback",
   set_work_item_customer: "set the customer",
+  set_customer_fact: "recorded a customer fact",
+  add_customer_unit: "added a unit",
+  add_unit_kind: "extended the blueprint",
   ingest_context: "took in the context",
 };
 

@@ -31,8 +31,10 @@ export interface SeededUnit {
   id: string;
   slug: string;
   customerId: string;
-  /** The profile it conforms to, when it has one - the sibling-boost case. */
-  profileId: string | null;
+  /** Null for a general unit; an item is filed under it only in its product. */
+  productId: string | null;
+  /** The template it follows, when it has one - the sibling-boost case. */
+  templateId: string | null;
 }
 
 export interface Catalog {
@@ -40,7 +42,7 @@ export interface Catalog {
   components: SeededComponent[];
   patterns: string[];
   labels: string[];
-  /** One customer's estate, so entries and tickets can be tagged against it. */
+  /** Two customers' setups, so entries and tickets can be tagged against them. */
   units: SeededUnit[];
 }
 
@@ -90,7 +92,8 @@ export async function seedCatalog(
 
   const components = await seedComponents(tx, volumes, products);
   const labels = await seedLabels(tx, volumes, products);
-  await seedCustomerComponents(tx, volumes, customers, components);
+  const runs = await seedCustomerComponents(tx, volumes, customers, components);
+  await seedBlueprints(tx, products);
   const units = await seedCustomerFacts(
     tx,
     volumes,
@@ -98,6 +101,12 @@ export async function seedCatalog(
     components,
     products,
   );
+  await seedCustomerProducts(tx, [
+    ...runs,
+    ...units.flatMap((u) =>
+      u.productId ? [{ customerId: u.customerId, productId: u.productId }] : [],
+    ),
+  ]);
 
   return { customers, components, patterns, labels, units };
 }
@@ -199,14 +208,23 @@ async function seedLabels(
   return slugs;
 }
 
-/** A stride rather than a dense block, so the join table looks scattered. */
+interface ProductUse {
+  customerId: string;
+  productId: string;
+}
+
+/**
+ * A stride rather than a dense block, so the join table looks scattered.
+ * Returns which product each link puts the customer in.
+ */
 async function seedCustomerComponents(
   tx: Tx,
   volumes: Volumes,
   customers: SeededCustomer[],
   components: SeededComponent[],
-): Promise<void> {
+): Promise<ProductUse[]> {
   const rows: Record<string, unknown>[] = [];
+  const uses: ProductUse[] = [];
   const seen = new Set<string>();
   for (let i = 0; i < volumes.customerComponents; i++) {
     const customer = customers[i % customers.length];
@@ -219,12 +237,108 @@ async function seedCustomerComponents(
       component_id: comp.id,
       notes: chance(rngFor("cc", i), 0.2) ? "Customer-specific build." : null,
     });
+    uses.push({ customerId: customer.id, productId: comp.productId });
   }
   await insertRows(
     tx,
     "customer_components",
     ["customer_id", "component_id", "notes"],
     rows,
+  );
+  return uses;
+}
+
+/** What `saveKnowledgeEntry` and the unit writes do as a side effect: link the product. */
+async function seedCustomerProducts(tx: Tx, uses: ProductUse[]): Promise<void> {
+  const pairs = new Map(
+    uses.map((use) => [`${use.customerId}:${use.productId}`, use]),
+  );
+  await insertRows(
+    tx,
+    "customer_products",
+    ["customer_id", "product_id"],
+    [...pairs.values()].map((use) => ({
+      customer_id: use.customerId,
+      product_id: use.productId,
+    })),
+  );
+}
+
+/**
+ * The first product is shaped like trellis: sites hold lines, and lines
+ * follow a layout. The second has integrations, as a reporting product does.
+ */
+async function seedBlueprints(
+  tx: Tx,
+  products: SeededProduct[],
+): Promise<void> {
+  const [lines, integrations] = products;
+  const kinds: Record<string, unknown>[] = [];
+  const facts: Record<string, unknown>[] = [];
+  const kind = (
+    product: SeededProduct,
+    slug: string,
+    name: string,
+    edges: { parent?: string; template?: string } = {},
+  ) => {
+    const id = uuidFor(`unit_kind_${product.slug}`, kinds.length);
+    kinds.push({
+      id,
+      product_id: product.id,
+      slug,
+      name,
+      parent_kind_id: edges.parent ?? null,
+      template_kind_id: edges.template ?? null,
+      position: kinds.length,
+    });
+    return id;
+  };
+  const fact = (kindId: string, slug: string, choices: string[] = []) =>
+    facts.push({
+      id: uuidFor("unit_kind_fact", facts.length),
+      unit_kind_id: kindId,
+      kind: slug,
+      choices,
+      position: facts.length,
+    });
+
+  if (lines) {
+    const site = kind(lines, "site", "Site");
+    const layout = kind(lines, "layout", "Line layout");
+    const line = kind(lines, "line", "Production line", {
+      parent: site,
+      template: layout,
+    });
+    fact(site, "timezone");
+    fact(layout, "printers");
+    fact(line, "ip");
+    fact(line, "coding_mode", ["CT1", "CT2", "CT3"]);
+  }
+  if (integrations) {
+    const integration = kind(integrations, "integration", "Integration");
+    fact(integration, "system", ["SAP", "Dynamics 365", "Oracle WMS"]);
+    fact(integration, "connection");
+    fact(integration, "version");
+  }
+  await insertRows(
+    tx,
+    "unit_kinds",
+    [
+      "id",
+      "product_id",
+      "slug",
+      "name",
+      "parent_kind_id",
+      "template_kind_id",
+      "position",
+    ],
+    kinds,
+  );
+  await insertRows(
+    tx,
+    "unit_kind_facts",
+    ["id", "unit_kind_id", "kind", "choices", "position"],
+    facts,
   );
 }
 
@@ -279,41 +393,59 @@ async function seedCustomerFacts(
   components: SeededComponent[],
   products: SeededProduct[],
 ): Promise<SeededUnit[]> {
-  // One customer gets a real estate - two sites of lines, two of which share a
-  // layout - so the resolution ladder and the unit tree have something to show.
-  // The rest stay flat, which is the commoner shape.
+  // Two real setups: lines in two sites, two following a layout, for the
+  // resolution ladder and the unit tree; a second product's integrations. The
+  // rest stay flat, which is the commoner shape.
   const unitRows: Record<string, unknown>[] = [];
   const unitIds = new Map<string, string>();
-  const estateOwner = customers[0];
-  if (estateOwner) {
-    const unit = (
-      slug: string,
-      name: string,
-      kind: string,
-      parent?: string,
-      profile?: string,
-    ) => {
-      const id = uuidFor("customer_unit", unitRows.length);
-      unitIds.set(slug, id);
-      unitRows.push({
-        id,
-        customer_id: estateOwner.id,
-        parent_id: parent ? unitIds.get(parent) : null,
-        profile_id: profile ? unitIds.get(profile) : null,
-        kind,
-        slug,
-        name,
-        aliases: [],
-        notes: null,
+  const unit = (
+    owner: SeededCustomer,
+    product: SeededProduct,
+    slug: string,
+    name: string,
+    kind: string,
+    edges: { parent?: string; template?: string } = {},
+  ) => {
+    const id = uuidFor("customer_unit", unitRows.length);
+    unitIds.set(slug, id);
+    unitRows.push({
+      id,
+      customer_id: owner.id,
+      product_id: product.id,
+      parent_id: edges.parent ? unitIds.get(edges.parent) : null,
+      template_id: edges.template ? unitIds.get(edges.template) : null,
+      kind,
+      slug,
+      name,
+      aliases: [],
+      notes: null,
+    });
+  };
+  const [setupOwner, integrationsOwner] = customers;
+  const [lines, integrations] = products;
+  if (setupOwner && lines) {
+    unit(setupOwner, lines, "layout-3", "Layout 3", "layout");
+    unit(setupOwner, lines, "calderra", "Altavon / Calderra", "site");
+    unit(setupOwner, lines, "logrono", "Logrono", "site");
+    for (const slug of ["pln191", "pln192"])
+      unit(setupOwner, lines, slug, slug.toUpperCase(), "line", {
+        parent: "calderra",
+        template: "layout-3",
       });
-    };
-    unit("layout-3", "Layout 3", "layout");
-    unit("calderra", "Altavon / Calderra", "site");
-    unit("logrono", "Logrono", "site");
-    unit("pln191", "PLN191", "line", "calderra", "layout-3");
-    unit("pln192", "PLN192", "line", "calderra", "layout-3");
-    unit("tpc141", "TPC141", "line", "calderra");
-    unit("tpc146", "TPC146", "line", "logrono");
+    unit(setupOwner, lines, "tpc141", "TPC141", "line", {
+      parent: "calderra",
+    });
+    unit(setupOwner, lines, "tpc146", "TPC146", "line", { parent: "logrono" });
+  }
+  if (integrationsOwner && integrations) {
+    unit(integrationsOwner, integrations, "sap", "SAP", "integration");
+    unit(
+      integrationsOwner,
+      integrations,
+      "dynamics",
+      "Dynamics 365",
+      "integration",
+    );
   }
   await insertRows(
     tx,
@@ -321,8 +453,9 @@ async function seedCustomerFacts(
     [
       "id",
       "customer_id",
+      "product_id",
       "parent_id",
-      "profile_id",
+      "template_id",
       "kind",
       "slug",
       "name",
@@ -334,32 +467,39 @@ async function seedCustomerFacts(
 
   const rows: Record<string, unknown>[] = [];
 
-  // Facts at three levels of that estate, so a resolved read shows the ladder
+  // Facts at three levels of that setup, so a resolved read shows the ladder
   // choosing between them.
-  if (estateOwner) {
-    const at = (
-      slug: string | null,
-      kind: string,
-      label: string,
-      value: string,
-    ) =>
-      rows.push({
-        id: uuidFor("customer_fact_unit", rows.length),
-        customer_id: estateOwner.id,
-        unit_id: slug ? unitIds.get(slug) : null,
-        kind,
-        label,
-        value,
-        notes: null,
-        source: "seed",
-        component_id: null,
-      });
-    at(null, "coding_mode", "", "CT1");
-    at("calderra", "timezone", "", "Europe/Madrid");
-    at("layout-3", "coding_mode", "", "CT2");
-    at("pln191", "ip", "plc", "10.4.12.31");
-    at("pln191", "ip", "scada", "10.4.12.32");
-    at("tpc141", "ip", "plc", "10.4.12.41");
+  const at = (
+    owner: SeededCustomer,
+    slug: string | null,
+    kind: string,
+    label: string,
+    value: string,
+  ) =>
+    rows.push({
+      id: uuidFor("customer_fact_unit", rows.length),
+      customer_id: owner.id,
+      unit_id: slug ? unitIds.get(slug) : null,
+      kind,
+      label,
+      value,
+      notes: null,
+      source: "seed",
+      component_id: null,
+    });
+  if (setupOwner && lines) {
+    at(setupOwner, null, "coding_mode", "", "CT1");
+    at(setupOwner, "calderra", "timezone", "", "Europe/Madrid");
+    at(setupOwner, "layout-3", "coding_mode", "", "CT2");
+    at(setupOwner, "pln191", "ip", "plc", "10.4.12.31");
+    at(setupOwner, "pln191", "ip", "scada", "10.4.12.32");
+    at(setupOwner, "tpc141", "ip", "plc", "10.4.12.41");
+  }
+  if (integrationsOwner && integrations) {
+    at(integrationsOwner, "sap", "system", "", "SAP");
+    at(integrationsOwner, "sap", "connection", "", "IDoc over RFC, nightly");
+    at(integrationsOwner, "dynamics", "system", "", "Dynamics 365");
+    at(integrationsOwner, "dynamics", "connection", "", "hourly poll");
   }
 
   outer: for (const customer of customers) {
@@ -410,6 +550,7 @@ async function seedCustomerFacts(
     id: u.id as string,
     slug: u.slug as string,
     customerId: u.customer_id as string,
-    profileId: (u.profile_id as string) ?? null,
+    productId: (u.product_id as string) ?? null,
+    templateId: (u.template_id as string) ?? null,
   }));
 }

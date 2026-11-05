@@ -39,6 +39,7 @@ import {
 } from "../library/revisions";
 import type { ActorRef } from "../library/revisions";
 import {
+  assertFilingFitsUnit,
   filingSlugs,
   patchedFiling,
   resolveFilingComponent,
@@ -90,7 +91,7 @@ export interface ReferenceDocInput {
   component?: string | null;
   /** Whose install this documents. Absent/null = general to every customer. */
   customerSlug?: string | null;
-  /** Which part of their estate, by unit slug/alias. Needs customerSlug. */
+  /** Which part of their setup, by unit slug/alias. Needs customerSlug. */
   unit?: string | null;
   /** 'wiki' makes it an article: addressed by slug, placed by categories. */
   kind?: string;
@@ -201,6 +202,7 @@ export async function saveReferenceDoc(input: ReferenceDocInput) {
     input.customerSlug,
     input.unit,
   );
+  await assertFilingFitsUnit(customerUnitId, productId);
   const kind = input.kind ?? "reference";
   if (kind === "wiki") {
     if (!input.slug) throw badInput("a wiki article needs a slug");

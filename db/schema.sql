@@ -220,23 +220,75 @@ create table customers (
 create index customers_aliases_idx on customers using gin (aliases);
 create index customers_domains_idx on customers using gin (email_domains);
 
--- A named part of one customer's estate: a site, a production line, a tenant.
--- The second axis of the customer model: customers say who, units say which of
--- theirs, because most of what is true of a big account is true of one place in
--- it rather than of the account.
+-- The products a customer uses. Who may edit a customer follows from it: the
+-- team admins of these products' teams.
+create table customer_products (
+    customer_id  uuid not null references customers(id) on delete cascade,
+    product_id   uuid not null references products(id) on delete cascade,
+    notes        text,
+    created_at   timestamptz not null default now(),
+    primary key (customer_id, product_id)
+);
+
+create index customer_products_product_idx on customer_products(product_id);
+
+-- A product's blueprint: the kinds of unit its customers' setups divide into, a
+-- site holding production lines that follow a layout, or the integrations of a
+-- reporting product. A product with no kinds has no blueprint, and its units
+-- take any kind and any fact.
+create table unit_kinds (
+    id               uuid primary key default gen_random_uuid(),
+    product_id       uuid not null references products(id) on delete cascade,
+    slug             text not null,
+    name             text not null,
+    description      text,
+    -- The kind a unit of this kind sits inside. A unit may also sit at the top
+    -- of the setup; null: it always does.
+    parent_kind_id   uuid references unit_kinds(id) on delete set null,
+    -- The kind of unit this kind's units may follow as a template, as lines
+    -- follow a layout. Null: they follow none.
+    template_kind_id uuid references unit_kinds(id) on delete set null,
+    position         integer not null default 0,
+    created_at       timestamptz not null default now(),
+    unique (product_id, slug),
+    constraint unit_kinds_no_self_parent   check (parent_kind_id   is null or parent_kind_id   <> id),
+    constraint unit_kinds_no_self_template check (template_kind_id is null or template_kind_id <> id)
+);
+
+create index unit_kinds_product_idx on unit_kinds(product_id);
+
+-- The facts a unit of a kind records. `kind` is the fact's kind, as
+-- customer_facts.kind stores it; its label stays free.
+create table unit_kind_facts (
+    id            uuid primary key default gen_random_uuid(),
+    unit_kind_id  uuid not null references unit_kinds(id) on delete cascade,
+    kind          text not null,
+    description   text,
+    -- Every value the fact may take. Empty: any value.
+    choices       text[] not null default '{}',
+    position      integer not null default 0,
+    unique (unit_kind_id, kind)
+);
+
+-- A named part of one customer's setup: a site, a production line, an
+-- integration, a tenant. Customers say who, units say which of theirs, because
+-- most of what is true of a big account is true of one place in it.
 --
--- `kind` is a deployment-specific vocabulary like customer_facts.kind and
--- knowledge_entries.cloud: no lookup table, because what a customer divides
--- into differs per product (site/line here, tenant/region elsewhere).
+-- `kind` follows the blueprint of the unit's product when that product has one
+-- (unit_kinds.slug); a general unit, with no product, takes any kind.
 create table customer_units (
     id           uuid primary key default gen_random_uuid(),
     customer_id  uuid not null references customers(id) on delete cascade,
+    -- The product whose setup this unit belongs to. Null: a general unit,
+    -- outside any blueprint.
+    product_id   uuid references products(id) on delete set null,
     -- Containment: a line is inside a site.
     parent_id    uuid references customer_units(id) on delete cascade,
-    -- Sharing without containment: a unit whose facts this one inherits without
-    -- being part of it - the layout several production lines conform to. Set
-    -- null on delete rather than cascade: losing a template must not delete the
-    -- lines that referenced it.
+    -- The unit whose facts this one adopts without being part of it: the layout
+    -- several production lines follow. Set null on delete rather than cascade:
+    -- losing a template must not delete the lines that follow it.
+    template_id  uuid references customer_units(id) on delete set null,
+    -- Unused: kept so the previous release still runs against this schema.
     profile_id   uuid references customer_units(id) on delete set null,
     kind         text not null,
     slug         text not null,
@@ -246,12 +298,15 @@ create table customer_units (
     created_at   timestamptz not null default now(),
     updated_at   timestamptz not null default now(),
     unique (customer_id, slug),
-    constraint customer_units_no_self_parent  check (parent_id  is null or parent_id  <> id),
-    constraint customer_units_no_self_profile check (profile_id is null or profile_id <> id)
+    constraint customer_units_no_self_parent   check (parent_id   is null or parent_id   <> id),
+    constraint customer_units_no_self_template check (template_id is null or template_id <> id),
+    constraint customer_units_no_self_profile  check (profile_id  is null or profile_id  <> id)
 );
 
 create index customer_units_customer_idx on customer_units(customer_id);
+create index customer_units_product_idx  on customer_units(product_id);
 create index customer_units_parent_idx   on customer_units(parent_id);
+create index customer_units_template_idx on customer_units(template_id);
 create index customer_units_profile_idx  on customer_units(profile_id);
 create index customer_units_aliases_idx  on customer_units using gin (aliases);
 
@@ -303,7 +358,7 @@ create table work_items (
     product_id            uuid references products(id) on delete set null,
     team_id               uuid references teams(id) on delete set null,
     customer_id           uuid references customers(id) on delete set null,
-    -- Which part of their estate this ticket is about. Never inferred from the
+    -- Which part of their setup this ticket is about. Never inferred from the
     -- text: a confidently wrong attribution is not recoverable, so it is set
     -- explicitly or left null.
     customer_unit_id uuid references customer_units(id) on delete set null,
@@ -500,19 +555,21 @@ create index customer_components_component_idx on customer_components(component_
 -- the version they run, their line layout, an integration they depend on. Their
 -- repos, projects and components are edges instead - those are real records.
 --
--- `kind` is a deployment-specific vocabulary, like knowledge_entries.cloud:
--- no lookup table, because what counts as a customer specific differs per
--- deployment. list_customer_fact_kinds reports what is already in use so callers
--- reuse a value instead of coining a near-duplicate.
+-- On a unit of a product with a blueprint, `kind` is one the blueprint lists
+-- for the unit's kind (unit_kind_facts). Elsewhere it is a deployment-specific
+-- vocabulary, like knowledge_entries.cloud: list_customer_fact_kinds reports
+-- what is already in use so callers reuse a value instead of coining a
+-- near-duplicate.
 create table customer_facts (
     id           uuid primary key default gen_random_uuid(),
     customer_id  uuid not null references customers(id) on delete cascade,
     kind         text not null,
     -- What the fact is about when the kind alone is ambiguous: which product a
-    -- version belongs to, which line a layout describes. '' when it needs none,
-    -- so (customer, kind, label) can be unique and a re-set replaces in place.
+    -- version belongs to, which device an address belongs to. '' when it needs
+    -- none, so (customer, kind, label) can be unique and a re-set replaces in
+    -- place.
     label        text not null default '',
-    -- Which part of their estate this is true of. Null = true of the whole
+    -- Which part of their setup this is true of. Null: true of the whole
     -- customer.
     unit_id      uuid references customer_units(id) on delete cascade,
     value        text not null,
@@ -557,7 +614,7 @@ create table knowledge_entries (
     -- which part of the product, customer says whose. Null = general to everyone.
     -- Held here rather than read through work_item_id, which is set null on delete.
     customer_id         uuid references customers(id) on delete set null,
-    -- Whose part of the estate this was learned on. Narrows customer_id the way
+    -- Which part of their setup this was learned on. Narrows customer_id the way
     -- component_id narrows product_id.
     customer_unit_id    uuid references customer_units(id) on delete set null,
     created_by          uuid references users(id) on delete set null,

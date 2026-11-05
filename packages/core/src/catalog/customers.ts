@@ -9,8 +9,18 @@ export type { CustomerProfile };
 import { sql } from "../infra/db";
 import { nearestSlugsHint } from "./nearest";
 import { badInput, conflict, notFound } from "../infra/errors";
+import { assertNoSecrets } from "../compliance/redaction";
 import { resolveComponentStrict } from "./components";
-import { listCustomerUnits, resolveUnit, resolveUnitFacts } from "./units";
+import { resolveFactValue } from "./blueprints";
+import {
+  assertUnitInProduct,
+  filedText,
+  filedTotal,
+  listCustomerUnits,
+  resolveUnit,
+  resolveUnitFacts,
+} from "./units";
+import { linkCustomerProduct, listCustomerProducts } from "./customer-products";
 
 export interface CustomerInput {
   name: string;
@@ -18,6 +28,8 @@ export interface CustomerInput {
   aliases?: string[];
   emailDomains?: string[];
   notes?: string;
+  /** Products the customer uses, linked as it is created. */
+  productIds?: string[];
 }
 
 /** Domains are compared lowercased and bare, so '@Foo.COM ' and 'foo.com' agree. */
@@ -26,25 +38,57 @@ const normalizeDomains = (domains: string[] | undefined) =>
     .map((d) => d.trim().toLowerCase().replace(/^@/, ""))
     .filter(Boolean);
 
-export async function listCustomers() {
-  return sql<
-    CustomerRow[]
-  >`select id, name, slug, aliases, email_domains, notes from customers order by name`;
+export interface CustomerListOptions {
+  /** Only customers that use this product. */
+  productId?: string;
+  /** Only customers that run this component. */
+  componentId?: string;
+}
+
+export async function listCustomers(opts: CustomerListOptions = {}) {
+  return sql<CustomerRow[]>`
+    select c.id, c.name, c.slug, c.aliases, c.email_domains, c.notes,
+           coalesce((
+             select array_agg(p.slug order by p.slug)
+             from customer_products cp join products p on p.id = cp.product_id
+             where cp.customer_id = c.id
+           ), '{}') as products
+    from customers c
+    where true
+      ${
+        opts.productId
+          ? sql`and exists (select 1 from customer_products cp
+                            where cp.customer_id = c.id and cp.product_id = ${opts.productId})`
+          : sql``
+      }
+      ${
+        opts.componentId
+          ? sql`and exists (select 1 from customer_components cc
+                            where cc.customer_id = c.id and cc.component_id = ${opts.componentId})`
+          : sql``
+      }
+    order by c.name
+  `;
 }
 
 export async function addCustomer(input: CustomerInput) {
-  const [row] = await sql`
-    insert into customers (name, slug, aliases, email_domains, notes)
-    values (${input.name}, ${input.slug}, ${input.aliases ?? []},
-            ${normalizeDomains(input.emailDomains)}, ${input.notes ?? null})
-    on conflict (slug) do update set
-      name = excluded.name,
-      aliases = excluded.aliases,
-      email_domains = excluded.email_domains,
-      notes = coalesce(excluded.notes, customers.notes)
-    returning id, name, slug, aliases, email_domains
-  `;
-  return row;
+  assertNoSecrets({ notes: input.notes });
+  return sql.begin(async (tx) => {
+    const [row] = await tx`
+      insert into customers (name, slug, aliases, email_domains, notes)
+      values (${input.name}, ${input.slug}, ${input.aliases ?? []},
+              ${normalizeDomains(input.emailDomains)}, ${input.notes ?? null})
+      on conflict (slug) do update set
+        name = excluded.name,
+        aliases = excluded.aliases,
+        email_domains = excluded.email_domains,
+        notes = coalesce(excluded.notes, customers.notes)
+      returning id, name, slug, aliases, email_domains
+    `;
+    for (const productId of input.productIds ?? [])
+      await linkCustomerProduct(row.id, productId, { db: tx });
+    return row;
+  });
 }
 
 export async function updateCustomer(
@@ -56,6 +100,7 @@ export async function updateCustomer(
     notes?: string | null;
   },
 ) {
+  assertNoSecrets({ notes: patch.notes });
   const [current] =
     await sql`select id, name, aliases, email_domains, notes from customers where slug = ${slug}`;
   if (!current) throw notFound(`customer '${slug}' not found`);
@@ -71,14 +116,35 @@ export async function updateCustomer(
   return row;
 }
 
+/** What names a customer, which a delete would un-file or orphan. */
+type FiledUnderCustomer = {
+  work_items: number;
+  entries: number;
+  docs: number;
+  repos: number;
+  source_projects: number;
+};
+
+/**
+ * Refused while tickets, entries, docs, repos or source projects name the
+ * customer: deleting it would un-file them silently. Its units, facts and links
+ * go with it.
+ */
 export async function deleteCustomer(slug: string) {
   const [current] = await sql`select id from customers where slug = ${slug}`;
   if (!current) throw notFound(`customer '${slug}' not found`);
-  const [ref] =
-    await sql`select count(*)::int as n from work_items where customer_id = ${current.id}`;
-  if (ref.n > 0)
+  const [filed] = await sql<FiledUnderCustomer[]>`
+    select
+      (select count(*)::int from work_items where customer_id = ${current.id}) as work_items,
+      (select count(*)::int from knowledge_entries where customer_id = ${current.id}) as entries,
+      (select count(*)::int from reference_docs where customer_id = ${current.id}) as docs,
+      (select count(*)::int from repos where customer_id = ${current.id}) as repos,
+      (select count(*)::int from source_projects where customer_id = ${current.id}) as source_projects
+  `;
+  if (filedTotal(filed) > 0)
     throw conflict(
-      `customer '${slug}' is referenced by ${ref.n} work item(s) - reassign them first (set_work_item_customer)`,
+      `customer '${slug}' still has ${filedText(filed)} filed under it: reassign them first (set_work_item_customer for tickets)`,
+      { filed },
     );
   await sql`delete from customers where id = ${current.id}`;
   return { deleted: true, slug };
@@ -162,7 +228,7 @@ export async function getCustomerIdBySlug(slug: string): Promise<string> {
 }
 
 /**
- * Attribute a ticket to a customer, and optionally to one part of their estate.
+ * Attribute a ticket to a customer, and optionally to one part of their setup.
  * Clearing the customer clears the unit with it: a unit belongs to a customer,
  * so a ticket carrying a unit but no customer is a state that cannot be read
  * back sensibly.
@@ -175,15 +241,20 @@ export async function setWorkItemCustomer(
   // An absent `unit` leaves it alone and an explicit null clears it: the common
   // call sets the customer alone and keeps the line the ticket was narrowed to.
   // It survives only while the customer is unchanged.
-  const [current] =
-    await sql`select customer_id from work_items where id = ${workItemId}`;
+  const [current] = await sql`
+    select customer_id, product_id from work_items where id = ${workItemId}
+  `;
   const keepUnit =
     unit === undefined &&
     customerId !== null &&
     current?.customer_id === customerId;
 
-  const unitId =
-    customerId && unit ? (await resolveUnit(customerId, unit)).id : null;
+  let unitId: string | null = null;
+  if (customerId && unit) {
+    const resolved = await resolveUnit(customerId, unit);
+    assertUnitInProduct(resolved, current?.product_id ?? null);
+    unitId = resolved.id;
+  }
   await sql`
     update work_items
     set customer_id = ${customerId},
@@ -223,40 +294,60 @@ export interface CustomerFactInput {
   notes?: string | null;
   source?: string | null;
   componentSlug?: string | null;
+  /** Resolves `componentSlug` on a customer-wide fact; a unit's product wins over it. */
   productId?: string | null;
   /**
-   * Which part of their estate this is true of, by unit slug or alias. Omit for
+   * Which part of their setup this is true of, by unit slug or alias. Omit for
    * a fact true of the whole customer.
    */
   unit?: string | null;
 }
 
 /**
- * Set one specific about a customer's install. Keyed on
- * (customer, unit, kind, label) with nulls not distinct, so re-stating a version
- * replaces it instead of leaving two answers to the same question - while the
- * same kind stated for a particular line coexists with the customer-wide one.
+ * Set one specific about a customer's install. Keyed on (customer, unit, kind,
+ * label) with nulls not distinct, so re-stating a version replaces it, while the
+ * same kind stated for one line coexists with the customer-wide one. On a unit
+ * of a product with a blueprint, `resolveFactValue` decides what may be stored.
  */
 export async function setCustomerFact(input: CustomerFactInput) {
   const customerId = await getCustomerIdBySlug(input.customerSlug);
   if (!input.kind.trim()) throw badInput("kind is required");
   if (!input.value.trim()) throw badInput("value is required");
+  assertNoSecrets({
+    value: input.value,
+    label: input.label,
+    notes: input.notes,
+    source: input.source,
+  });
+  const unit = input.unit ? await resolveUnit(customerId, input.unit) : null;
+  if (unit && input.productId) assertUnitInProduct(unit, input.productId);
+  const productId = unit?.product_id ?? input.productId ?? null;
   let componentId: string | null = null;
   if (input.componentSlug) {
-    if (!input.productId)
+    if (!productId)
       throw badInput(
         "a component needs its product: pass product_slug with component",
       );
-    componentId = (
-      await resolveComponentStrict(input.productId, input.componentSlug)
-    ).id;
+    componentId = (await resolveComponentStrict(productId, input.componentSlug))
+      .id;
   }
-  const unitId = input.unit
-    ? (await resolveUnit(customerId, input.unit)).id
-    : null;
-  const [row] = await sql`
+  const kind = input.kind.trim();
+  const value = await resolveFactValue(
+    sql,
+    unit ? { productId: unit.product_id, kind: unit.kind } : null,
+    { kind, value: input.value.trim() },
+  );
+  const [row] = await sql<
+    {
+      id: string;
+      kind: string;
+      label: string;
+      value: string;
+      unit_id: string | null;
+    }[]
+  >`
     insert into customer_facts (customer_id, unit_id, kind, label, value, notes, source, component_id)
-    values (${customerId}, ${unitId}, ${input.kind.trim()}, ${input.label?.trim() ?? ""}, ${input.value.trim()},
+    values (${customerId}, ${unit?.id ?? null}, ${kind}, ${input.label?.trim() ?? ""}, ${value},
             ${input.notes ?? null}, ${input.source ?? null}, ${componentId})
     on conflict (customer_id, unit_id, kind, label) do update set
       value        = excluded.value,
@@ -265,24 +356,43 @@ export async function setCustomerFact(input: CustomerFactInput) {
       component_id = excluded.component_id
     returning id, kind, label, value, unit_id
   `;
-  return row;
+  return { ...row, unit: unit?.slug ?? null };
 }
 
-export async function deleteCustomerFact(id: string) {
-  const [row] =
-    await sql`delete from customer_facts where id = ${id} returning id`;
+/** Only a fact of `customerId`: a fact id from another customer is not found. */
+export async function deleteCustomerFact(customerId: string, id: string) {
+  const [row] = await sql`
+    delete from customer_facts
+    where id = ${id} and customer_id = ${customerId}
+    returning id
+  `;
   if (!row) throw notFound(`customer fact '${id}' not found`);
   return { deleted: true, id };
 }
 
+/** One fact with the unit it is on, for the rights a write to it needs. */
+export async function getCustomerFact(customerId: string, id: string) {
+  const [row] = await sql<
+    { id: string; unit_id: string | null; product_id: string | null }[]
+  >`
+    select f.id, f.unit_id, u.product_id
+    from customer_facts f left join customer_units u on u.id = f.unit_id
+    where f.id = ${id} and f.customer_id = ${customerId}
+  `;
+  if (!row) throw notFound(`customer fact '${id}' not found`);
+  return row;
+}
+
 export async function listCustomerFacts(customerId: string) {
   return sql<CustomerFactRow[]>`
-    select f.id, f.kind, f.label, f.value, f.notes, f.source,
-           f.component_id, c.slug as component_slug, f.updated_at
+    select f.id, f.unit_id, u.slug as unit_slug, f.kind, f.label, f.value,
+           f.notes, f.source, f.component_id, c.slug as component_slug,
+           f.updated_at
     from customer_facts f
+    left join customer_units u on u.id = f.unit_id
     left join components c on c.id = f.component_id
     where f.customer_id = ${customerId}
-    order by f.kind, f.label
+    order by u.slug nulls first, f.kind, f.label
   `;
 }
 
@@ -301,7 +411,7 @@ export async function listCustomerFactKinds(): Promise<
   `;
 }
 
-/** Record that a customer runs a component. Idempotent. */
+/** Record that a customer runs a component, and so uses its product. Idempotent. */
 export async function linkCustomerComponent(
   customerSlug: string,
   productId: string,
@@ -310,12 +420,15 @@ export async function linkCustomerComponent(
 ) {
   const customerId = await getCustomerIdBySlug(customerSlug);
   const component = await resolveComponentStrict(productId, componentSlug);
-  await sql`
-    insert into customer_components (customer_id, component_id, notes)
-    values (${customerId}, ${component.id}, ${notes ?? null})
-    on conflict (customer_id, component_id) do update set
-      notes = coalesce(excluded.notes, customer_components.notes)
-  `;
+  await sql.begin(async (tx) => {
+    await tx`
+      insert into customer_components (customer_id, component_id, notes)
+      values (${customerId}, ${component.id}, ${notes ?? null})
+      on conflict (customer_id, component_id) do update set
+        notes = coalesce(excluded.notes, customer_components.notes)
+    `;
+    await linkCustomerProduct(customerId, productId, { db: tx });
+  });
   return { customer: customerSlug, component: component.slug };
 }
 
@@ -350,7 +463,7 @@ export async function listCustomerComponents(customerId: string) {
  * install plus the records that belong to them. A ticket turn needs it before
  * it reasons, since their version and addons decide whether a general answer
  * applies. With `unit`, the facts are the resolved ladder for that part of
- * their estate, each carrying where it came from.
+ * their setup, each carrying where it came from.
  */
 export async function getCustomerProfile(
   customerId: string,
@@ -363,53 +476,60 @@ export async function getCustomerProfile(
   `;
   if (!customer) return null;
   const resolvedUnit = unit ? await resolveUnit(customerId, unit) : null;
-  const [facts, components, repos, projects, units] = await Promise.all([
-    // Unit-resolved reads also say which level each fact came from, and
-    // whether it was inherited rather than stated here.
-    resolvedUnit
-      ? resolveUnitFacts(resolvedUnit.id).then((rows) =>
-          rows.map((f) => ({
-            kind: f.kind,
-            label: f.label,
-            value: f.value,
-            component: null,
-            origin: f.origin_slug,
-            origin_kind: f.origin_kind,
-            inherited: f.inherited,
-          })),
-        )
-      : listCustomerFacts(customerId).then((rows) =>
-          rows.map((f) => ({
-            kind: f.kind,
-            label: f.label,
-            value: f.value,
-            component: f.component_slug,
-          })),
-        ),
-    listCustomerComponents(customerId),
-    sql<CustomerProfile["repos"]>`
-      select r.slug, c.slug as component, coalesce(dl.index_status, 'idle') as index_status
-      from repos r
-      left join repo_lines dl on dl.repo_id = r.id and dl.ref = r.default_branch
-      left join components c on c.id = r.component_id
-      where r.customer_id = ${customerId} order by r.slug
-    `,
-    sql<CustomerProfile["projects"]>`
-      select sc.slug as source_slug, sp.external_key
-      from source_projects sp
-      join source_connections sc on sc.id = sp.source_connection_id
-      where sp.customer_id = ${customerId} order by sp.external_key
-    `,
-    listCustomerUnits(customerId),
-  ]);
+  const [facts, products, components, repos, projects, units] =
+    await Promise.all([
+      // Unit-resolved reads also say which level each fact came from, and
+      // whether it was inherited rather than stated here.
+      resolvedUnit
+        ? resolveUnitFacts(resolvedUnit.id).then((rows) =>
+            rows.map((f) => ({
+              kind: f.kind,
+              label: f.label,
+              value: f.value,
+              component: null,
+              origin: f.origin_slug,
+              origin_kind: f.origin_kind,
+              inherited: f.inherited,
+            })),
+          )
+        : listCustomerFacts(customerId).then((rows) =>
+            rows.map((f) => ({
+              kind: f.kind,
+              label: f.label,
+              value: f.value,
+              component: f.component_slug,
+              unit: f.unit_slug,
+            })),
+          ),
+      listCustomerProducts(customerId),
+      listCustomerComponents(customerId),
+      sql<CustomerProfile["repos"]>`
+        select r.slug, c.slug as component, coalesce(dl.index_status, 'idle') as index_status
+        from repos r
+        left join repo_lines dl on dl.repo_id = r.id and dl.ref = r.default_branch
+        left join components c on c.id = r.component_id
+        where r.customer_id = ${customerId} order by r.slug
+      `,
+      sql<CustomerProfile["projects"]>`
+        select sc.slug as source_slug, sp.external_key
+        from source_projects sp
+        join source_connections sc on sc.id = sp.source_connection_id
+        where sp.customer_id = ${customerId} order by sp.external_key
+      `,
+      listCustomerUnits(customerId),
+    ]);
+  const slugOf = (id: string | null) =>
+    units.find((u) => u.id === id)?.slug ?? null;
   return {
     ...customer,
+    products: products.map((p) => p.slug),
     ...(resolvedUnit
       ? {
           unit: {
             slug: resolvedUnit.slug,
             name: resolvedUnit.name,
             kind: resolvedUnit.kind,
+            product: resolvedUnit.product_slug,
           },
         }
       : {}),
@@ -418,8 +538,9 @@ export async function getCustomerProfile(
       slug: u.slug,
       name: u.name,
       kind: u.kind,
-      parent: units.find((p) => p.id === u.parent_id)?.slug ?? null,
-      profile: units.find((p) => p.id === u.profile_id)?.slug ?? null,
+      product: u.product_slug,
+      parent: slugOf(u.parent_id),
+      template: slugOf(u.template_id),
     })),
     components: components.map((c) => ({
       slug: c.slug,

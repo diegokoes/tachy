@@ -13,6 +13,8 @@ const ACTIONS: Record<string, string> = {
   set_work_item_customer: "set the ticket's customer",
   set_customer_fact: "record a customer fact",
   set_customer_component: "record a component they run",
+  add_customer_unit: "add a unit to their setup",
+  add_unit_kind: "extend the product's blueprint",
   set_observed_version: "record a version",
   add_knowledge_feedback: "leave feedback",
 };
