@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   libraryTab,
   libraryTabPath,
+  libraryTabs,
 } from "../../packages/web/src/library/tabs";
 import {
   libraryItemPath,
@@ -64,6 +65,17 @@ describe("library tabs", () => {
     expect(libraryTab("/wiki/tpd")).toBe("wiki");
     expect(libraryTab("/wiki/tpd/glossary")).toBe("wiki");
     expect(libraryTab("/wiki/tpd/gaps")).toBe("gaps");
+    expect(libraryTab("/customers/itg/tlc191")).toBe("customers");
+  });
+
+  it("offers the customers tab only where customers exist", () => {
+    expect(libraryTabs({ customers: false }).map((t) => t.key)).toEqual([
+      "all",
+      "wiki",
+      "gaps",
+    ]);
+    expect(libraryTabs({ customers: true }).at(-1)?.key).toBe("customers");
+    expect(libraryTabPath("customers", "tpd")).toBe("/customers");
   });
 
   it("sends the wiki tabs to the wiki in view", () => {

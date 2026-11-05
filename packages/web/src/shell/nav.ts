@@ -15,7 +15,10 @@ export function navItems(): NavItem[] {
 }
 
 /** Sections with no tab of their own, by the tab they open from. */
-const HOSTED: Record<string, string> = { wiki: "library" };
+const HOSTED: Record<string, string> = {
+  wiki: "library",
+  customers: "library",
+};
 
 /** The tab lit while `section` is open. */
 export const tabOf = (section: string) => HOSTED[section] ?? section;

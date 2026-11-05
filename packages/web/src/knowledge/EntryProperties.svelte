@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { link } from "../shell/router.svelte";
   import type { PatternRow } from "@tachy/contract";
   import { Meter, Select } from "../tui";
   import { CONFIDENCES, RESOLUTION_CLARITIES } from "../vocab";
@@ -139,7 +140,9 @@
             onchange={pickCustomer}
           />
         {:else}
-          {@render text(draft.customerSlug)}
+          <a class="value mono" href="/customers/{draft.customerSlug}" use:link
+            >{draft.customerSlug}</a
+          >
         {/if}
       </dd>
     </div>
@@ -157,6 +160,12 @@
             aria-label="unit"
             onchange={(slug) => (draft.unit = String(slug))}
           />
+        {:else if draft.unit}
+          <a
+            class="value mono"
+            href="/customers/{draft.customerSlug}/{draft.unit}"
+            use:link>{draft.unit}</a
+          >
         {:else}
           {@render text(draft.unit)}
         {/if}
