@@ -135,6 +135,7 @@ export type {
   CustomerFactRow,
   CustomerComponentRow,
   CustomerProfile,
+  CustomerFiled,
   CustomerChange,
   CustomerChangeBatch,
   CustomerChangeRecord,

@@ -6,6 +6,7 @@ import {
   getCustomerIdBySlug,
   getCustomerProfile,
   getCustomerFact,
+  listCustomerFiled,
   listCustomerUnits,
   addCustomerUnit,
   updateCustomerUnit,
@@ -256,6 +257,11 @@ export const customers = new Hono()
         await getCustomerIdBySlug(c.req.param("slug")),
         c.req.query("unit") ?? null,
       ),
+    ),
+  )
+  .get("/customers/:slug/filed", async (c) =>
+    c.json(
+      await listCustomerFiled(await getCustomerIdBySlug(c.req.param("slug"))),
     ),
   )
   .get("/customers/:slug/rights", async (c) =>

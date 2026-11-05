@@ -189,8 +189,15 @@ export interface CustomerProfile {
     template: string | null;
   }[];
   components: { slug: string; product_slug: string }[];
-  repos: { slug: string; component: string | null; index_status: string }[];
-  projects: { source_slug: string; external_key: string }[];
+  /** `url`: the repo's page on its host; null for an ssh or file remote. */
+  repos: {
+    slug: string;
+    component: string | null;
+    index_status: string;
+    url: string | null;
+  }[];
+  /** `url`: the project's page at its source, where that address is known. */
+  projects: { source_slug: string; external_key: string; url: string | null }[];
   /** Units and facts that disagree with their products' blueprints. */
   conflicts: { unit: string; problem: string }[];
   /** Customer reads: how many live entries and docs are filed under the customer. */
@@ -201,6 +208,18 @@ export interface CustomerProfile {
   documents?: { id: string; title: string; unit: string; original: boolean }[];
   /** Unit reads: entries filed under the unit or a unit inside it. */
   entries?: { id: string; title: string; unit: string; status: string }[];
+}
+
+/** Live docs and entries filed under a customer, newest first, capped. */
+export interface CustomerFiled {
+  /** `unit`: the unit it is filed under, null when on the customer as a whole. */
+  documents: {
+    id: string;
+    title: string;
+    unit: string | null;
+    original: boolean;
+  }[];
+  entries: { id: string; title: string; unit: string | null; status: string }[];
 }
 
 /** What a customer_changes row is about. */
