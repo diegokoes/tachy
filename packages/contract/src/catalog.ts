@@ -263,3 +263,10 @@ export interface CustomerSearchHits {
     value: string;
   }[];
 }
+
+/** What the caller may edit of one customer: its own record, and which products' parts. */
+export interface CustomerRights {
+  customer: boolean;
+  /** Slugs of the products whose units and facts the caller may edit, linked to the customer or not. */
+  products: string[];
+}

@@ -17,7 +17,7 @@
   import ResultRow from "./ResultRow.svelte";
   import { fill, toDoc, toEntry, type Item } from "./items";
   import { isCurator } from "../access/session.svelte";
-  import { t } from "../terms";
+  import { showCustomer, t } from "../terms";
   import { errText } from "../resource.svelte";
   import { componentOptions } from "../catalog/componentOptions";
   import {
@@ -48,7 +48,7 @@
   import DocDetail from "../reference/DocDetail.svelte";
   import { movedWikiPath, ORG_WIDE, wikiPath } from "../wiki/paths";
   import { landingScope, loadWikis, wikis } from "../wiki/wikis.svelte";
-  import { LIBRARY_TABS, libraryTabPath } from "./tabs";
+  import { libraryTabPath, libraryTabs } from "./tabs";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
 
   // Entries, docs and articles are one corpus that search spans; narrowing to
@@ -103,7 +103,7 @@
   // actions in the row beside them.
   $effect(() =>
     setSubnav({
-      items: LIBRARY_TABS,
+      items: libraryTabs({ customers: showCustomer() }),
       active: "all",
       onpick: (tab) => void openTab(tab),
       // Only over a list. A detail view claims the row for itself, and a

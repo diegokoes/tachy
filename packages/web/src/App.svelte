@@ -5,6 +5,7 @@
   import LibraryView from "./library/LibraryView.svelte";
   import BoardView from "./work-items/BoardView.svelte";
   import WikiView from "./wiki/WikiView.svelte";
+  import CustomersView from "./catalog/CustomersView.svelte";
   import AdminView from "./admin/AdminView.svelte";
   import SettingsView from "./settings/SettingsView.svelte";
   import FeedbackView from "./reports/FeedbackView.svelte";
@@ -420,6 +421,8 @@
                 <LibraryView />
               {:else if view === "wiki"}
                 <WikiView />
+              {:else if view === "customers"}
+                <CustomersView />
               {:else if view === "console"}
                 <AdminView />
               {:else if view === "settings"}

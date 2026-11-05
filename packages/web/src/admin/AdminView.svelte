@@ -34,6 +34,7 @@
   import LabelsPanel from "../catalog/LabelsPanel.svelte";
   import PatternsPanel from "../catalog/PatternsPanel.svelte";
   import CustomersPanel from "../catalog/CustomersPanel.svelte";
+  import BlueprintPanel from "../catalog/BlueprintPanel.svelte";
   import AccessPanel from "../access/AccessPanel.svelte";
   import TeamRosterPanel from "../access/TeamRosterPanel.svelte";
   import AppAdminsPanel from "../access/AppAdminsPanel.svelte";
@@ -90,6 +91,7 @@
       labels: { view: LabelsPanel },
       patterns: { view: PatternsPanel },
       customers: { view: CustomersPanel },
+      blueprints: { view: BlueprintPanel },
     },
     access: {
       users: { view: AccessPanel },

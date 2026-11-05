@@ -118,6 +118,7 @@ export function consoleSections(): Record<string, ConsoleSection[]> {
         show: showCustomer(),
         add: `add ${t("customer")}`,
       },
+      { key: "blueprints", label: "blueprints", show: showCustomer() },
     ],
     access: [
       {
