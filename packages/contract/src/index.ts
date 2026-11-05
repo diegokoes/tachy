@@ -151,6 +151,7 @@ export {
 export type { ApiTokenRow, SsoAdmission, UserCensus } from "./access";
 export {
   FILE_CONTENT_TYPES,
+  LIBRARY_FILE_TYPES,
   FILE_EXTENSIONS,
   FILE_TYPES,
   checkFile,

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   CONFIDENCES,
   FEEDBACK_KINDS,
@@ -409,6 +410,39 @@ async function seedReference(
   );
 
   return docs;
+}
+
+/** A text PDF small enough to hold inline: what a doc saved from a file keeps. */
+const SEED_PDF =
+  "%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n" +
+  "2 0 obj << /Type /Pages /Kids [] /Count 0 >> endobj\n" +
+  "trailer << /Root 1 0 R >>\n%%EOF\n";
+
+/** The first doc keeps an original, and the first unit fact links to that doc. */
+export async function seedDocOriginal(tx: Tx): Promise<void> {
+  const bytes = Buffer.from(SEED_PDF);
+  const fileId = uuidFor("library_file", 0);
+  const docId = uuidFor("reference_doc", 0);
+  await insertRows(
+    tx,
+    "library_files",
+    ["id", "sha256", "content_type", "filename", "byte_size", "bytes"],
+    [
+      {
+        id: fileId,
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+        content_type: "application/pdf",
+        filename: "line-layout.pdf",
+        byte_size: bytes.length,
+        bytes,
+      },
+    ],
+  );
+  await tx`update reference_docs set file_id = ${fileId} where id = ${docId}`;
+  await tx`
+    update customer_facts set doc_id = ${docId}
+    where id = (select id from customer_facts where unit_id is not null order by id limit 1)
+  `;
 }
 
 /**

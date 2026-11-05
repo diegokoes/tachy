@@ -373,6 +373,22 @@ export interface CustomerFactInput {
    * a fact true of the whole customer.
    */
   unit?: string | null;
+  /** The library doc that details the fact. Absent keeps the stored link; null clears it. */
+  docId?: string | null;
+}
+
+/** Throws unless the doc exists and is a current version. */
+async function assertLinkableDoc(docId: string): Promise<void> {
+  const [doc] = await sql<{ status: string; superseded_by: string | null }[]>`
+    select status, superseded_by from reference_docs where id = ${docId}
+  `;
+  if (!doc) throw badInput(`reference doc '${docId}' not found`);
+  if (doc.status === "archived")
+    throw badInput(
+      doc.superseded_by
+        ? `reference doc '${docId}' was superseded by '${doc.superseded_by}': link that one`
+        : `reference doc '${docId}' is archived`,
+    );
 }
 
 /**
@@ -406,6 +422,7 @@ export async function setCustomerFact(
     componentId = (await resolveComponentStrict(productId, input.componentSlug))
       .id;
   }
+  if (input.docId) await assertLinkableDoc(input.docId);
   const kind = input.kind.trim();
   const label = input.label?.trim() ?? "";
   const value = await resolveFactValue(
@@ -427,14 +444,17 @@ export async function setCustomerFact(
           unit_id: string | null;
         }[]
       >`
-        insert into customer_facts (customer_id, unit_id, kind, label, value, notes, source, component_id)
+        insert into customer_facts
+          (customer_id, unit_id, kind, label, value, notes, source, component_id, doc_id)
         values (${customerId}, ${unit?.id ?? null}, ${kind}, ${label}, ${value},
-                ${input.notes ?? null}, ${input.source ?? null}, ${componentId})
+                ${input.notes ?? null}, ${input.source ?? null}, ${componentId},
+                ${input.docId ?? null})
         on conflict (customer_id, unit_id, kind, label) do update set
           value        = excluded.value,
           notes        = coalesce(excluded.notes, customer_facts.notes),
           source       = coalesce(excluded.source, customer_facts.source),
-          component_id = excluded.component_id
+          component_id = excluded.component_id,
+          doc_id       = ${"docId" in input ? ctx.db`excluded.doc_id` : ctx.db`customer_facts.doc_id`}
         returning id, kind, label, value, unit_id
       `,
     ),
@@ -478,10 +498,11 @@ export async function listCustomerFacts(customerId: string) {
   return sql<CustomerFactRow[]>`
     select f.id, f.unit_id, u.slug as unit_slug, f.kind, f.label, f.value,
            f.notes, f.source, f.component_id, c.slug as component_slug,
-           f.updated_at
+           f.doc_id, d.title as doc_title, f.updated_at
     from customer_facts f
     left join customer_units u on u.id = f.unit_id
     left join components c on c.id = f.component_id
+    left join reference_docs d on d.id = f.doc_id
     where f.customer_id = ${customerId}
     order by u.slug nulls first, f.kind, f.label
   `;
@@ -562,6 +583,9 @@ export async function listCustomerComponents(customerId: string) {
   `;
 }
 
+const docLink = (fact: { doc_id: string | null; doc_title: string | null }) =>
+  fact.doc_id ? { id: fact.doc_id, title: fact.doc_title ?? "" } : null;
+
 /**
  * Everything configured about one customer, in one read: the specifics of their
  * install plus the records that belong to them. A ticket turn needs it before
@@ -594,6 +618,7 @@ export async function getCustomerProfile(
               origin: f.origin_slug,
               origin_kind: f.origin_kind,
               inherited: f.inherited,
+              doc: docLink(f),
             })),
           )
         : listCustomerFacts(customerId).then((rows) =>
@@ -603,6 +628,7 @@ export async function getCustomerProfile(
               value: f.value,
               component: f.component_slug,
               unit: f.unit_slug,
+              doc: docLink(f),
             })),
           ),
       listCustomerProducts(customerId),

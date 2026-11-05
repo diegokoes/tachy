@@ -4,3 +4,4 @@ export * from "./links";
 export * from "./coverage";
 export * from "./assets";
 export * from "./engagement";
+export * from "./files";
