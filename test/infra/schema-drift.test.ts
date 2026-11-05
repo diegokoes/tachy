@@ -17,6 +17,7 @@ import {
   SOURCE_CALL_ORIGINS,
   RESOLUTION_CLARITIES,
   LIBRARY_ACTORS,
+  CUSTOMER_CHANGE_RECORDS,
   USER_ROLES,
   TEAM_ROLES,
   REPO_INDEX_STATUSES,
@@ -68,6 +69,8 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     ["analysis_runs", "mode", RUN_MODES],
     ["source_calls", "origin", SOURCE_CALL_ORIGINS],
     ["library_revisions", "actor", LIBRARY_ACTORS],
+    ["customer_changes", "record", CUSTOMER_CHANGE_RECORDS],
+    ["customer_changes", "actor", LIBRARY_ACTORS],
     ["reference_docs", "status", REFERENCE_STATUSES],
     ["reference_docs", "kind", REFERENCE_KINDS],
     ["library_links", "kind", LINK_KINDS],
@@ -143,6 +146,17 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
   it("customer_units.product_id is optional", () => {
     expect(tableBlock("customer_units")).toMatch(
       /\n\s+product_id\s+uuid references products\(id\) on delete set null,/,
+    );
+  });
+
+  // The history is what a wrong write is undone from, so the app cannot rewrite it.
+  it("keeps customer_changes append-only for the app roles", () => {
+    const roles = readFileSync(
+      join(here, "..", "..", "db", "roles.sql"),
+      "utf8",
+    );
+    expect(roles).toContain(
+      "revoke update, delete, truncate on %I.customer_changes from tachy_app, tachy_mcp",
     );
   });
 

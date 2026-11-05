@@ -385,6 +385,26 @@ function factValue(kind: string, rng: () => number): string {
   }
 }
 
+/** One batch that added each seeded setup's units, so a history read has rows. */
+async function seedSetupHistory(
+  tx: Tx,
+  unitRows: Record<string, unknown>[],
+): Promise<void> {
+  await insertRows(
+    tx,
+    "customer_changes",
+    ["batch_id", "customer_id", "record", "record_id", "after", "actor"],
+    unitRows.map((unit) => ({
+      batch_id: uuidFor("customer_change_batch", 0),
+      customer_id: unit.customer_id,
+      record: "unit",
+      record_id: unit.id,
+      after: JSON.stringify(unit),
+      actor: "web",
+    })),
+  );
+}
+
 /** (customer, kind, label) is enumerated, never sampled, so it stays unique. */
 async function seedCustomerFacts(
   tx: Tx,
@@ -464,6 +484,8 @@ async function seedCustomerFacts(
     ],
     unitRows,
   );
+
+  await seedSetupHistory(tx, unitRows);
 
   const rows: Record<string, unknown>[] = [];
 

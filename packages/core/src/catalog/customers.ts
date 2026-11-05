@@ -21,6 +21,13 @@ import {
   resolveUnitFacts,
 } from "./units";
 import { linkCustomerProduct, listCustomerProducts } from "./customer-products";
+import {
+  inNewBatch,
+  recordDeleted,
+  trackRecord,
+  type WriteContext,
+} from "./customer-history";
+import type { ActorRef } from "../library/revisions";
 
 export interface CustomerInput {
   name: string;
@@ -71,22 +78,28 @@ export async function listCustomers(opts: CustomerListOptions = {}) {
   `;
 }
 
-export async function addCustomer(input: CustomerInput) {
+export async function addCustomer(input: CustomerInput, actor?: ActorRef) {
   assertNoSecrets({ notes: input.notes });
-  return sql.begin(async (tx) => {
-    const [row] = await tx`
-      insert into customers (name, slug, aliases, email_domains, notes)
-      values (${input.name}, ${input.slug}, ${input.aliases ?? []},
-              ${normalizeDomains(input.emailDomains)}, ${input.notes ?? null})
-      on conflict (slug) do update set
-        name = excluded.name,
-        aliases = excluded.aliases,
-        email_domains = excluded.email_domains,
-        notes = coalesce(excluded.notes, customers.notes)
-      returning id, name, slug, aliases, email_domains
-    `;
+  return inNewBatch(actor, async (ctx) => {
+    const [row] = await trackRecord(
+      ctx,
+      "customer",
+      { slug: input.slug },
+      () =>
+        ctx.db`
+        insert into customers (name, slug, aliases, email_domains, notes)
+        values (${input.name}, ${input.slug}, ${input.aliases ?? []},
+                ${normalizeDomains(input.emailDomains)}, ${input.notes ?? null})
+        on conflict (slug) do update set
+          name = excluded.name,
+          aliases = excluded.aliases,
+          email_domains = excluded.email_domains,
+          notes = coalesce(excluded.notes, customers.notes)
+        returning id, name, slug, aliases, email_domains
+      `,
+    );
     for (const productId of input.productIds ?? [])
-      await linkCustomerProduct(row.id, productId, { db: tx });
+      await linkCustomerProduct(row.id, productId, { within: ctx });
     return row;
   });
 }
@@ -99,21 +112,30 @@ export async function updateCustomer(
     emailDomains?: string[];
     notes?: string | null;
   },
+  actor?: ActorRef,
 ) {
   assertNoSecrets({ notes: patch.notes });
   const [current] =
     await sql`select id, name, aliases, email_domains, notes from customers where slug = ${slug}`;
   if (!current) throw notFound(`customer '${slug}' not found`);
-  const [row] = await sql`
-    update customers set
-      name          = ${patch.name ?? current.name},
-      aliases       = ${patch.aliases ?? current.aliases},
-      email_domains = ${patch.emailDomains ? normalizeDomains(patch.emailDomains) : current.email_domains},
-      notes         = ${"notes" in patch ? patch.notes : current.notes}
-    where id = ${current.id}
-    returning id, name, slug, aliases, email_domains, notes
-  `;
-  return row;
+  return inNewBatch(actor, async (ctx) => {
+    const [row] = await trackRecord(
+      ctx,
+      "customer",
+      { id: current.id },
+      () =>
+        ctx.db`
+        update customers set
+          name          = ${patch.name ?? current.name},
+          aliases       = ${patch.aliases ?? current.aliases},
+          email_domains = ${patch.emailDomains ? normalizeDomains(patch.emailDomains) : current.email_domains},
+          notes         = ${"notes" in patch ? patch.notes : current.notes}
+        where id = ${current.id}
+        returning id, name, slug, aliases, email_domains, notes
+      `,
+    );
+    return row;
+  });
 }
 
 /** What names a customer, which a delete would un-file or orphan. */
@@ -128,9 +150,9 @@ type FiledUnderCustomer = {
 /**
  * Refused while tickets, entries, docs, repos or source projects name the
  * customer: deleting it would un-file them silently. Its units, facts and links
- * go with it.
+ * go with it, recorded in the same batch so a restore brings them back.
  */
-export async function deleteCustomer(slug: string) {
+export async function deleteCustomer(slug: string, actor?: ActorRef) {
   const [current] = await sql`select id from customers where slug = ${slug}`;
   if (!current) throw notFound(`customer '${slug}' not found`);
   const [filed] = await sql<FiledUnderCustomer[]>`
@@ -146,8 +168,58 @@ export async function deleteCustomer(slug: string) {
       `customer '${slug}' still has ${filedText(filed)} filed under it: reassign them first (set_work_item_customer for tickets)`,
       { filed },
     );
-  await sql`delete from customers where id = ${current.id}`;
+  await inNewBatch(actor, async (ctx) => {
+    await recordCustomerContents(ctx, current.id);
+    await trackRecord(
+      ctx,
+      "customer",
+      { id: current.id },
+      () => ctx.db`delete from customers where id = ${current.id}`,
+    );
+  });
   return { deleted: true, slug };
+}
+
+/**
+ * Records as deleted everything the customer's delete cascades to, in an order
+ * whose reverse a restore can insert: facts, links, then units deepest first.
+ */
+async function recordCustomerContents(
+  ctx: WriteContext,
+  customerId: string,
+): Promise<void> {
+  const { db } = ctx;
+  await recordDeleted(
+    ctx,
+    "fact",
+    await db`select * from customer_facts where customer_id = ${customerId}`,
+  );
+  await recordDeleted(
+    ctx,
+    "component",
+    await db`select * from customer_components where customer_id = ${customerId}`,
+  );
+  await recordDeleted(
+    ctx,
+    "product",
+    await db`select * from customer_products where customer_id = ${customerId}`,
+  );
+  await recordDeleted(
+    ctx,
+    "unit",
+    await db`
+      with recursive tree as (
+        select id, 0 as depth from customer_units
+        where customer_id = ${customerId} and parent_id is null
+        union all
+        select u.id, tree.depth + 1
+        from customer_units u join tree on u.parent_id = tree.id
+      )
+      select u.* from customer_units u left join tree on tree.id = u.id
+      where u.customer_id = ${customerId}
+      order by coalesce(tree.depth, -1) desc
+    `,
+  );
 }
 
 export interface CustomerMatch {
@@ -309,7 +381,10 @@ export interface CustomerFactInput {
  * same kind stated for one line coexists with the customer-wide one. On a unit
  * of a product with a blueprint, `resolveFactValue` decides what may be stored.
  */
-export async function setCustomerFact(input: CustomerFactInput) {
+export async function setCustomerFact(
+  input: CustomerFactInput,
+  actor?: ActorRef,
+) {
   const customerId = await getCustomerIdBySlug(input.customerSlug);
   if (!input.kind.trim()) throw badInput("kind is required");
   if (!input.value.trim()) throw badInput("value is required");
@@ -332,41 +407,57 @@ export async function setCustomerFact(input: CustomerFactInput) {
       .id;
   }
   const kind = input.kind.trim();
+  const label = input.label?.trim() ?? "";
   const value = await resolveFactValue(
     sql,
     unit ? { productId: unit.product_id, kind: unit.kind } : null,
     { kind, value: input.value.trim() },
   );
-  const [row] = await sql<
-    {
-      id: string;
-      kind: string;
-      label: string;
-      value: string;
-      unit_id: string | null;
-    }[]
-  >`
-    insert into customer_facts (customer_id, unit_id, kind, label, value, notes, source, component_id)
-    values (${customerId}, ${unit?.id ?? null}, ${kind}, ${input.label?.trim() ?? ""}, ${value},
-            ${input.notes ?? null}, ${input.source ?? null}, ${componentId})
-    on conflict (customer_id, unit_id, kind, label) do update set
-      value        = excluded.value,
-      notes        = coalesce(excluded.notes, customer_facts.notes),
-      source       = coalesce(excluded.source, customer_facts.source),
-      component_id = excluded.component_id
-    returning id, kind, label, value, unit_id
-  `;
+  const [row] = await inNewBatch(actor, (ctx) =>
+    trackRecord(
+      ctx,
+      "fact",
+      { customer_id: customerId, unit_id: unit?.id ?? null, kind, label },
+      () => ctx.db<
+        {
+          id: string;
+          kind: string;
+          label: string;
+          value: string;
+          unit_id: string | null;
+        }[]
+      >`
+        insert into customer_facts (customer_id, unit_id, kind, label, value, notes, source, component_id)
+        values (${customerId}, ${unit?.id ?? null}, ${kind}, ${label}, ${value},
+                ${input.notes ?? null}, ${input.source ?? null}, ${componentId})
+        on conflict (customer_id, unit_id, kind, label) do update set
+          value        = excluded.value,
+          notes        = coalesce(excluded.notes, customer_facts.notes),
+          source       = coalesce(excluded.source, customer_facts.source),
+          component_id = excluded.component_id
+        returning id, kind, label, value, unit_id
+      `,
+    ),
+  );
   return { ...row, unit: unit?.slug ?? null };
 }
 
 /** Only a fact of `customerId`: a fact id from another customer is not found. */
-export async function deleteCustomerFact(customerId: string, id: string) {
-  const [row] = await sql`
-    delete from customer_facts
-    where id = ${id} and customer_id = ${customerId}
-    returning id
-  `;
-  if (!row) throw notFound(`customer fact '${id}' not found`);
+export async function deleteCustomerFact(
+  customerId: string,
+  id: string,
+  actor?: ActorRef,
+) {
+  await inNewBatch(actor, (ctx) =>
+    trackRecord(ctx, "fact", { id, customer_id: customerId }, async () => {
+      const [row] = await ctx.db`
+        delete from customer_facts
+        where id = ${id} and customer_id = ${customerId}
+        returning id
+      `;
+      if (!row) throw notFound(`customer fact '${id}' not found`);
+    }),
+  );
   return { deleted: true, id };
 }
 
@@ -416,18 +507,23 @@ export async function linkCustomerComponent(
   customerSlug: string,
   productId: string,
   componentSlug: string,
-  notes?: string | null,
+  opts: { notes?: string | null; actor?: ActorRef } = {},
 ) {
   const customerId = await getCustomerIdBySlug(customerSlug);
   const component = await resolveComponentStrict(productId, componentSlug);
-  await sql.begin(async (tx) => {
-    await tx`
-      insert into customer_components (customer_id, component_id, notes)
-      values (${customerId}, ${component.id}, ${notes ?? null})
-      on conflict (customer_id, component_id) do update set
-        notes = coalesce(excluded.notes, customer_components.notes)
-    `;
-    await linkCustomerProduct(customerId, productId, { db: tx });
+  await inNewBatch(opts.actor, async (ctx) => {
+    await trackRecord(
+      ctx,
+      "component",
+      { customer_id: customerId, component_id: component.id },
+      () => ctx.db`
+        insert into customer_components (customer_id, component_id, notes)
+        values (${customerId}, ${component.id}, ${opts.notes ?? null})
+        on conflict (customer_id, component_id) do update set
+          notes = coalesce(excluded.notes, customer_components.notes)
+      `,
+    );
+    await linkCustomerProduct(customerId, productId, { within: ctx });
   });
   return { customer: customerSlug, component: component.slug };
 }
@@ -436,13 +532,21 @@ export async function unlinkCustomerComponent(
   customerSlug: string,
   productId: string,
   componentSlug: string,
+  actor?: ActorRef,
 ) {
   const customerId = await getCustomerIdBySlug(customerSlug);
   const component = await resolveComponentStrict(productId, componentSlug);
-  await sql`
-    delete from customer_components
-    where customer_id = ${customerId} and component_id = ${component.id}
-  `;
+  await inNewBatch(actor, (ctx) =>
+    trackRecord(
+      ctx,
+      "component",
+      { customer_id: customerId, component_id: component.id },
+      () => ctx.db`
+        delete from customer_components
+        where customer_id = ${customerId} and component_id = ${component.id}
+      `,
+    ),
+  );
   return { unlinked: true, customer: customerSlug, component: component.slug };
 }
 

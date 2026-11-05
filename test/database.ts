@@ -13,7 +13,7 @@ export async function resetData() {
              reports, report_messages, notifications, audit_events, api_tokens,
              knowledge_entries, analysis_runs, team_members, users,
              customers, customer_facts, customer_components, customer_units,
-             customer_products, unit_kinds, unit_kind_facts,
+             customer_products, unit_kinds, unit_kind_facts, customer_changes,
              resolution_patterns, components, project_area_map, labels,
              reference_docs, reference_doc_chunks, artifacts, generated_outputs, chat_uploads,
              settings, library_revisions, library_views, source_calls, mcp_tool_calls,

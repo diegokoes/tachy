@@ -4,8 +4,15 @@ import { nearestSlugsHint } from "./nearest";
 import { wouldCycle, type ParentColumn } from "../infra/hierarchy";
 import { badInput, conflict, notFound } from "../infra/errors";
 import { assertNoSecrets } from "../compliance/redaction";
+import type { ActorRef } from "../library/revisions";
 import { assertUnitFitsBlueprint } from "./blueprints";
 import { linkCustomerProduct } from "./customer-products";
+import {
+  inNewBatch,
+  recordDeleted,
+  trackRecord,
+  type WriteContext,
+} from "./customer-history";
 
 export type { CustomerUnitRow, ResolvedFact };
 
@@ -130,7 +137,10 @@ async function assertNoCycle(
     throw badInput(`'${label}' already sits under this unit; that would cycle`);
 }
 
-export async function addCustomerUnit(input: CustomerUnitInput) {
+export async function addCustomerUnit(
+  input: CustomerUnitInput,
+  actor?: ActorRef,
+) {
   if (!UNIT_SLUG_RE.test(input.slug))
     throw badInput(
       `invalid unit slug '${input.slug}': letters, digits, dot, dash and underscore only`,
@@ -170,32 +180,47 @@ export async function addCustomerUnit(input: CustomerUnitInput) {
     }
   }
 
-  return sql.begin(async (tx) => {
-    await assertUnitFitsBlueprint(tx, {
+  return inNewBatch(actor, async (ctx) => {
+    await assertUnitFitsBlueprint(ctx.db, {
       productId,
       kind: input.kind,
       parentId,
       templateId,
     });
-    const [row] = await tx`
-      insert into customer_units
-        (customer_id, product_id, parent_id, template_id, kind, slug, name, aliases, notes)
-      values
-        (${customerId}, ${productId}, ${parentId}, ${templateId}, ${input.kind}, ${input.slug},
-         ${input.name}, ${input.aliases ?? []}, ${input.notes ?? null})
-      on conflict (customer_id, slug) do update set
-        product_id  = excluded.product_id,
-        parent_id   = excluded.parent_id,
-        template_id = excluded.template_id,
-        kind        = excluded.kind,
-        name        = excluded.name,
-        aliases     = excluded.aliases,
-        notes       = excluded.notes
-      returning id, slug, name, kind
-    `;
-    if (productId) await linkCustomerProduct(customerId, productId, { db: tx });
+    const [row] = await trackRecord(
+      ctx,
+      "unit",
+      { customer_id: customerId, slug: input.slug },
+      () => ctx.db`
+        insert into customer_units
+          (customer_id, product_id, parent_id, template_id, kind, slug, name, aliases, notes)
+        values
+          (${customerId}, ${productId}, ${parentId}, ${templateId}, ${input.kind}, ${input.slug},
+           ${input.name}, ${input.aliases ?? []}, ${input.notes ?? null})
+        on conflict (customer_id, slug) do update set
+          product_id  = excluded.product_id,
+          parent_id   = excluded.parent_id,
+          template_id = excluded.template_id,
+          kind        = excluded.kind,
+          name        = excluded.name,
+          aliases     = excluded.aliases,
+          notes       = excluded.notes
+        returning id, slug, name, kind
+      `,
+    );
+    await linkUnitProduct(ctx, customerId, productId);
     return row;
   });
+}
+
+/** Adding or moving a unit into a product's setup records that the customer uses it. */
+async function linkUnitProduct(
+  ctx: WriteContext,
+  customerId: string,
+  productId: string | null,
+): Promise<void> {
+  if (productId)
+    await linkCustomerProduct(customerId, productId, { within: ctx });
 }
 
 async function patchedEdge(
@@ -220,6 +245,7 @@ export async function updateCustomerUnit(
   customerId: string,
   slug: string,
   patch: CustomerUnitPatch,
+  actor?: ActorRef,
 ) {
   assertNoSecrets({ notes: patch.notes });
   const current = await resolveUnit(customerId, slug);
@@ -240,26 +266,32 @@ export async function updateCustomerUnit(
     "productId" in patch ? (patch.productId ?? null) : current.product_id;
   const kind = patch.kind ?? current.kind;
 
-  return sql.begin(async (tx) => {
-    await assertUnitFitsBlueprint(tx, {
+  return inNewBatch(actor, async (ctx) => {
+    await assertUnitFitsBlueprint(ctx.db, {
       productId,
       kind,
       parentId,
       templateId,
     });
-    const [row] = await tx`
-      update customer_units set
-        name        = ${patch.name ?? current.name},
-        kind        = ${kind},
-        product_id  = ${productId},
-        parent_id   = ${parentId},
-        template_id = ${templateId},
-        aliases     = ${patch.aliases ?? current.aliases},
-        notes       = ${"notes" in patch ? (patch.notes ?? null) : current.notes}
-      where id = ${current.id}
-      returning id, slug, name, kind
-    `;
-    if (productId) await linkCustomerProduct(customerId, productId, { db: tx });
+    const [row] = await trackRecord(
+      ctx,
+      "unit",
+      { id: current.id },
+      () =>
+        ctx.db`
+        update customer_units set
+          name        = ${patch.name ?? current.name},
+          kind        = ${kind},
+          product_id  = ${productId},
+          parent_id   = ${parentId},
+          template_id = ${templateId},
+          aliases     = ${patch.aliases ?? current.aliases},
+          notes       = ${"notes" in patch ? (patch.notes ?? null) : current.notes}
+        where id = ${current.id}
+        returning id, slug, name, kind
+      `,
+    );
+    await linkUnitProduct(ctx, customerId, productId);
     return row;
   });
 }
@@ -299,7 +331,11 @@ async function filedUnderUnit(unitId: string): Promise<FiledUnder> {
  * deleting every line beneath it. Units that follow it lose their template, and
  * its own facts go, since they described a place that no longer exists.
  */
-export async function deleteCustomerUnit(customerId: string, slug: string) {
+export async function deleteCustomerUnit(
+  customerId: string,
+  slug: string,
+  actor?: ActorRef,
+) {
   const current = await resolveUnit(customerId, slug);
   const filed = await filedUnderUnit(current.id);
   if (filedTotal(filed) > 0)
@@ -307,17 +343,45 @@ export async function deleteCustomerUnit(customerId: string, slug: string) {
       `'${current.slug}' still has ${filedText(filed)} filed under it: file them elsewhere first`,
       { filed },
     );
-  return sql.begin(async (tx) => {
-    await tx`
-      update customer_units set parent_id = ${current.parent_id}
-      where parent_id = ${current.id}
+  return inNewBatch(actor, async (ctx) => {
+    const { db } = ctx;
+    const children = await db<{ id: string }[]>`
+      select id from customer_units where parent_id = ${current.id}
     `;
-    await tx`
-      update customer_units set template_id = null
-      where template_id = ${current.id}
+    for (const child of children)
+      await trackRecord(
+        ctx,
+        "unit",
+        { id: child.id },
+        () => db`
+        update customer_units set parent_id = ${current.parent_id}
+        where id = ${child.id}
+      `,
+      );
+    const followers = await db<{ id: string }[]>`
+      select id from customer_units where template_id = ${current.id}
     `;
-    await tx`delete from customer_facts where unit_id = ${current.id}`;
-    await tx`delete from customer_units where id = ${current.id}`;
+    for (const follower of followers)
+      await trackRecord(
+        ctx,
+        "unit",
+        { id: follower.id },
+        () => db`
+        update customer_units set template_id = null where id = ${follower.id}
+      `,
+      );
+    const facts =
+      await db`select * from customer_facts where unit_id = ${current.id}`;
+    await recordDeleted(ctx, "fact", facts);
+    await db`delete from customer_facts where unit_id = ${current.id}`;
+    await trackRecord(
+      ctx,
+      "unit",
+      { id: current.id },
+      () => db`
+      delete from customer_units where id = ${current.id}
+    `,
+    );
     return { deleted: current.slug };
   });
 }
