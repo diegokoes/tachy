@@ -134,9 +134,25 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
   it("customer_units carries both edges and guards them", () => {
     const block = tableBlock("customer_units");
     expect(block).toContain("parent_id");
-    expect(block).toContain("profile_id");
+    expect(block).toContain("template_id");
     expect(block).toContain("customer_units_no_self_parent");
-    expect(block).toContain("customer_units_no_self_profile");
+    expect(block).toContain("customer_units_no_self_template");
+  });
+
+  // A general unit has no product; a blueprint applies only once it has one.
+  it("customer_units.product_id is optional", () => {
+    expect(tableBlock("customer_units")).toMatch(
+      /\n\s+product_id\s+uuid references products\(id\) on delete set null,/,
+    );
+  });
+
+  it("unit_kinds carries both edges and guards them", () => {
+    const block = tableBlock("unit_kinds");
+    expect(block).toContain("parent_kind_id");
+    expect(block).toContain("template_kind_id");
+    expect(block).toContain("unit_kinds_no_self_parent");
+    expect(block).toContain("unit_kinds_no_self_template");
+    expect(block).toContain("unique (product_id, slug)");
   });
 
   it("customer_facts keys on the unit, nulls not distinct", () => {

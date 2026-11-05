@@ -50,10 +50,12 @@ export class Filing {
   ]);
   unitOptions = $derived([
     { value: "", label: "the whole account" },
-    ...this.units.map((u) => ({
-      value: u.slug,
-      label: `${u.name} (${u.kind})`,
-    })),
+    ...this.units
+      .filter((u) => this.fitsProduct(u))
+      .map((u) => ({
+        value: u.slug,
+        label: `${u.name} (${u.kind})`,
+      })),
   ]);
 
   private seed: FilingSeed;
@@ -62,6 +64,20 @@ export class Filing {
     this.seed = seed;
     this.customerSlug = seed.customer_slug ?? "";
     this.unitSlug = seed.customer_unit_slug ?? "";
+  }
+
+  /** A unit of another product's setup cannot hold an item of this one. */
+  private fitsProduct(unit: CustomerUnitRow): boolean {
+    return (
+      !unit.product_slug ||
+      !this.productSlug ||
+      unit.product_slug === this.productSlug
+    );
+  }
+
+  private dropUnfitUnit(): void {
+    const picked = this.units.find((u) => u.slug === this.unitSlug);
+    if (picked && !this.fitsProduct(picked)) this.unitSlug = "";
   }
 
   async load(): Promise<void> {
@@ -92,6 +108,7 @@ export class Filing {
     }
     if (!this.components.some((c) => c.slug === this.component))
       this.component = "";
+    this.dropUnfitUnit();
   }
 
   async customerChanged(): Promise<void> {
@@ -106,6 +123,7 @@ export class Filing {
       this.error = errText(e);
     }
     if (!this.units.some((u) => u.slug === this.unitSlug)) this.unitSlug = "";
+    this.dropUnfitUnit();
   }
 
   /**

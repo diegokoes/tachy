@@ -1,7 +1,8 @@
 /**
  * The vocabularies a ticket is filed against (resolution patterns, components,
- * and the customers and units that own an install) and who owns what: teams,
- * their products, and the labels shared across them.
+ * and the customers and units that own an install, shaped by each product's
+ * blueprint) and who owns what: teams, their products, and the labels shared
+ * across them.
  */
 import { z } from "zod";
 import {
@@ -27,13 +28,19 @@ import {
   unlinkCustomerComponent,
   listCustomerUnits,
   addCustomerUnit,
+  resolveUnit,
+  resolveComponentStrict,
+  getProductBlueprint,
+  addUnitKind,
 } from "@tachy/core/catalog";
+import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
-import { out } from "../results";
+import { out, outScrubbed } from "../results";
 import {
   audited,
   requireCanEdit,
   requireCanManageTeam,
+  requireCustomerPartEditor,
   requireGlobalAdmin,
   requireAnyTeamAdmin,
 } from "../permissions";
@@ -117,18 +124,35 @@ tool(
   "list_customers",
   {
     description:
-      "List known customers with their aliases (other NAMES the account trades under) and email_domains (sender domains that resolve to it, including a partner or distributor who raises tickets on their behalf). Use to check before correcting a work item's customer.",
-    inputSchema: {},
+      "List known customers with their aliases (other NAMES the account trades under), email_domains (sender domains that resolve to it, including a partner or distributor who raises tickets on their behalf) and the products they use. Use to check before correcting a work item's customer. With product_slug, only customers that use that product; with component as well, only those that run that component - who else a fix or a regression touches.",
+    inputSchema: {
+      product_slug: z.string().optional(),
+      component: z
+        .string()
+        .optional()
+        .describe("Slug or alias from list_components. Needs product_slug."),
+    },
     annotations: { readOnlyHint: true },
   },
-  async () => out(await listCustomers()),
+  async ({ product_slug, component }) => {
+    if (component && !product_slug)
+      throw badInput("component resolves within a product: pass product_slug");
+    const productId = product_slug
+      ? await getProductIdBySlug(product_slug)
+      : undefined;
+    const componentId =
+      component && productId
+        ? (await resolveComponentStrict(productId, component)).id
+        : undefined;
+    return out(await listCustomers({ productId, componentId }));
+  },
 );
 
 tool(
   "add_customer",
   {
     description:
-      "Add (or extend) a customer. Call when the user describes a customer, asks to add one, or a ticket names one that is unresolved but unambiguous; the review box is their chance to refuse it.",
+      "Add (or extend) a customer. Call when the user describes a customer, asks to add one, or a ticket names one that is unresolved but unambiguous; the review box is their chance to refuse it. Pass product_slug for the product the ticket or the user is about: the teams of a customer's products are who may edit it.",
     inputSchema: {
       name: z.string(),
       slug: z.string(),
@@ -145,10 +169,18 @@ tool(
           "Sender domains that mean this customer, including a partner or distributor who raises tickets for them (arkwell.example on Dalmoor, losvanetrade.example on Losvane). A domain listed on two customers deliberately resolves to neither, so give a shared integrator's domain to nobody.",
         ),
       notes: z.string().optional(),
+      product_slug: z
+        .string()
+        .optional()
+        .describe("A product the customer uses, linked as it is added."),
     },
   },
   async (args) => {
     await requireAnyTeamAdmin();
+    const productId = args.product_slug
+      ? await getProductIdBySlug(args.product_slug)
+      : null;
+    if (productId) await requireCanEdit({ productId });
     return out(
       await audited("catalog_add", `customer:${args.slug}`, () =>
         addCustomer({
@@ -157,6 +189,7 @@ tool(
           aliases: args.aliases,
           emailDomains: args.email_domains,
           notes: args.notes,
+          productIds: productId ? [productId] : [],
         }),
       ),
     );
@@ -167,27 +200,29 @@ tool(
   "get_customer_profile",
   {
     description:
-      "Everything configured about one customer's install: their specifics (the version they run, their layout, integrations), the components they have, their own repos, any source project that exists for them, and the parts their estate divides into (`units` - sites, production lines, tenants). Call it before advising a named customer - a general answer can be wrong for them because of what is here. Pass `unit` when the question is about one part of their estate: the facts then come back RESOLVED for that unit, each carrying `origin` and `inherited`, so you can say a thing is true of every line on a shared layout rather than only of the one asked about. Arrives automatically on fetch_work_item/get_context when the ticket resolves to a customer, so do not re-fetch it then.",
+      "Everything configured about one customer's install: their specifics (the version they run, their layout, integrations), the products they use, the components they have, their own repos, any source project that exists for them, and the parts their setup divides into (`units` - sites, production lines, integrations, each tied to a product or general). Call it before advising a named customer - a general answer can be wrong for them because of what is here. Pass `unit` when the question is about one part of their setup: the facts then come back RESOLVED for that unit, each carrying `origin` and `inherited`, so you can say a thing is true of every line on a shared template rather than only of the one asked about. Arrives automatically on fetch_work_item/get_context when the ticket resolves to a customer, so do not re-fetch it then.",
     inputSchema: {
       customer: z.string().describe("Slug from list_customers"),
       unit: z
         .string()
         .optional()
         .describe(
-          "Unit slug or alias from list_customer_units. Resolves facts for that part of their estate instead of listing the customer's flat set.",
+          "Unit slug or alias from list_customer_units. Resolves facts for that part of their setup instead of listing the customer's flat set.",
         ),
     },
     annotations: { readOnlyHint: true },
   },
   async ({ customer, unit }) =>
-    out(await getCustomerProfile(await getCustomerIdBySlug(customer), unit)),
+    outScrubbed(
+      await getCustomerProfile(await getCustomerIdBySlug(customer), unit),
+    ),
 );
 
 tool(
   "list_customer_units",
   {
     description:
-      "The parts one customer's estate divides into - sites, production lines, tenants - with how they nest and which shared profile each conforms to. `kind` is a deployment-specific vocabulary, not a fixed list. Read this before set_customer_fact with a unit, or before answering a question about a named line or site: a fact recorded against a line is not visible on the customer as a whole.",
+      "The parts one customer's setup divides into - sites, production lines, integrations, tenants - with the product each belongs to, how they nest, and which template each follows. A unit of a product with a blueprint has one of its kinds (get_product_blueprint); a general unit, with no product, takes any kind. Read this before set_customer_fact with a unit, or before answering a question about a named line or site: a fact recorded against a line is not visible on the customer as a whole.",
     inputSchema: { customer: z.string().describe("Slug from list_customers") },
     annotations: { readOnlyHint: true },
   },
@@ -196,16 +231,17 @@ tool(
     if (!units.length)
       return out({
         units: [],
-        note: "This customer's estate is not broken down into units, so every fact about them is customer-wide.",
+        note: "This customer's setup is not broken down into units, so every fact about them is customer-wide.",
       });
-    const bySlug = new Map(units.map((u) => [u.id, u.slug]));
+    const slugById = new Map(units.map((u) => [u.id, u.slug]));
     return out({
       units: units.map((u) => ({
         slug: u.slug,
         name: u.name,
         kind: u.kind,
-        parent: u.parent_id ? (bySlug.get(u.parent_id) ?? null) : null,
-        profile: u.profile_id ? (bySlug.get(u.profile_id) ?? null) : null,
+        product: u.product_slug,
+        parent: u.parent_id ? (slugById.get(u.parent_id) ?? null) : null,
+        template: u.template_id ? (slugById.get(u.template_id) ?? null) : null,
         aliases: u.aliases,
         notes: u.notes,
       })),
@@ -217,23 +253,29 @@ tool(
   "add_customer_unit",
   {
     description:
-      "Add (or update) one part of a customer's estate. `parent` is containment - a line is inside a site. `profile` is sharing WITHOUT containment: the shared layout several lines conform to, whose facts they inherit without being part of it. Pick `kind` to match what this deployment already uses (see list_customer_units); it is free text, not a fixed vocabulary. Do not invent units from ticket text - propose one and let the user confirm.",
+      "Add (or update) one part of a customer's setup. `product_slug` ties it to a product's setup: its kind, where it sits and the template it follows must then fit that product's blueprint (get_product_blueprint), and the refusal names what fits. Leave product_slug off for a general unit, which takes any kind. `parent` is containment - a line is inside a site. `template` is sharing WITHOUT containment: the layout several lines follow, whose facts they inherit without being part of it. Do not invent units from ticket text - propose one and let the user confirm.",
     inputSchema: {
       customer: z.string().describe("Slug from list_customers"),
       slug: z.string().describe("Short identifier, e.g. 'pln191'"),
       name: z.string(),
       kind: z
         .string()
-        .describe("What sort of part this is, e.g. site, line, layout, tenant"),
+        .describe(
+          "What sort of part this is, e.g. site, line, layout, integration",
+        ),
+      product_slug: z
+        .string()
+        .optional()
+        .describe("The product whose setup this unit is part of."),
       parent: z
         .string()
         .optional()
         .describe("The unit that CONTAINS this one."),
-      profile: z
+      template: z
         .string()
         .optional()
         .describe(
-          "A unit whose facts this one inherits without being inside it - a shared layout or template.",
+          "A unit whose facts this one inherits without being inside it - a shared layout.",
         ),
       aliases: z
         .array(z.string())
@@ -244,6 +286,11 @@ tool(
   },
   async (args) => {
     await requireAnyTeamAdmin();
+    const customerId = await getCustomerIdBySlug(args.customer);
+    const productId = args.product_slug
+      ? await getProductIdBySlug(args.product_slug)
+      : null;
+    await requireCustomerPartEditor(customerId, productId);
     return out(
       await audited("catalog_add", `unit:${args.customer}/${args.slug}`, () =>
         addCustomerUnit({
@@ -251,8 +298,9 @@ tool(
           slug: args.slug,
           name: args.name,
           kind: args.kind,
+          productId,
           parentSlug: args.parent,
-          profileSlug: args.profile,
+          templateSlug: args.template,
           aliases: args.aliases,
           notes: args.notes,
         }),
@@ -265,7 +313,7 @@ tool(
   "list_customer_fact_kinds",
   {
     description:
-      "The kinds of customer specific already recorded in this deployment (version, environment, layout, …), with usage counts. The vocabulary is deployment-specific, so call this before set_customer_fact and reuse an existing kind rather than coining a near-duplicate.",
+      "The kinds of customer specific already recorded in this deployment (version, environment, layout, …), with usage counts. The vocabulary is deployment-specific, so call this before set_customer_fact and reuse an existing kind rather than coining a near-duplicate. On a unit of a product with a blueprint, the blueprint decides the kinds instead.",
     inputSchema: {},
     annotations: { readOnlyHint: true },
   },
@@ -276,7 +324,7 @@ tool(
   "set_customer_fact",
   {
     description:
-      "Record one specific about a customer's install - the version they run, their line layout, an integration they depend on. This is where customer-specific truth belongs; a knowledge entry is for a problem and its resolution, so do not use one to store what is really a configuration fact. Re-setting the same (unit, kind, label) replaces the value, so this is how a version gets updated rather than duplicated. Pass `unit` when the fact is true of one part of their estate rather than of the whole account - an IP belongs to a line, a timezone to a site. Call list_customer_fact_kinds first and reuse a kind.",
+      "Record one specific about a customer's install - the version they run, their line layout, an integration they depend on. This is where customer-specific truth belongs; a knowledge entry is for a problem and its resolution, so do not use one to store what is really a configuration fact. Re-setting the same (unit, kind, label) replaces the value, so this is how a version gets updated rather than duplicated. Pass `unit` when the fact is true of one part of their setup rather than of the whole account - an IP belongs to a line, a timezone to a site. On a unit of a product with a blueprint the kind must be one the blueprint lists for that unit's kind, and a value from its choices when it has some; elsewhere call list_customer_fact_kinds first and reuse a kind. Credentials and card numbers are refused: record where a secret is kept, never the secret.",
     inputSchema: {
       customer: z.string().describe("Slug from list_customers"),
       unit: z
@@ -292,7 +340,7 @@ tool(
         .string()
         .optional()
         .describe(
-          "What it is about when the kind alone is ambiguous - which product a version belongs to, which line a layout describes. Together with kind it identifies the fact, so reuse it to update rather than add.",
+          "What it is about when the kind alone is ambiguous - which device an address belongs to, which line a layout describes. Together with kind it identifies the fact, so reuse it to update rather than add.",
         ),
       value: z.string(),
       notes: z.string().optional(),
@@ -306,25 +354,32 @@ tool(
       component: z
         .string()
         .optional()
-        .describe("Pin the fact to one component. Needs product_slug."),
+        .describe(
+          "Pin the fact to one component. Needs product_slug on a customer-wide fact; a unit's product is used otherwise.",
+        ),
     },
   },
   async (args) => {
     await requireAnyTeamAdmin();
+    const customerId = await getCustomerIdBySlug(args.customer);
+    const unit = args.unit ? await resolveUnit(customerId, args.unit) : null;
+    await requireCustomerPartEditor(customerId, unit?.product_id ?? null);
     return out(
-      await setCustomerFact({
-        customerSlug: args.customer,
-        unit: args.unit,
-        kind: args.kind,
-        label: args.label,
-        value: args.value,
-        notes: args.notes,
-        source: args.source,
-        componentSlug: args.component,
-        productId: args.product_slug
-          ? await getProductIdBySlug(args.product_slug)
-          : null,
-      }),
+      await audited("catalog_update", `customer:${args.customer}`, async () =>
+        setCustomerFact({
+          customerSlug: args.customer,
+          unit: args.unit,
+          kind: args.kind,
+          label: args.label,
+          value: args.value,
+          notes: args.notes,
+          source: args.source,
+          componentSlug: args.component,
+          productId: args.product_slug
+            ? await getProductIdBySlug(args.product_slug)
+            : null,
+        }),
+      ),
     );
   },
 );
@@ -333,7 +388,7 @@ tool(
   "set_customer_component",
   {
     description:
-      "Record that a customer runs a component, or that they no longer do (linked: false). Many-to-many on purpose: a shared component has many customers, one built for a single customer has just that one. Use it to answer 'who else runs this?' before treating a fix as safe for everyone.",
+      "Record that a customer runs a component, or that they no longer do (linked: false). Many-to-many on purpose: a shared component has many customers, one built for a single customer has just that one. list_customers with product_slug and component answers 'who else runs this?' before a fix is treated as safe for everyone.",
     inputSchema: {
       customer: z.string().describe("Slug from list_customers"),
       product_slug: z.string(),
@@ -345,19 +400,84 @@ tool(
   async (args) => {
     await requireAnyTeamAdmin();
     const productId = await getProductIdBySlug(args.product_slug);
+    await requireCanEdit({ productId });
     return out(
-      args.linked === false
-        ? await unlinkCustomerComponent(
-            args.customer,
+      await audited("catalog_update", `customer:${args.customer}`, () =>
+        args.linked === false
+          ? unlinkCustomerComponent(args.customer, productId, args.component)
+          : linkCustomerComponent(
+              args.customer,
+              productId,
+              args.component,
+              args.notes,
+            ),
+      ),
+    );
+  },
+);
+
+tool(
+  "get_product_blueprint",
+  {
+    description:
+      "A product's blueprint: the kinds of unit its customers' setups divide into (a site holding production lines that follow a layout; the integrations of a reporting product), where each kind sits, which template kind it follows, and the facts each kind records, with their choices when the values are a closed list. No kinds means the product has no blueprint and its units are free form. Read it before add_customer_unit or set_customer_fact on a unit of that product.",
+    inputSchema: { product_slug: z.string() },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ product_slug }) =>
+    out(await getProductBlueprint(await getProductIdBySlug(product_slug))),
+);
+
+tool(
+  "add_unit_kind",
+  {
+    description:
+      "Add a kind of unit to a product's blueprint, or extend one: where it sits (`parent_kind`), the template kind its units may follow, and the facts it records. Facts given are added or updated, never removed. Call it when the user describes how a product's customers are set up, or alongside a set_customer_fact or add_customer_unit that a blueprint refused because the kind or fact is missing - its own review box is the user's chance to refuse it.",
+    inputSchema: {
+      product_slug: z.string(),
+      slug: z.string().describe("Lowercase key, e.g. 'line', 'integration'"),
+      name: z.string(),
+      description: z.string().optional(),
+      parent_kind: z
+        .string()
+        .optional()
+        .describe("The kind a unit of this kind sits inside, e.g. 'site'."),
+      template_kind: z
+        .string()
+        .optional()
+        .describe("The kind of template its units may follow, e.g. 'layout'."),
+      facts: z
+        .array(
+          z.object({
+            kind: z.string().describe("Lowercase key, e.g. 'ip'"),
+            description: z.string().optional(),
+            choices: z
+              .array(z.string())
+              .optional()
+              .describe("Every value the fact may take; omit for any value."),
+          }),
+        )
+        .optional(),
+    },
+  },
+  async (args) => {
+    const productId = await getProductIdBySlug(args.product_slug);
+    await requireCanEdit({ productId });
+    return out(
+      await audited(
+        "catalog_add",
+        `blueprint:${args.product_slug}/${args.slug}`,
+        () =>
+          addUnitKind({
             productId,
-            args.component,
-          )
-        : await linkCustomerComponent(
-            args.customer,
-            productId,
-            args.component,
-            args.notes,
-          ),
+            slug: args.slug,
+            name: args.name,
+            description: args.description,
+            parentKind: args.parent_kind,
+            templateKind: args.template_kind,
+            facts: args.facts,
+          }),
+      ),
     );
   },
 );

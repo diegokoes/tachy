@@ -345,6 +345,123 @@ describe("customer round trip", () => {
     });
     expect(answer.isError).toBe(true);
   });
+
+  it("builds a product's blueprint and holds a setup to it", async () => {
+    expect(
+      (
+        await call("add_unit_kind", {
+          product_slug: "tqx",
+          slug: "site",
+          name: "Site",
+        })
+      ).isError,
+    ).toBe(false);
+    await call("add_unit_kind", {
+      product_slug: "tqx",
+      slug: "line",
+      name: "Line",
+      parent_kind: "site",
+      facts: [{ kind: "coding_mode", choices: ["CT1", "CT2"] }],
+    });
+    const blueprint = await call("get_product_blueprint", {
+      product_slug: "tqx",
+    });
+    expect(blueprint.text).toMatch(/"parent_kind":"site"/);
+
+    await call("add_customer", {
+      name: "Northwind",
+      slug: "northwind",
+      product_slug: "tqx",
+    });
+    await call("add_customer_unit", {
+      customer: "northwind",
+      slug: "plant",
+      name: "Plant",
+      kind: "site",
+      product_slug: "tqx",
+    });
+    const refused = await call("add_customer_unit", {
+      customer: "northwind",
+      slug: "hall-1",
+      name: "Hall 1",
+      kind: "hall",
+      product_slug: "tqx",
+    });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toMatch(/propose add_unit_kind/);
+
+    await call("add_customer_unit", {
+      customer: "northwind",
+      slug: "line-1",
+      name: "Line 1",
+      kind: "line",
+      product_slug: "tqx",
+      parent: "plant",
+    });
+    const fact = await call("set_customer_fact", {
+      customer: "northwind",
+      unit: "line-1",
+      kind: "coding_mode",
+      value: "ct2",
+    });
+    expect(fact.text).toMatch(/"value":"CT2"/);
+    const units = await call("list_customer_units", { customer: "northwind" });
+    expect(units.text).toMatch(/"product":"tqx"/);
+    expect(units.text).toMatch(/"parent":"plant"/);
+  });
+
+  it("lists who uses a product, and who runs a component", async () => {
+    await call("add_component", {
+      product_slug: "tqx",
+      slug: "printer",
+      name: "Printer",
+    });
+    await call("add_customer", { name: "Losvane", slug: "losvane" });
+    await call("add_customer", {
+      name: "Velmora",
+      slug: "velmora",
+      product_slug: "tqx",
+    });
+    await call("set_customer_component", {
+      customer: "losvane",
+      product_slug: "tqx",
+      component: "printer",
+    });
+    const users = await call("list_customers", { product_slug: "tqx" });
+    expect((users.json as { slug: string }[]).map((c) => c.slug)).toEqual([
+      "losvane",
+      "velmora",
+    ]);
+    const runners = await call("list_customers", {
+      product_slug: "tqx",
+      component: "printer",
+    });
+    expect((runners.json as { slug: string }[]).map((c) => c.slug)).toEqual([
+      "losvane",
+    ]);
+    expect(
+      (await call("list_customers", { component: "printer" })).isError,
+    ).toBe(true);
+  });
+
+  it("scrubs the profile under redaction", async () => {
+    await call("add_customer", { name: "Northwind", slug: "northwind" });
+    await call("set_customer_fact", {
+      customer: "northwind",
+      kind: "contact",
+      value: "duty phone via lead@northwind.invalid",
+    });
+    process.env.TACHY_REDACT = "true";
+    try {
+      const profile = await call("get_customer_profile", {
+        customer: "northwind",
+      });
+      expect(profile.text).not.toMatch(/lead@northwind\.invalid/);
+      expect(profile.text).toMatch(/\[EMAIL_1\]/);
+    } finally {
+      delete process.env.TACHY_REDACT;
+    }
+  });
 });
 
 describe("reference and wiki round trips", () => {

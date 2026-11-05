@@ -2,12 +2,13 @@ import { sql } from "./db";
 
 /**
  * Self-parenting tables. Named rather than taken as a string so the identifier
- * that reaches the query is one of these three and nothing else - the same
- * shape `resolveScoped` uses for its own table argument.
+ * that reaches the query is one of these and nothing else - the same shape
+ * `resolveScoped` uses for its own table argument.
  */
 const HIERARCHY_TABLES = [
   "components",
   "customer_units",
+  "unit_kinds",
   "wiki_categories",
 ] as const;
 export type HierarchyTable = (typeof HIERARCHY_TABLES)[number];
@@ -20,11 +21,16 @@ export type HierarchyTable = (typeof HIERARCHY_TABLES)[number];
 const MAX_DEPTH = 64;
 
 /**
- * The columns that point at another row of the same table. `customer_units` has
- * two - where a unit sits, and which unit it takes its shape from - and both can
- * ring.
+ * The columns that point at another row of the same table. `customer_units` and
+ * `unit_kinds` have two each - where it sits, and which template it follows -
+ * and both can ring.
  */
-const PARENT_COLUMNS = ["parent_id", "profile_id"] as const;
+const PARENT_COLUMNS = [
+  "parent_id",
+  "template_id",
+  "parent_kind_id",
+  "template_kind_id",
+] as const;
 export type ParentColumn = (typeof PARENT_COLUMNS)[number];
 
 /**

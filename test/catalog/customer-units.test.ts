@@ -23,9 +23,9 @@ afterAll(() => sql.end());
 
 /**
  * The IVK shape, reduced to what the ladder needs: a site containing lines,
- * two of which conform to a shared layout that is not part of the estate.
+ * two of which follow a shared layout that is not part of the setup.
  */
-async function estate() {
+async function buildSetup() {
   await addCustomer({ name: "Ilverton Brands", slug: "ivk" });
   const customerId = await getCustomerIdBySlug("ivk");
   await addCustomerUnit({
@@ -47,7 +47,7 @@ async function estate() {
       name: slug.toUpperCase(),
       kind: "line",
       parentSlug: "calderra",
-      profileSlug: "layout-3",
+      templateSlug: "layout-3",
     });
   await addCustomerUnit({
     customerSlug: "ivk",
@@ -75,7 +75,7 @@ describe("customer units", () => {
   beforeEach(resetData);
 
   it("models a site containing lines, with a layout beside it", async () => {
-    const customerId = await estate();
+    const customerId = await buildSetup();
     const units = await listCustomerUnits(customerId);
     expect(units.map((u) => u.slug).sort()).toEqual([
       "calderra",
@@ -88,13 +88,13 @@ describe("customer units", () => {
     const site = units.find((u) => u.slug === "calderra")!;
     const layout = units.find((u) => u.slug === "layout-3")!;
     expect(line.parent_id).toBe(site.id);
-    expect(line.profile_id).toBe(layout.id);
-    // A layout is not part of the estate - it has no parent.
+    expect(line.template_id).toBe(layout.id);
+    // A layout is not part of the setup tree - it has no parent.
     expect(layout.parent_id).toBeNull();
   });
 
   it("resolves a unit by slug or alias, and hints on a miss", async () => {
-    await estate();
+    await buildSetup();
     const customerId = await getCustomerIdBySlug("ivk");
     await updateCustomerUnit(customerId, "pln191", { aliases: ["line 191"] });
     expect((await resolveUnit(customerId, "LINE 191")).slug).toBe("pln191");
@@ -103,8 +103,8 @@ describe("customer units", () => {
     );
   });
 
-  it("refuses a containment cycle and a profile cycle", async () => {
-    await estate();
+  it("refuses a containment cycle and a template cycle", async () => {
+    await buildSetup();
     const customerId = await getCustomerIdBySlug("ivk");
     await expect(
       updateCustomerUnit(customerId, "calderra", { parentSlug: "pln191" }),
@@ -112,15 +112,15 @@ describe("customer units", () => {
     await expect(
       updateCustomerUnit(customerId, "pln191", { parentSlug: "pln191" }),
     ).rejects.toThrow(/contain itself/);
-    // pln191 already conforms to layout-3, so pointing the layout back at the
-    // line is a cycle on the profile edge.
+    // pln191 already follows layout-3, so pointing the layout back at the line
+    // is a cycle on the template edge.
     await expect(
-      updateCustomerUnit(customerId, "layout-3", { profileSlug: "pln191" }),
+      updateCustomerUnit(customerId, "layout-3", { templateSlug: "pln191" }),
     ).rejects.toThrow(/cycle/);
     await expect(
-      updateCustomerUnit(customerId, "layout-3", { profileSlug: "layout-3" }),
-    ).rejects.toThrow(/its own profile/);
-    // A layout may still take a profile that does not lead back to it.
+      updateCustomerUnit(customerId, "layout-3", { templateSlug: "layout-3" }),
+    ).rejects.toThrow(/its own template/);
+    // A layout may still follow a template that does not lead back to it.
     await addCustomerUnit({
       customerSlug: "ivk",
       slug: "base-layout",
@@ -128,12 +128,12 @@ describe("customer units", () => {
       kind: "layout",
     });
     await updateCustomerUnit(customerId, "layout-3", {
-      profileSlug: "base-layout",
+      templateSlug: "base-layout",
     });
   });
 
   it("flattens rather than deletes a subtree when a level goes", async () => {
-    await estate();
+    await buildSetup();
     const customerId = await getCustomerIdBySlug("ivk");
     await deleteCustomerUnit(customerId, "calderra");
     const units = await listCustomerUnits(customerId);
@@ -147,12 +147,36 @@ describe("customer units", () => {
   });
 
   it("keeps the lines when the layout they reference is deleted", async () => {
-    await estate();
+    await buildSetup();
     const customerId = await getCustomerIdBySlug("ivk");
     await deleteCustomerUnit(customerId, "layout-3");
     const units = await listCustomerUnits(customerId);
     expect(units.map((u) => u.slug)).toContain("pln191");
-    expect(units.find((u) => u.slug === "pln191")!.profile_id).toBeNull();
+    expect(units.find((u) => u.slug === "pln191")!.template_id).toBeNull();
+  });
+
+  it("refuses to delete a unit an entry is filed under, naming it", async () => {
+    const customerId = await buildSetup();
+    await saveKnowledgeEntry({
+      productId: await tqxProductId(),
+      title: "Printer stops on PLN191",
+      issueSummary: "The printer stops mid-batch.",
+      customerSlug: "ivk",
+      unit: "pln191",
+      status: "approved",
+    });
+    await expect(deleteCustomerUnit(customerId, "pln191")).rejects.toThrow(
+      /'pln191' still has 1 entries filed under it/,
+    );
+  });
+
+  it("deletes the unit's own facts with it", async () => {
+    const customerId = await buildSetup();
+    await fact("pln191", "ip", "10.4.12.31", "plc");
+    await fact(null, "contract", "annual");
+    await deleteCustomerUnit(customerId, "pln191");
+    const [left] = await sql`select count(*)::int as n from customer_facts`;
+    expect(left.n).toBe(1);
   });
 });
 
@@ -160,7 +184,7 @@ describe("the fact resolution ladder", () => {
   beforeEach(resetData);
 
   it("prefers the unit's own fact over everything above it", async () => {
-    await estate();
+    await buildSetup();
     await fact(null, "coding_mode", "CUSTOMER");
     await fact("calderra", "coding_mode", "SITE");
     await fact("layout-3", "coding_mode", "LAYOUT");
@@ -177,9 +201,9 @@ describe("the fact resolution ladder", () => {
     expect(facts.inherited).toBe(false);
   });
 
-  // Why profile_id exists: a template beats the place.
-  it("prefers the profile over the parent", async () => {
-    const customerId = await estate();
+  // Why template_id exists: a template beats the place.
+  it("prefers the template over the parent", async () => {
+    const customerId = await buildSetup();
     await fact(null, "coding_mode", "CUSTOMER");
     await fact("calderra", "coding_mode", "SITE");
     await fact("layout-3", "coding_mode", "LAYOUT");
@@ -195,7 +219,7 @@ describe("the fact resolution ladder", () => {
   });
 
   it("falls through the parent to the customer", async () => {
-    const customerId = await estate();
+    const customerId = await buildSetup();
     await fact(null, "coding_mode", "CUSTOMER");
     await fact("calderra", "timezone", "Europe/Madrid");
 
@@ -213,12 +237,12 @@ describe("the fact resolution ladder", () => {
     });
   });
 
-  it("skips the profile rung for a line that has none", async () => {
-    const customerId = await estate();
+  it("skips the template rung for a line that has none", async () => {
+    const customerId = await buildSetup();
     await fact("layout-3", "coding_mode", "LAYOUT");
     await fact("calderra", "coding_mode", "SITE");
 
-    // tpc141 has no profile, so the layout's fact must not reach it.
+    // tpc141 has no template, so the layout's fact must not reach it.
     const facts = byKind(
       await resolveUnitFacts((await resolveUnit(customerId, "tpc141")).id),
       "coding_mode",
@@ -227,7 +251,7 @@ describe("the fact resolution ladder", () => {
   });
 
   it("does not leak a sibling's facts", async () => {
-    const customerId = await estate();
+    const customerId = await buildSetup();
     await fact("pln192", "ip", "10.4.12.32", "plc");
     const facts = await resolveUnitFacts(
       (await resolveUnit(customerId, "pln191")).id,
@@ -236,7 +260,7 @@ describe("the fact resolution ladder", () => {
   });
 
   it("keeps facts of the same kind apart by label", async () => {
-    const customerId = await estate();
+    const customerId = await buildSetup();
     await fact("pln191", "ip", "10.4.12.31", "plc");
     await fact("pln191", "ip", "10.4.12.32", "scada");
     const ips = (
@@ -249,7 +273,7 @@ describe("the fact resolution ladder", () => {
   });
 
   it("upserts a customer-level fact in place rather than duplicating it", async () => {
-    await estate();
+    await buildSetup();
     await fact(null, "version", "4.2.0", "tqx");
     await fact(null, "version", "4.2.1", "tqx");
     const [{ count }] =
@@ -258,7 +282,7 @@ describe("the fact resolution ladder", () => {
   });
 
   it("lets a unit-level fact coexist with the customer-level one", async () => {
-    const customerId = await estate();
+    const customerId = await buildSetup();
     await fact(null, "version", "4.2.0", "tqx");
     await fact("pln191", "version", "4.3.0", "tqx");
     const [{ count }] =
@@ -294,7 +318,7 @@ describe("unit-aware search", () => {
   // The PLN191/192 case: a lesson from a sibling on the same layout should
   // outrank one from a line on a different layout, without either being hidden.
   it("lifts the unit's own entries above a sibling's, and a sibling's above an unrelated line's", async () => {
-    const customerId = await estate();
+    const customerId = await buildSetup();
     const own = await entry("pln191", "spooler queue overrun on the labeller");
     const sibling = await entry(
       "pln192",
@@ -319,7 +343,7 @@ describe("unit-aware search", () => {
   });
 
   it("changes nothing when no unit is given", async () => {
-    const customerId = await estate();
+    const customerId = await buildSetup();
     await entry("pln191", "spooler queue overrun on the labeller");
     await entry("tpc141", "spooler queue overrun on the labeller");
     const hits = await searchKnowledge("spooler queue overrun labeller", {
@@ -346,7 +370,7 @@ describe("unit attribution on tickets and entries", () => {
   }
 
   it("records a unit on a ticket, and clears it with the customer", async () => {
-    const customerId = await estate();
+    const customerId = await buildSetup();
     const id = await ticket();
 
     await setWorkItemCustomer(id, customerId, "pln191");
@@ -364,7 +388,7 @@ describe("unit attribution on tickets and entries", () => {
   });
 
   it("refuses a unit belonging to a different customer", async () => {
-    await estate();
+    await buildSetup();
     await addCustomer({ name: "Other", slug: "other" });
     const otherId = await getCustomerIdBySlug("other");
     const id = await ticket();
@@ -377,7 +401,7 @@ describe("unit attribution on tickets and entries", () => {
   // judgement. Once the judgement is stated, narrowing it to the line the
   // ticket already named adds nothing new.
   it("inherits the ticket's unit once the customer is stated and matches", async () => {
-    const customerId = await estate();
+    const customerId = await buildSetup();
     const id = await ticket();
     await setWorkItemCustomer(id, customerId, "pln191");
 
@@ -394,7 +418,7 @@ describe("unit attribution on tickets and entries", () => {
   });
 
   it("inherits nothing when no customer is stated", async () => {
-    const customerId = await estate();
+    const customerId = await buildSetup();
     const id = await ticket();
     await setWorkItemCustomer(id, customerId, "pln191");
 
@@ -409,7 +433,7 @@ describe("unit attribution on tickets and entries", () => {
   });
 
   it("inherits nothing when a different customer is stated", async () => {
-    const customerId = await estate();
+    const customerId = await buildSetup();
     await addCustomer({ name: "Other", slug: "other" });
     const id = await ticket();
     await setWorkItemCustomer(id, customerId, "pln191");
@@ -425,7 +449,7 @@ describe("unit attribution on tickets and entries", () => {
   });
 
   it("takes an explicit unit, and refuses one without a customer", async () => {
-    const customerId = await estate();
+    const customerId = await buildSetup();
     const entry = await saveKnowledgeEntry({
       productId: await tqxProductId(),
       customerSlug: "ivk",
@@ -448,7 +472,7 @@ describe("unit attribution on tickets and entries", () => {
   });
 
   it("drops the unit when an entry is re-filed under another customer", async () => {
-    await estate();
+    await buildSetup();
     await addCustomer({ name: "Other", slug: "other" });
     const entry = await saveKnowledgeEntry({
       productId: await tqxProductId(),
@@ -463,7 +487,7 @@ describe("unit attribution on tickets and entries", () => {
   });
 
   it("tags a reference doc with a unit too", async () => {
-    const customerId = await estate();
+    const customerId = await buildSetup();
     const doc = await saveReferenceDoc({
       productId: await tqxProductId(),
       customerSlug: "ivk",

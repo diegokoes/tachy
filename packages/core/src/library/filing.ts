@@ -1,10 +1,15 @@
+import { sql } from "../infra/db";
 import { badInput } from "../infra/errors";
 import {
   getComponentSlug,
   resolveComponentStrict,
 } from "../catalog/components";
 import { getCustomerIdBySlug, getCustomerSlug } from "../catalog/customers";
-import { getUnitSlug, resolveUnit } from "../catalog/units";
+import {
+  assertUnitInProduct,
+  getUnitSlug,
+  resolveUnit,
+} from "../catalog/units";
 
 /**
  * Where a knowledge entry or reference doc is filed: its component (with the
@@ -41,6 +46,22 @@ export async function resolveFilingComponent(
   return { componentId: resolved.id, productArea: resolved.path };
 }
 
+/** Throws when an item of `productId` is filed under another product's unit. */
+export async function assertFilingFitsUnit(
+  customerUnitId: string | null,
+  productId: string | null,
+): Promise<void> {
+  if (!customerUnitId || !productId) return;
+  const [unit] = await sql<
+    { slug: string; product_id: string | null; product_slug: string | null }[]
+  >`
+    select u.slug, u.product_id, p.slug as product_slug
+    from customer_units u left join products p on p.id = u.product_id
+    where u.id = ${customerUnitId}
+  `;
+  if (unit) assertUnitInProduct(unit, productId);
+}
+
 /** Customer and unit for a new item. A unit needs a stated customer. */
 export async function statedCustomer(
   customerSlug: string | null | undefined,
@@ -62,8 +83,8 @@ export async function statedCustomer(
  * The filing an update leaves behind. A key present in `patch` replaces the
  * stored value and null clears it; an absent key keeps it. The unit follows
  * the customer: re-filing under another customer, or clearing it, drops a unit
- * that belongs to the old one, which would otherwise resolve facts from an
- * estate the item is not about.
+ * that belongs to the old one, which would otherwise resolve facts from a
+ * setup the item is not about.
  */
 export async function patchedFiling(
   current: FiledRow,
@@ -100,6 +121,7 @@ export async function patchedFiling(
         ? (await resolveUnit(customerId, patch.unit)).id
         : null;
   }
+  await assertFilingFitsUnit(customerUnitId, current.product_id);
   return { componentId, productArea, customerId, customerUnitId };
 }
 

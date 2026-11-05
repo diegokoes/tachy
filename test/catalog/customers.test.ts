@@ -13,8 +13,17 @@ import {
   linkCustomerComponent,
   unlinkCustomerComponent,
   getCustomerProfile,
+  addCustomerUnit,
+  deleteCustomer,
+  deleteCustomerFact,
+  linkCustomerProduct,
+  unlinkCustomerProduct,
+  getProductIdBySlug,
+  setWorkItemCustomer,
 } from "@tachy/core/catalog";
 import { linkRepo, listRepos } from "@tachy/core/code";
+import { saveKnowledgeEntry } from "@tachy/core/knowledge";
+import { saveReferenceDoc } from "@tachy/core/reference";
 import { resetData, sql, tqxProductId } from "../database";
 
 // File scope, not inside the first describe: a later block would otherwise run
@@ -222,7 +231,13 @@ describe("customer profile", () => {
     ]);
     expect(profile?.repos.map((r) => r.slug)).toEqual(["addon-losvane"]);
     expect(profile?.facts).toEqual([
-      { kind: "version", label: "", value: "4.2.1", component: null },
+      {
+        kind: "version",
+        label: "",
+        value: "4.2.1",
+        component: null,
+        unit: null,
+      },
     ]);
 
     const velmora = await getCustomerProfile(
@@ -270,5 +285,255 @@ describe("customer resolution by slug or alias", () => {
     await expect(resolveCustomer("davidof")).rejects.toThrow(
       /Nearest matches: 'dalmoor'/,
     );
+  });
+});
+
+describe("the products a customer uses", () => {
+  beforeEach(resetData);
+
+  it("links a product when the customer is added with it, and lists it", async () => {
+    await addCustomer({
+      name: "Losvane",
+      slug: "losvane",
+      productIds: [await tqxProductId()],
+    });
+    expect((await listCustomers())[0].products).toEqual(["tqx"]);
+  });
+
+  it("links the product of a unit or a component added for them", async () => {
+    const productId = await tqxProductId();
+    await addCustomer({ name: "Losvane", slug: "losvane" });
+    await addCustomerUnit({
+      customerSlug: "losvane",
+      slug: "madrid",
+      name: "Madrid",
+      kind: "site",
+      productId,
+    });
+    await addCustomer({ name: "Velmora", slug: "velmora" });
+    await addComponent({ productId, slug: "printer", name: "Printer" });
+    await linkCustomerComponent("velmora", productId, "printer");
+    const rows = await listCustomers();
+    expect(rows.map((r) => [r.slug, r.products])).toEqual([
+      ["losvane", ["tqx"]],
+      ["velmora", ["tqx"]],
+    ]);
+  });
+
+  it("narrows the list to a product, or to who runs a component", async () => {
+    const productId = await tqxProductId();
+    await addComponent({ productId, slug: "printer", name: "Printer" });
+    await addCustomer({ name: "Losvane", slug: "losvane" });
+    await addCustomer({ name: "Velmora", slug: "velmora" });
+    await addCustomer({ name: "Dalmoor", slug: "dalmoor" });
+    await linkCustomerProduct(await getCustomerIdBySlug("velmora"), productId);
+    await linkCustomerComponent("losvane", productId, "printer");
+    const users = await listCustomers({ productId });
+    expect(users.map((r) => r.slug)).toEqual(["losvane", "velmora"]);
+    const [printer] =
+      await sql`select id from components where slug = 'printer'`;
+    const runners = await listCustomers({ componentId: printer.id as string });
+    expect(runners.map((r) => r.slug)).toEqual(["losvane"]);
+  });
+
+  it("refuses to unlink a product the customer still has units of", async () => {
+    const productId = await tqxProductId();
+    await addCustomer({ name: "Losvane", slug: "losvane" });
+    const customerId = await getCustomerIdBySlug("losvane");
+    await addCustomerUnit({
+      customerSlug: "losvane",
+      slug: "madrid",
+      name: "Madrid",
+      kind: "site",
+      productId,
+    });
+    await expect(unlinkCustomerProduct(customerId, productId)).rejects.toThrow(
+      /1 unit\(s\) in this product's setup/,
+    );
+    await sql`delete from customer_units`;
+    await unlinkCustomerProduct(customerId, productId);
+    expect((await listCustomers())[0].products).toEqual([]);
+  });
+});
+
+describe("deleting a customer", () => {
+  beforeEach(resetData);
+
+  it("refuses while entries or docs are filed under them, naming the counts", async () => {
+    const productId = await tqxProductId();
+    await addCustomer({ name: "Losvane", slug: "losvane" });
+    await saveKnowledgeEntry({
+      productId,
+      title: "Printer stops",
+      issueSummary: "The printer stops mid-batch.",
+      customerSlug: "losvane",
+      status: "approved",
+    });
+    await saveReferenceDoc({
+      title: "Losvane addon",
+      body: "How their addon works.",
+      productId,
+      customerSlug: "losvane",
+    });
+    await expect(deleteCustomer("losvane")).rejects.toThrow(
+      /1 entries, 1 docs filed under it/,
+    );
+  });
+
+  it("takes their units, facts and links with them when nothing is filed", async () => {
+    await addCustomer({
+      name: "Losvane",
+      slug: "losvane",
+      productIds: [await tqxProductId()],
+    });
+    await addCustomerUnit({
+      customerSlug: "losvane",
+      slug: "madrid",
+      name: "Madrid",
+      kind: "site",
+    });
+    await setCustomerFact({
+      customerSlug: "losvane",
+      unit: "madrid",
+      kind: "timezone",
+      value: "Europe/Madrid",
+    });
+    await deleteCustomer("losvane");
+    const [left] = await sql`
+      select (select count(*)::int from customer_units) as units,
+             (select count(*)::int from customer_facts) as facts,
+             (select count(*)::int from customer_products) as products
+    `;
+    expect(left).toEqual({ units: 0, facts: 0, products: 0 });
+  });
+});
+
+describe("what a fact may hold", () => {
+  beforeEach(resetData);
+
+  it("refuses a credential or a card number, naming the field", async () => {
+    await addCustomer({ name: "Losvane", slug: "losvane" });
+    await expect(
+      setCustomerFact({
+        customerSlug: "losvane",
+        kind: "sftp",
+        value: "password: hunter2",
+      }),
+    ).rejects.toThrow(/value looks like a credential/);
+    await expect(
+      setCustomerFact({
+        customerSlug: "losvane",
+        kind: "billing",
+        value: "on file",
+        notes: "card 4111 1111 1111 1111",
+      }),
+    ).rejects.toThrow(/notes looks like a credential or a card number/);
+    await expect(
+      addCustomer({
+        name: "Velmora",
+        slug: "velmora",
+        notes: "token=abc123",
+      }),
+    ).rejects.toThrow(/notes looks like/);
+  });
+
+  it("names the unit of a unit's fact in the flat list", async () => {
+    await addCustomer({ name: "Losvane", slug: "losvane" });
+    await addCustomerUnit({
+      customerSlug: "losvane",
+      slug: "madrid",
+      name: "Madrid",
+      kind: "site",
+    });
+    await setCustomerFact({
+      customerSlug: "losvane",
+      unit: "madrid",
+      kind: "timezone",
+      value: "Europe/Madrid",
+    });
+    await setCustomerFact({
+      customerSlug: "losvane",
+      kind: "contract",
+      value: "annual",
+    });
+    const facts = await listCustomerFacts(await getCustomerIdBySlug("losvane"));
+    expect(facts.map((f) => [f.unit_slug, f.kind])).toEqual([
+      [null, "contract"],
+      ["madrid", "timezone"],
+    ]);
+  });
+
+  it("deletes a fact only through the customer it belongs to", async () => {
+    await addCustomer({ name: "Losvane", slug: "losvane" });
+    await addCustomer({ name: "Velmora", slug: "velmora" });
+    const fact = await setCustomerFact({
+      customerSlug: "losvane",
+      kind: "contract",
+      value: "annual",
+    });
+    await expect(
+      deleteCustomerFact(await getCustomerIdBySlug("velmora"), fact.id),
+    ).rejects.toThrow(/not found/);
+    await deleteCustomerFact(await getCustomerIdBySlug("losvane"), fact.id);
+    expect(
+      await listCustomerFacts(await getCustomerIdBySlug("losvane")),
+    ).toEqual([]);
+  });
+});
+
+describe("filing under a product's unit", () => {
+  beforeEach(resetData);
+
+  async function trellisLine() {
+    await addCustomer({ name: "Losvane", slug: "losvane" });
+    await addCustomerUnit({
+      customerSlug: "losvane",
+      slug: "line-1",
+      name: "Line 1",
+      kind: "line",
+      productId: await tqxProductId(),
+    });
+  }
+
+  it("refuses an entry or a doc of another product", async () => {
+    await trellisLine();
+    const fqlink = await getProductIdBySlug("fqlink");
+    await expect(
+      saveKnowledgeEntry({
+        productId: fqlink,
+        title: "Fleet sync stalls",
+        issueSummary: "Sync stalls.",
+        customerSlug: "losvane",
+        unit: "line-1",
+        status: "approved",
+      }),
+    ).rejects.toThrow(/part of the tqx setup/);
+    await expect(
+      saveReferenceDoc({
+        title: "Fleet guide",
+        body: "How fleets sync.",
+        productId: fqlink,
+        customerSlug: "losvane",
+        unit: "line-1",
+      }),
+    ).rejects.toThrow(/part of the tqx setup/);
+  });
+
+  it("refuses a ticket of another product, and takes one with none", async () => {
+    await trellisLine();
+    const customerId = await getCustomerIdBySlug("losvane");
+    const [fqlinkTicket, unrouted] = await sql`
+      insert into work_items (source_connection_id, external_id, kind, title, product_id)
+      select sc.id, x.external_id, 'ticket', 'sync stalls', x.product_id
+      from source_connections sc,
+           (values ('wi-fqlink', (select id from products where slug = 'fqlink')),
+                   ('wi-none', null::uuid)) as x(external_id, product_id)
+      where sc.slug = 'test-freshdesk'
+      returning id
+    `;
+    await expect(
+      setWorkItemCustomer(fqlinkTicket.id as string, customerId, "line-1"),
+    ).rejects.toThrow(/part of the tqx setup/);
+    await setWorkItemCustomer(unrouted.id as string, customerId, "line-1");
   });
 });

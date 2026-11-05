@@ -3,6 +3,7 @@ import {
   resolveCurrentUserId,
   adminCount,
   canManageTeam,
+  assertCanEditCustomer,
   assertCanEditScope,
   assertAnyTeamAdmin,
   assertGlobalAdmin,
@@ -62,6 +63,25 @@ export async function gateUserId(): Promise<string | null> {
 export async function requireCanEdit(scope: EntryScope): Promise<void> {
   const userId = await gateUserId();
   if (userId) await assertCanEditScope(userId, scope);
+}
+
+export async function requireCanEditCustomer(
+  customerId: string,
+): Promise<void> {
+  const userId = await gateUserId();
+  if (userId) await assertCanEditCustomer(userId, customerId);
+}
+
+/**
+ * A part of a customer tied to a product is edited under that product's scope;
+ * the customer's own record and its general parts under the customer's rights.
+ */
+export async function requireCustomerPartEditor(
+  customerId: string,
+  productId: string | null,
+): Promise<void> {
+  if (productId) await requireCanEdit({ productId });
+  else await requireCanEditCustomer(customerId);
 }
 
 export async function requireCanManageTeam(
