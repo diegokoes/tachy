@@ -97,6 +97,8 @@ export interface ReferenceDocInput {
   kind?: string;
   /** Required for kind 'wiki'; ignored otherwise. */
   slug?: string | null;
+  /** The original the body was read out of (`saveLibraryFile`). */
+  fileId?: string | null;
 }
 
 export interface ReferenceDocUpdate {
@@ -212,13 +214,13 @@ export async function saveReferenceDoc(input: ReferenceDocInput) {
   const { doc, chunks } = await sql.begin(async (tx) => {
     const [row] = await tx<RevisedRow[]>`
       insert into reference_docs
-        (product_id, team_id, created_by, source, source_project_id, external_key,
+        (product_id, team_id, created_by, source, file_id, source_project_id, external_key,
          component_id, product_area, customer_id, customer_unit_id, title, body, tags,
          status, doc_version, kind, slug)
       values
         (${productId},
          ${input.teamId ?? predecessor?.team_id ?? null},
-         ${input.createdById ?? null}, ${input.source ?? null},
+         ${input.createdById ?? null}, ${input.source ?? null}, ${input.fileId ?? null},
          ${input.sourceProjectId ?? null}, ${input.externalKey ?? null},
          ${componentId}, ${productArea}, ${customerId}, ${customerUnitId},
          ${input.title}, ${input.body}, ${input.tags ?? predecessor?.tags ?? []},
@@ -264,10 +266,13 @@ export async function getReferenceDoc(id: string) {
            d.title, d.body, d.tags, d.status, d.doc_version,
            d.superseded_by, d.version, d.customer_id, cu.slug as customer_slug,
            d.customer_unit_id, un.slug as customer_unit_slug,
-           d.kind, d.slug, d.created_at, d.updated_at
+           d.kind, d.slug, d.created_at, d.updated_at,
+           f.filename as file_name, f.content_type as file_type,
+           f.byte_size as file_bytes
     from reference_docs d
     left join customers cu on cu.id = d.customer_id
     left join customer_units un on un.id = d.customer_unit_id
+    left join library_files f on f.id = d.file_id
     where d.id = ${id}
   `;
   if (!row) throw notFound(`reference doc '${id}' not found`);

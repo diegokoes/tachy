@@ -75,6 +75,8 @@ const customerFactSchema = z.object({
   source: z.string().nullable().optional(),
   product_slug: z.string().optional(),
   component: z.string().optional(),
+  /** A library doc's id; null removes the link. */
+  doc: z.string().uuid().nullable().optional(),
 });
 
 const customerComponentSchema = z.object({
@@ -389,6 +391,7 @@ export const customers = new Hono()
                 source: body.source,
                 componentSlug: body.component,
                 productId: await productIdOrNull(body.product_slug),
+                ...("doc" in body ? { docId: body.doc } : {}),
               },
               await callerActor(c),
             ),

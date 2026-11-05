@@ -13,6 +13,7 @@ import { seedFollows, seedSources } from "./sources";
 import {
   deriveProductAreas,
   seedKnowledge,
+  seedDocOriginal,
   type Knowledge,
   supersede,
 } from "./knowledge";
@@ -92,6 +93,7 @@ const TABLES = [
   "repos",
   "reference_doc_chunks",
   "reference_docs",
+  "library_files",
   "knowledge_feedback",
   "knowledge_entries",
   "work_item_follow_notes",
@@ -369,6 +371,7 @@ export async function seed(opts: SeedOptions): Promise<void> {
     await phases.run("derive", async () => {
       await deriveProductAreas(tx);
       await supersede(tx);
+      await seedDocOriginal(tx);
       await stampVectors(tx);
     });
     await phases.run("activity", async () => {

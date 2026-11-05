@@ -417,10 +417,12 @@ export async function resolveUnitFacts(
     select distinct on (f.kind, f.label)
       f.kind, f.label, f.value, f.notes, f.source,
       u.slug as origin_slug, u.name as origin_name, u.kind as origin_kind,
-      (f.unit_id is null or f.unit_id <> ${unitId}) as inherited
+      (f.unit_id is null or f.unit_id <> ${unitId}) as inherited,
+      f.doc_id, d.title as doc_title
     from customer_facts f
     left join ranked r on r.unit_id = f.unit_id
     left join customer_units u on u.id = f.unit_id
+    left join reference_docs d on d.id = f.doc_id
     where f.customer_id = ${unit.customer_id}
       and (f.unit_id is null or r.unit_id is not null)
     order by f.kind, f.label, coalesce(r.rank, 1000000)

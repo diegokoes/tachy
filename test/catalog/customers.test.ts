@@ -237,6 +237,7 @@ describe("customer profile", () => {
         value: "4.2.1",
         component: null,
         unit: null,
+        doc: null,
       },
     ]);
 
@@ -535,5 +536,77 @@ describe("filing under a product's unit", () => {
       setWorkItemCustomer(ftraceTicket.id as string, customerId, "line-1"),
     ).rejects.toThrow(/part of the tpd setup/);
     await setWorkItemCustomer(unrouted.id as string, customerId, "line-1");
+  });
+});
+
+describe("a fact's doc", () => {
+  beforeEach(resetData);
+
+  async function layoutDoc() {
+    return saveReferenceDoc({
+      title: "TLC191 layout",
+      body: "Electrical layout of the line.",
+      productId: await tpdProductId(),
+      customerSlug: "logista",
+    });
+  }
+
+  it("links a fact to a doc, keeps the link on a re-set, and clears it with null", async () => {
+    await addCustomer({ name: "Logista", slug: "logista" });
+    const doc = await layoutDoc();
+    const customerId = await getCustomerIdBySlug("logista");
+    await setCustomerFact({
+      customerSlug: "logista",
+      kind: "layout",
+      value: "two printers, one camera",
+      docId: doc.id,
+    });
+    await setCustomerFact({
+      customerSlug: "logista",
+      kind: "layout",
+      value: "two printers, two cameras",
+    });
+    const [kept] = await listCustomerFacts(customerId);
+    expect(kept).toMatchObject({ doc_id: doc.id, doc_title: "TLC191 layout" });
+    const profile = await getCustomerProfile(customerId);
+    expect(profile?.facts[0].doc).toEqual({
+      id: doc.id,
+      title: "TLC191 layout",
+    });
+
+    await setCustomerFact({
+      customerSlug: "logista",
+      kind: "layout",
+      value: "two printers, two cameras",
+      docId: null,
+    });
+    expect((await listCustomerFacts(customerId))[0].doc_id).toBeNull();
+  });
+
+  it("refuses a doc that does not exist, or a superseded version", async () => {
+    await addCustomer({ name: "Logista", slug: "logista" });
+    const old = await layoutDoc();
+    const current = await saveReferenceDoc({
+      title: "TLC191 layout v2",
+      body: "Electrical layout of the line, second issue.",
+      productId: await tpdProductId(),
+      supersedes: old.id,
+    });
+    await expect(
+      setCustomerFact({
+        customerSlug: "logista",
+        kind: "layout",
+        value: "v1",
+        docId: old.id,
+      }),
+    ).rejects.toThrow(new RegExp(`superseded by '${current.id}'`));
+    await expect(
+      setCustomerFact({
+        customerSlug: "logista",
+        kind: "layout",
+        value: "v1",
+        docId: "00000000-0000-0000-0000-000000000000",
+      }),
+    ).rejects.toThrow(/not found/);
   });
 });
