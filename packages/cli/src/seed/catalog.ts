@@ -399,7 +399,7 @@ async function seedSetupHistory(
       customer_id: unit.customer_id,
       record: "unit",
       record_id: unit.id,
-      after: JSON.stringify(unit),
+      after: tx.json(unit as Parameters<typeof tx.json>[0]),
       actor: "web",
     })),
   );

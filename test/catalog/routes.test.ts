@@ -504,6 +504,17 @@ describe("customer product links and edit rights", () => {
     ).toBe(200);
   });
 
+  it("tells each caller what of the customer they may edit", async () => {
+    const mine = await (await get("/api/customers/northwind/rights")).json();
+    expect(mine.customer).toBe(true);
+    expect(mine.products).toContain("tqx");
+    const other = await otherTeamAdmin();
+    const theirs = await (
+      await as(other, "/api/customers/northwind/rights", "GET")
+    ).json();
+    expect(theirs).toEqual({ customer: false, products: ["op"] });
+  });
+
   it("keeps a product's units with that product's team", async () => {
     const other = await otherTeamAdmin();
     await as(other, "/api/customers/northwind/products/op", "PUT", {});
