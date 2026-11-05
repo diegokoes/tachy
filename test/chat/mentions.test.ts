@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createUser, setTeamMember } from "@tachy/core/access";
 import { createBucket } from "@tachy/core/buckets";
+import { addCustomer, addCustomerUnit } from "@tachy/core/catalog";
 import { checkMentions, listMentionables } from "@tachy/core/chat";
 import { linkRepo } from "@tachy/core/code";
 import type { AgentEvent, AgentTurn } from "@tachy/agent";
@@ -69,6 +70,7 @@ describe("mentionables", () => {
       repos: [{ slug: "billing-api", product_slug: "tpd", project: GROUP_KEY }],
       buckets: [{ slug: "guides", name: "Guides" }],
       projects: [GROUP_KEY],
+      customers: [],
     });
     expect((await listMentionables(outsiderId)).buckets).toEqual([]);
   });
@@ -84,6 +86,54 @@ describe("mentionables", () => {
       "billing-api",
     ]);
     expect(listed.buckets).toEqual([]);
+  });
+});
+
+describe("customer mentions", () => {
+  beforeEach(async () => {
+    await addCustomer({ name: "Imperial Brands", slug: "itg" });
+    await addCustomerUnit({
+      customerSlug: "itg",
+      slug: "tlc191",
+      name: "TLC191",
+      kind: "line",
+    });
+  });
+
+  it("offers each customer, and each of their units after a slash", async () => {
+    expect((await listMentionables(memberId)).customers).toEqual([
+      { key: "itg", name: "Imperial Brands" },
+      { key: "itg/tlc191", name: "TLC191 (line)" },
+    ]);
+  });
+
+  it("passes a customer and a unit of theirs, and names one that is not", async () => {
+    await expect(
+      checkMentions(memberId, [
+        { kind: "customer", key: "itg" },
+        { kind: "customer", key: "itg/tlc191" },
+      ]),
+    ).resolves.toBeUndefined();
+    await expect(
+      checkMentions(memberId, [{ kind: "customer", key: "itg/tlc999" }]),
+    ).rejects.toThrow(/unknown unit 'tlc999'/);
+  });
+
+  it("tells the agent to read the profile and lift the searches", async () => {
+    const response = await app.request("/api/agent/chat", {
+      ...json({
+        message: "why does it stop?",
+        mentions: [{ kind: "customer", key: "itg/tlc191" }],
+      }),
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: await loginCookie(app, "in@example.com", "a-long-password"),
+      },
+    });
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(prompts[0]).toContain("customers: itg/tlc191");
+    expect(prompts[0]).toContain("get_customer_profile");
   });
 });
 

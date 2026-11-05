@@ -9,3 +9,4 @@ export * from "./resolution-patterns";
 export * from "./units";
 export * from "./blueprints";
 export * from "./customer-history";
+export * from "./customer-search";

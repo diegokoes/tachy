@@ -444,6 +444,74 @@ describe("customer round trip", () => {
     ).toBe(true);
   });
 
+  it("reads a unit named alone, notes its gaps, and finds it by search", async () => {
+    await call("add_unit_kind", {
+      product_slug: "tpd",
+      slug: "line",
+      name: "Line",
+      facts: [{ kind: "ip" }, { kind: "coding_mode" }],
+    });
+    await call("add_customer", { name: "Northwind", slug: "northwind" });
+    await call("add_customer_unit", {
+      customer: "northwind",
+      slug: "line-7",
+      name: "Line 7",
+      kind: "line",
+      product_slug: "tpd",
+    });
+    await call("set_customer_fact", {
+      customer: "northwind",
+      unit: "line-7",
+      kind: "coding_mode",
+      value: "CT1",
+    });
+    const profile = await call("get_customer_profile", { unit: "line-7" });
+    expect(profile.json).toMatchObject({
+      slug: "northwind",
+      unit: { slug: "line-7" },
+      missing: ["ip"],
+    });
+    expect((profile.json as { note: string }).note).toMatch(
+      /propose set_customer_fact/,
+    );
+    expect((await call("get_customer_profile", {})).isError).toBe(true);
+
+    const found = await call("search_customers", { query: "line 7" });
+    expect(found.json).toMatchObject({
+      units: [{ customer: "northwind", slug: "line-7" }],
+    });
+  });
+
+  it("names the unit of a hit, and lifts it with customer and unit", async () => {
+    await call("add_customer", { name: "Northwind", slug: "northwind" });
+    await call("add_customer_unit", {
+      customer: "northwind",
+      slug: "line-7",
+      name: "Line 7",
+      kind: "line",
+    });
+    await call("save_knowledge_entry", {
+      product_slug: "tpd",
+      status: "approved",
+      title: "Labeller jams on line 7",
+      issue_summary: "The labeller jams when the queue overruns.",
+      customer_slug: "northwind",
+      unit: "line-7",
+    });
+    const hits = await call("search_knowledge", {
+      query: "labeller jams queue overruns",
+      customer: "northwind",
+      unit: "line-7",
+    });
+    const [hit] = hitsOf(hits.json);
+    expect(hit).toMatchObject({ customer: "northwind", unit: "line-7" });
+    expect(hit).not.toHaveProperty("customer_unit_id");
+    expect(
+      (await call("search_knowledge", { query: "labeller", unit: "line-7" }))
+        .isError,
+    ).toBe(true);
+  });
+
   it("scrubs the profile under redaction", async () => {
     await call("add_customer", { name: "Northwind", slug: "northwind" });
     await call("set_customer_fact", {

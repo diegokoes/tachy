@@ -173,8 +173,6 @@ export interface CustomerProfile {
     label: string;
     value: string;
     component: string | null;
-    /** Flat reads only: the unit the fact is true of, null for the whole customer. */
-    unit?: string | null;
     /** Unit-resolved reads only: which level the fact came from. */
     origin?: string | null;
     origin_kind?: string | null;
@@ -193,6 +191,16 @@ export interface CustomerProfile {
   components: { slug: string; product_slug: string }[];
   repos: { slug: string; component: string | null; index_status: string }[];
   projects: { source_slug: string; external_key: string }[];
+  /** Units and facts that disagree with their products' blueprints. */
+  conflicts: { unit: string; problem: string }[];
+  /** Customer reads: how many live entries and docs are filed under the customer. */
+  library?: { entries: number; docs: number };
+  /** Unit reads: fact kinds its blueprint asks for that nothing records, inherited ones included. */
+  missing?: string[];
+  /** Unit reads: docs filed under the unit, a unit it sits inside, or its template. */
+  documents?: { id: string; title: string; unit: string; original: boolean }[];
+  /** Unit reads: entries filed under the unit or a unit inside it. */
+  entries?: { id: string; title: string; unit: string; status: string }[];
 }
 
 /** What a customer_changes row is about. */
@@ -235,4 +243,23 @@ export interface DeletedCustomer {
   name: string;
   user_email: string | null;
   user_name: string | null;
+}
+
+/** What a search over customer data turns up, in three groups. */
+export interface CustomerSearchHits {
+  customers: { slug: string; name: string }[];
+  units: {
+    customer: string;
+    slug: string;
+    name: string;
+    kind: string;
+    product: string | null;
+  }[];
+  facts: {
+    customer: string;
+    unit: string | null;
+    kind: string;
+    label: string;
+    value: string;
+  }[];
 }

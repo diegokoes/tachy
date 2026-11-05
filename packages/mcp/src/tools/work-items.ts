@@ -357,6 +357,7 @@ tool(
         queryVectors: search.queryVectors,
         exactTerms: search.exactTerms,
         boostCustomerId,
+        boostUnitId,
       }),
       resolveProjectContext({ workItemId: item.id }).then(async (context) => ({
         context,

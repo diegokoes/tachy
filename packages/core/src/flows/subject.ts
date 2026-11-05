@@ -21,6 +21,8 @@ export interface FlowSubject {
   connection: string;
   source_type: string;
   customer: string | null;
+  /** The part of the customer's setup the item is filed under, by slug. */
+  unit: string | null;
   product: string | null;
   team: string | null;
   project: string | null;
@@ -40,10 +42,12 @@ const SELECT = sql`
          wi.source_created_at as created_at, wi.source_updated_at as updated_at,
          wi.customer_id, wi.product_id, wi.team_id, wi.source_project_id,
          sc.slug as connection, sc.source_type,
-         cu.slug as customer, p.slug as product, t.slug as team, sp.name as project
+         cu.slug as customer, un.slug as unit, p.slug as product, t.slug as team,
+         sp.name as project
   from work_items wi
   join source_connections sc on sc.id = wi.source_connection_id
   left join customers cu on cu.id = wi.customer_id
+  left join customer_units un on un.id = wi.customer_unit_id
   left join products p on p.id = wi.product_id
   left join teams t on t.id = wi.team_id
   left join source_projects sp on sp.id = wi.source_project_id

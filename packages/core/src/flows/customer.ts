@@ -73,12 +73,15 @@ async function itemRedacts(item: Pick<FlowSubject, "connection">) {
   );
 }
 
-/** The item's customer profile, scrubbed when the item's reads are. */
+/**
+ * The item's customer profile, read for the unit the item is filed under, and
+ * scrubbed when the item's reads are.
+ */
 export async function customerProfileOf(
   item: FlowSubject,
 ): Promise<CustomerProfile | null> {
   if (!item.customer_id) return null;
-  const profile = await getCustomerProfile(item.customer_id);
+  const profile = await getCustomerProfile(item.customer_id, item.unit);
   if (!profile) return null;
   return (await itemRedacts(item))
     ? scrubDeep(profile, new TokenMap())

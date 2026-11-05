@@ -1592,7 +1592,7 @@ using constants measured by hand (`search/relevance.ts`).
   On CPU it is cut to about 256 tokens.
 
 - **Boosts on a new scale.** `CUSTOMER_BOOST`, `UNIT_BOOST` and
-  `SIBLING_UNIT_BOOST` are sized in rank-fusion units (`search/rank.ts`).
+  `RELATED_UNIT_BOOST` are sized in rank-fusion units (`search/rank.ts`).
   After reranking they need restating, for example as tiebreakers within a
   grade. Otherwise they stop meaning "win a tie, never bury a better answer".
 - **A relevance path.** The cross-encoder's output is "not bounded to a

@@ -386,6 +386,125 @@ export async function deleteCustomerUnit(
   });
 }
 
+/** Deep enough for any real setup; bounds a walk over a ring written before cycles were refused. */
+const MAX_UNIT_DEPTH = 64;
+
+/**
+ * The units close to one, which a search lifts below the unit itself: those it
+ * sits inside, those inside it, its template, the units that follow the same
+ * template, and the units that follow it.
+ */
+export async function unitNeighbourhood(unitId: string): Promise<string[]> {
+  const rows = await sql<{ id: string }[]>`
+    with recursive up as (
+      select parent_id as id, 1 as depth from customer_units
+      where id = ${unitId} and parent_id is not null
+      union all
+      select u.parent_id, up.depth + 1
+      from customer_units u join up on u.id = up.id
+      where u.parent_id is not null and up.depth < ${MAX_UNIT_DEPTH}
+    ),
+    down as (
+      select id, 1 as depth from customer_units where parent_id = ${unitId}
+      union all
+      select u.id, down.depth + 1
+      from customer_units u join down on u.parent_id = down.id
+      where down.depth < ${MAX_UNIT_DEPTH}
+    ),
+    own as (select template_id from customer_units where id = ${unitId})
+    select id from up
+    union select id from down
+    union select template_id from own where template_id is not null
+    union select u.id from customer_units u, own
+      where u.template_id = own.template_id and u.id <> ${unitId}
+    union select id from customer_units where template_id = ${unitId}
+  `;
+  return rows.map((row) => row.id);
+}
+
+/** A unit and every unit inside it, for a filter that asks for a site and means its lines too. */
+export async function unitWithDescendants(unitId: string): Promise<string[]> {
+  const rows = await sql<{ id: string }[]>`
+    with recursive down as (
+      select id, 0 as depth from customer_units where id = ${unitId}
+      union all
+      select u.id, down.depth + 1
+      from customer_units u join down on u.parent_id = down.id
+      where down.depth < ${MAX_UNIT_DEPTH}
+    )
+    select id from down
+  `;
+  return rows.map((row) => row.id);
+}
+
+/** How many docs or entries a unit read lists: enough to name, not to page through. */
+const UNIT_ITEMS = 10;
+
+/** Live docs filed under the unit, the units it sits inside, or its template; its own first. */
+export async function listUnitDocs(unitId: string) {
+  return sql<{ id: string; title: string; unit: string; original: boolean }[]>`
+    with recursive chain as (
+      select id, parent_id, template_id, 0 as depth
+      from customer_units where id = ${unitId}
+      union all
+      select u.id, u.parent_id, u.template_id, chain.depth + 1
+      from customer_units u join chain on u.id = chain.parent_id
+      where chain.depth < ${MAX_UNIT_DEPTH}
+    )
+    select d.id, d.title, un.slug as unit, (d.file_id is not null) as original
+    from reference_docs d
+    join customer_units un on un.id = d.customer_unit_id
+    where d.status = 'approved'
+      and d.customer_unit_id in (
+        select id from chain
+        union select template_id from chain where template_id is not null)
+    order by (d.customer_unit_id = ${unitId}) desc, d.updated_at desc
+    limit ${UNIT_ITEMS}
+  `;
+}
+
+/** Live entries filed under the unit or a unit inside it, newest first. */
+export async function listUnitEntries(unitId: string) {
+  return sql<{ id: string; title: string; unit: string; status: string }[]>`
+    select e.id, e.title, un.slug as unit, e.status
+    from knowledge_entries e
+    join customer_units un on un.id = e.customer_unit_id
+    where e.customer_unit_id = any(${await unitWithDescendants(unitId)}::uuid[])
+      and e.status not in ('rejected', 'archived')
+    order by e.updated_at desc
+    limit ${UNIT_ITEMS}
+  `;
+}
+
+/**
+ * A unit by slug or alias across every customer, for a question that names a
+ * line without its customer. Ambiguous when two customers have one by that name.
+ */
+export async function resolveUnitAnywhere(
+  slugOrAlias: string,
+): Promise<CustomerUnitRow & { customer_slug: string }> {
+  const rows = await sql<(CustomerUnitRow & { customer_slug: string })[]>`
+    select ${UNIT_COLUMNS}, c.slug as customer_slug
+    from customer_units u
+    join customers c on c.id = u.customer_id
+    left join products p on p.id = u.product_id
+    where u.slug = ${slugOrAlias}
+       or exists (select 1 from unnest(u.aliases) a where lower(a) = lower(${slugOrAlias}))
+    order by c.slug
+    limit ${UNIT_ITEMS}
+  `;
+  if (rows.length === 1) return rows[0];
+  if (!rows.length)
+    throw badInput(
+      `no customer has a unit '${slugOrAlias}'. search_customers finds one by name`,
+    );
+  throw badInput(
+    `ambiguous unit '${slugOrAlias}': ${rows
+      .map((row) => `'${row.customer_slug}/${row.slug}'`)
+      .join(", ")}. pass the customer too`,
+  );
+}
+
 /**
  * Every fact that applies to one unit, most specific first, each carrying where
  * it came from: the unit's own, its template's, then the same pair for each
