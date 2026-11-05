@@ -129,12 +129,15 @@ export function forAgent<T extends Record<string, unknown>>(rows: T[]) {
       rrf,
       customer_id,
       customer_slug,
+      customer_unit_id,
+      customer_unit_slug,
       ...rest
     }) => ({
       ...rest,
       // One spelling of the customer across all three search surfaces: the
       // slug, which can be cited and filtered by, where the uuid cannot.
       ...(customer_slug ? { customer: customer_slug } : {}),
+      ...(customer_unit_slug ? { unit: customer_unit_slug } : {}),
     }),
   );
 }
@@ -159,7 +162,7 @@ export const GRADE_NOTE =
  * product behaves.
  */
 export const CUSTOMER_NOTE =
-  "Some hits carry a `customer`: that material came from one customer's install and must be attributed to them by name - never restated as general product behaviour. Hits with customer null are general. Where the two disagree, say so rather than merging them.";
+  "Some hits carry a `customer`: that material came from one customer's install and must be attributed to them by name - never restated as general product behaviour; a `unit` narrows it to one part of their setup (a site, a line, an integration). Hits with customer null are general. Where the two disagree, say so rather than merging them.";
 
 const MAX_NAMED_REPOS = 5;
 

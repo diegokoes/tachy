@@ -26,6 +26,10 @@ import {
   getCustomerProfile,
   getTeamIdBySlug,
   listCustomerUnits,
+  getCustomerIdBySlug,
+  getUnitSlug,
+  resolveUnit,
+  type CustomerProfile,
 } from "@tachy/core/catalog";
 import { readForModel, type ModelRead } from "@tachy/core/flows";
 import type { IngestedItem } from "@tachy/core/work-items";
@@ -92,20 +96,29 @@ export function withGuidance(view: ModelRead): Record<string, unknown> {
   return view.guidance ? { group_guidance: view.guidance } : {};
 }
 
+/** One fact as a line the agent reads, saying where an inherited one comes from. */
+const specificText = (fact: CustomerProfile["facts"][number]) =>
+  [fact.kind, fact.label, fact.value].filter(Boolean).join(": ") +
+  (fact.inherited && fact.origin ? ` (from ${fact.origin})` : "");
+
 /**
- * The customer's own install, inline on the read that fetched their ticket.
- * Their version and addons decide whether a general answer applies, and the
- * model does not ask for them unprompted. Scrubbed when the ticket's own read
- * is, since it reaches the same model.
+ * The customer's own install, inline on the ticket read, which the model does
+ * not ask for unprompted: customer-wide, or for a ticket filed under a unit,
+ * that unit's resolved facts, gaps and docs. Scrubbed when the ticket's own
+ * read is, since it reaches the same model.
  */
 export async function withCustomerProfile(
   customerId: string | null | undefined,
-  opts: { redact: boolean },
+  opts: { redact: boolean; unitId?: string | null },
 ): Promise<Record<string, unknown>> {
   if (!customerId) return {};
-  const profile = await getCustomerProfile(customerId);
+  const profile = await getCustomerProfile(
+    customerId,
+    await getUnitSlug(opts.unitId ?? null),
+  );
   if (!profile) return {};
   const hasContent =
+    profile.unit ||
     profile.facts.length ||
     profile.components.length ||
     profile.repos.length ||
@@ -114,11 +127,16 @@ export async function withCustomerProfile(
   const attached = {
     slug: profile.slug,
     ...(profile.notes ? { notes: profile.notes } : {}),
+    ...(profile.unit
+      ? { unit: `${profile.unit.slug} (${profile.unit.kind})` }
+      : {}),
     ...(profile.facts.length
+      ? { specifics: profile.facts.map(specificText) }
+      : {}),
+    ...(profile.missing?.length ? { missing: profile.missing } : {}),
+    ...(profile.documents?.length
       ? {
-          specifics: profile.facts.map((f) =>
-            [f.unit, f.kind, f.label, f.value].filter(Boolean).join(": "),
-          ),
+          documents: profile.documents.map((doc) => `${doc.title} (${doc.id})`),
         }
       : {}),
     ...(profile.components.length
@@ -136,8 +154,29 @@ export async function withCustomerProfile(
       ? scrubDeep(attached, new TokenMap())
       : attached,
     customer_profile_note:
-      "This is THIS customer's install, not the product in general. Check their version against an entry's affected_version/fixed_version before repeating its advice, and search their own repos for addon behaviour. Anything you learn here that is true only of them belongs on their profile (set_customer_fact), not in a knowledge entry.",
+      "This is THIS customer's install, not the product in general. Check their version against an entry's affected_version/fixed_version before repeating its advice, and search their own repos for addon behaviour. Anything you learn here that is true only of them belongs on their profile (set_customer_fact), not in a knowledge entry." +
+      (profile.missing?.length
+        ? " `missing` names facts this unit's blueprint asks for that nothing records yet: when the ticket states one, propose set_customer_fact."
+        : ""),
   };
+}
+
+/**
+ * Whose material a search lifts: a customer's, and with a unit, that part of
+ * their setup's and, less, the units near it.
+ */
+export async function customerBoost(
+  customer: string | undefined,
+  unit: string | undefined,
+): Promise<{ boostCustomerId?: string; boostUnitId?: string }> {
+  if (!customer) {
+    if (unit) throw badInput("unit needs customer: pass the customer slug too");
+    return {};
+  }
+  const customerId = await getCustomerIdBySlug(customer);
+  if (!unit) return { boostCustomerId: customerId };
+  const { id } = await resolveUnit(customerId, unit);
+  return { boostCustomerId: customerId, boostUnitId: id };
 }
 
 /**
@@ -236,7 +275,10 @@ export async function workItemFacts(
     customer_name: await getCustomerName(item.customerId),
     ...unresolvedCustomer(item.customerId, item.customerAmbiguity),
     ...(await unresolvedUnit(item.customerId, item.customerUnitId, text)),
-    ...(await withCustomerProfile(item.customerId, opts)),
+    ...(await withCustomerProfile(item.customerId, {
+      redact: opts.redact,
+      unitId: item.customerUnitId,
+    })),
     observed_version: item.observedVersion,
     ...(item.componentSlug ? { component: item.componentSlug } : {}),
   };

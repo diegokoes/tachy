@@ -21,7 +21,30 @@ const LISTED: Mentionables = {
     { slug: "docs", name: "Product docs" },
   ],
   projects: ["Payments"],
+  customers: [
+    { key: "ivk", name: "Ilverton Brands" },
+    { key: "ivk/pln191", name: "PLN191 (line)" },
+  ],
 };
+
+describe("customer mentions", () => {
+  it("offers customers and their units, and narrows to them by prefix", () => {
+    const offered = mentionOptions(LISTED, { kind: "customer", query: "pln" });
+    expect(offered.map((option) => option.mention)).toEqual([
+      { kind: "customer", key: "ivk/pln191" },
+    ]);
+  });
+
+  it("reads a unit after the slash as part of the key", () => {
+    expect(parseMentionWord("customer.ivk/pln191")).toEqual({
+      kind: "customer",
+      key: "ivk/pln191",
+    });
+    expect(mentionWord({ kind: "customer", key: "ivk/pln191" })).toBe(
+      "customer.ivk/pln191",
+    );
+  });
+});
 
 describe("mentionBeingTyped", () => {
   it("reads the word at the end of the line", () => {

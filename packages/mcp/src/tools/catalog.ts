@@ -32,6 +32,9 @@ import {
   resolveComponentStrict,
   getProductBlueprint,
   addUnitKind,
+  resolveUnitAnywhere,
+  searchCustomers,
+  type CustomerProfile,
 } from "@tachy/core/catalog";
 import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
@@ -200,25 +203,66 @@ tool(
   },
 );
 
+/** Said only when a profile carries blueprint gaps or disagreements. */
+function profileNote(profile: CustomerProfile): Record<string, string> {
+  const parts = [
+    profile.missing?.length
+      ? "`missing` names facts this unit's blueprint asks for that nothing records yet: when the conversation states one, propose set_customer_fact."
+      : "",
+    profile.conflicts.length
+      ? "`conflicts` are units and facts that do not fit their product's blueprint; mention one when it bears on the answer, and leave curating them to the user."
+      : "",
+  ].filter(Boolean);
+  return parts.length ? { note: parts.join(" ") } : {};
+}
+
 tool(
   "get_customer_profile",
   {
     description:
-      "Everything configured about one customer's install: their specifics (the version they run, their layout, integrations), the products they use, the components they have, their own repos, any source project that exists for them, and the parts their setup divides into (`units` - sites, production lines, integrations, each tied to a product or general). Call it before advising a named customer - a general answer can be wrong for them because of what is here. Pass `unit` when the question is about one part of their setup: the facts then come back RESOLVED for that unit, each carrying `origin` and `inherited`, so you can say a thing is true of every line on a shared template rather than only of the one asked about. Arrives automatically on fetch_work_item/get_context when the ticket resolves to a customer, so do not re-fetch it then.",
+      "Everything configured about one customer's install: the customer-wide specifics (their version, integrations, contract), the products they use, the parts their setup divides into (`units` - sites, production lines, integrations, each tied to a product or general), the components they run, their repos and projects, and how many entries and docs are filed under them. Call it before advising a named customer - a general answer can be wrong for them because of what is here. Pass `unit` for one part of their setup: the facts come back RESOLVED for it, each with `origin` and `inherited`, plus the facts its blueprint still misses and the docs and entries filed around it. A unit can be named without its customer when its name is unique. Arrives automatically on fetch_work_item/get_context when the ticket resolves to a customer, so do not re-fetch it then.",
     inputSchema: {
-      customer: z.string().describe("Slug from list_customers"),
+      customer: z
+        .string()
+        .optional()
+        .describe("Slug from list_customers. Optional when unit names one."),
       unit: z
         .string()
         .optional()
         .describe(
-          "Unit slug or alias from list_customer_units. Resolves facts for that part of their setup instead of listing the customer's flat set.",
+          "Unit slug or alias from list_customer_units, e.g. a line or an integration.",
         ),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ customer, unit }) =>
+  async ({ customer, unit }) => {
+    if (!customer && !unit) throw badInput("name a customer, a unit, or both");
+    const customerId = customer
+      ? await getCustomerIdBySlug(customer)
+      : (await resolveUnitAnywhere(unit!)).customer_id;
+    const profile = (await getCustomerProfile(customerId, unit))!;
+    return outScrubbed({ ...profile, ...profileNote(profile) });
+  },
+);
+
+tool(
+  "search_customers",
+  {
+    description:
+      "Find customer data by what it says: which customers run SAP, where line PLN191 is, who records coding mode CT2. Matches customer names, slugs, aliases and email domains; unit names, slugs, aliases and kinds; and fact kinds, labels and values. Answers in three groups; follow up with get_customer_profile. With product_slug, only that product's customers and setups.",
+    inputSchema: {
+      query: z.string().min(1),
+      product_slug: z.string().optional(),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ query, product_slug }) =>
     outScrubbed(
-      await getCustomerProfile(await getCustomerIdBySlug(customer), unit),
+      await searchCustomers(query, {
+        productId: product_slug
+          ? await getProductIdBySlug(product_slug)
+          : undefined,
+      }),
     ),
 );
 

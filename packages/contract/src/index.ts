@@ -139,6 +139,7 @@ export type {
   CustomerChangeBatch,
   CustomerChangeRecord,
   DeletedCustomer,
+  CustomerSearchHits,
 } from "./catalog";
 export { CUSTOMER_CHANGE_RECORDS } from "./catalog";
 export {

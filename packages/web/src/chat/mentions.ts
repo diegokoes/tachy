@@ -6,7 +6,7 @@ import {
 } from "@tachy/contract";
 import { matches } from "../work-items/azCommand";
 
-/** The `@` word being completed: a typed `repo.` / `bucket.` / `project.` narrows it. */
+/** The `@` word being completed: a typed `repo.` / `bucket.` / `project.` / `customer.` narrows it. */
 export interface MentionQuery {
   kind: MentionKind | null;
   query: string;
@@ -58,6 +58,10 @@ function allOptions(mentionables: Mentionables): MentionOption[] {
     ...mentionables.projects.map((project) => ({
       mention: { kind: "project" as const, key: project },
       hint: "",
+    })),
+    ...(mentionables.customers ?? []).map((customer) => ({
+      mention: { kind: "customer" as const, key: customer.key },
+      hint: customer.name,
     })),
   ];
 }

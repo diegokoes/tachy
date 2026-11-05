@@ -11,14 +11,22 @@ import { nearestSlugsHint } from "./nearest";
 import { badInput, conflict, notFound } from "../infra/errors";
 import { assertNoSecrets } from "../compliance/redaction";
 import { resolveComponentStrict } from "./components";
-import { resolveFactValue } from "./blueprints";
+import {
+  blueprintConflicts,
+  expectedFactKinds,
+  resolveFactValue,
+} from "./blueprints";
 import {
   assertUnitInProduct,
   filedText,
   filedTotal,
   listCustomerUnits,
+  listUnitDocs,
+  listUnitEntries,
   resolveUnit,
   resolveUnitFacts,
+  unitWithDescendants,
+  type CustomerUnitRow,
 } from "./units";
 import { linkCustomerProduct, listCustomerProducts } from "./customer-products";
 import {
@@ -297,6 +305,24 @@ export async function resolveCustomer(
 
 export async function getCustomerIdBySlug(slug: string): Promise<string> {
   return (await resolveCustomer(slug)).id;
+}
+
+/**
+ * A filter on one customer's items, and with a unit, on that unit and the
+ * units inside it: asking for a site means its lines too.
+ */
+export async function resolveCustomerFilter(
+  customerSlug: string | null | undefined,
+  unit?: string | null,
+): Promise<{ customerId?: string; unitIds?: string[] }> {
+  if (!customerSlug) {
+    if (unit) throw badInput("a unit needs its customer: pass customer too");
+    return {};
+  }
+  const customerId = await getCustomerIdBySlug(customerSlug);
+  if (!unit) return { customerId };
+  const { id } = await resolveUnit(customerId, unit);
+  return { customerId, unitIds: await unitWithDescendants(id) };
 }
 
 /**
@@ -587,11 +613,10 @@ const docLink = (fact: { doc_id: string | null; doc_title: string | null }) =>
   fact.doc_id ? { id: fact.doc_id, title: fact.doc_title ?? "" } : null;
 
 /**
- * Everything configured about one customer, in one read: the specifics of their
- * install plus the records that belong to them. A ticket turn needs it before
- * it reasons, since their version and addons decide whether a general answer
- * applies. With `unit`, the facts are the resolved ladder for that part of
- * their setup, each carrying where it came from.
+ * Everything configured about one customer, in one read: their version and
+ * addons decide whether a general answer applies. Without `unit`, the facts are
+ * the customer-wide ones; with it, the resolved ladder for that part of their
+ * setup, what its blueprint still misses, and the docs and entries around it.
  */
 export async function getCustomerProfile(
   customerId: string,
@@ -604,33 +629,8 @@ export async function getCustomerProfile(
   `;
   if (!customer) return null;
   const resolvedUnit = unit ? await resolveUnit(customerId, unit) : null;
-  const [facts, products, components, repos, projects, units] =
+  const [products, components, repos, projects, units, conflicts] =
     await Promise.all([
-      // Unit-resolved reads also say which level each fact came from, and
-      // whether it was inherited rather than stated here.
-      resolvedUnit
-        ? resolveUnitFacts(resolvedUnit.id).then((rows) =>
-            rows.map((f) => ({
-              kind: f.kind,
-              label: f.label,
-              value: f.value,
-              component: null,
-              origin: f.origin_slug,
-              origin_kind: f.origin_kind,
-              inherited: f.inherited,
-              doc: docLink(f),
-            })),
-          )
-        : listCustomerFacts(customerId).then((rows) =>
-            rows.map((f) => ({
-              kind: f.kind,
-              label: f.label,
-              value: f.value,
-              component: f.component_slug,
-              unit: f.unit_slug,
-              doc: docLink(f),
-            })),
-          ),
       listCustomerProducts(customerId),
       listCustomerComponents(customerId),
       sql<CustomerProfile["repos"]>`
@@ -647,6 +647,7 @@ export async function getCustomerProfile(
         where sp.customer_id = ${customerId} order by sp.external_key
       `,
       listCustomerUnits(customerId),
+      blueprintConflicts(customerId),
     ]);
   const slugOf = (id: string | null) =>
     units.find((u) => u.id === id)?.slug ?? null;
@@ -654,16 +655,8 @@ export async function getCustomerProfile(
     ...customer,
     products: products.map((p) => p.slug),
     ...(resolvedUnit
-      ? {
-          unit: {
-            slug: resolvedUnit.slug,
-            name: resolvedUnit.name,
-            kind: resolvedUnit.kind,
-            product: resolvedUnit.product_slug,
-          },
-        }
-      : {}),
-    facts,
+      ? await unitReading(resolvedUnit)
+      : await customerReading(customerId)),
     units: units.map((u) => ({
       slug: u.slug,
       name: u.name,
@@ -678,5 +671,72 @@ export async function getCustomerProfile(
     })),
     repos: [...repos],
     projects: [...projects],
+    conflicts,
+  };
+}
+
+/** A customer read: the customer-wide facts, and how much is filed under them. */
+async function customerReading(
+  customerId: string,
+): Promise<Pick<CustomerProfile, "facts" | "library">> {
+  const facts = (await listCustomerFacts(customerId)).filter(
+    (fact) => !fact.unit_id,
+  );
+  const [library] = await sql<{ entries: number; docs: number }[]>`
+    select
+      (select count(*)::int from knowledge_entries
+        where customer_id = ${customerId} and status not in ('rejected', 'archived')) as entries,
+      (select count(*)::int from reference_docs
+        where customer_id = ${customerId} and status = 'approved') as docs
+  `;
+  return {
+    facts: facts.map((fact) => ({
+      kind: fact.kind,
+      label: fact.label,
+      value: fact.value,
+      component: fact.component_slug,
+      doc: docLink(fact),
+    })),
+    library,
+  };
+}
+
+/**
+ * A unit read: the facts that apply to it, each saying which level it came
+ * from and whether it was inherited rather than stated here; what its
+ * blueprint still misses; and the docs and entries filed around it.
+ */
+async function unitReading(
+  unit: CustomerUnitRow,
+): Promise<
+  Pick<CustomerProfile, "unit" | "facts" | "missing" | "documents" | "entries">
+> {
+  const [facts, expected, documents, entries] = await Promise.all([
+    resolveUnitFacts(unit.id),
+    expectedFactKinds({ productId: unit.product_id, kind: unit.kind }),
+    listUnitDocs(unit.id),
+    listUnitEntries(unit.id),
+  ]);
+  const recorded = new Set(facts.map((fact) => fact.kind));
+  return {
+    unit: {
+      slug: unit.slug,
+      name: unit.name,
+      kind: unit.kind,
+      product: unit.product_slug,
+    },
+    facts: facts.map((fact) => ({
+      kind: fact.kind,
+      label: fact.label,
+      value: fact.value,
+      component: null,
+      origin: fact.origin_slug,
+      origin_kind: fact.origin_kind,
+      inherited: fact.inherited,
+      doc: docLink(fact),
+    })),
+    missing: expected.filter((kind) => !recorded.has(kind)),
+    documents: [...documents],
+    entries: [...entries],
   };
 }

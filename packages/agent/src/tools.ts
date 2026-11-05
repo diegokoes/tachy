@@ -22,6 +22,7 @@ export const READ_TOOLS = [
   "list_customer_fact_kinds",
   "list_customer_units",
   "get_product_blueprint",
+  "search_customers",
   "list_teams",
   "list_products",
   "list_labels",

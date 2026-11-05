@@ -426,16 +426,10 @@ async function blueprintOf(
 const slugList = (slugs: string[]) =>
   slugs.length ? slugs.map((s) => `'${s}'`).join(", ") : "none yet";
 
-function kindNamed(blueprint: Blueprint, slug: string): KindRecord {
-  const kind = blueprint.kinds.find((k) => k.slug === slug);
-  if (!kind)
-    throw badInput(
-      `'${slug}' is not a unit kind in ${blueprint.productSlug}'s blueprint (${slugList(
-        blueprint.kinds.map((k) => k.slug),
-      )}). pick one of those, or propose add_unit_kind first`,
-    );
-  return kind;
-}
+const kindNotListed = (blueprint: Blueprint, slug: string) =>
+  `'${slug}' is not a unit kind in ${blueprint.productSlug}'s blueprint (${slugList(
+    blueprint.kinds.map((k) => k.slug),
+  )}). pick one of those, or propose add_unit_kind first`;
 
 export interface BlueprintUnit {
   productId: string | null;
@@ -458,27 +452,55 @@ async function placedUnit(db: Db, unitId: string): Promise<PlacedUnit> {
   return row;
 }
 
-/** Throws unless `edge` names a unit of `expected` within the same product. */
-async function assertEdgeFits(
+/** What is wrong with `edge` pointing at `target`, or null when it names a unit of the expected kind in the same product. */
+function edgeProblem(
+  blueprint: Blueprint,
+  unit: { productId: string; kind: string },
+  target: PlacedUnit,
+  edge: { expectedKindId: string | null; relation: string },
+): string | null {
+  const expected = blueprint.kinds.find((k) => k.id === edge.expectedKindId);
+  if (!expected)
+    return `a ${unit.kind} ${edge.relation} no unit in ${blueprint.productSlug}'s blueprint, so it cannot ${edge.relation} '${target.slug}'`;
+  if (target.product_id !== unit.productId)
+    return `'${target.slug}' belongs to another product's setup; a ${unit.kind} ${edge.relation} a ${expected.slug} of ${blueprint.productSlug}`;
+  if (target.kind !== expected.slug)
+    return `a ${unit.kind} ${edge.relation} a ${expected.slug}; '${target.slug}' is a ${target.kind}`;
+  return null;
+}
+
+/** Everything about where a unit sits that its product's blueprint does not allow. */
+async function unitProblems(
   db: Db,
   blueprint: Blueprint,
   unit: BlueprintUnit & { productId: string },
-  edge: { unitId: string; expectedKindId: string | null; relation: string },
-): Promise<void> {
-  const target = await placedUnit(db, edge.unitId);
-  const expected = blueprint.kinds.find((k) => k.id === edge.expectedKindId);
-  if (!expected)
-    throw badInput(
-      `a ${unit.kind} ${edge.relation} no unit in ${blueprint.productSlug}'s blueprint, so it cannot ${edge.relation} '${target.slug}'`,
+): Promise<string[]> {
+  const kind = blueprint.kinds.find((k) => k.slug === unit.kind);
+  if (!kind) return [kindNotListed(blueprint, unit.kind)];
+  const edges = [
+    {
+      unitId: unit.parentId,
+      expectedKindId: kind.parent_kind_id,
+      relation: "sits inside",
+    },
+    {
+      unitId: unit.templateId,
+      expectedKindId: kind.template_kind_id,
+      relation: "follows",
+    },
+  ];
+  const problems: string[] = [];
+  for (const edge of edges) {
+    if (!edge.unitId) continue;
+    const problem = edgeProblem(
+      blueprint,
+      unit,
+      await placedUnit(db, edge.unitId),
+      edge,
     );
-  if (target.product_id !== unit.productId)
-    throw badInput(
-      `'${target.slug}' belongs to another product's setup; a ${unit.kind} ${edge.relation} a ${expected.slug} of ${blueprint.productSlug}`,
-    );
-  if (target.kind !== expected.slug)
-    throw badInput(
-      `a ${unit.kind} ${edge.relation} a ${expected.slug}; '${target.slug}' is a ${target.kind}`,
-    );
+    if (problem) problems.push(problem);
+  }
+  return problems;
 }
 
 /**
@@ -493,20 +515,11 @@ export async function assertUnitFitsBlueprint(
   if (!unit.productId) return;
   const blueprint = await blueprintOf(db, unit.productId);
   if (!blueprint) return;
-  const kind = kindNamed(blueprint, unit.kind);
-  const placed = { ...unit, productId: unit.productId };
-  if (unit.parentId)
-    await assertEdgeFits(db, blueprint, placed, {
-      unitId: unit.parentId,
-      expectedKindId: kind.parent_kind_id,
-      relation: "sits inside",
-    });
-  if (unit.templateId)
-    await assertEdgeFits(db, blueprint, placed, {
-      unitId: unit.templateId,
-      expectedKindId: kind.template_kind_id,
-      relation: "follows",
-    });
+  const [problem] = await unitProblems(db, blueprint, {
+    ...unit,
+    productId: unit.productId,
+  });
+  if (problem) throw badInput(problem);
 }
 
 /**
@@ -521,6 +534,32 @@ function factsAllowedOn(blueprint: Blueprint, kind: KindRecord): FactRecord[] {
     (fact) =>
       fact.unit_kind_id === kind.id || followers.includes(fact.unit_kind_id),
   );
+}
+
+/** A fact checked against a unit's kind: the value to store, or what is wrong. */
+function checkFact(
+  blueprint: Blueprint,
+  unitKind: string,
+  fact: { kind: string; value: string },
+): { value: string } | { problem: string } {
+  const kind = blueprint.kinds.find((k) => k.slug === unitKind);
+  if (!kind) return { problem: kindNotListed(blueprint, unitKind) };
+  const allowed = factsAllowedOn(blueprint, kind);
+  const definition = allowed.find((f) => f.kind === fact.kind);
+  if (!definition)
+    return {
+      problem: `'${fact.kind}' is not a fact of a ${kind.slug} in ${blueprint.productSlug}'s blueprint (${slugList(
+        [...new Set(allowed.map((f) => f.kind))],
+      )}). use one of those, or propose add_unit_kind with the fact`,
+    };
+  if (!definition.choices.length) return { value: fact.value };
+  const wanted = fact.value.trim().toLowerCase();
+  const choice = definition.choices.find((c) => c.toLowerCase() === wanted);
+  if (!choice)
+    return {
+      problem: `'${fact.value}' is not a value of ${fact.kind}: one of ${slugList(definition.choices)}`,
+    };
+  return { value: choice };
 }
 
 /**
@@ -538,21 +577,82 @@ export async function resolveFactValue(
   if (!unit?.productId) return fact.value;
   const blueprint = await blueprintOf(db, unit.productId);
   if (!blueprint) return fact.value;
-  const kind = kindNamed(blueprint, unit.kind);
-  const allowed = factsAllowedOn(blueprint, kind);
-  const definition = allowed.find((f) => f.kind === fact.kind);
-  if (!definition)
-    throw badInput(
-      `'${fact.kind}' is not a fact of a ${kind.slug} in ${blueprint.productSlug}'s blueprint (${slugList(
-        [...new Set(allowed.map((f) => f.kind))],
-      )}). use one of those, or propose add_unit_kind with the fact`,
-    );
-  if (!definition.choices.length) return fact.value;
-  const wanted = fact.value.trim().toLowerCase();
-  const choice = definition.choices.find((c) => c.toLowerCase() === wanted);
-  if (!choice)
-    throw badInput(
-      `'${fact.value}' is not a value of ${fact.kind}: one of ${slugList(definition.choices)}`,
-    );
-  return choice;
+  const checked = checkFact(blueprint, unit.kind, fact);
+  if ("problem" in checked) throw badInput(checked.problem);
+  return checked.value;
+}
+
+/**
+ * The fact kinds a unit's blueprint asks it to record, or none for a general
+ * unit, a product with no blueprint, or a kind the blueprint does not list.
+ */
+export async function expectedFactKinds(unit: {
+  productId: string | null;
+  kind: string;
+}): Promise<string[]> {
+  if (!unit.productId) return [];
+  const blueprint = await blueprintOf(sql, unit.productId);
+  const kind = blueprint?.kinds.find((k) => k.slug === unit.kind);
+  if (!blueprint || !kind) return [];
+  return blueprint.facts
+    .filter((fact) => fact.unit_kind_id === kind.id)
+    .map((fact) => fact.kind);
+}
+
+/** How many disagreements a profile reports; the page lists the rest itself. */
+const MAX_CONFLICTS = 20;
+
+export interface BlueprintConflict {
+  unit: string;
+  problem: string;
+}
+
+/**
+ * Where a customer's units and their facts disagree with their products'
+ * blueprints: written before the blueprint, or under one that changed since.
+ * Reported for curation, never rewritten.
+ */
+export async function blueprintConflicts(
+  customerId: string,
+): Promise<BlueprintConflict[]> {
+  const units = await sql<
+    (PlacedUnit & {
+      id: string;
+      parent_id: string | null;
+      template_id: string | null;
+    })[]
+  >`
+    select id, slug, kind, product_id, parent_id, template_id
+    from customer_units where customer_id = ${customerId} and product_id is not null
+    order by slug
+  `;
+  const blueprints = new Map<string, Blueprint | null>();
+  const blueprintFor = async (productId: string) => {
+    if (!blueprints.has(productId))
+      blueprints.set(productId, await blueprintOf(sql, productId));
+    return blueprints.get(productId)!;
+  };
+  const conflicts: BlueprintConflict[] = [];
+  for (const unit of units) {
+    const blueprint = await blueprintFor(unit.product_id!);
+    if (!blueprint) continue;
+    const problems = await unitProblems(sql, blueprint, {
+      productId: unit.product_id!,
+      kind: unit.kind,
+      parentId: unit.parent_id,
+      templateId: unit.template_id,
+    });
+    const facts = await sql<{ kind: string; value: string }[]>`
+      select kind, value from customer_facts where unit_id = ${unit.id}
+      order by kind, label
+    `;
+    for (const fact of facts) {
+      const checked = checkFact(blueprint, unit.kind, fact);
+      if ("problem" in checked) problems.push(checked.problem);
+    }
+    for (const problem of new Set(problems))
+      conflicts.push({ unit: unit.slug, problem });
+    if (conflicts.length >= MAX_CONFLICTS) break;
+  }
+  return conflicts.slice(0, MAX_CONFLICTS);
 }
