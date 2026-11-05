@@ -76,6 +76,39 @@ export async function canEditScope(
   return false;
 }
 
+/**
+ * Whether a user may edit a customer's own record: its fields, its general
+ * units and facts, its component links. A part tied to a product is edited
+ * under that product's scope instead (`canEditScope`).
+ */
+export async function canEditCustomer(
+  userId: string,
+  customerId: string,
+): Promise<boolean> {
+  const ctx = await contextFor(userId);
+  if (ctx.isGlobalAdmin) return true;
+  if (ctx.teamAdmin.size === 0) return false;
+  const owners = await sql<{ team_id: string }[]>`
+    select p.team_id
+    from customer_products cp join products p on p.id = cp.product_id
+    where cp.customer_id = ${customerId}
+  `;
+  // A customer no product claims yet is open to any team admin, so a team can
+  // set one up and link its product.
+  if (!owners.length) return true;
+  return owners.some((owner) => ctx.teamAdmin.has(owner.team_id));
+}
+
+export async function assertCanEditCustomer(
+  userId: string,
+  customerId: string,
+): Promise<void> {
+  if (!(await canEditCustomer(userId, customerId)))
+    throw forbidden(
+      "you don't have edit rights on this customer: it needs team admin of a team whose product the customer uses, or app admin",
+    );
+}
+
 export async function canManageTeam(
   userId: string,
   teamId: string,

@@ -33,7 +33,7 @@ export const CUSTOMER_BOOST = 0.5 / (RRF_K + 1);
 
 /**
  * Below `CUSTOMER_BOOST`: a unit is a narrower claim than a customer, so it
- * moves a result less. A sibling unit on the same profile is weaker again.
+ * moves a result less. A sibling unit on the same template is weaker again.
  */
 export const UNIT_BOOST = CUSTOMER_BOOST / 2;
 export const SIBLING_UNIT_BOOST = CUSTOMER_BOOST / 4;
@@ -124,7 +124,7 @@ export const nearestToAny = (
  * (id, rnk) and its raw signal, into `fused`: the raw signals plus `rrf` to
  * order by. `boost` names a table with (id, customer_id) whose rows for
  * `customerId` are lifted, and with `unitId` that unit's rows and, less, its
- * profile siblings'. A lift, never a filter: other customers' rows stay.
+ * template siblings'. A lift, never a filter: other customers' rows stay.
  */
 export const fusedCte = (
   boost?: { table: string; customerId: string; unitId?: string | null } | null,
@@ -160,8 +160,8 @@ export const fusedCte = (
                                        select 1 from customer_units mine, customer_units theirs
                                        where mine.id = ${boost.unitId}
                                          and theirs.id = b.customer_unit_id
-                                         and mine.profile_id is not null
-                                         and mine.profile_id = theirs.profile_id)
+                                         and mine.template_id is not null
+                                         and mine.template_id = theirs.template_id)
                                       then ${SIBLING_UNIT_BOOST}::float8
                                     else 0::float8 end
                              from ${sql.unsafe(boost.table)} b where b.id = i.id), 0::float8)`

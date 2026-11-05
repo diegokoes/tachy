@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import {
   getUserByEmail,
+  assertCanEditCustomer,
   assertCanEditScope,
   assertCanManageTeamBySlug,
   assertAnyTeamAdmin,
@@ -56,6 +57,15 @@ export async function assertScopeEditor(
 ): Promise<void> {
   if (isAdminIdentity(c)) return;
   await assertCanEditScope(await requireCaller(c), scope);
+}
+
+/** The customer's own record; a part tied to a product goes through `assertScopeEditor`. */
+export async function assertCustomerEditor(
+  c: Context,
+  customerId: string,
+): Promise<void> {
+  if (isAdminIdentity(c)) return;
+  await assertCanEditCustomer(await requireCaller(c), customerId);
 }
 
 export async function assertTeamAdmin(

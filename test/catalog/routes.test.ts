@@ -1,6 +1,15 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { addComponent, addLabel } from "@tachy/core/catalog";
-import { createUser } from "@tachy/core/access";
+import {
+  addComponent,
+  addLabel,
+  addProduct,
+  addTeam,
+} from "@tachy/core/catalog";
+import {
+  clearPermissionCache,
+  createUser,
+  setTeamMember,
+} from "@tachy/core/access";
 import { saveKnowledgeEntry } from "@tachy/core/knowledge";
 import { createApp } from "../../packages/api/src/app";
 import { json, loginCookie } from "../http";
@@ -423,6 +432,214 @@ describe("customer component links", () => {
     expect((await response.json()).detail).toMatch(
       /product_slug and component/,
     );
+  });
+});
+
+describe("customer product links and edit rights", () => {
+  /** A team admin of a team other than tpd's, signed in. */
+  async function otherTeamAdmin() {
+    await addTeam("other-team", "Other Team");
+    await addProduct("other-team", "op", "Other Product");
+    await createUser({
+      email: "other@example.com",
+      password: "a-long-password",
+      role: "member",
+    });
+    await setTeamMember("other-team", "other@example.com", "admin");
+    clearPermissionCache();
+    return loginCookie(app, "other@example.com", "a-long-password");
+  }
+
+  const as = (who: string, path: string, method: string, body?: unknown) =>
+    app.request(path, {
+      method,
+      headers: {
+        Cookie: who,
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+
+  beforeEach(async () => {
+    await requestAs("/api/customers", "POST", {
+      name: "Northwind",
+      slug: "northwind",
+      products: ["tpd"],
+    });
+  });
+
+  it("links and unlinks a product, and lists who uses it", async () => {
+    expect(
+      (await (await get("/api/customers?product=tpd")).json()).map(
+        (x: { slug: string }) => x.slug,
+      ),
+    ).toEqual(["northwind"]);
+    expect(
+      (await requestAs("/api/customers/northwind/products/tpd", "DELETE"))
+        .status,
+    ).toBe(200);
+    expect(await (await get("/api/customers?product=tpd")).json()).toEqual([]);
+    expect(
+      (await requestAs("/api/customers/northwind/products/tpd", "PUT", {}))
+        .status,
+    ).toBe(200);
+  });
+
+  it("keeps a team admin of another product out until that product is linked", async () => {
+    const other = await otherTeamAdmin();
+    const refused = await as(other, "/api/customers/northwind", "PATCH", {
+      notes: "ours now",
+    });
+    expect(refused.status).toBe(403);
+    expect(
+      (await as(other, "/api/customers/northwind/products/op", "PUT", {}))
+        .status,
+    ).toBe(200);
+    expect(
+      (
+        await as(other, "/api/customers/northwind", "PATCH", {
+          notes: "ours too",
+        })
+      ).status,
+    ).toBe(200);
+  });
+
+  it("keeps a product's units with that product's team", async () => {
+    const other = await otherTeamAdmin();
+    await as(other, "/api/customers/northwind/products/op", "PUT", {});
+    const refused = await as(other, "/api/customers/northwind/units", "PUT", {
+      slug: "line-1",
+      name: "Line 1",
+      kind: "line",
+      product: "tpd",
+    });
+    expect(refused.status).toBe(403);
+    const ownUnit = await as(other, "/api/customers/northwind/units", "PUT", {
+      slug: "tenant-1",
+      name: "Tenant 1",
+      kind: "tenant",
+      product: "op",
+    });
+    expect(ownUnit.status).toBe(200);
+  });
+
+  it("refuses to delete a customer with an entry filed under them, with the counts", async () => {
+    await saveKnowledgeEntry({
+      productId: await tpdProductId(),
+      title: "Printer stops",
+      issueSummary: "The printer stops mid-batch.",
+      customerSlug: "northwind",
+      status: "approved",
+    });
+    const response = await requestAs("/api/customers/northwind", "DELETE");
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body.detail).toMatch(/1 entries/);
+    expect(body.filed).toMatchObject({ entries: 1, work_items: 0 });
+  });
+});
+
+describe("blueprint routes", () => {
+  it("builds a blueprint, renames a kind and refuses to delete one in use", async () => {
+    const site = await requestAs("/api/products/tpd/blueprint/kinds", "PUT", {
+      slug: "site",
+      name: "Site",
+    });
+    expect(site.status).toBe(200);
+    expect(
+      (
+        await requestAs("/api/products/tpd/blueprint/kinds", "PUT", {
+          slug: "line",
+          name: "Line",
+          parent_kind: "site",
+          facts: [{ kind: "coding_mode", choices: ["CT1", "CT2"] }],
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await requestAs("/api/products/tpd/blueprint/kinds/line/facts", "PUT", {
+          kind: "ip",
+        })
+      ).status,
+    ).toBe(200);
+
+    const blueprint = await (await get("/api/products/tpd/blueprint")).json();
+    const line = blueprint.kinds.find(
+      (k: { slug: string }) => k.slug === "line",
+    );
+    expect(line.parent_kind).toBe("site");
+    expect(line.facts.map((f: { kind: string }) => f.kind).sort()).toEqual([
+      "coding_mode",
+      "ip",
+    ]);
+
+    expect(
+      (
+        await requestAs("/api/products/tpd/blueprint/kinds/line", "PATCH", {
+          slug: "production-line",
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await requestAs(
+          "/api/products/tpd/blueprint/kinds/production-line/facts/ip",
+          "PATCH",
+          { description: "one per device" },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await requestAs(
+          "/api/products/tpd/blueprint/kinds/production-line/facts/ip",
+          "DELETE",
+        )
+      ).status,
+    ).toBe(200);
+
+    await requestAs("/api/customers", "POST", {
+      name: "Northwind",
+      slug: "northwind",
+    });
+    await requestAs("/api/customers/northwind/units", "PUT", {
+      slug: "plant",
+      name: "Plant",
+      kind: "site",
+      product: "tpd",
+    });
+    expect(
+      (await requestAs("/api/products/tpd/blueprint/kinds/site", "DELETE"))
+        .status,
+    ).toBe(409);
+    expect(
+      (
+        await requestAs(
+          "/api/products/tpd/blueprint/kinds/production-line",
+          "DELETE",
+        )
+      ).status,
+    ).toBe(200);
+  });
+
+  it("refuses a blueprint change from a member", async () => {
+    await createUser({
+      email: "member@example.com",
+      password: "a-long-password",
+      role: "member",
+    });
+    const memberCookie = await loginCookie(
+      app,
+      "member@example.com",
+      "a-long-password",
+    );
+    const response = await app.request("/api/products/tpd/blueprint/kinds", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: memberCookie },
+      body: JSON.stringify({ slug: "site", name: "Site" }),
+    });
+    expect(response.status).toBe(403);
   });
 });
 

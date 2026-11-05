@@ -43,6 +43,7 @@ import {
 } from "../library/revisions";
 import type { ActorRef } from "../library/revisions";
 import {
+  assertFilingFitsUnit,
   filingSlugs,
   patchedFiling,
   resolveFilingComponent,
@@ -99,7 +100,7 @@ export interface KnowledgeInput extends KnowledgeFacets {
    * `saveKnowledgeEntry`. Absent or null means the lesson is general.
    */
   customerSlug?: string | null;
-  /** Which part of their estate, by unit slug/alias. Needs customerSlug. */
+  /** Which part of their setup, by unit slug/alias. Needs customerSlug. */
   unit?: string | null;
   createdById?: string | null;
   status?: string;
@@ -242,6 +243,7 @@ export async function prepareKnowledgeEntry(input: KnowledgeInput) {
         customerUnitId ??= workItem.customer_unit_id ?? null;
     }
   }
+  await assertFilingFitsUnit(customerUnitId, productId);
 
   const { componentId, productArea } = await resolveFilingComponent(
     productId,

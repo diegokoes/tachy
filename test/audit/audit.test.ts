@@ -234,18 +234,24 @@ describe("what the API records", () => {
   });
 });
 
-describe("what the chat tools record", () => {
-  it("records a catalog write once it has happened, and not a refused one", async () => {
+/** The server takes one connection per process, so the tests share a client. */
+let chatClient: Client | null = null;
+
+async function call(name: string, args: Record<string, unknown>) {
+  if (!chatClient) {
     const [serverTransport, clientTransport] =
       InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
-    const client = new Client({ name: "test", version: "0" });
-    await client.connect(clientTransport);
-    const call = (name: string, args: Record<string, unknown>) =>
-      client.callTool({ name, arguments: args }) as Promise<{
-        isError?: boolean;
-      }>;
+    chatClient = new Client({ name: "test", version: "0" });
+    await chatClient.connect(clientTransport);
+  }
+  return chatClient.callTool({ name, arguments: args }) as Promise<{
+    isError?: boolean;
+  }>;
+}
 
+describe("what the chat tools record", () => {
+  it("records a catalog write once it has happened, and not a refused one", async () => {
     expect(
       (await call("add_team", { slug: "ops", name: "Ops" })).isError,
     ).not.toBe(true);
@@ -269,6 +275,42 @@ describe("what the chat tools record", () => {
       "customer:acme",
       "team:ops",
     ]);
+  });
+});
+
+describe("what the chat tools record about customers", () => {
+  it("records a fact and a component link the agent sets, without the fact's value", async () => {
+    await call("add_customer", { name: "Acme", slug: "acme" });
+    await call("add_component", {
+      product_slug: "tpd",
+      slug: "printer",
+      name: "Printer",
+    });
+    expect(
+      (
+        await call("set_customer_fact", {
+          customer: "acme",
+          kind: "contract",
+          value: "gold-tier",
+        })
+      ).isError,
+    ).not.toBe(true);
+    expect(
+      (
+        await call("set_customer_component", {
+          customer: "acme",
+          product_slug: "tpd",
+          component: "printer",
+        })
+      ).isError,
+    ).not.toBe(true);
+
+    const events = await listAudit();
+    expect(events.slice(0, 2).map((e) => [e.action, e.target])).toEqual([
+      ["catalog_update", "customer:acme"],
+      ["catalog_update", "customer:acme"],
+    ]);
+    expect(JSON.stringify(events)).not.toMatch(/gold-tier/);
   });
 });
 
