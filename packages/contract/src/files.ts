@@ -51,6 +51,14 @@ export const FILE_CONTENT_TYPES = [
 
 export const FILE_EXTENSIONS = Object.keys(FILE_TYPES) as FileExtension[];
 
+/** The families a library doc keeps its original of: those its text is read out of. */
+const ORIGINAL_FAMILIES: readonly FileFamily[] = ["pdf", "document", "sheet"];
+
+/** What a `library_files` row may hold: the `library_files` CHECK. */
+export const LIBRARY_FILE_TYPES = FILE_CONTENT_TYPES.filter((type) =>
+  ORIGINAL_FAMILIES.includes(fileFamily(type)),
+);
+
 export function fileExtension(filename: string): FileExtension | null {
   const dot = filename.lastIndexOf(".");
   if (dot < 0) return null;

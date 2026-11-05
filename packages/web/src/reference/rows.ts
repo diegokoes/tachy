@@ -24,6 +24,8 @@ export interface ReferenceRow {
   customer_slug?: string | null;
   customer_unit_slug?: string | null;
   source?: string | null;
+  /** The original file the body was read out of, when the doc keeps one. */
+  file_name?: string | null;
   tags: string[] | null;
   status: string;
   version: number;

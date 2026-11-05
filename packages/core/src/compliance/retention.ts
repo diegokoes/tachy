@@ -10,6 +10,7 @@ import { defineJob } from "../jobs/registry";
 import { sweepJobRuns } from "../jobs/runs";
 import { sweepFlowRuns } from "../flows/run";
 import { sweepNotifications } from "../notifications/notifications";
+import { sweepOrphanFiles } from "../library/files";
 
 const DAY = 86_400_000;
 
@@ -131,7 +132,7 @@ export function defineRetentionJobs() {
     kind: "retention.sweep",
     title: "clean up old data",
     description:
-      "deletes expired exports and uploads, old job and flow runs, old notifications, chat transcripts past their age, orphaned wiki images, and rolls old usage counters up to months without people",
+      "deletes expired exports and uploads, old job and flow runs, old notifications, chat transcripts past their age, orphaned wiki images and doc originals, and rolls old usage counters up to months without people",
     params: z.object({
       transcript_days: z.number().int().min(1).default(90),
       usage_months: z.number().int().min(1).default(13),
@@ -154,6 +155,7 @@ export function defineRetentionJobs() {
         notifications: await sweepNotifications(),
         transcripts: await sweepTranscripts(params.transcript_days),
         assets: await sweepOrphanAssets(),
+        files: await sweepOrphanFiles(),
         usage: await rollUpUsage(params.usage_months),
       };
       ctx.log("retention applied", swept);

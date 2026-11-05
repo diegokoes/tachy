@@ -551,77 +551,6 @@ create table customer_components (
 
 create index customer_components_component_idx on customer_components(component_id);
 
--- Everything about a customer's install that is not an entity in its own right:
--- the version they run, their line layout, an integration they depend on. Their
--- repos, projects and components are edges instead - those are real records.
---
--- On a unit of a product with a blueprint, `kind` is one the blueprint lists
--- for the unit's kind (unit_kind_facts). Elsewhere it is a deployment-specific
--- vocabulary, like knowledge_entries.cloud: list_customer_fact_kinds reports
--- what is already in use so callers reuse a value instead of coining a
--- near-duplicate.
-create table customer_facts (
-    id           uuid primary key default gen_random_uuid(),
-    customer_id  uuid not null references customers(id) on delete cascade,
-    kind         text not null,
-    -- What the fact is about when the kind alone is ambiguous: which product a
-    -- version belongs to, which device an address belongs to. '' when it needs
-    -- none, so (customer, kind, label) can be unique and a re-set replaces in
-    -- place.
-    label        text not null default '',
-    -- Which part of their setup this is true of. Null: true of the whole
-    -- customer.
-    unit_id      uuid references customer_units(id) on delete cascade,
-    value        text not null,
-    notes        text,
-    -- Where this was learned - a ticket URL, a wiki page, a person.
-    source       text,
-    component_id uuid references components(id) on delete set null,
-    created_at   timestamptz not null default now(),
-    updated_at   timestamptz not null default now()
-);
-
--- `nulls not distinct` so a customer-level fact (unit_id null) still upserts in
--- place rather than piling up a row per set - the idiom
--- work_item_links_external_idx uses.
-create unique index customer_facts_key_idx
-    on customer_facts(customer_id, unit_id, kind, label) nulls not distinct;
-
-create index customer_facts_customer_idx on customer_facts(customer_id);
-create index customer_facts_unit_idx     on customer_facts(unit_id);
-create index customer_facts_kind_idx     on customer_facts(kind);
-
--- A customer's record as it was before and after each write: the customer, the
--- products it uses, its units, facts and component links. One action is one
--- batch, and restoring a batch writes its `before` rows back as a new batch.
--- Append-only for the app roles (db/roles.sql).
-create table customer_changes (
-    id           bigint generated always as identity primary key,
-    batch_id     uuid not null,
-    -- No foreign key: the change outlives the customer it describes.
-    customer_id  uuid not null,
-    record       text not null
-                     check (record in ('customer','product','unit','fact','component')),
-    -- The row's id; for a product or component link, the product's or the
-    -- component's.
-    record_id    uuid not null,
-    -- Null when the change added the record.
-    before       jsonb,
-    -- Null when the change deleted it.
-    after        jsonb,
-    user_id      uuid references users(id) on delete set null,
-    actor        text not null check (actor in ('web','agent','mcp','api','ingest')),
-    turn_id      text,
-    -- The batch this one undid.
-    restores     uuid,
-    created_at   timestamptz not null default now(),
-    check (before is not null or after is not null)
-);
-
-create index customer_changes_customer_idx on customer_changes(customer_id, id desc);
-create index customer_changes_batch_idx    on customer_changes(batch_id);
-create index customer_changes_record_idx   on customer_changes(record_id, id desc);
-
 -- Azure DevOps System.AreaPath prefix -> component, so an ingested item lands on
 -- the right component instead of being guessed at. A table rather than jsonb on
 -- source_projects: a component rename rewrites an FK, it cannot rewrite a slug
@@ -832,12 +761,29 @@ create table labels (
 
 create index labels_product_idx on labels(product_id);
 
+-- The original of a library doc saved from a file, for a reader to open as it
+-- was. In the database for the reason library_assets is: the backup carries it.
+-- One row per content, so the same file saved twice is stored once.
+create table library_files (
+    id           uuid primary key default gen_random_uuid(),
+    sha256       text not null unique,
+    content_type text not null
+                     check (content_type in ('application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')),
+    filename     text not null,
+    byte_size    integer not null,
+    bytes        bytea not null,
+    created_by   uuid references users(id) on delete set null,
+    created_at   timestamptz not null default now()
+);
+
 create table reference_docs (
     id          uuid primary key default gen_random_uuid(),
     product_id  uuid references products(id) on delete set null,
     team_id     uuid references teams(id) on delete set null,
     created_by  uuid references users(id) on delete set null,
     source      text,
+    -- The file the body was read out of, kept as it was. Null: written as text.
+    file_id     uuid references library_files(id) on delete set null,
     -- Provenance for docs pulled from a project wiki; external_key is the page
     -- path, and (project, page) is what a re-import supersedes instead of
     -- duplicating. Not unique: a new revision is inserted before its predecessor
@@ -905,6 +851,7 @@ create index reference_docs_tsv_idx     on reference_docs using gin (search_tsv)
 create index reference_docs_tsv_en_idx  on reference_docs using gin (search_tsv_en);
 create index reference_docs_trgm_idx    on reference_docs using gin (search_text gin_trgm_ops);
 create index reference_docs_superseded_idx on reference_docs(superseded_by);
+create index reference_docs_file_idx on reference_docs(file_id);
 -- One live article per slug per wiki. product_id null is the org-wide wiki, so
 -- `nulls not distinct` keeps those unique among themselves rather than treating
 -- every one of them as a distinct key.
@@ -912,6 +859,79 @@ create unique index reference_docs_wiki_slug_idx
     on reference_docs(product_id, slug)
     nulls not distinct
     where kind = 'wiki' and status <> 'archived';
+
+-- Everything about a customer's install that is not an entity in its own right:
+-- the version they run, their line layout, an integration they depend on. Their
+-- repos, projects and components are edges instead - those are real records.
+--
+-- On a unit of a product with a blueprint, `kind` is one the blueprint lists
+-- for the unit's kind (unit_kind_facts). Elsewhere it is a deployment-specific
+-- vocabulary, like knowledge_entries.cloud: list_customer_fact_kinds reports
+-- what is already in use so callers reuse a value instead of coining a
+-- near-duplicate.
+create table customer_facts (
+    id           uuid primary key default gen_random_uuid(),
+    customer_id  uuid not null references customers(id) on delete cascade,
+    kind         text not null,
+    -- What the fact is about when the kind alone is ambiguous: which product a
+    -- version belongs to, which device an address belongs to. '' when it needs
+    -- none, so (customer, kind, label) can be unique and a re-set replaces in
+    -- place.
+    label        text not null default '',
+    -- Which part of their setup this is true of. Null: true of the whole
+    -- customer.
+    unit_id      uuid references customer_units(id) on delete cascade,
+    value        text not null,
+    notes        text,
+    -- Where this was learned - a ticket URL, a wiki page, a person.
+    source       text,
+    component_id uuid references components(id) on delete set null,
+    -- The library doc that details this fact: a drawing, an interface spec.
+    doc_id       uuid references reference_docs(id) on delete set null,
+    created_at   timestamptz not null default now(),
+    updated_at   timestamptz not null default now()
+);
+
+-- `nulls not distinct` so a customer-level fact (unit_id null) still upserts in
+-- place rather than piling up a row per set - the idiom
+-- work_item_links_external_idx uses.
+create unique index customer_facts_key_idx
+    on customer_facts(customer_id, unit_id, kind, label) nulls not distinct;
+
+create index customer_facts_customer_idx on customer_facts(customer_id);
+create index customer_facts_unit_idx     on customer_facts(unit_id);
+create index customer_facts_kind_idx     on customer_facts(kind);
+
+-- A customer's record as it was before and after each write: the customer, the
+-- products it uses, its units, facts and component links. One action is one
+-- batch, and restoring a batch writes its `before` rows back as a new batch.
+-- Append-only for the app roles (db/roles.sql).
+create table customer_changes (
+    id           bigint generated always as identity primary key,
+    batch_id     uuid not null,
+    -- No foreign key: the change outlives the customer it describes.
+    customer_id  uuid not null,
+    record       text not null
+                     check (record in ('customer','product','unit','fact','component')),
+    -- The row's id; for a product or component link, the product's or the
+    -- component's.
+    record_id    uuid not null,
+    -- Null when the change added the record.
+    before       jsonb,
+    -- Null when the change deleted it.
+    after        jsonb,
+    user_id      uuid references users(id) on delete set null,
+    actor        text not null check (actor in ('web','agent','mcp','api','ingest')),
+    turn_id      text,
+    -- The batch this one undid.
+    restores     uuid,
+    created_at   timestamptz not null default now(),
+    check (before is not null or after is not null)
+);
+
+create index customer_changes_customer_idx on customer_changes(customer_id, id desc);
+create index customer_changes_batch_idx    on customer_changes(batch_id);
+create index customer_changes_record_idx   on customer_changes(record_id, id desc);
 
 -- The wiki's own taxonomy, one tree per product (product_id null = the org-wide
 -- wiki). The general table of contents is this tree rendered. Distinct from
