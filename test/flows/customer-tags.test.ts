@@ -236,6 +236,30 @@ describe("customer.properties", () => {
   });
 });
 
+describe("customer.profile", () => {
+  it("returns the profile as stored, and scrubbed when the connection redacts", async () => {
+    const item = await acmeItem();
+    await setCustomerFact({
+      customerSlug: "acme",
+      kind: "contact",
+      value: "ops lead jane.doe@acme.example",
+    });
+    const profileStep = [
+      { id: "who", kind: "action", action: "customer.profile", params: {} },
+    ];
+    const plain = await run(profileStep, item.id);
+    expect(JSON.stringify(plain.steps[0].output)).toContain(
+      "jane.doe@acme.example",
+    );
+
+    await sql`update source_connections set config = ${sql.json({ redaction: { enabled: true } })} where slug = 'fake-flow-conn'`;
+    const scrubbed = await run(profileStep, item.id);
+    const text = JSON.stringify(scrubbed.steps[0].output);
+    expect(text).not.toContain("jane.doe@acme.example");
+    expect(text).toContain("[EMAIL_");
+  });
+});
+
 describe("tag steps", () => {
   it("adds and removes tags, and later conditions see the result", async () => {
     const item = await ingestWorkItem(await connId(), rawItem());

@@ -1,4 +1,5 @@
-import type { FlowOption } from "@tachy/contract";
+import type { CustomerProfile, FlowOption } from "@tachy/contract";
+import { getCustomerProfile } from "../catalog/customers";
 import {
   customerStandIn,
   resolveRedactionPolicy,
@@ -61,6 +62,29 @@ export async function customerPropertyOptions(
   ];
 }
 
+/** Whether what a flow reads about the item is scrubbed: by the deployment, or by its connection. */
+async function itemRedacts(item: Pick<FlowSubject, "connection">) {
+  const [conn] = await sql<{ config: Record<string, unknown> | null }[]>`
+    select config from source_connections where slug = ${item.connection}
+  `;
+  return (
+    (await effectiveSettings()).redaction_global.value ||
+    resolveRedactionPolicy(conn?.config).enabled
+  );
+}
+
+/** The item's customer profile, scrubbed when the item's reads are. */
+export async function customerProfileOf(
+  item: FlowSubject,
+): Promise<CustomerProfile | null> {
+  if (!item.customer_id) return null;
+  const profile = await getCustomerProfile(item.customer_id);
+  if (!profile) return null;
+  return (await itemRedacts(item))
+    ? scrubDeep(profile, new TokenMap())
+    : profile;
+}
+
 function asText(value: unknown): string | null {
   if (value == null || value === "") return null;
   if (Array.isArray(value)) return value.map(String).join(", ");
@@ -107,12 +131,7 @@ export async function customerProperties(
     }
   }
 
-  const [conn] = await sql<{ config: Record<string, unknown> | null }[]>`
-    select config from source_connections where slug = ${item.connection}
-  `;
-  const redact =
-    (await effectiveSettings()).redaction_global.value ||
-    resolveRedactionPolicy(conn?.config).enabled;
+  const redact = await itemRedacts(item);
   const name = asText(record?.name);
   const readable = redact
     ? Object.fromEntries(
