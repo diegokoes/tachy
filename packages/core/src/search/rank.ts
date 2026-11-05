@@ -33,10 +33,20 @@ export const CUSTOMER_BOOST = 0.5 / (RRF_K + 1);
 
 /**
  * Below `CUSTOMER_BOOST`: a unit is a narrower claim than a customer, so it
- * moves a result less. A sibling unit on the same template is weaker again.
+ * moves a result less. A unit near it (`unitNeighbourhood`: the site above a
+ * line, the lines below a site, the layout they share) is weaker again.
  */
 export const UNIT_BOOST = CUSTOMER_BOOST / 2;
-export const SIBLING_UNIT_BOOST = CUSTOMER_BOOST / 4;
+export const RELATED_UNIT_BOOST = CUSTOMER_BOOST / 4;
+
+/** Whose rows a search lifts: a customer's, and with a unit, that unit's and its neighbours'. */
+export interface SearchBoost {
+  table: string;
+  customerId: string;
+  unitId?: string | null;
+  /** From `unitNeighbourhood`. */
+  relatedUnitIds?: string[];
+}
 
 /**
  * HNSW search breadth. The default of 40 is thin once a WHERE clause filters
@@ -122,13 +132,11 @@ export const nearestToAny = (
 /**
  * Fuses three candidate CTEs named `vec`, `lex` and `fuzzy`, each exposing
  * (id, rnk) and its raw signal, into `fused`: the raw signals plus `rrf` to
- * order by. `boost` names a table with (id, customer_id) whose rows for
- * `customerId` are lifted, and with `unitId` that unit's rows and, less, its
- * template siblings'. A lift, never a filter: other customers' rows stay.
+ * order by. `boost` names a table with (id, customer_id, customer_unit_id)
+ * whose rows for the customer are lifted, and with a unit that unit's rows
+ * and, less, its neighbours'. A lift, never a filter: other customers' rows stay.
  */
-export const fusedCte = (
-  boost?: { table: string; customerId: string; unitId?: string | null } | null,
-) => sql`
+export const fusedCte = (boost?: SearchBoost | null) => sql`
   ids as (
     select id from vec
     union select id from lex
@@ -155,14 +163,8 @@ export const fusedCte = (
                          ? sql`+ coalesce((select case
                                     when b.customer_unit_id = ${boost.unitId}
                                       then ${UNIT_BOOST}::float8
-                                    when b.customer_unit_id is not null
-                                     and exists (
-                                       select 1 from customer_units mine, customer_units theirs
-                                       where mine.id = ${boost.unitId}
-                                         and theirs.id = b.customer_unit_id
-                                         and mine.template_id is not null
-                                         and mine.template_id = theirs.template_id)
-                                      then ${SIBLING_UNIT_BOOST}::float8
+                                    when b.customer_unit_id = any(${boost.relatedUnitIds ?? []}::uuid[])
+                                      then ${RELATED_UNIT_BOOST}::float8
                                     else 0::float8 end
                              from ${sql.unsafe(boost.table)} b where b.id = i.id), 0::float8)`
                          : sql``

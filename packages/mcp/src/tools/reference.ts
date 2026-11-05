@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { parseAttachmentRef } from "@tachy/core";
 import { resolveCurrentUserId } from "@tachy/core/access";
-import { getCustomerIdBySlug } from "@tachy/core/catalog";
+import { resolveCustomerFilter } from "@tachy/core/catalog";
 import {
   TokenMap,
   globalImagesAllowed,
@@ -47,6 +47,7 @@ import { memberField, textWindowFields } from "../fields";
 import {
   codeNextFor,
   componentIntoFilter,
+  customerBoost,
   resolveScopeIds,
   loadContextSources,
   type ContextSource,
@@ -207,6 +208,13 @@ tool(
         .describe(
           "Set only when the doc describes ONE customer's install (their addon, their configuration). Leave it off for anything true of the product generally - a customer here means the doc is cited as that customer's setup, not as how the product works.",
         ),
+      unit: z
+        .string()
+        .nullable()
+        .optional()
+        .describe(
+          "Which part of that customer's setup the doc describes - a unit slug or alias from list_customer_units, with customer_slug.",
+        ),
       source: z
         .string()
         .optional()
@@ -281,6 +289,7 @@ tool(
       supersedes: args.supersedes,
       component: args.component,
       customerSlug: args.customer_slug,
+      unit: args.unit,
       fileId,
     });
     return out({
@@ -311,6 +320,12 @@ tool(
         .describe(
           "Customer slug from list_customers. Ranks that customer's own material first WITHOUT hiding the rest.",
         ),
+      unit: z
+        .string()
+        .optional()
+        .describe(
+          "Unit slug or alias from list_customer_units, with customer: lifts that part of their setup's docs, and less those of the units near it.",
+        ),
       doc_version: z.string().optional(),
       tags: z.array(z.string()).optional(),
       limit: z.number().int().positive().max(100).optional(),
@@ -323,6 +338,7 @@ tool(
     team_slug,
     component,
     customer,
+    unit,
     doc_version,
     tags,
     limit,
@@ -336,9 +352,7 @@ tool(
       teamId,
       includeUnscoped: true,
       ...(await componentIntoFilter(productId, component, tags)),
-      boostCustomerId: customer
-        ? await getCustomerIdBySlug(customer)
-        : undefined,
+      ...(await customerBoost(customer, unit)),
       docVersion: doc_version,
       limit,
     });
@@ -352,12 +366,19 @@ tool(
   "list_reference_docs",
   {
     description:
-      "List reference docs (newest first), optionally filtered by status, product_slug / team_slug, component, doc_version or tags. Bodies are omitted; use get_reference_doc for the full text. Rows carry doc_version and superseded_by - archived rows with superseded_by set are old versions of a newer doc.",
+      "List reference docs (newest first), optionally filtered by status, product_slug / team_slug, component, doc_version, tags, or a customer and one part of their setup. Bodies are omitted; use get_reference_doc for the full text. Rows carry doc_version and superseded_by - archived rows with superseded_by set are old versions of a newer doc.",
     inputSchema: {
       status: referenceStatusSchema.optional(),
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
       component: z.string().optional(),
+      customer: z.string().optional().describe("Slug from list_customers"),
+      unit: z
+        .string()
+        .optional()
+        .describe(
+          "Unit slug or alias, with customer: docs filed under it or under a unit inside it.",
+        ),
       doc_version: z.string().optional(),
       tags: z.array(z.string()).optional(),
       limit: z.number().int().positive().max(100).optional(),
@@ -369,6 +390,8 @@ tool(
     product_slug,
     team_slug,
     component,
+    customer,
+    unit,
     doc_version,
     tags,
     limit,
@@ -383,6 +406,7 @@ tool(
         productId,
         teamId,
         ...(await componentIntoFilter(productId, component, tags)),
+        ...(await resolveCustomerFilter(customer, unit)),
         docVersion: doc_version,
         limit,
       }),
@@ -425,6 +449,13 @@ tool(
         .describe(
           "Re-file whose install this documents; null makes it general again.",
         ),
+      unit: z
+        .string()
+        .nullable()
+        .optional()
+        .describe(
+          "Re-file under one part of that customer's setup - a unit slug or alias; null files it under the whole customer.",
+        ),
       expected_version: z.number().int().optional(),
     },
   },
@@ -439,6 +470,7 @@ tool(
     if (args.doc_version !== undefined) patch.docVersion = args.doc_version;
     if (args.customer_slug !== undefined)
       patch.customerSlug = args.customer_slug;
+    if (args.unit !== undefined) patch.unit = args.unit;
     if (args.expected_version !== undefined)
       patch.expectedVersion = args.expected_version;
     const row = await updateReferenceDoc(args.id, patch, await mcpActor());

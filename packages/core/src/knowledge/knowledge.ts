@@ -51,6 +51,7 @@ import {
   type FiledRow,
 } from "../library/filing";
 import { syncLinks } from "../library/links";
+import { unitNeighbourhood } from "../catalog/units";
 
 const searchedStatuses = [...SEARCHED_ENTRY_STATUSES];
 
@@ -378,6 +379,8 @@ export interface KnowledgeFilters {
   componentId?: string;
   componentTags?: string[];
   customerId?: string;
+  /** A unit and the units inside it (`unitWithDescendants`). */
+  unitIds?: string[];
   cloud?: string;
   confidence?: string;
   resolutionClarity?: string;
@@ -392,6 +395,7 @@ export type FacetKey =
   | "tags"
   | "component"
   | "customer"
+  | "unit"
   | "cloud"
   | "confidence"
   | "resolution_clarity"
@@ -411,6 +415,7 @@ function facetSql(filters: KnowledgeFilters, except?: FacetKey) {
     ${filters.tags && filters.tags.length && on("tags") ? sql`and tags && ${filters.tags}` : sql``}
     ${filters.componentId && on("component") ? sql`and (component_id = ${filters.componentId} or tags && ${filters.componentTags ?? []})` : sql``}
     ${filters.customerId && on("customer") ? sql`and customer_id = ${filters.customerId}` : sql``}
+    ${filters.unitIds?.length && on("unit") ? sql`and customer_unit_id = any(${filters.unitIds}::uuid[])` : sql``}
     ${filters.cloud && on("cloud") ? sql`and cloud = ${filters.cloud}` : sql``}
     ${filters.confidence && on("confidence") ? sql`and confidence = ${filters.confidence}` : sql``}
     ${filters.resolutionClarity && on("resolution_clarity") ? sql`and resolution_clarity = ${filters.resolutionClarity}` : sql``}
@@ -445,8 +450,8 @@ export interface SearchOptions extends KnowledgeFilters {
    */
   boostCustomerId?: string;
   /**
-   * Lifts this unit's own entries, and a sibling on the same shared profile
-   * less. Only meaningful alongside boostCustomerId.
+   * Lifts this unit's own entries, and those of the units near it less (see
+   * `unitNeighbourhood`). Only meaningful alongside boostCustomerId.
    */
   boostUnitId?: string | null;
 }
@@ -458,6 +463,9 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
     ? opts.queryVectors
     : [await embedQueryLiteral(query)];
   const keywords = keywordInputs(query, opts.exactTerms);
+  const relatedUnitIds = opts.boostUnitId
+    ? await unitNeighbourhood(opts.boostUnitId)
+    : [];
 
   // Deprecated entries are included: a flagged stale lesson beats the model
   // re-deriving it. Consumers warn on status='deprecated'.
@@ -524,12 +532,14 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
             table: "knowledge_entries",
             customerId: opts.boostCustomerId,
             unitId: opts.boostUnitId ?? null,
+            relatedUnitIds,
           }
         : null,
     )}
     select e.id, e.work_item_id, e.status, e.superseded_by, e.title, e.issue_summary, e.root_cause, e.resolution,
            e.investigation, e.resolution_pattern, e.component_id, e.product_area, e.confidence, e.cloud,
            e.customer_id, cu.slug as customer_slug,
+           e.customer_unit_id, un.slug as customer_unit_slug,
            e.resolution_clarity, e.hidden_fix,
            e.affected_version, e.fixed_version,
            e.symptoms, e.signals, e.tags, e.related_links, e.version, e.created_at, e.updated_at,
@@ -537,6 +547,7 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
     from fused f
     join knowledge_entries e on e.id = f.id
     left join customers cu on cu.id = e.customer_id
+    left join customer_units un on un.id = e.customer_unit_id
     order by f.rrf desc, e.updated_at desc
     limit ${limit}
   `,
@@ -580,7 +591,9 @@ export async function listKnowledgeEntries(opts: KnowledgeListOptions = {}) {
     select e.id, e.work_item_id, e.product_id, e.team_id, e.status, e.superseded_by, e.title, e.issue_summary,
            e.root_cause, e.resolution, e.resolution_pattern, e.component_id, e.product_area, e.confidence,
            e.cloud, e.resolution_clarity, e.hidden_fix, e.affected_version, e.fixed_version,
-           e.customer_id, cu.slug as customer_slug,
+           e.customer_id, cu.slug as customer_slug, e.customer_unit_id,
+           (select un.slug from customer_units un
+            where un.id = e.customer_unit_id) as customer_unit_slug,
            e.symptoms, e.signals, e.tags, e.version, e.created_at, e.updated_at
     from knowledge_entries e
     left join customers cu on cu.id = e.customer_id
@@ -660,9 +673,27 @@ export async function listKnowledgeFacets(
     `;
   };
 
+  /** Unit slugs repeat across customers, so they are counted only within one. */
+  const unitRows = async (): Promise<FacetCount[]> => {
+    if (!opts.customerId) return [];
+    // A subquery rather than a join, as in listKnowledgeEntries: customer_units
+    // has a customer_id of its own, which `facetSql` names unqualified.
+    return sql<FacetCount[]>`
+      select (select un.slug from customer_units un
+              where un.id = knowledge_entries.customer_unit_id) as value,
+             count(*)::int as count
+      from knowledge_entries
+      ${scope("unit")}
+        and customer_unit_id is not null
+      group by 1
+      order by count desc, value
+    `;
+  };
+
   const [
     tags,
     customer,
+    unit,
     cloud,
     confidence,
     resolution_clarity,
@@ -673,6 +704,7 @@ export async function listKnowledgeFacets(
   ] = await Promise.all([
     tagRows(),
     customerRows(),
+    unitRows(),
     column("cloud", "cloud"),
     column("confidence", "confidence"),
     column("resolution_clarity", "resolution_clarity"),
@@ -688,6 +720,7 @@ export async function listKnowledgeFacets(
     // that from /products/:slug/components rather than from row counts.
     component: [],
     customer,
+    unit,
     cloud,
     confidence,
     resolution_clarity,

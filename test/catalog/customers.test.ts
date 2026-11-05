@@ -236,7 +236,6 @@ describe("customer profile", () => {
         label: "",
         value: "4.2.1",
         component: null,
-        unit: null,
         doc: null,
       },
     ]);

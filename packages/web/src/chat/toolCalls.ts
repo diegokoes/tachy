@@ -37,6 +37,7 @@ const TOOL_WORDS: Record<string, string> = {
   get_bucket_doc: "read a bucket doc",
   get_customer_profile: "read the customer",
   get_product_blueprint: "read the blueprint",
+  search_customers: "searched customers",
   get_project_context: "read the project",
   get_ado_wiki_page: "read a wiki page",
   get_ado_work_item_schema: "read the item's form",

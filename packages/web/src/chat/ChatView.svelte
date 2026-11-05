@@ -122,6 +122,7 @@
     repo: "repo",
     bucket: "bucket",
     project: "project",
+    customer: "customer",
   };
 
   /** MCP results arrive as content blocks; the payload is JSON in the first text block. */

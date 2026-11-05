@@ -30,7 +30,7 @@ import {
 import { referenceStatusSchema } from "@tachy/core/knowledge";
 import {
   resolveComponentFilter,
-  getCustomerIdBySlug,
+  resolveCustomerFilter,
 } from "@tachy/core/catalog";
 import { assertScopeEditor, callerActor, callerUserId } from "../authz";
 import { csv } from "../query";
@@ -100,9 +100,7 @@ async function listFilters(c: QueryCtx) {
     tags: merged.length ? merged : undefined,
     componentId: filter?.componentId,
     componentTags: filter?.componentTags,
-    customerId: customerSlug
-      ? await getCustomerIdBySlug(customerSlug)
-      : undefined,
+    ...(await resolveCustomerFilter(customerSlug, c.req.query("unit"))),
     docVersion: c.req.query("doc_version"),
     limit: c.req.query("limit") ? Number(c.req.query("limit")) : undefined,
   };

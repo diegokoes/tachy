@@ -10,13 +10,16 @@ import {
   setCustomerFact,
   getCustomerIdBySlug,
   setWorkItemCustomer,
+  resolveCustomerFilter,
 } from "@tachy/core/catalog";
 import {
   saveKnowledgeEntry,
   updateKnowledgeEntry,
   searchKnowledge,
+  listKnowledgeEntries,
+  listKnowledgeFacets,
 } from "@tachy/core/knowledge";
-import { saveReferenceDoc } from "@tachy/core/reference";
+import { saveReferenceDoc, searchReferenceDocs } from "@tachy/core/reference";
 import { resetData, sql, tqxProductId } from "../database";
 
 afterAll(() => sql.end());
@@ -340,6 +343,89 @@ describe("unit-aware search", () => {
     expect(order.indexOf(sibling.id)).toBeLessThan(order.indexOf(other.id));
     // Boost, never exclude.
     expect(order).toContain(other.id);
+  });
+
+  it("lifts the site a line sits in above an unrelated line, when asked from the line", async () => {
+    const customerId = await buildSetup();
+    const site = await entry(
+      "calderra",
+      "spooler queue overrun on the labeller",
+    );
+    const unrelated = await entry(
+      "tpc141",
+      "spooler queue overrun on the labeller",
+    );
+    const hits = await searchKnowledge("spooler queue overrun labeller", {
+      boostCustomerId: customerId,
+      boostUnitId: (await resolveUnit(customerId, "pln191")).id,
+      limit: 10,
+    });
+    const order = hits.map((h: any) => h.id);
+    expect(order.indexOf(site.id)).toBeLessThan(order.indexOf(unrelated.id));
+    expect(hits.find((h: any) => h.id === site.id)?.customer_unit_slug).toBe(
+      "calderra",
+    );
+  });
+
+  it("lifts the lines inside a site above the customer's general entries, when asked from the site", async () => {
+    const customerId = await buildSetup();
+    const line = await entry("pln191", "spooler queue overrun on the labeller");
+    const general = await entry(null, "spooler queue overrun on the labeller");
+    const hits = await searchKnowledge("spooler queue overrun labeller", {
+      boostCustomerId: customerId,
+      boostUnitId: (await resolveUnit(customerId, "calderra")).id,
+      limit: 10,
+    });
+    const order = hits.map((h: any) => h.id);
+    expect(order.indexOf(line.id)).toBeLessThan(order.indexOf(general.id));
+  });
+
+  it("lifts a unit's docs the same way", async () => {
+    const customerId = await buildSetup();
+    const doc = (unit: string) =>
+      saveReferenceDoc({
+        title: "Spooler queue runbook",
+        body: "When the spooler queue overruns on the labeller, drain it.",
+        productId: null,
+        customerSlug: "ivk",
+        unit,
+      });
+    const unrelated = await doc("tpc141");
+    const own = await doc("pln191");
+    const hits = await searchReferenceDocs("spooler queue overruns labeller", {
+      boostCustomerId: customerId,
+      boostUnitId: (await resolveUnit(customerId, "pln191")).id,
+      limit: 10,
+    });
+    const order = hits.map((h: any) => h.id);
+    expect(order.indexOf(own.id)).toBeLessThan(order.indexOf(unrelated.id));
+    expect(hits[0].customer_unit_slug).toBe("pln191");
+  });
+
+  it("filters to a site and the lines inside it, and counts entries per unit", async () => {
+    const customerId = await buildSetup();
+    const line = await entry("pln191", "spooler queue overrun on the labeller");
+    const site = await entry(
+      "calderra",
+      "spooler queue overrun on the labeller",
+    );
+    await entry(null, "spooler queue overrun on the labeller");
+    const listed = await listKnowledgeEntries(
+      await resolveCustomerFilter("ivk", "calderra"),
+    );
+    expect(listed.map((row: any) => row.id).sort()).toEqual(
+      [line.id, site.id].sort(),
+    );
+    const facets = await listKnowledgeFacets({ customerId });
+    expect(facets.unit).toEqual(
+      expect.arrayContaining([
+        { value: "calderra", count: 1 },
+        { value: "pln191", count: 1 },
+      ]),
+    );
+    await expect(resolveCustomerFilter(undefined, "pln191")).rejects.toThrow(
+      /needs its customer/,
+    );
   });
 
   it("changes nothing when no unit is given", async () => {
