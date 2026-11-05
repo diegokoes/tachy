@@ -38,6 +38,7 @@ import { tool } from "../server";
 import { out, outScrubbed } from "../results";
 import {
   audited,
+  mcpActor,
   requireCanEdit,
   requireCanManageTeam,
   requireCustomerPartEditor,
@@ -182,15 +183,18 @@ tool(
       : null;
     if (productId) await requireCanEdit({ productId });
     return out(
-      await audited("catalog_add", `customer:${args.slug}`, () =>
-        addCustomer({
-          name: args.name,
-          slug: args.slug,
-          aliases: args.aliases,
-          emailDomains: args.email_domains,
-          notes: args.notes,
-          productIds: productId ? [productId] : [],
-        }),
+      await audited("catalog_add", `customer:${args.slug}`, async () =>
+        addCustomer(
+          {
+            name: args.name,
+            slug: args.slug,
+            aliases: args.aliases,
+            emailDomains: args.email_domains,
+            notes: args.notes,
+            productIds: productId ? [productId] : [],
+          },
+          await mcpActor(),
+        ),
       ),
     );
   },
@@ -292,18 +296,24 @@ tool(
       : null;
     await requireCustomerPartEditor(customerId, productId);
     return out(
-      await audited("catalog_add", `unit:${args.customer}/${args.slug}`, () =>
-        addCustomerUnit({
-          customerSlug: args.customer,
-          slug: args.slug,
-          name: args.name,
-          kind: args.kind,
-          productId,
-          parentSlug: args.parent,
-          templateSlug: args.template,
-          aliases: args.aliases,
-          notes: args.notes,
-        }),
+      await audited(
+        "catalog_add",
+        `unit:${args.customer}/${args.slug}`,
+        async () =>
+          addCustomerUnit(
+            {
+              customerSlug: args.customer,
+              slug: args.slug,
+              name: args.name,
+              kind: args.kind,
+              productId,
+              parentSlug: args.parent,
+              templateSlug: args.template,
+              aliases: args.aliases,
+              notes: args.notes,
+            },
+            await mcpActor(),
+          ),
       ),
     );
   },
@@ -366,19 +376,22 @@ tool(
     await requireCustomerPartEditor(customerId, unit?.product_id ?? null);
     return out(
       await audited("catalog_update", `customer:${args.customer}`, async () =>
-        setCustomerFact({
-          customerSlug: args.customer,
-          unit: args.unit,
-          kind: args.kind,
-          label: args.label,
-          value: args.value,
-          notes: args.notes,
-          source: args.source,
-          componentSlug: args.component,
-          productId: args.product_slug
-            ? await getProductIdBySlug(args.product_slug)
-            : null,
-        }),
+        setCustomerFact(
+          {
+            customerSlug: args.customer,
+            unit: args.unit,
+            kind: args.kind,
+            label: args.label,
+            value: args.value,
+            notes: args.notes,
+            source: args.source,
+            componentSlug: args.component,
+            productId: args.product_slug
+              ? await getProductIdBySlug(args.product_slug)
+              : null,
+          },
+          await mcpActor(),
+        ),
       ),
     );
   },
@@ -402,16 +415,20 @@ tool(
     const productId = await getProductIdBySlug(args.product_slug);
     await requireCanEdit({ productId });
     return out(
-      await audited("catalog_update", `customer:${args.customer}`, () =>
-        args.linked === false
-          ? unlinkCustomerComponent(args.customer, productId, args.component)
-          : linkCustomerComponent(
+      await audited("catalog_update", `customer:${args.customer}`, async () => {
+        const actor = await mcpActor();
+        return args.linked === false
+          ? unlinkCustomerComponent(
               args.customer,
               productId,
               args.component,
-              args.notes,
-            ),
-      ),
+              actor,
+            )
+          : linkCustomerComponent(args.customer, productId, args.component, {
+              notes: args.notes,
+              actor,
+            });
+      }),
     );
   },
 );

@@ -25,6 +25,10 @@ import {
   updateCustomer,
   deleteCustomer,
   resolveComponentStrict,
+  batchScope,
+  listCustomerChanges,
+  listDeletedCustomers,
+  restoreCustomerBatch,
 } from "@tachy/core/catalog";
 import { badInput } from "@tachy/core/infra";
 import { audited } from "../../audit";
@@ -32,6 +36,7 @@ import {
   assertAnyTeamAdminApi,
   assertCustomerEditor,
   assertScopeEditor,
+  callerActor,
 } from "../../authz";
 import { slugField } from "./catalog";
 
@@ -81,6 +86,8 @@ const customerComponentSchema = z.object({
 const customerProductSchema = z.object({
   notes: z.string().nullable().optional(),
 });
+
+const batchParam = z.object({ batch: z.string().uuid() });
 
 const customerPatchSchema = z.object({
   name: z.string().optional(),
@@ -132,8 +139,8 @@ export const customers = new Hono()
       productIds.push(productId);
     }
     return c.json(
-      await audited(c, "catalog_add", `customer:${body.slug}`, () =>
-        addCustomer({ ...body, productIds }),
+      await audited(c, "catalog_add", `customer:${body.slug}`, async () =>
+        addCustomer({ ...body, productIds }, await callerActor(c)),
       ),
     );
   })
@@ -144,9 +151,10 @@ export const customers = new Hono()
       await assertAnyTeamAdminApi(c);
       const slug = c.req.param("slug");
       await assertCustomerEditor(c, await getCustomerIdBySlug(slug));
+      const actor = await callerActor(c);
       return c.json(
         await audited(c, "catalog_update", `customer:${slug}`, () =>
-          updateCustomer(slug, c.req.valid("json")),
+          updateCustomer(slug, c.req.valid("json"), actor),
         ),
       );
     },
@@ -155,9 +163,10 @@ export const customers = new Hono()
     await assertAnyTeamAdminApi(c);
     const slug = c.req.param("slug");
     await assertCustomerEditor(c, await getCustomerIdBySlug(slug));
+    const actor = await callerActor(c);
     return c.json(
       await audited(c, "catalog_delete", `customer:${slug}`, () =>
-        deleteCustomer(slug),
+        deleteCustomer(slug, actor),
       ),
     );
   })
@@ -172,6 +181,7 @@ export const customers = new Hono()
       const customerId = await getCustomerIdBySlug(c.req.param("slug"));
       const productId = await getProductIdBySlug(c.req.param("product"));
       await assertScopeEditor(c, { productId });
+      const actor = await callerActor(c);
       return c.json(
         await audited(
           c,
@@ -180,6 +190,7 @@ export const customers = new Hono()
           () =>
             linkCustomerProduct(customerId, productId, {
               notes: c.req.valid("json").notes,
+              actor,
             }),
           { product_linked: c.req.param("product") },
         ),
@@ -196,7 +207,8 @@ export const customers = new Hono()
         c,
         "catalog_update",
         `customer:${c.req.param("slug")}`,
-        () => unlinkCustomerProduct(customerId, productId),
+        async () =>
+          unlinkCustomerProduct(customerId, productId, await callerActor(c)),
         { product_unlinked: c.req.param("product") },
       ),
     );
@@ -232,18 +244,21 @@ export const customers = new Hono()
           c,
           "catalog_add",
           `unit:${c.req.param("slug")}/${body.slug}`,
-          () =>
-            addCustomerUnit({
-              customerSlug: c.req.param("slug"),
-              slug: body.slug,
-              name: body.name,
-              kind: body.kind,
-              productId,
-              parentSlug: body.parent,
-              templateSlug: body.template,
-              aliases: body.aliases,
-              notes: body.notes,
-            }),
+          async () =>
+            addCustomerUnit(
+              {
+                customerSlug: c.req.param("slug"),
+                slug: body.slug,
+                name: body.name,
+                kind: body.kind,
+                productId,
+                parentSlug: body.parent,
+                templateSlug: body.template,
+                aliases: body.aliases,
+                notes: body.notes,
+              },
+              await callerActor(c),
+            ),
         ),
       );
     },
@@ -266,15 +281,20 @@ export const customers = new Hono()
       const target = `unit:${c.req.param("slug")}/${c.req.param("unit")}`;
       return c.json(
         await audited(c, "catalog_update", target, async () =>
-          updateCustomerUnit(customerId, c.req.param("unit"), {
-            ...(body.name !== undefined ? { name: body.name } : {}),
-            ...(body.kind !== undefined ? { kind: body.kind } : {}),
-            ...("product" in body ? { productId } : {}),
-            ...("parent" in body ? { parentSlug: body.parent } : {}),
-            ...("template" in body ? { templateSlug: body.template } : {}),
-            ...(body.aliases !== undefined ? { aliases: body.aliases } : {}),
-            ...("notes" in body ? { notes: body.notes } : {}),
-          }),
+          updateCustomerUnit(
+            customerId,
+            c.req.param("unit"),
+            {
+              ...(body.name !== undefined ? { name: body.name } : {}),
+              ...(body.kind !== undefined ? { kind: body.kind } : {}),
+              ...("product" in body ? { productId } : {}),
+              ...("parent" in body ? { parentSlug: body.parent } : {}),
+              ...("template" in body ? { templateSlug: body.template } : {}),
+              ...(body.aliases !== undefined ? { aliases: body.aliases } : {}),
+              ...("notes" in body ? { notes: body.notes } : {}),
+            },
+            await callerActor(c),
+          ),
         ),
       );
     },
@@ -287,7 +307,11 @@ export const customers = new Hono()
     const target = `unit:${c.req.param("slug")}/${c.req.param("unit")}`;
     return c.json(
       await audited(c, "catalog_delete", target, async () =>
-        deleteCustomerUnit(customerId, c.req.param("unit")),
+        deleteCustomerUnit(
+          customerId,
+          c.req.param("unit"),
+          await callerActor(c),
+        ),
       ),
     );
   })
@@ -304,6 +328,38 @@ export const customers = new Hono()
   )
   .get("/customer-fact-kinds", async (c) =>
     c.json(await listCustomerFactKinds()),
+  )
+  .get("/customers/:slug/history", async (c) =>
+    c.json(
+      await listCustomerChanges(await getCustomerIdBySlug(c.req.param("slug"))),
+    ),
+  )
+  .get("/customer-history/deleted", async (c) =>
+    c.json(await listDeletedCustomers()),
+  )
+  // Undoing a batch takes the rights of every write in it: each product's
+  // scope, and the customer's own record for the rest.
+  .post(
+    "/customer-history/:batch/restore",
+    validate("param", batchParam),
+    async (c) => {
+      await assertAnyTeamAdminApi(c);
+      const { batch } = c.req.valid("param");
+      const scope = await batchScope(batch);
+      for (const productId of scope.productIds)
+        await assertScopeEditor(c, { productId });
+      if (scope.touchesCustomer)
+        await assertCustomerEditor(c, scope.customerId);
+      return c.json(
+        await audited(
+          c,
+          "catalog_update",
+          `customer-history:${batch}`,
+          async () => restoreCustomerBatch(batch, await callerActor(c)),
+          { restored: batch },
+        ),
+      );
+    },
   )
   .put(
     "/customers/:slug/facts",
@@ -322,17 +378,20 @@ export const customers = new Hono()
           "catalog_update",
           `customer:${c.req.param("slug")}`,
           async () =>
-            setCustomerFact({
-              customerSlug: c.req.param("slug"),
-              unit: body.unit,
-              kind: body.kind,
-              label: body.label,
-              value: body.value,
-              notes: body.notes,
-              source: body.source,
-              componentSlug: body.component,
-              productId: await productIdOrNull(body.product_slug),
-            }),
+            setCustomerFact(
+              {
+                customerSlug: c.req.param("slug"),
+                unit: body.unit,
+                kind: body.kind,
+                label: body.label,
+                value: body.value,
+                notes: body.notes,
+                source: body.source,
+                componentSlug: body.component,
+                productId: await productIdOrNull(body.product_slug),
+              },
+              await callerActor(c),
+            ),
           { fact_set: body.kind, label: body.label, unit: body.unit },
         ),
       );
@@ -348,7 +407,8 @@ export const customers = new Hono()
         c,
         "catalog_update",
         `customer:${c.req.param("slug")}`,
-        () => deleteCustomerFact(customerId, fact.id),
+        async () =>
+          deleteCustomerFact(customerId, fact.id, await callerActor(c)),
         { fact_deleted: fact.id },
       ),
     );
@@ -371,7 +431,10 @@ export const customers = new Hono()
               c.req.param("slug"),
               productId,
               body.component,
-              body.notes,
+              {
+                notes: body.notes,
+                actor: await callerActor(c),
+              },
             ),
           { component_linked: `${body.product_slug}/${body.component}` },
         ),
@@ -392,7 +455,12 @@ export const customers = new Hono()
         "catalog_update",
         `customer:${c.req.param("slug")}`,
         async () =>
-          unlinkCustomerComponent(c.req.param("slug"), productId, component),
+          unlinkCustomerComponent(
+            c.req.param("slug"),
+            productId,
+            component,
+            await callerActor(c),
+          ),
         { component_unlinked: `${productSlug}/${component}` },
       ),
     );

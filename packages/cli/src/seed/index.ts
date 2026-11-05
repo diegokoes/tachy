@@ -104,6 +104,7 @@ const TABLES = [
   "project_area_map",
   "source_projects",
   "source_connections",
+  "customer_changes",
   "customer_facts",
   "customer_units",
   "customer_components",

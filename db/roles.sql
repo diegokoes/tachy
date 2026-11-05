@@ -63,11 +63,13 @@ begin
     execute format('revoke select, update, delete, truncate on %I.audit_events from tachy_mcp', s);
 end $$;
 
--- The audit trail is append-only for the application.
+-- The audit trail and a customer's history are append-only for the
+-- application, whichever door a write came through.
 do $$
 declare s text := current_schema();
 begin
     execute format('revoke update, delete, truncate on %I.audit_events from tachy_app', s);
+    execute format('revoke update, delete, truncate on %I.customer_changes from tachy_app, tachy_mcp', s);
 end $$;
 
 grant pg_read_all_data to tachy_backup;
