@@ -1,6 +1,7 @@
 import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { ModelImage } from "@tachy/core/files";
 import { claudeEnv } from "./claude";
+import { sandboxOption } from "./sandboxed-spawn";
 import {
   effectiveModel,
   turnUsage,
@@ -93,6 +94,7 @@ export async function completeOnce(
         allowedTools: [],
         mcpServers: {},
         includePartialMessages: false,
+        ...sandboxOption(),
         env: claudeEnv(config),
       },
     })) {
