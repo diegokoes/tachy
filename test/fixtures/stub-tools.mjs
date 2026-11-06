@@ -43,8 +43,8 @@ server.registerTool(
       body: z.string(),
     },
   },
-  async () => {
-    record("post_private_note");
+  async ({ body }) => {
+    record(`post_private_note ${body}`);
     return answer("posted");
   },
 );

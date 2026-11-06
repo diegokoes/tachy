@@ -46,8 +46,8 @@ api            node dist/api.js
 |-- timers: turn sweep (60 s), heavy-job slot poll (10 s),
 |           event-loop sampler (60 s), pool watchdog (30 s)
 |-- one-shot model calls (report and ticket review): Claude Code, no tools
-`-- one tree per chat turn:
-    Claude Code CLI (agent SDK query())
+`-- per chat turn, two children:
+    |-- Claude Code CLI (agent SDK query()), tachy's tools in process
     `-- MCP server: node dist/mcp.js
         |-- a postgres.js pool of 2, as tachy_mcp
         `-- embeds over HTTP at the embedder
@@ -61,8 +61,9 @@ cli            profile "tools", ad hoc: sync, backup, restore, reembed, seed
 - **A turn** starts at `POST /api/agent/chat` (`api/src/routes/agent.ts`).
   - It calls the agent SDK's `query()` (`agent/src/claude.ts`), which starts
     Claude Code.
-  - Claude Code gets the MCP server as a stdio command, built in
-    `api/src/turn-config.ts`.
+  - The api starts the turn's MCP server from the command built in
+    `api/src/turn-config.ts`, and Claude Code reaches it through an
+    in-process server over its own channel (`agent/src/turn-tools.ts`).
 - **The MCP child** gets an environment built for that turn (`mcpConfig` in
   `api/src/turn-config.ts`):
   - an allowlist of inherited variables;
@@ -2290,6 +2291,12 @@ and the SFTP pull keeps working as it is.
   doesn't. `.dockerignore` keeps `.env` out of the image.
 - The per-turn MCP env isolation invariant stays as it is: caller-scoped
   tokens, built fresh for each turn (`api/src/turn-config.ts`).
+- **What a turn's model can call.** Claude Code runs with no built-in tool but
+  `ToolSearch` and pre-approves none (`agent/src/claude.ts`), so every call
+  reaches tachy's gate: reads run, writes and URL fetches wait for the person.
+  A write then reaches the MCP server only with an approval for that exact
+  call (`agent/src/turn-tools.ts`). `test/agent/claude-runtime.test.ts` holds
+  this against the bundled Claude Code and a scripted model.
 - **The workers hold the vault key.** A flow acts with its owner's source
   tokens and model credential (§5.3.7), so `worker-light` decrypts them. A turn
   has a person approving its writes. A flow doesn't, which is why its model
@@ -2403,10 +2410,11 @@ quiet container keeps months and a busy one keeps days.
 - Every line is one JSON object with an `event` field (`http`, `mcp_tool`,
   `repo_index_failed` and so on) and a request id, so
   `docker compose logs api | grep <request-id>` follows a request.
-- **MCP children can't log to the container.** Claude Code doesn't pass an MCP
-  server's stderr on (verified 2026-09-17). So a child posts each line to the
-  api's `POST /internal/log`, with the internal secret, and the api writes it
-  with `source: "mcp"`, the turn id and the request id.
+- **MCP children log through the api.** The api reads a child's stderr only
+  for a short tail it logs when the child fails to start
+  (`agent/src/turn-tools.ts`). So a child posts each line to the api's
+  `POST /internal/log`, with the internal secret, and the api writes it with
+  `source: "mcp"`, the turn id and the request id.
 
 **Tracing.** Deferred. Revisit only when turn latency can't be explained from
 logs.

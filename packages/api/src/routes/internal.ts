@@ -44,9 +44,9 @@ const sameSecret = (given: string, want: string) => {
  * For the MCP children this process spawns, and nobody else: never routed by
  * the proxy, and every call needs the per-boot secret only the children get.
  *
- * `/embed` is text in, vectors out; it reads and writes nothing. `/log` exists
- * because Claude Code does not pass its MCP servers' stderr on, so a child's
- * log lines would otherwise never reach the container log.
+ * `/embed` is text in, vectors out; it reads and writes nothing. `/log` is how
+ * a child's log lines reach the container log: the api reads a child's stderr
+ * only when it fails to start.
  */
 export function internalRoutes(opts: InternalOptions) {
   const authorized = (auth: string | undefined) =>

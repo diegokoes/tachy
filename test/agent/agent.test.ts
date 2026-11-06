@@ -8,6 +8,7 @@ import {
   claudeOptions,
   effectiveModel,
   explainFailure,
+  turnCanUseTool,
   userStateDir,
   READ_TOOLS,
   WRITE_TOOLS,
@@ -15,6 +16,7 @@ import {
   type AgentConfig,
   type Decision,
 } from "../../packages/agent/src/index";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -282,6 +284,45 @@ describe("claudePermission (approval gate)", () => {
     const gate = gateWith({ approve: false, message: "wrong customer" });
     const decision = await ask("save_knowledge_entry", {}, { gate });
     expect(decision).toEqual({ behavior: "deny", message: "wrong customer" });
+  });
+});
+
+describe("turnCanUseTool", () => {
+  const USE = { toolUseID: "use-1", signal: new AbortController().signal };
+
+  function gateWithTools(decision: Decision) {
+    const handed: { tool: string; input: Record<string, unknown> }[] = [];
+    const announced: string[] = [];
+    const canUseTool = turnCanUseTool({
+      gate: gateWith(decision),
+      tools: { allow: (tool, input) => handed.push({ tool, input }) },
+      onWriteAllowed: ({ tool }) => announced.push(tool),
+    });
+    return { canUseTool, handed, announced };
+  }
+
+  it("hands the tools a write as the person approved it, edits included", async () => {
+    const turn = gateWithTools({
+      approve: true,
+      updatedInput: { body: "edited" },
+    });
+    await turn.canUseTool(
+      qualify("post_private_note"),
+      { body: "draft" },
+      USE as never,
+    );
+    expect(turn.handed).toEqual([
+      { tool: "post_private_note", input: { body: "edited" } },
+    ]);
+    expect(turn.announced).toEqual(["post_private_note"]);
+  });
+
+  it("hands over nothing for a read or a refused write", async () => {
+    const turn = gateWithTools({ approve: false });
+    await turn.canUseTool(qualify("search_knowledge"), {}, USE as never);
+    await turn.canUseTool(qualify("post_private_note"), {}, USE as never);
+    expect(turn.handed).toEqual([]);
+    expect(turn.announced).toEqual([]);
   });
 });
 
@@ -577,17 +618,20 @@ describe("what the agent reads", () => {
     cwd: "/app",
     systemPrompt: "the prompt",
   };
+  const toolServer = {
+    type: "sdk" as const,
+    name: "tachy",
+    instance: new McpServer({ name: "tachy", version: "1" }),
+  };
+  const optionsFor = (turnConfig: AgentConfig) =>
+    claudeOptions(turnConfig, {
+      abortController: new AbortController(),
+      canUseTool: async () => ({ behavior: "deny", message: "" }),
+      toolServer,
+    });
 
   it("gives Claude the prompt as its whole system prompt, and nothing from disk", () => {
-    const options = claudeOptions(
-      config,
-      {},
-      new AbortController(),
-      async () => ({
-        behavior: "deny",
-        message: "",
-      }),
-    );
+    const options = optionsFor(config);
     expect(options.systemPrompt).toBe("the prompt");
     expect(options.settingSources).toEqual([]);
     expect(options.strictMcpConfig).toBe(true);
@@ -598,25 +642,18 @@ describe("what the agent reads", () => {
   // With tool search on, the tachy tools are deferred behind ToolSearch; a
   // turn without it starts with no tools at all.
   it("keeps ToolSearch and no other Claude Code built-in", () => {
-    const options = claudeOptions(
-      config,
-      {},
-      new AbortController(),
-      async () => ({
-        behavior: "deny",
-        message: "",
-      }),
-    );
-    expect(options.tools).toEqual(["ToolSearch"]);
+    expect(optionsFor(config).tools).toEqual(["ToolSearch"]);
+  });
+
+  it("offers tachy's tools in process, as the only MCP server", () => {
+    expect(optionsFor(config).mcpServers).toEqual({ tachy: toolServer });
   });
 
   it("pre-approves no tool, so every call reaches canUseTool", () => {
-    const options = claudeOptions(
-      { ...config, proxiedTools: ["hub_events_search"] },
-      {},
-      new AbortController(),
-      async () => ({ behavior: "deny", message: "" }),
-    );
+    const options = optionsFor({
+      ...config,
+      proxiedTools: ["hub_events_search"],
+    });
     expect(options.allowedTools).toBeUndefined();
     expect(options.canUseTool).toBeTypeOf("function");
   });

@@ -8,11 +8,9 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  claudeOptions,
-  claudePermission,
-} from "../../packages/agent/src/claude";
+import { claudeOptions, turnCanUseTool } from "../../packages/agent/src/claude";
 import type { AgentConfig } from "../../packages/agent/src/backend";
+import { startTurnTools } from "../../packages/agent/src/turn-tools";
 import {
   startScriptedModel,
   type ScriptedCall,
@@ -74,17 +72,23 @@ async function runScriptedTurn(modelUrl: string): Promise<ScriptedTurn> {
     agentAuth: { kind: "anthropic_api_key", value: "sk-ant-api03-runtime" },
   };
   const reviewed: string[] = [];
-  const gate = async (_id: string, tool: string) => {
+  const gate = async (_id: string, tool: string, input: unknown) => {
     reviewed.push(tool.slice(TACHY.length));
-    return { approve: tool === `${TACHY}post_private_note` };
+    if (tool !== `${TACHY}post_private_note`) return { approve: false };
+    const edited = { ...(input as object), body: "edited by the person" };
+    return { approve: true, updatedInput: edited };
   };
-  const options = claudeOptions(
-    config,
-    {},
-    new AbortController(),
-    (toolName, input, { toolUseID }) =>
-      claudePermission({ toolName, input, toolUseID }, { gate }),
-  );
+  const tools = await startTurnTools({
+    command: config.mcpCommand,
+    args: config.mcpArgs,
+    env: config.mcpEnv,
+    cwd: config.cwd,
+  });
+  const options = claudeOptions(config, {
+    abortController: new AbortController(),
+    canUseTool: turnCanUseTool({ tools, gate }),
+    toolServer: tools.serverConfig,
+  });
   // A turn's own options; the env only points Claude Code at the scripted
   // model and keeps it off the network.
   options.env = {
@@ -101,20 +105,24 @@ async function runScriptedTurn(modelUrl: string): Promise<ScriptedTurn> {
     reviewed,
     ran: [],
   };
-  for await (const message of query({ prompt: "go", options })) {
-    if (message.type === "system" && message.subtype === "init")
-      turn.startedWith = message.tools;
-    if (message.type === "assistant")
+  try {
+    for await (const message of query({ prompt: "go", options })) {
+      if (message.type === "system" && message.subtype === "init")
+        turn.startedWith = message.tools;
+      if (message.type === "assistant")
+        for (const block of message.message.content)
+          if (block.type === "tool_use") toolNames.set(block.id, block.name);
+      if (message.type !== "user" || !Array.isArray(message.message.content))
+        continue;
       for (const block of message.message.content)
-        if (block.type === "tool_use") toolNames.set(block.id, block.name);
-    if (message.type !== "user" || !Array.isArray(message.message.content))
-      continue;
-    for (const block of message.message.content)
-      if (block.type === "tool_result")
-        turn.results.push({
-          tool: toolNames.get(block.tool_use_id) ?? "",
-          isError: block.is_error === true,
-        });
+        if (block.type === "tool_result")
+          turn.results.push({
+            tool: toolNames.get(block.tool_use_id) ?? "",
+            isError: block.is_error === true,
+          });
+    }
+  } finally {
+    await tools.close();
   }
   if (existsSync(toolsLog))
     turn.ran = readFileSync(toolsLog, "utf8").trim().split("\n");
@@ -154,6 +162,9 @@ describe("Claude Code under tachy's options", () => {
   it("puts a URL fetch and a write in front of a person, and runs only what they approve", () => {
     expect(turn.reviewed).toEqual(["ingest_context", "post_private_note"]);
     expect(turn.ran).not.toContain("ingest_context urls");
-    expect(turn.ran).toContain("post_private_note");
+  });
+
+  it("runs an approved write with the person's edit", () => {
+    expect(turn.ran).toContain("post_private_note edited by the person");
   });
 });
