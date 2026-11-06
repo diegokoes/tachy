@@ -10,6 +10,7 @@
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@tachy/contract": "*",
     "@tachy/core": "*",
+    "@tachy/sandbox": "*",
     "zod": "^4.6.7"
   }
 }
