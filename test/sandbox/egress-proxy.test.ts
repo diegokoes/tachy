@@ -1,6 +1,6 @@
 /** The egress proxy over real sockets: a tunnel where allowed, a refusal anywhere else. */
 import { request, type Server } from "node:http";
-import { createServer, type AddressInfo, type Socket } from "node:net";
+import { connect, createServer, type AddressInfo, type Socket } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   parseDestinations,
@@ -14,16 +14,23 @@ describe("the egress proxy", () => {
   const echo = createServer((socket) => socket.pipe(socket));
   let proxy: Server;
   let allowedDestination: string;
+  let silentDestination: string;
 
   beforeAll(async () => {
     await new Promise<void>((listening) =>
       echo.listen(0, "127.0.0.1", listening),
     );
     allowedDestination = `127.0.0.1:${portOf(echo)}`;
+    const closed = createServer();
+    await new Promise<void>((listening) =>
+      closed.listen(0, "127.0.0.1", listening),
+    );
+    silentDestination = `127.0.0.1:${portOf(closed)}`;
+    await new Promise((done) => closed.close(done));
     proxy = await startEgressProxy({
       host: "127.0.0.1",
       port: 0,
-      allowed: [allowedDestination],
+      allowed: [allowedDestination, silentDestination],
     });
   });
 
@@ -68,6 +75,28 @@ describe("the egress proxy", () => {
       expect(status).toBe(403);
       tunnel.destroy();
     }
+  });
+
+  it("passes on bytes sent along with the CONNECT", async () => {
+    const socket = connect(portOf(proxy), "127.0.0.1");
+    let answer = "";
+    socket.on("data", (chunk: Buffer) => (answer += chunk.toString()));
+    socket.write(
+      `CONNECT ${allowedDestination} HTTP/1.1\r\nHost: ${allowedDestination}\r\n\r\nping`,
+    );
+    await new Promise<void>((done) => {
+      const check = setInterval(() => {
+        if (!answer.endsWith("ping")) return;
+        clearInterval(check);
+        done();
+      }, 10);
+    });
+    expect(answer).toBe("HTTP/1.1 200 Connection Established\r\n\r\nping");
+    socket.destroy();
+  });
+
+  it("drops the client when an allowed destination does not answer", async () => {
+    await expect(connectThrough(silentDestination)).rejects.toThrow();
   });
 
   it("answers a plain request with 405", async () => {

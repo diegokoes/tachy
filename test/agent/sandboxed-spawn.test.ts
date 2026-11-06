@@ -46,9 +46,10 @@ function startStandInLauncher(
         rest = head.subarray(newline + 1);
       }
       for (const frame of frames.read(rest))
-        if (frame.stream === STREAM.stdin)
+        if (frame.stream === STREAM.stdin) {
+          socket.write(encodeFrame(STREAM.stderr, Buffer.from("a warning")));
           socket.write(encodeFrame(STREAM.stdout, frame.payload));
-        else if (frame.stream === STREAM.stdinEnd)
+        } else if (frame.stream === STREAM.stdinEnd)
           socket.end(exitFrame({ exitCode: 0 }));
     });
   });
@@ -105,6 +106,7 @@ describe("Claude Code through the launcher", () => {
     const exited = exitOf(child);
     child.stdin.end('{"type":"user"}\n');
     expect(await exited).toEqual([0, null]);
+    // The stand-in sends a stderr frame first: it goes to the log, not stdout.
     expect(stdout).toBe('{"type":"user"}\n');
     expect(received).toEqual([
       {
