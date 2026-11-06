@@ -178,21 +178,34 @@ const gateWith = (decision: Decision) => {
 };
 
 describe("claudePermission (approval gate)", () => {
+  const ask = (
+    tool: string,
+    input: Record<string, unknown>,
+    policy: Parameters<typeof claudePermission>[1],
+  ) =>
+    claudePermission(
+      { toolName: qualify(tool), input, toolUseID: "use-1" },
+      policy,
+    );
+
+  const COMPACT_ON_59577 = {
+    tool: "compact_work_item",
+    workItem: { source: "fd", externalId: "59577" },
+  };
+
   it("allows read tools without consulting the gate", async () => {
     const gate = gateWith({ approve: true });
-    const decision = await claudePermission(
-      qualify("search_knowledge"),
-      { q: "x" },
-      "id1",
-      gate,
-    );
+    const decision = await ask("search_knowledge", { q: "x" }, { gate });
     expect(decision).toMatchObject({ behavior: "allow" });
     expect(gate).not.toHaveBeenCalled();
   });
 
   it("denies non-tachy tools without consulting the gate", async () => {
     const gate = gateWith({ approve: true });
-    const decision = await claudePermission("Bash", {}, "id2", gate);
+    const decision = await claudePermission(
+      { toolName: "Bash", input: {}, toolUseID: "use-2" },
+      { gate },
+    );
     expect(decision).toMatchObject({ behavior: "deny" });
     expect(gate).not.toHaveBeenCalled();
   });
@@ -202,11 +215,10 @@ describe("claudePermission (approval gate)", () => {
       approve: true,
       updatedInput: { issue_summary: "edited" },
     });
-    const decision = await claudePermission(
-      qualify("save_knowledge_entry"),
+    const decision = await ask(
+      "save_knowledge_entry",
       { issue_summary: "orig" },
-      "id3",
-      gate,
+      { gate },
     );
     expect(decision).toEqual({
       behavior: "allow",
@@ -215,35 +227,60 @@ describe("claudePermission (approval gate)", () => {
     expect(gate).toHaveBeenCalledOnce();
   });
 
-  it("skips the gate for a write the typed command authorised", async () => {
+  it("sends a URL fetch to the gate and runs pasted text without it", async () => {
+    const gate = gateWith({ approve: false });
+    const fetched = await ask(
+      "ingest_context",
+      { urls: ["https://example.com/page"] },
+      { gate },
+    );
+    expect(fetched).toMatchObject({ behavior: "deny" });
+    expect(gate).toHaveBeenCalledOnce();
+
+    const pasted = await ask("ingest_context", { text: "notes" }, { gate });
+    expect(pasted).toMatchObject({ behavior: "allow" });
+    expect(gate).toHaveBeenCalledOnce();
+  });
+
+  it("skips the gate for the write the typed command authorised, on its work item", async () => {
     const gate = gateWith({ approve: true });
-    const decision = await claudePermission(
-      qualify("compact_work_item"),
-      { post_note: true },
-      "id5",
-      gate,
-      ["compact_work_item"],
+    const decision = await ask(
+      "compact_work_item",
+      { source: "fd", external_id: "59577", post_note: true },
+      { gate, preApproved: [COMPACT_ON_59577] },
     );
     expect(decision).toMatchObject({ behavior: "allow" });
     expect(gate).not.toHaveBeenCalled();
   });
 
-  it("auto-approval covers only the named tool", async () => {
+  it("gates the same write on any other work item", async () => {
     const gate = gateWith({ approve: true });
-    await claudePermission(qualify("save_knowledge_entry"), {}, "id6", gate, [
+    await ask(
       "compact_work_item",
-    ]);
+      { source: "fd", external_id: "60001" },
+      { gate, preApproved: [COMPACT_ON_59577] },
+    );
+    await ask(
+      "compact_work_item",
+      { source: "other-desk", external_id: "59577" },
+      { gate, preApproved: [COMPACT_ON_59577] },
+    );
+    expect(gate).toHaveBeenCalledTimes(2);
+  });
+
+  it("pre-approval covers only the named tool", async () => {
+    const gate = gateWith({ approve: true });
+    await ask(
+      "post_private_note",
+      { source: "fd", external_id: "59577" },
+      { gate, preApproved: [COMPACT_ON_59577] },
+    );
     expect(gate).toHaveBeenCalledOnce();
   });
 
   it("denies write tools with the user's message on reject", async () => {
     const gate = gateWith({ approve: false, message: "wrong customer" });
-    const decision = await claudePermission(
-      qualify("save_knowledge_entry"),
-      {},
-      "id4",
-      gate,
-    );
+    const decision = await ask("save_knowledge_entry", {}, { gate });
     expect(decision).toEqual({ behavior: "deny", message: "wrong customer" });
   });
 });
@@ -504,33 +541,28 @@ describe("linked-server tools", () => {
     );
   });
 
-  it("allows them without the gate, and lists them in allowedTools", async () => {
+  it("allows them without the gate, and gates one that shadows a tachy write", async () => {
     const gate = gateWith({ approve: false });
-    const decision = await claudePermission(
-      qualify("hub_events_search"),
-      {},
-      "id7",
-      gate,
-      [],
-      proxied,
-    );
-    expect(decision).toMatchObject({ behavior: "allow" });
-    expect(gate).not.toHaveBeenCalled();
-    const options = claudeOptions(
+    const read = await claudePermission(
       {
-        mcpCommand: "node",
-        mcpArgs: [],
-        mcpEnv: {},
-        cwd: "/app",
-        systemPrompt: "",
-        proxiedTools: proxied,
+        toolName: qualify("hub_events_search"),
+        input: {},
+        toolUseID: "use-7",
       },
-      {},
-      new AbortController(),
-      async () => ({ behavior: "deny", message: "" }),
+      { gate, proxiedTools: proxied },
     );
-    expect(options.allowedTools).toContain(qualify("hub_events_search"));
-    expect(options.allowedTools).not.toContain(qualify("post_private_note"));
+    expect(read).toMatchObject({ behavior: "allow" });
+    expect(gate).not.toHaveBeenCalled();
+
+    await claudePermission(
+      {
+        toolName: qualify("post_private_note"),
+        input: {},
+        toolUseID: "use-8",
+      },
+      { gate, proxiedTools: proxied },
+    );
+    expect(gate).toHaveBeenCalledOnce();
   });
 });
 
@@ -576,6 +608,17 @@ describe("what the agent reads", () => {
       }),
     );
     expect(options.tools).toEqual(["ToolSearch"]);
+  });
+
+  it("pre-approves no tool, so every call reaches canUseTool", () => {
+    const options = claudeOptions(
+      { ...config, proxiedTools: ["hub_events_search"] },
+      {},
+      new AbortController(),
+      async () => ({ behavior: "deny", message: "" }),
+    );
+    expect(options.allowedTools).toBeUndefined();
+    expect(options.canUseTool).toBeTypeOf("function");
   });
 });
 

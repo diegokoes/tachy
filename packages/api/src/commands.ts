@@ -1,3 +1,5 @@
+import type { WorkItemRef } from "@tachy/agent";
+
 export interface Subcommand {
   name: string;
   /** What follows the command, in words, for the menu; never parsed. */
@@ -147,14 +149,24 @@ export const findCommand = (name: string): BuiltinCommand | undefined =>
   BUILTIN_COMMANDS.find((c) => c.name === name);
 
 /**
- * Writes a slash command exists to perform, so typing it is the authorisation
- * and no approval box is raised for that one tool. Keyed on the command the
- * user typed, never on anything the model chooses.
+ * The write each command exists to perform. Typing the command authorises that
+ * tool on the work item it names, keyed on what the user typed, never on what
+ * the model chooses.
  */
-const COMMAND_AUTO_APPROVE: Record<string, string[]> = {
-  compact: ["compact_work_item"],
-  summary: ["post_work_item_summary"],
-};
+const COMMAND_WRITES = new Map([
+  ["compact", "compact_work_item"],
+  ["summary", "post_work_item_summary"],
+]);
 
-export const commandAutoApprove = (name: string): string[] =>
-  COMMAND_AUTO_APPROVE[name] ?? [];
+export const commandWrite = (name: string): string | undefined =>
+  COMMAND_WRITES.get(name);
+
+const WORK_ITEM_ID_RE = /^#?(\d+)$/;
+
+/** `<source> <id> [flags]`, as the composer writes a ticket command; else null. */
+export function namedWorkItem(args: string): WorkItemRef | null {
+  const [source, id] = args.trim().split(/\s+/);
+  const externalId = id?.match(WORK_ITEM_ID_RE)?.[1];
+  if (!source || !externalId) return null;
+  return { source, externalId };
+}

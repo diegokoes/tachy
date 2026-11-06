@@ -14,7 +14,7 @@ const traceOf = (model?: string): TurnTrace => ({
     prompt: "hi",
     model,
     resumed: false,
-    autoApprove: [],
+    preApproved: [],
     redactionForced: false,
     linkedServers: [],
   },

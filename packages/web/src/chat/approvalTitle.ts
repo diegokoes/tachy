@@ -17,6 +17,7 @@ const ACTIONS: Record<string, string> = {
   add_unit_kind: "extend the product's blueprint",
   set_observed_version: "record a version",
   add_knowledge_feedback: "leave feedback",
+  ingest_context: "fetch a web page",
 };
 
 const TACHY_PREFIX = "mcp__tachy__";
