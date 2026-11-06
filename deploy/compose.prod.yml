@@ -84,6 +84,8 @@ services:
       # Admin › system wins over it.
       TACHY_AGENT_SLOT_CAP: ${TACHY_AGENT_SLOT_CAP:-12}
       TACHY_TURN_SANDBOX: ${TACHY_TURN_SANDBOX:-on}
+      # Where a turn's tools reach this process from their own container.
+      TACHY_INTERNAL_URL: http://api:8787/internal
     volumes:
       - ${TACHY_STATUS_HOST_DIR:-/srv/tachy/status}:/status:ro
       - tachy-sandbox-run:/run/tachy-sandbox:ro
@@ -213,10 +215,18 @@ services:
       TACHY_SANDBOX_INSTANCE: ${COMPOSE_PROJECT_NAME:-tachy}
       TACHY_SANDBOX_NETWORK: ${COMPOSE_PROJECT_NAME:-tachy}-sandbox
       TACHY_SANDBOX_STATE_VOLUME: ${COMPOSE_PROJECT_NAME:-tachy}_tachy-agent-home
-      TACHY_SANDBOX_MAX: ${TACHY_SANDBOX_MAX:-20}
+      # A chat turn takes two: Claude Code's and its tools'.
+      TACHY_SANDBOX_MAX: ${TACHY_SANDBOX_MAX:-32}
       TACHY_SANDBOX_MEMORY_MB: ${TACHY_SANDBOX_MEMORY_MB:-512}
       TACHY_SANDBOX_CPUS: ${TACHY_SANDBOX_CPUS:-1}
       TACHY_SANDBOX_PIDS: ${TACHY_SANDBOX_PIDS:-256}
+      # A turn's tools run this release's own image, on the database's network.
+      TACHY_TOOLS_IMAGE: ${TACHY_IMAGE:-ghcr.io/diegokoes/tachy:main}
+      TACHY_TOOLS_NETWORK: ${COMPOSE_PROJECT_NAME:-tachy}
+      TACHY_TOOLS_REPO_VOLUME: ${COMPOSE_PROJECT_NAME:-tachy}_tachy-repo-data
+      TACHY_TOOLS_MEMORY_MB: ${TACHY_TOOLS_MEMORY_MB:-512}
+      TACHY_TOOLS_CPUS: ${TACHY_TOOLS_CPUS:-1}
+      TACHY_TOOLS_PIDS: ${TACHY_TOOLS_PIDS:-256}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tachy-sandbox-run:/run/tachy-sandbox

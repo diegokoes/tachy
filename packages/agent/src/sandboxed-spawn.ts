@@ -1,6 +1,7 @@
 /**
  * Claude Code in a container per turn or one-shot, through the sandbox
  * launcher, when TACHY_TURN_SANDBOX is on. Off, the SDK starts it locally.
+ * A turn's tools process follows the same switch (`turn-tools.ts`).
  */
 import { relative } from "node:path";
 import type {
@@ -12,6 +13,9 @@ import { agentHome, log } from "@tachy/core/infra";
 import { LAUNCHER_SOCKET, openSandbox } from "@tachy/sandbox";
 
 export const isSandboxed = () => process.env.TACHY_TURN_SANDBOX === "on";
+
+export const launcherSocket = () =>
+  process.env.TACHY_SANDBOX_SOCKET ?? LAUNCHER_SOCKET;
 
 /** A person's agent state folder as the launcher names it: `users/<id>`. */
 export const stateNameOf = (configDir: string) =>
@@ -37,7 +41,7 @@ export function sandboxedSpawn(
         ...(state ? { state } : {}),
       },
       {
-        socketPath: process.env.TACHY_SANDBOX_SOCKET ?? LAUNCHER_SOCKET,
+        socketPath: launcherSocket(),
         onStderr: (text) => log("debug", "sandbox_stderr", { text }),
       },
     );

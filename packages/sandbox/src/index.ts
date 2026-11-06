@@ -6,8 +6,10 @@ export {
 } from "./protocol";
 export {
   claudeSandboxSpec,
+  toolsSandboxSpec,
   SANDBOX_LABEL,
-  type SandboxSettings,
+  type ClaudeSandboxSettings,
+  type ToolsSandboxSettings,
 } from "./container-spec";
 export { openSandbox, SandboxProcess, type SandboxConnection } from "./client";
 export {

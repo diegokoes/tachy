@@ -38,7 +38,10 @@ export interface McpServerInput {
 const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const HEADER_NAME_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 
-/** From TACHY_MCP_STDIO_COMMANDS: in the host env, so the console cannot start arbitrary programs. */
+/**
+ * From TACHY_MCP_STDIO_COMMANDS, in the host env: the console picks the program
+ * from it, and sets the program's arguments, env and files itself.
+ */
 export function allowedStdioCommands(): string[] {
   return (process.env.TACHY_MCP_STDIO_COMMANDS ?? "")
     .split(",")

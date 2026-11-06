@@ -63,7 +63,10 @@ if (externalEmbedder) {
   process.once("exit", () => void embedder.stop());
 }
 setInternalEndpoint({
-  baseUrl: `http://127.0.0.1:${env.port}/internal`,
+  // A turn's tools in a container of their own reach this process by its
+  // service name, which TACHY_INTERNAL_URL gives.
+  baseUrl:
+    process.env.TACHY_INTERNAL_URL || `http://127.0.0.1:${env.port}/internal`,
   embedUrl: externalEmbedder,
   secret: internalSecret,
 });
