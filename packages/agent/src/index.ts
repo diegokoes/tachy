@@ -16,6 +16,7 @@ export {
   claudePermission,
   claudeEnv,
   claudeOptions,
+  turnCanUseTool,
   BUILTIN_TOOLS,
   explainFailure,
   sessionFacts,

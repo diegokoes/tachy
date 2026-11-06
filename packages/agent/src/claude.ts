@@ -2,6 +2,7 @@ import { errorText } from "@tachy/core/infra";
 import {
   query,
   type CanUseTool,
+  type McpSdkServerConfigWithInstance,
   type Options,
   type PermissionResult,
   type SDKSystemMessage,
@@ -21,6 +22,7 @@ import {
   type SessionFacts,
 } from "./backend";
 import { TurnBase, type ApprovalGate } from "./turn";
+import { startTurnTools, type TurnTools } from "./turn-tools";
 
 interface ContentBlock {
   type: string;
@@ -132,12 +134,15 @@ export const BUILTIN_TOOLS = ["ToolSearch"];
  */
 export function claudeOptions(
   config: AgentConfig,
-  opts: { resume?: string },
-  abortController: AbortController,
-  canUseTool: CanUseTool,
+  turn: {
+    abortController: AbortController;
+    canUseTool: CanUseTool;
+    toolServer: McpSdkServerConfigWithInstance;
+    resume?: string;
+  },
 ): Options {
   return {
-    abortController,
+    abortController: turn.abortController,
     model: effectiveModel(config),
     ...(config.effort ? { effort: config.effort } : {}),
     cwd: config.cwd,
@@ -148,18 +153,11 @@ export function claudeOptions(
     // Set so Claude Code does not spend a model call naming each session.
     title: "tachy",
     permissionMode: "default",
-    mcpServers: {
-      [MCP_SERVER]: {
-        type: "stdio",
-        command: config.mcpCommand,
-        args: config.mcpArgs,
-        env: config.mcpEnv,
-      },
-    },
+    mcpServers: { [MCP_SERVER]: turn.toolServer },
     // No allowedTools: a pre-approved tool skips canUseTool, the only gate.
-    canUseTool,
+    canUseTool: turn.canUseTool,
     includePartialMessages: false,
-    ...(opts.resume ? { resume: opts.resume } : {}),
+    ...(turn.resume ? { resume: turn.resume } : {}),
     env: claudeEnv(config),
   };
 }
@@ -193,6 +191,35 @@ export async function claudePermission(
   return decision.approve
     ? { behavior: "allow", updatedInput: decision.updatedInput ?? input }
     : { behavior: "deny", message: decision.message ?? "Denied by user." };
+}
+
+interface AllowedWrite {
+  toolUseID: string;
+  tool: string;
+  input: Record<string, unknown>;
+}
+
+/**
+ * tachy's gate as Claude Code's `canUseTool`. A write it allows is handed to
+ * the turn's tools, the only way that write reaches them.
+ */
+export function turnCanUseTool(
+  turn: ApprovalPolicy & {
+    tools: Pick<TurnTools, "allow">;
+    onWriteAllowed?: (write: AllowedWrite) => void;
+  },
+): CanUseTool {
+  return async (toolName, input, { toolUseID }) => {
+    const permission = await claudePermission(
+      { toolName, input, toolUseID },
+      turn,
+    );
+    const { cls, base } = classifyCall(toolName, input, turn.proxiedTools);
+    if (permission.behavior !== "allow" || cls !== "write") return permission;
+    turn.tools.allow(base, permission.updatedInput ?? input);
+    turn.onWriteAllowed?.({ toolUseID, tool: base, input });
+    return permission;
+  };
 }
 
 /**
@@ -248,36 +275,37 @@ export class ClaudeTurn extends TurnBase {
     config: AgentConfig,
     opts: { resume?: string },
   ): Promise<void> {
-    const options = claudeOptions(
-      config,
-      opts,
-      this.controller,
-      async (toolName, input, { toolUseID }) => {
-        const permission = await claudePermission(
-          { toolName, input, toolUseID },
-          {
-            gate: this.requestApproval,
-            preApproved: config.preApproved,
-            proxiedTools: config.proxiedTools,
-          },
-        );
-        // A read is announced from its assistant block. A write is announced
-        // here, once allowed, so the UI shows it running.
-        const { cls, base } = classifyCall(
-          toolName,
-          input,
-          config.proxiedTools,
-        );
-        if (permission.behavior === "allow" && cls === "write")
-          this.queue.push({
-            type: "tool_use",
-            tool: base,
-            input,
-            id: toolUseID,
-          });
-        return permission;
-      },
-    );
+    let tools: TurnTools;
+    try {
+      tools = await startTurnTools(
+        {
+          command: config.mcpCommand,
+          args: config.mcpArgs,
+          env: config.mcpEnv,
+          cwd: config.cwd,
+        },
+        config.proxiedTools,
+      );
+    } catch (e) {
+      this.queue.push({ type: "error", kind: "other", message: errorText(e) });
+      this.finish();
+      return;
+    }
+    const options = claudeOptions(config, {
+      abortController: this.controller,
+      toolServer: tools.serverConfig,
+      resume: opts.resume,
+      canUseTool: turnCanUseTool({
+        tools,
+        gate: this.requestApproval,
+        preApproved: config.preApproved,
+        proxiedTools: config.proxiedTools,
+        // A read is announced from its assistant block, a write here once
+        // allowed, so the UI shows it running.
+        onWriteAllowed: ({ toolUseID, tool, input }) =>
+          this.queue.push({ type: "tool_use", tool, input, id: toolUseID }),
+      }),
+    });
 
     const pending = new Map<string, string>();
     let answeredSessionId: string | undefined;
@@ -364,6 +392,7 @@ export class ClaudeTurn extends TurnBase {
       if (!this.controller.signal.aborted && !failed)
         this.queue.push({ type: "error", ...explainFailure(errorText(e)) });
     } finally {
+      await tools.close().catch(() => {});
       if (this.controller.signal.aborted && !resulted)
         this.queue.push({
           type: "stopped",
