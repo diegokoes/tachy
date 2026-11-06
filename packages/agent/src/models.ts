@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { claudeEnv } from "./claude";
+import { sandboxOption } from "./sandboxed-spawn";
 import { AGENT_EFFORTS, type AgentAuth, type AgentEffort } from "./backend";
 
 /** A model the caller's runtime offers, with the efforts it accepts. */
@@ -81,6 +82,7 @@ async function claudeModels(config: ModelListConfig): Promise<ModelChoice[]> {
       settingSources: [],
       strictMcpConfig: true,
       tools: [],
+      ...sandboxOption(),
       env: claudeEnv(config),
     },
   });

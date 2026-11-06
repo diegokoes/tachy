@@ -34,6 +34,7 @@ COPY packages/core/package.json packages/core/package.json
 COPY packages/sources/freshdesk/package.json packages/sources/freshdesk/package.json
 COPY packages/sources/github/package.json packages/sources/github/package.json
 COPY packages/sources/azure-devops/package.json packages/sources/azure-devops/package.json
+COPY packages/sandbox/package.json packages/sandbox/package.json
 COPY packages/mcp/package.json packages/mcp/package.json
 COPY packages/agent/package.json packages/agent/package.json
 COPY packages/api/package.json packages/api/package.json
@@ -68,6 +69,7 @@ COPY packages/core/package.json packages/core/package.json
 COPY packages/sources/freshdesk/package.json packages/sources/freshdesk/package.json
 COPY packages/sources/github/package.json packages/sources/github/package.json
 COPY packages/sources/azure-devops/package.json packages/sources/azure-devops/package.json
+COPY packages/sandbox/package.json packages/sandbox/package.json
 COPY packages/mcp/package.json packages/mcp/package.json
 COPY packages/agent/package.json packages/agent/package.json
 COPY packages/api/package.json packages/api/package.json
