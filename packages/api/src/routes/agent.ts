@@ -79,7 +79,8 @@ const MAX_MENTIONS = 20;
 
 const chatSchema = z.object({
   message: z.string().min(1),
-  sessionId: z.string().optional(),
+  // Claude Code also resumes by session title, and every tachy session has one.
+  sessionId: z.string().uuid().optional(),
   uploadPaths: z.array(z.string()).optional(),
   artifactId: z.string().optional(),
   command: z
