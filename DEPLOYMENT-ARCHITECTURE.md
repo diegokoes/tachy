@@ -49,11 +49,11 @@ api            node dist/api.js
 |   in a sandbox
 `-- per chat turn:
     |-- Claude Code CLI (agent SDK query()) in a sandbox, tachy's tools in process
-    `-- a child, the MCP server: node dist/mcp.js
+    `-- the MCP server, node dist/mcp.js, in a sandbox of its own
         |-- a postgres.js pool of 2, as tachy_mcp
         `-- embeds over HTTP at the embedder
 sandbox-launcher  node dist/launcher.js: the Docker socket, no network (§5.17)
-`-- per Claude Code run: a container of the claude-sandbox image
+`-- per Claude Code run, and per turn for its tools: a container
 egress         node dist/egress.js: the sandboxes' only way out
 embedder       node dist/embedder.js: the one embedding model (§5.4)
 worker-light   node dist/worker.js: queues sync, flows, maintenance; 4 runs
@@ -66,8 +66,9 @@ cli            profile "tools", ad hoc: sync, backup, restore, reembed, seed
   - It calls the agent SDK's `query()` (`agent/src/claude.ts`), which starts
     Claude Code in a sandbox of its own (§5.17).
   - The api starts the turn's MCP server from the command built in
-    `api/src/turn-config.ts`, and Claude Code reaches it through an
-    in-process server over its own channel (`agent/src/turn-tools.ts`).
+    `api/src/turn-config.ts`, in a container of its own too, and Claude Code
+    reaches it through an in-process server over its own channel
+    (`agent/src/turn-tools.ts`).
 - **The MCP child** gets an environment built for that turn (`mcpConfig` in
   `api/src/turn-config.ts`):
   - an allowlist of inherited variables;
@@ -91,9 +92,9 @@ cli            profile "tools", ad hoc: sync, backup, restore, reembed, seed
 - **Usage counting** writes to Postgres without waiting: library views, tool
   calls from each MCP child and source traffic, all through `inBackground`
   (`core/src/infra/background.ts`). The api waits up to 5 s for them when it
-  drains (`api/src/index.ts`) and the worker waits too. An MCP child
-  has no exit hook, so a count in flight when it exits is lost. That is
-  acceptable for counts.
+  drains (`api/src/index.ts`) and the worker waits too. An MCP child gives
+  its counts 1.5 s once the api closes its stdin, and is stopped at 2 s
+  (`mcp/src/index.ts`).
 
 **Without the overlay** (development, CI, `npm run api`) the same image behaves
 differently:
@@ -101,7 +102,8 @@ differently:
 - the api holds the model in a worker thread (`api/src/index.ts`);
 - the api works jobs itself, one slot per class;
 - the api publishes 8787 and connects to Postgres as the superuser;
-- Claude Code runs as a child of the api or the worker, with no sandbox;
+- Claude Code and the MCP server run as children of the api or the worker,
+  with no sandbox;
 - outside the image, the MCP child falls back to `tsx` (`turn-config.ts`).
 
 ### 2.2 Where state lives
@@ -171,8 +173,9 @@ otherwise. §15.2 lists what is known to be unfinished.
    at once peaked at 424 to 448 MiB of its 512 MB, and 6 were OOM-killed, so
    `TACHY_WORKER_LIGHT_CONCURRENCY` and `TACHY_WORKER_LIGHT_MEM_LIMIT` move
    together. In production each call is a sandbox instead, and the launcher
-   refuses one past `TACHY_SANDBOX_MAX` (20) rather than queue it: 12 chat
-   turns and 4 flow runs leave 4 for the api's one-shots.
+   refuses one past `TACHY_SANDBOX_MAX` (32) rather than queue it: 12 chat
+   turns take 24, Claude Code's and their tools', and 4 flow runs leave 4 for
+   the api's one-shots.
 2. **Connections, once the cap rises.** At 40 slots the pools need 110 of
    Postgres's 100 connections (§4.6).
 3. **State that dies with the api process:** active turns, pending approvals,
@@ -362,6 +365,11 @@ container from the production image (`--network none`, no database), measured
   machine's noise.
 - The launcher and the egress proxy idle at 19 and 18 MiB. The sandbox image
   is 297 MB, 294 of them Claude Code's binary.
+- With the tools in a container of their own as well, the same way: the
+  tools container starts about 0.7 s before Claude Code's and peaked at
+  59 MiB, Claude Code's at 146 MiB, and the api grew 5 to 6 MiB a turn. First
+  events took 1.7 to 5.1 s. The tools exit by themselves 0.4 s after Claude
+  Code.
 
 **Conclusion.** Before Phase 1 the laptop could hold about 5 turns before it
 ran out of memory, and nothing stopped a sixth. Taking the model out of the MCP
@@ -421,11 +429,12 @@ ceilings, and each is a variable in `.env` (§4.3):
 - The two move together: what a model needs more, the turns give up. §5.15
   has the pair for three models.
 
-- **With the turn sandbox on** (§5.17), a turn's Claude Code is charged to its
-  own sandbox, at most 512 MiB (`TACHY_SANDBOX_MEMORY_MB`), and the api keeps
-  only the tools processes. The api's limit still has room for Claude Code, so
-  that `TACHY_TURN_SANDBOX=off` stays a way back: 12 slots of 512 MiB and the
-  api's share for turns are the same memory, counted twice (§15.2).
+- **With the turn sandbox on** (§5.17), a turn's Claude Code and its tools
+  are charged to containers of their own, at most 512 MiB each
+  (`TACHY_SANDBOX_MEMORY_MB`, `TACHY_TOOLS_MEMORY_MB`), and the api holds
+  neither. Its limit still has room for both, so that `TACHY_TURN_SANDBOX=off`
+  stays a way back: the sandboxes' ceilings and the api's share for turns are
+  the same memory, counted twice (§15.2).
 
 **Admission.**
 
@@ -542,17 +551,17 @@ A pusher is a script outside tachý that holds one bucket's ingest token (§7).
 
 ### 4.2 Services and replicas
 
-| Service                  | A · without the overlay    | A · production                  | B · server         | C · HA                          |
-| ------------------------ | -------------------------- | ------------------------------- | ------------------ | ------------------------------- |
-| caddy                    | -                          | 1                               | 1                  | 1 per app host, behind a VIP    |
-| api                      | 1 (runs turns)             | 1 (runs turns)                  | 2, stateless       | 2+ across hosts                 |
-| agent                    | -                          | -                               | 1–2                | 1+ per app host, sticky by user |
-| embedder                 | - (a thread in the api)    | 1                               | 1–2                | 1 per app host                  |
-| sandbox-launcher, egress | -                          | 1 each                          | 1 each             | 1 each per app host             |
-| a sandbox                | - (Claude Code is a child) | 1 per Claude Code run, up to 20 | same               | same                            |
-| worker                   | - (the api works jobs)     | 2: light, heavy                 | 2+                 | 2+, cron under a leader lock    |
-| postgres                 | 1                          | 1                               | 1, on its own host | primary and standby             |
-| monitoring               | -                          | host watch script               | same, per host     | same, per host                  |
+| Service                  | A · without the overlay                         | A · production                                      | B · server         | C · HA                          |
+| ------------------------ | ----------------------------------------------- | --------------------------------------------------- | ------------------ | ------------------------------- |
+| caddy                    | -                                               | 1                                                   | 1                  | 1 per app host, behind a VIP    |
+| api                      | 1 (runs turns)                                  | 1 (runs turns)                                      | 2, stateless       | 2+ across hosts                 |
+| agent                    | -                                               | -                                                   | 1–2                | 1+ per app host, sticky by user |
+| embedder                 | - (a thread in the api)                         | 1                                                   | 1–2                | 1 per app host                  |
+| sandbox-launcher, egress | -                                               | 1 each                                              | 1 each             | 1 each per app host             |
+| a sandbox                | - (Claude Code and the MCP server are children) | 1 per Claude Code run, 1 per turn's tools, up to 32 | same               | same                            |
+| worker                   | - (the api works jobs)                          | 2: light, heavy                                     | 2+                 | 2+, cron under a leader lock    |
+| postgres                 | 1                                               | 1                                                   | 1, on its own host | primary and standby             |
+| monitoring               | -                                               | host watch script                                   | same, per host     | same, per host                  |
 
 ### 4.3 Limits on the laptop
 
@@ -561,17 +570,18 @@ value shown is its default, the laptop's. `0` lifts a memory or CPU limit
 (checked on Docker Compose 5.6: the container's `memory.max` and `cpu.max` read
 `max`).
 
-| Service          | mem_limit                                 | CPU                                                                                  | pids_limit                        | Other                                                                               |
-| ---------------- | ----------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------- | ----------------------------------------------------------------------------------- |
-| caddy            | 256m (`TACHY_CADDY_MEM_LIMIT`)            | 1024 shares                                                                          | 256                               | the only published ports, 80 and 443                                                |
-| api              | 5808m (`TACHY_API_MEM_LIMIT`)             | 2048 shares, no cap                                                                  | 2048 (`TACHY_API_PIDS_LIMIT`)     | `init: true`, `stop_grace_period` 210 s (the drain plus 30 s)                       |
-| embedder         | 3700m (`TACHY_EMBEDDER_MEM_LIMIT`)        | `cpus: 6` (`TACHY_EMBEDDER_CPUS`), 2048 shares; the model's threads follow it (§3.3) | 256                               | healthcheck on its `/readyz`                                                        |
-| worker-light     | 512m (`TACHY_WORKER_LIGHT_MEM_LIMIT`)     | `cpus: 1` (`TACHY_WORKER_LIGHT_CPUS`), 512 shares                                    | 256                               | 4 runs at once (`TACHY_WORKER_LIGHT_CONCURRENCY`), `stop_grace_period` 90 s         |
-| worker-heavy     | 1536m (`TACHY_WORKER_HEAVY_MEM_LIMIT`)    | `cpus: 4` (`TACHY_WORKER_HEAVY_CPUS`), 256 shares                                    | 256                               | 1 run at a time (`TACHY_WORKER_HEAVY_CONCURRENCY`); runs k6 for `load.test` (§11.3) |
-| postgres         | 2g (`TACHY_POSTGRES_MEM_LIMIT`)           | 2048 shares                                                                          | 512 (`TACHY_POSTGRES_PIDS_LIMIT`) | `shm_size: 1gb`; its conf (§5.9) is replaced with `TACHY_POSTGRES_CONF`             |
-| sandbox-launcher | 128m (`TACHY_SANDBOX_LAUNCHER_MEM_LIMIT`) | -                                                                                    | 64                                | no network; the Docker socket through `TACHY_DOCKER_GID`                            |
-| egress           | 64m (`TACHY_EGRESS_MEM_LIMIT`)            | -                                                                                    | 64                                | on the `sandbox` and `outbound` networks only                                       |
-| a sandbox        | 512 MiB (`TACHY_SANDBOX_MEMORY_MB`)       | 1 CPU (`TACHY_SANDBOX_CPUS`)                                                         | 256 (`TACHY_SANDBOX_PIDS`)        | 20 at once (`TACHY_SANDBOX_MAX`); §5.17                                             |
+| Service               | mem_limit                                 | CPU                                                                                  | pids_limit                        | Other                                                                               |
+| --------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------- | ----------------------------------------------------------------------------------- |
+| caddy                 | 256m (`TACHY_CADDY_MEM_LIMIT`)            | 1024 shares                                                                          | 256                               | the only published ports, 80 and 443                                                |
+| api                   | 5808m (`TACHY_API_MEM_LIMIT`)             | 2048 shares, no cap                                                                  | 2048 (`TACHY_API_PIDS_LIMIT`)     | `init: true`, `stop_grace_period` 210 s (the drain plus 30 s)                       |
+| embedder              | 3700m (`TACHY_EMBEDDER_MEM_LIMIT`)        | `cpus: 6` (`TACHY_EMBEDDER_CPUS`), 2048 shares; the model's threads follow it (§3.3) | 256                               | healthcheck on its `/readyz`                                                        |
+| worker-light          | 512m (`TACHY_WORKER_LIGHT_MEM_LIMIT`)     | `cpus: 1` (`TACHY_WORKER_LIGHT_CPUS`), 512 shares                                    | 256                               | 4 runs at once (`TACHY_WORKER_LIGHT_CONCURRENCY`), `stop_grace_period` 90 s         |
+| worker-heavy          | 1536m (`TACHY_WORKER_HEAVY_MEM_LIMIT`)    | `cpus: 4` (`TACHY_WORKER_HEAVY_CPUS`), 256 shares                                    | 256                               | 1 run at a time (`TACHY_WORKER_HEAVY_CONCURRENCY`); runs k6 for `load.test` (§11.3) |
+| postgres              | 2g (`TACHY_POSTGRES_MEM_LIMIT`)           | 2048 shares                                                                          | 512 (`TACHY_POSTGRES_PIDS_LIMIT`) | `shm_size: 1gb`; its conf (§5.9) is replaced with `TACHY_POSTGRES_CONF`             |
+| sandbox-launcher      | 128m (`TACHY_SANDBOX_LAUNCHER_MEM_LIMIT`) | -                                                                                    | 64                                | no network; the Docker socket through `TACHY_DOCKER_GID`                            |
+| egress                | 64m (`TACHY_EGRESS_MEM_LIMIT`)            | -                                                                                    | 64                                | on the `sandbox` and `outbound` networks only                                       |
+| a tools sandbox       | 512 MiB (`TACHY_TOOLS_MEMORY_MB`)         | 1 CPU (`TACHY_TOOLS_CPUS`)                                                           | 256 (`TACHY_TOOLS_PIDS`)          | `node dist/mcp.js` on the default network; §5.17                                    |
+| a Claude Code sandbox | 512 MiB (`TACHY_SANDBOX_MEMORY_MB`)       | 1 CPU (`TACHY_SANDBOX_CPUS`)                                                         | 256 (`TACHY_SANDBOX_PIDS`)        | 32 at once (`TACHY_SANDBOX_MAX`); §5.17                                             |
 
 - The memory limits sum to 13.72 GiB (§3.2).
 - `pids_limit` is 2048 on the api because every turn's process tree holds
@@ -1297,13 +1307,13 @@ sets them from `.env`, on a fresh volume and on every deploy. `roles.sql` also
 sets default privileges, so a table the schema plan adds is granted to
 `tachy_app` as it is created.
 
-| Role           | Used by                                                                      | Rights                                                                                                                 |
-| -------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `tachy_owner`  | schema apply                                                                 | meant to own every object. Not created: `tachy-deploy` applies the schema as the bootstrap superuser                   |
-| `tachy_app`    | api, workers                                                                 | DML on application tables, `pg_read_all_stats`, and a 60 s `statement_timeout`                                         |
-| `tachy_mcp`    | the chat tools' subprocess; the overlay requires its `TACHY_MCP_DB_PASSWORD` | DML as `tachy_app`, except: no `credentials`, no `api_tokens`, no `users.password_hash`, insert-only on `audit_events` |
-| `tachy_backup` | `pg_dump`                                                                    | `pg_read_all_data` (Postgres 14+)                                                                                      |
-| `tachy_watch`  | `tachy-watch`                                                                | `pg_monitor`. No password: it logs in only where `pg_hba` trusts, inside the postgres container                        |
+| Role           | Used by                                                                      | Rights                                                                                                                                                                                        |
+| -------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tachy_owner`  | schema apply                                                                 | meant to own every object. Not created: `tachy-deploy` applies the schema as the bootstrap superuser                                                                                          |
+| `tachy_app`    | api, workers                                                                 | DML on application tables, `pg_read_all_stats`, and a 60 s `statement_timeout`                                                                                                                |
+| `tachy_mcp`    | the chat tools' subprocess; the overlay requires its `TACHY_MCP_DB_PASSWORD` | DML as `tachy_app`, except: no `credentials`, no `api_tokens`, no `users.password_hash`, insert-only on `audit_events`, read-only on `mcp_servers`, `mcp_server_teams` and `mcp_server_tools` |
+| `tachy_backup` | `pg_dump`                                                                    | `pg_read_all_data` (Postgres 14+)                                                                                                                                                             |
+| `tachy_watch`  | `tachy-watch`                                                                | `pg_monitor`. No password: it logs in only where `pg_hba` trusts, inside the postgres container                                                                                               |
 
 **Why the roles.** The MCP child is driven by a model and inherits the api's
 `DATABASE_URL` (`api/src/turn-config.ts`). A superuser can run
@@ -1983,7 +1993,8 @@ its exposed tools under `<tool_prefix>_<name>`, next to tachy's own
 - **Budget.** `rate_windows` per token, counted in Postgres
   (`mcp_server_usage`), since each turn is its own process. Only `tools/call`
   counts.
-- **stdio.** The command must be listed in `TACHY_MCP_STDIO_COMMANDS` on the
+- **stdio.** In production the program runs inside the turn's tools container
+  (§5.17). The command must be listed in `TACHY_MCP_STDIO_COMMANDS` on the
   host, checked on save and again at spawn. The program gets the SDK's login
   variables and its rendered `env`, never the child's environment. Templated
   files go into a private temporary directory, removed when the connection
@@ -1998,13 +2009,14 @@ its exposed tools under `<tool_prefix>_<name>`, next to tachy's own
 **Not built:** result caching for slow-changing tools; per-person budgets on a
 shared pool.
 
-### 5.17 Claude Code runs in a sandbox per turn
+### 5.17 Claude Code and the tools run in sandboxes per turn
 
 **Decision.** In production every Claude Code run, a chat turn or a one-shot
 call, gets a container of its own that is removed when the run ends
-(`packages/sandbox`). The api and the workers start it through
-`sandboxedSpawn` (`agent/src/sandboxed-spawn.ts`) when `TACHY_TURN_SANDBOX` is
-`on`, which only `deploy/compose.prod.yml` sets.
+(`packages/sandbox`), and so does each turn's tools process. The api and the
+workers start them through the launcher (`agent/src/sandboxed-spawn.ts`,
+`agent/src/turn-tools.ts`) when `TACHY_TURN_SANDBOX` is `on`, which only
+`deploy/compose.prod.yml` sets.
 
 **Why.** Claude Code applies what its credential brings. A `claude setup-token`
 token receives the managed settings of the organization that owns it, hooks
@@ -2012,9 +2024,11 @@ included, and in an SDK run they apply without asking
 ([docs](https://code.claude.com/docs/en/server-managed-settings)). Nothing tachý passes turns
 them off, and tachý cannot see them. In the api, such a hook would run beside
 the vault key, the database password and everyone else's turns. In a sandbox
-there is no shell to start it, and nothing but the turn to reach.
+there is no shell to start it, and nothing but the turn to reach. The tools
+process, and a linked stdio server it starts, run what an admin configured;
+in a container of their own neither can read the api's environment.
 
-**A sandbox** (`container-spec.ts`):
+**Claude Code's sandbox** (`container-spec.ts`):
 
 - The `claude-sandbox` image: Claude Code's binary from the same lockfile as
   the SDK, the C library, CA certificates and one user. No shell.
@@ -2029,26 +2043,40 @@ there is no shell to start it, and nothing but the turn to reach.
   proxy connects only to `TACHY_SANDBOX_EGRESS`, `api.anthropic.com:443` by
   default, from its own `outbound` network, away from the database.
 
+**The tools' sandbox** (§5.12 has why there is one per turn):
+
+- tachý's own image running `node dist/mcp.js`, a command the request cannot
+  change, as uid 1000: the owner of the clones it reads.
+- The same hardening as Claude Code's, with a 256 MB heap
+  (`TACHY_TOOLS_*` for the limits).
+- One mount: the repo clones, writable, because a partial clone fetches a
+  file's contents when a tool first reads it.
+- The env `mcpConfig` builds for the turn, by a fixed list of names and the
+  `<SOURCE>_TOKEN_<SLUG>` shape: no vault key, nothing else of the api's.
+- The default network, for the database as `tachy_mcp`, the embedder, the
+  api's `/internal` (`TACHY_INTERNAL_URL`) and the sources. No Docker socket.
+- Claude Code reaches it through the api, and a write still needs its exact
+  approval there (`agent/src/turn-tools.ts`).
+- Measured 2026-11-06 with a linked stdio server that reports what it sees:
+  in the tools container it ran as uid 1000 beside one other process, the
+  tools server, and read neither the vault key nor the session secret. With
+  `TACHY_TURN_SANDBOX=off` it saw the api's six processes and read both.
+
 **The launcher** (`sandbox-launcher`) is the one service with the Docker
 socket, which is root on the host. It has no network and no app secret. On
 its own socket (`/run/tachy-sandbox/launcher.sock`, a volume shared with the
-api and the workers) it takes arguments, named env values and a state folder,
-and builds the container above from them: a request cannot name an image, a
-mount, a flag or a network. It removes a sandbox when its client hangs up,
-removes its instance's leftovers when it starts, and refuses a sandbox past
-`TACHY_SANDBOX_MAX`.
-
-**What stays in the api.** The tools process (§5.12) is still the api's
-child. Claude Code reaches it through the api, and a write still needs its
-exact approval there (`agent/src/turn-tools.ts`). Its own container is the
-next step.
+api and the workers) it takes a kind, arguments, named env values and a state
+folder, and builds one of the two containers above: a request cannot name an
+image, a mount, a flag or a network. It removes a sandbox when its client
+hangs up, removes its instance's leftovers when it starts, and refuses a
+sandbox past `TACHY_SANDBOX_MAX`.
 
 **Deploys.** `tachy-deploy` pulls `sandbox-sha-<commit>` with the server image
 and pins both by digest. It stops the api and the workers before it recreates
 the stack, so the turns they drain finish on the launcher they started on.
-`TACHY_TURN_SANDBOX=off` in `.env` runs Claude Code in the api and the workers
-again: a way back while a sandbox problem is fixed, which brings the org's
-hooks back into the api.
+`TACHY_TURN_SANDBOX=off` in `.env` runs Claude Code and the tools in the api
+and the workers again: a way back while a sandbox problem is fixed, which
+brings the org's hooks back into the api.
 
 **A model endpoint of your own** (`ANTHROPIC_BASE_URL`) has to be listed in
 `TACHY_SANDBOX_EGRESS`. Claude Code sends every model request through the
@@ -2396,9 +2424,11 @@ and the SFTP pull keeps working as it is.
   A write then reaches the MCP server only with an approval for that exact
   call (`agent/src/turn-tools.ts`). `test/agent/claude-runtime.test.ts` holds
   this against the bundled Claude Code and a scripted model.
-- **Where Claude Code runs.** In a sandbox of its own per run (§5.17), with
-  the person's credential and nothing else. What that credential brings, an
-  organization's managed hooks included, runs there and not in the api.
+- **Where a turn runs.** Claude Code in a sandbox of its own per run (§5.17),
+  with the person's credential and nothing else: what that credential brings,
+  an organization's managed hooks included, runs there and not in the api. The
+  tools process, and any linked stdio server, in a container of their own,
+  where the api's environment is out of reach.
 - **The workers hold the vault key.** A flow acts with its owner's source
   tokens and model credential (§5.3.7), so `worker-light` decrypts them. A turn
   has a person approving its writes. A flow doesn't, which is why its model
@@ -2452,7 +2482,8 @@ and the SFTP pull keeps working as it is.
   who can run `docker compose logs`. Bodies and tokens
   are never logged, and that must stay true.
 - Egress the host needs:
-  - the model provider (Anthropic), the sandboxes' only destination (§5.17);
+  - the model provider (Anthropic), the only destination of Claude Code's
+    sandboxes (§5.17);
   - the sources (Freshdesk, GitHub, Azure DevOps) and the linked git remotes;
   - GHCR, to pull images;
   - the Teams workflow URLs and healthchecks.io;
@@ -3143,10 +3174,10 @@ None of these blocks a deploy.
   window, gives the laptop's.
 - **One-shot model calls take no slot** (§2.4). In production each is a
   sandbox outside the turn budget, refused past `TACHY_SANDBOX_MAX`.
-- **The tools process still runs in the api** (§5.17). Its own container is
-  the next step.
-- **The api's limit still counts Claude Code** while the sandbox runs it
-  (§3.2). Giving that share to the sandboxes waits for a load window with
+- **A turn's two containers start one after the other:** the tools first,
+  about 0.7 s, then Claude Code (§3.1). Starting them together is open.
+- **The api's limit still counts Claude Code and the tools** while sandboxes
+  run them (§3.2). Giving that share to the sandboxes waits for a load window with
   sandboxed turns on the laptop, and makes `TACHY_TURN_SANDBOX=off` a
   change of limits too.
 - **`tachy-watch` does not see a sandbox's OOM kill.** It watches the api's
