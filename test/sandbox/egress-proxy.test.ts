@@ -1,5 +1,10 @@
 /** The egress proxy over real sockets: a tunnel where allowed, a refusal anywhere else. */
-import { request, type Server } from "node:http";
+import {
+  createServer as createHttpServer,
+  request,
+  type IncomingHttpHeaders,
+  type Server,
+} from "node:http";
 import { connect, createServer, type AddressInfo, type Socket } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -10,10 +15,27 @@ import {
 const portOf = (server: { address(): unknown }) =>
   (server.address() as AddressInfo).port;
 
+interface SeenRequest {
+  method?: string;
+  url?: string;
+  headers: IncomingHttpHeaders;
+  body: string;
+}
+
 describe("the egress proxy", () => {
   const echo = createServer((socket) => socket.pipe(socket));
+  const seen: SeenRequest[] = [];
+  const origin = createHttpServer((request, response) => {
+    let body = "";
+    request.on("data", (chunk: Buffer) => (body += chunk.toString()));
+    request.on("end", () => {
+      seen.push({ ...request, headers: request.headers, body });
+      response.writeHead(201, { "x-origin": "yes" }).end("made");
+    });
+  });
   let proxy: Server;
   let allowedDestination: string;
+  let originDestination: string;
   let silentDestination: string;
 
   beforeAll(async () => {
@@ -21,6 +43,10 @@ describe("the egress proxy", () => {
       echo.listen(0, "127.0.0.1", listening),
     );
     allowedDestination = `127.0.0.1:${portOf(echo)}`;
+    await new Promise<void>((listening) =>
+      origin.listen(0, "127.0.0.1", listening),
+    );
+    originDestination = `127.0.0.1:${portOf(origin)}`;
     const closed = createServer();
     await new Promise<void>((listening) =>
       closed.listen(0, "127.0.0.1", listening),
@@ -30,14 +56,51 @@ describe("the egress proxy", () => {
     proxy = await startEgressProxy({
       host: "127.0.0.1",
       port: 0,
-      allowed: [allowedDestination, silentDestination],
+      allowed: [allowedDestination, originDestination, silentDestination],
     });
   });
 
   afterAll(async () => {
     await new Promise((closed) => proxy.close(closed));
     await new Promise((closed) => echo.close(closed));
+    await new Promise((closed) => origin.close(closed));
   });
+
+  /** A request in absolute form, as a client sends plain HTTP through a proxy. */
+  const forward = (
+    url: string,
+    headers: Record<string, string> = {},
+    body = "",
+  ) =>
+    new Promise<{ status: number; headers: IncomingHttpHeaders; body: string }>(
+      (resolve, reject) => {
+        const asking = request(
+          {
+            host: "127.0.0.1",
+            port: portOf(proxy),
+            method: "POST",
+            path: url,
+            headers,
+          },
+          (response) => {
+            let answer = "";
+            response.on(
+              "data",
+              (chunk: Buffer) => (answer += chunk.toString()),
+            );
+            response.on("end", () =>
+              resolve({
+                status: response.statusCode ?? 0,
+                headers: response.headers,
+                body: answer,
+              }),
+            );
+          },
+        );
+        asking.on("error", reject);
+        asking.end(body);
+      },
+    );
 
   const connectThrough = (destination: string) =>
     new Promise<{ status: number; tunnel: Socket }>((resolve, reject) => {
@@ -99,6 +162,41 @@ describe("the egress proxy", () => {
     await expect(connectThrough(silentDestination)).rejects.toThrow();
   });
 
+  it("forwards plain HTTP in absolute form to an allowed destination", async () => {
+    const answer = await forward(
+      `http://${originDestination}/v1/messages?beta=true`,
+      { "x-api-key": "key", "proxy-connection": "keep-alive" },
+      "hello",
+    );
+    expect(answer).toMatchObject({
+      status: 201,
+      headers: { "x-origin": "yes" },
+      body: "made",
+    });
+    const [received] = seen.splice(0);
+    expect(received).toMatchObject({
+      method: "POST",
+      url: "/v1/messages?beta=true",
+      body: "hello",
+      headers: { "x-api-key": "key" },
+    });
+    expect(received!.headers).not.toHaveProperty("proxy-connection");
+  });
+
+  it("refuses plain HTTP to anywhere else, port 80 included", async () => {
+    for (const url of [
+      "http://127.0.0.1:1/",
+      `http://localhost:${portOf(origin)}/`,
+      "http://api.anthropic.com/v1/messages",
+    ])
+      expect((await forward(url)).status).toBe(403);
+    expect(seen).toEqual([]);
+  });
+
+  it("drops a forwarded request whose destination does not answer", async () => {
+    await expect(forward(`http://${silentDestination}/`)).rejects.toThrow();
+  });
+
   it("answers a plain request with 405", async () => {
     const status = await new Promise<number>((resolve, reject) => {
       const asking = request(
@@ -109,6 +207,7 @@ describe("the egress proxy", () => {
       asking.end();
     });
     expect(status).toBe(405);
+    expect((await forward(`https://${originDestination}/`)).status).toBe(405);
   });
 
   it("reads its list from a comma-separated variable", () => {

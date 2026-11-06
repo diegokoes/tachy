@@ -1,7 +1,8 @@
 name: Image cleanup
 
-# Keeps the 30 newest sha-* images, which is how far back tachy-deploy can roll
-# back. Whatever dev and main currently point at is never deleted.
+# Keeps the 60 newest tagged images: a commit has two, sha-* and
+# sandbox-sha-*, so tachy-deploy can roll back 30 commits. Whatever dev and
+# main currently point at is never deleted.
 on:
   schedule:
     - cron: "30 3 * * 1"
@@ -29,6 +30,6 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           package: tachy
-          keep-n-tagged: 30
-          exclude-tags: dev,main
+          keep-n-tagged: 60
+          exclude-tags: dev,main,sandbox-dev,sandbox-main
           dry-run: ${{ inputs.dry-run == true }}

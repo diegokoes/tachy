@@ -9,7 +9,7 @@ import { mkdtempSync } from "node:fs";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   openSandbox,
   type SandboxProcess,
@@ -253,12 +253,27 @@ describe("the sandbox launcher", () => {
   });
 
   it("carries on after a client that leaves before its request", async () => {
-    const leaving = connect(settings.socketPath);
-    await once(leaving, "connect");
-    leaving.destroy();
-    expect((await run(["cat"], { stdin: "still here\n" })).stdout).toBe(
-      "still here\n",
-    );
+    const logged: string[] = [];
+    const stderr = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((line) => logged.push(String(line)) > 0);
+    try {
+      const probe = connect(settings.socketPath);
+      await once(probe, "connect");
+      probe.destroy();
+      const leaving = connect(settings.socketPath);
+      await once(leaving, "connect");
+      leaving.end('{"kind":"claude"');
+      await until(() => logged.some((line) => line.includes("sandbox_failed")));
+      expect((await run(["cat"], { stdin: "still here\n" })).stdout).toBe(
+        "still here\n",
+      );
+    } finally {
+      stderr.mockRestore();
+    }
+    const failures = logged.filter((line) => line.includes("sandbox_failed"));
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toContain("the connection closed before its request");
     expect(launcher.running).toBe(0);
   });
 
