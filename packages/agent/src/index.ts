@@ -9,6 +9,8 @@ export {
   classifyCall,
   proxiedReads,
   qualify,
+  type PreApprovedCall,
+  type WorkItemRef,
 } from "./tools";
 export {
   claudePermission,

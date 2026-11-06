@@ -6,7 +6,7 @@ export interface TurnSent {
   model?: string;
   effort?: string;
   resumed: boolean;
-  autoApprove: string[];
+  preApproved: string[];
   redactionForced: boolean;
   linkedServers: {
     slug: string;

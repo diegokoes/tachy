@@ -43,7 +43,7 @@
     ],
     ["skills", list(trace.session?.skills)],
     ["plugins", list(trace.session?.plugins)],
-    ["auto-approved", list(trace.sent.autoApprove)],
+    ["pre-approved", list(trace.sent.preApproved)],
     [
       "redaction",
       trace.sent.redactionForced ? "forced on everywhere" : "per source",

@@ -67,7 +67,7 @@ import {
   buildPrompt,
   mcpConfig,
   systemPrompt,
-  turnAutoApprove,
+  turnPreApprovals,
   turnDebug,
   turnChoice,
 } from "../turn-config";
@@ -79,7 +79,8 @@ const MAX_MENTIONS = 20;
 
 const chatSchema = z.object({
   message: z.string().min(1),
-  sessionId: z.string().optional(),
+  // Claude Code also resumes by session title, and every tachy session has one.
+  sessionId: z.string().uuid().optional(),
   uploadPaths: z.array(z.string()).optional(),
   artifactId: z.string().optional(),
   command: z
@@ -248,7 +249,7 @@ export const agent = new Hono()
       dateFormat: user ? await dateFormatOf(ctx) : undefined,
     });
 
-    const autoApprove = turnAutoApprove(command?.name, artifact?.spec);
+    const preApproved = await turnPreApprovals(command, artifact?.spec);
 
     // Minted before the config so the MCP subprocess can carry it: a knowledge
     // edit made mid-turn records which conversation made it.
@@ -269,7 +270,7 @@ export const agent = new Hono()
     const config: AgentConfig = {
       ...base,
       systemPrompt: await systemPrompt(),
-      ...(autoApprove.length ? { autoApprove } : {}),
+      ...(preApproved.length ? { preApproved } : {}),
     };
 
     if (activeByUser.has(userKey))

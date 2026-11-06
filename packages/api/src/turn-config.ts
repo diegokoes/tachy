@@ -39,9 +39,10 @@ import {
   userStateDir,
   type AgentConfig,
   type LinkedServer,
+  type PreApprovedCall,
 } from "@tachy/agent";
 import { internalEndpoint } from "./internal-endpoint";
-import { findCommand, commandAutoApprove } from "./commands";
+import { findCommand, commandWrite, namedWorkItem } from "./commands";
 import { findMode } from "./modes";
 
 /**
@@ -252,7 +253,7 @@ export interface TurnDebug {
   effort?: AgentEffort;
   /** The turn continues a session, whose earlier turns are not shown. */
   resumed: boolean;
-  autoApprove: string[];
+  preApproved: string[];
   /** TACHY_REDACT is on, so every connection is scrubbed. */
   redactionForced: boolean;
   /** With each server's credential state, which says why one has no tools. */
@@ -274,11 +275,14 @@ export function turnDebug(
     model: effectiveModel(config),
     effort: config.effort,
     resumed: opts.resumed,
-    autoApprove: config.autoApprove ?? [],
+    preApproved: (config.preApproved ?? []).map(describePreApproval),
     redactionForced: globalRedactionEnabled(),
     linkedServers: config.linkedServers ?? [],
   };
 }
+
+const describePreApproval = ({ tool, workItem }: PreApprovedCall) =>
+  workItem ? `${tool} on ${workItem.source} #${workItem.externalId}` : tool;
 
 const SAMPLE_DATE = "2026-09-29T14:05:00Z";
 
@@ -380,15 +384,21 @@ export function buildPrompt(input: {
 }
 
 /**
- * Typing a command and attaching an artifact are both user actions, so the tools
- * each one exists to run are pre-authorised. Never keyed on the model's choice.
+ * Typing a command and attaching an artifact are both user actions, so the
+ * writes each one exists to perform are pre-authorised. A command's covers only
+ * the work item it names, on a connection that exists.
  */
-export function turnAutoApprove(
-  commandName: string | undefined,
+export async function turnPreApprovals(
+  command: { name: string; args: string } | undefined,
   spec: ArtifactSpec | null | undefined,
-): string[] {
-  return [
-    ...(commandName ? commandAutoApprove(commandName) : []),
-    ...(spec?.utilities ?? []),
-  ];
+): Promise<PreApprovedCall[]> {
+  const fromArtifact = (spec?.utilities ?? []).map((tool) => ({ tool }));
+  const tool = command && commandWrite(command.name);
+  const workItem = command && namedWorkItem(command.args);
+  if (!tool || !workItem || !(await isConnectionSlug(workItem.source)))
+    return fromArtifact;
+  return [...fromArtifact, { tool, workItem }];
 }
+
+const isConnectionSlug = async (slug: string) =>
+  (await listSourceConnections()).some((conn) => conn.slug === slug);
