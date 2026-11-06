@@ -28,6 +28,7 @@ import {
 
 const IMAGE = "node:26.13.0-slim";
 const RUN_ID = randomUUID().slice(0, 8);
+const REPO_VOLUME = `tachy-test-repos-${RUN_ID}`;
 const PERSON = randomUUID();
 const POLL_MS = 100;
 const POLL_LIMIT_MS = 20_000;
@@ -139,6 +140,7 @@ describe("the sandbox launcher", () => {
     ensureImage();
     docker("network", "create", "--internal", settings.network);
     docker("volume", "create", settings.stateVolume);
+    docker("volume", "create", REPO_VOLUME);
     docker(
       "run",
       "--rm",
@@ -155,7 +157,7 @@ describe("the sandbox launcher", () => {
   afterAll(async () => {
     await launcher.close();
     docker("network", "rm", settings.network);
-    docker("volume", "rm", settings.stateVolume);
+    docker("volume", "rm", settings.stateVolume, REPO_VOLUME);
   });
 
   it("streams stdin to the container and its output back", async () => {
@@ -275,6 +277,52 @@ describe("the sandbox launcher", () => {
     expect(failures).toHaveLength(1);
     expect(failures[0]).toContain("the connection closed before its request");
     expect(launcher.running).toBe(0);
+  });
+
+  it("refuses a tools sandbox when the deployment gave it none", async () => {
+    const sandbox = openSandbox(
+      { kind: "tools", args: [], env: {} },
+      { socketPath: settings.socketPath },
+    );
+    const refused = new Promise<Error>((resolve) =>
+      sandbox.once("error", resolve),
+    );
+    expect((await refused).message).toBe(
+      "this launcher starts no tools sandbox",
+    );
+    expect(ownContainers()).toEqual([]);
+  });
+
+  it("runs the tools server's own command in a tools sandbox", async () => {
+    const toolsDir = mkdtempSync(join(tmpdir(), "tachy-tools-"));
+    const toolsLauncher = await startLauncher({
+      ...settingsFor(toolsDir),
+      tools: {
+        image: IMAGE,
+        network: settings.network,
+        repoVolume: REPO_VOLUME,
+        memoryMb: 256,
+        pidsLimit: 64,
+        cpus: 1,
+      },
+    });
+    try {
+      let stderr = "";
+      const sandbox = openSandbox(
+        { kind: "tools", args: [], env: {} },
+        {
+          socketPath: join(toolsDir, "launcher.sock"),
+          onStderr: (text) => (stderr += text),
+        },
+      );
+      const exited = exitOf(sandbox);
+      sandbox.stdin.end();
+      // The stand-in image has no tools server: what fails is its fixed command.
+      expect((await exited)[0]).toBe(1);
+      expect(stderr).toContain("/app/dist/mcp.js");
+    } finally {
+      await toolsLauncher.close();
+    }
   });
 
   it("removes the container when its client goes away", async () => {

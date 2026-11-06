@@ -9,7 +9,10 @@ import type { Duplex } from "node:stream";
 import {
   claudeSandboxSpec,
   SANDBOX_LABEL,
-  type SandboxSettings,
+  toolsSandboxSpec,
+  type ClaudeSandboxSettings,
+  type ContainerSpec,
+  type ToolsSandboxSettings,
 } from "./container-spec";
 import { DockerEngine } from "./docker";
 import { logEvent } from "./log";
@@ -21,10 +24,12 @@ import {
   type SandboxRequest,
 } from "./protocol";
 
-export interface LauncherSettings extends SandboxSettings {
+export interface LauncherSettings extends ClaudeSandboxSettings {
   socketPath: string;
   dockerSocket: string;
   maxSandboxes: number;
+  /** Absent, the launcher starts no tools sandbox. */
+  tools?: ToolsSandboxSettings;
 }
 
 export interface Launcher {
@@ -91,6 +96,15 @@ function drained(containerIo: Duplex, client: Socket): Promise<void> {
   });
 }
 
+function specFor(
+  request: SandboxRequest,
+  settings: LauncherSettings,
+): ContainerSpec {
+  if (request.kind === "claude") return claudeSandboxSpec(request, settings);
+  if (!settings.tools) throw new Error("this launcher starts no tools sandbox");
+  return toolsSandboxSpec(request, settings.instance, settings.tools);
+}
+
 async function removeLeftovers(
   docker: DockerEngine,
   instance: string,
@@ -121,9 +135,7 @@ export async function startLauncher(
         throw new Error("the sandbox limit is reached");
       admitted++;
       isAdmitted = true;
-      const id = await docker.createContainer(
-        claudeSandboxSpec(request, settings),
-      );
+      const id = await docker.createContainer(specFor(request, settings));
       containerId = id;
       const removeOnHangUp = () => void docker.forceRemove(id).catch(() => {});
       client.once("close", removeOnHangUp);
@@ -154,6 +166,7 @@ export async function startLauncher(
       client.end(exitFrame({ exitCode: code }));
       logEvent("info", "sandbox_exited", {
         container: id.slice(0, SHORT_ID_CHARS),
+        kind: request.kind,
         exitCode: code,
       });
     } catch (error) {
