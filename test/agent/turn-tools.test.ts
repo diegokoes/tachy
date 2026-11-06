@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   startTurnTools,
   type TurnTools,
@@ -106,6 +106,26 @@ describe("a turn's tools that do not start", () => {
       startTurnTools({
         command: process.execPath,
         args: ["-e", "process.exit(3)"],
+        env: {},
+        cwd: tmpdir(),
+      }),
+    ).rejects.toThrow(NOT_STARTED);
+  });
+});
+
+describe("a turn's tools in a sandbox", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("fail the same way when the launcher cannot be reached", async () => {
+    vi.stubEnv("TACHY_TURN_SANDBOX", "on");
+    vi.stubEnv(
+      "TACHY_SANDBOX_SOCKET",
+      join(mkdtempSync(join(tmpdir(), "tachy-no-launcher-")), "launcher.sock"),
+    );
+    await expect(
+      startTurnTools({
+        command: process.execPath,
+        args: [STUB_TOOLS],
         env: {},
         cwd: tmpdir(),
       }),

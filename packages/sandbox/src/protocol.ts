@@ -4,7 +4,7 @@
  * attach framing, with an exit frame last. A connection that closes is a
  * client gone, whose container is removed.
  */
-export const SANDBOX_KINDS = ["claude"] as const;
+export const SANDBOX_KINDS = ["claude", "tools"] as const;
 export type SandboxKind = (typeof SANDBOX_KINDS)[number];
 
 export interface SandboxRequest {
