@@ -1,8 +1,9 @@
 name: Image scan
 
 # An image is scanned when it is built. What is known about it changes
-# afterwards, so the two a host deploys from are scanned again every week, to
+# afterwards, so the ones a host deploys from are scanned again every week, to
 # the same bar as a pull request: a critical vulnerability that has a fix.
+# sandbox-main joins once a release to main carries the turn sandbox.
 on:
   schedule:
     - cron: "23 5 * * 1"
@@ -21,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tag: [main, dev]
+        tag: [main, dev, sandbox-dev]
     steps:
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
