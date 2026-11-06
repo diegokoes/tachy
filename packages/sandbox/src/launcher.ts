@@ -40,11 +40,14 @@ const SHORT_ID_CHARS = 12;
 const messageOf = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
-/** Reads the request line and leaves whatever stdin followed it unread. */
-function readRequest(client: Socket): Promise<SandboxRequest> {
+/**
+ * Reads the request line and leaves whatever stdin followed it unread. Null
+ * when the connection closed without sending a byte, as a health probe does.
+ */
+function readRequest(client: Socket): Promise<SandboxRequest | null> {
   return new Promise((resolve, reject) => {
     let buffered = Buffer.alloc(0);
-    const settle = (outcome: () => SandboxRequest, rest?: Buffer) => {
+    const settle = (outcome: () => SandboxRequest | null, rest?: Buffer) => {
       client.pause();
       client.off("data", onData);
       client.off("close", onClose);
@@ -70,6 +73,7 @@ function readRequest(client: Socket): Promise<SandboxRequest> {
     };
     const onClose = () =>
       settle(() => {
+        if (!buffered.length) return null;
         throw new Error("the connection closed before its request");
       });
     client.on("data", onData);
@@ -112,6 +116,7 @@ export async function startLauncher(
     let isAdmitted = false;
     try {
       const request = await readRequest(client);
+      if (!request) return;
       if (admitted >= settings.maxSandboxes)
         throw new Error("the sandbox limit is reached");
       admitted++;

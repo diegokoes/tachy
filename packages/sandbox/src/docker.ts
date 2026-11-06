@@ -25,6 +25,30 @@ function dockerMessage(body: string): string {
   }
 }
 
+/** An image reference as the pull API takes it: the name, and a tag or digest. */
+function splitReference(image: string): { name: string; tag: string } {
+  const digestAt = image.indexOf("@");
+  if (digestAt >= 0)
+    return { name: image.slice(0, digestAt), tag: image.slice(digestAt + 1) };
+  const tagAt = image.lastIndexOf(":");
+  if (tagAt > image.lastIndexOf("/"))
+    return { name: image.slice(0, tagAt), tag: image.slice(tagAt + 1) };
+  return { name: image, tag: "latest" };
+}
+
+/** A pull can answer 200 and still fail: its progress stream ends in an error line. */
+function pullFailure(body: string): string | undefined {
+  for (const line of body.split("\n").filter(Boolean)) {
+    try {
+      const progress = JSON.parse(line) as { error?: string };
+      if (progress.error) return progress.error;
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
 export class DockerEngine {
   constructor(private readonly socketPath: string) {}
 
@@ -98,6 +122,44 @@ export class DockerEngine {
       undefined,
       [404, 409],
     );
+  }
+
+  /** Pulls `image` unless the daemon has it. The daemon fetches; the caller needs no network. */
+  async ensureImage(image: string): Promise<void> {
+    const inspected = await this.call(
+      "GET",
+      `/images/${image}/json`,
+      undefined,
+      [404],
+    );
+    if (inspected.Id) return;
+    const { name, tag } = splitReference(image);
+    const query = new URLSearchParams({ fromImage: name, tag });
+    await new Promise<void>((resolve, reject) => {
+      const pulling = request(
+        {
+          socketPath: this.socketPath,
+          method: "POST",
+          path: `${API_PREFIX}/images/create?${query}`,
+        },
+        async (response) => {
+          const status = response.statusCode ?? 0;
+          const body = await readBody(response);
+          if (!isSuccess(status))
+            return reject(
+              new Error(
+                `docker pull ${image} answered ${status}: ${dockerMessage(body)}`,
+              ),
+            );
+          const failure = pullFailure(body);
+          if (failure)
+            return reject(new Error(`docker pull ${image} failed: ${failure}`));
+          resolve();
+        },
+      );
+      pulling.on("error", reject);
+      pulling.end();
+    });
   }
 
   async listLabelled(label: string): Promise<string[]> {

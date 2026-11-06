@@ -1,15 +1,42 @@
 /** The Docker client's failure paths, against a stand-in daemon on a unix socket. */
 import { mkdtempSync } from "node:fs";
-import { createServer, type Server } from "node:http";
+import { createServer, type Server, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DockerEngine } from "../../packages/sandbox/src/docker";
 
-/** Answers by container id: `gone` 404, `going` 409, anything else 500 in plain text. */
+/** The pulls the stand-in was asked for, as `fromImage` and `tag`. */
+const pulls: { fromImage: string | null; tag: string | null }[] = [];
+
+/** How the stand-in answers a pull, by the image name asked for. */
+function answerPull(fromImage: string, response: ServerResponse): void {
+  if (fromImage.endsWith("refused"))
+    return void response
+      .writeHead(404, { "Content-Type": "application/json" })
+      .end(JSON.stringify({ message: "pull access denied" }));
+  const progress = [JSON.stringify({ status: "Pulling from x" }), "not json"];
+  if (fromImage.endsWith("broken"))
+    progress.push(JSON.stringify({ error: "unexpected EOF" }));
+  response.writeHead(200).end(progress.join("\n"));
+}
+
+/**
+ * Images: `present` is there, any other name is pulled. Containers by id:
+ * `gone` 404, `going` 409, anything else 500 in plain text.
+ */
 function standInDaemon(socketPath: string): Promise<Server> {
   const daemon = createServer((request, response) => {
     const path = request.url ?? "";
+    if (path.includes("/images/create")) {
+      const query = new URL(path, "http://daemon").searchParams;
+      pulls.push({ fromImage: query.get("fromImage"), tag: query.get("tag") });
+      return answerPull(query.get("fromImage") ?? "", response);
+    }
+    if (path.includes("/images/"))
+      return path.includes("/images/present")
+        ? response.writeHead(200).end(JSON.stringify({ Id: "sha256:present" }))
+        : response.writeHead(404).end();
     if (path.includes("/attach")) return response.writeHead(404).end();
     if (path.includes("/wait"))
       return response
@@ -56,6 +83,29 @@ describe("the Docker client", () => {
   it("quotes a plain-text answer when a call fails", async () => {
     await expect(docker.start("x")).rejects.toThrow(
       "docker POST /containers/x/start answered 500: the daemon is unwell",
+    );
+  });
+
+  it("pulls an image only when the daemon lacks it", async () => {
+    pulls.length = 0;
+    await docker.ensureImage("present:1");
+    expect(pulls).toEqual([]);
+    await docker.ensureImage("registry.local:5000/team/sandbox:sha-1");
+    await docker.ensureImage("ghcr.io/team/sandbox@sha256:abc");
+    await docker.ensureImage("sandbox");
+    expect(pulls).toEqual([
+      { fromImage: "registry.local:5000/team/sandbox", tag: "sha-1" },
+      { fromImage: "ghcr.io/team/sandbox", tag: "sha256:abc" },
+      { fromImage: "sandbox", tag: "latest" },
+    ]);
+  });
+
+  it("fails a pull the daemon refuses, or one whose progress ends in an error", async () => {
+    await expect(docker.ensureImage("refused:1")).rejects.toThrow(
+      "docker pull refused:1 answered 404: pull access denied",
+    );
+    await expect(docker.ensureImage("broken:1")).rejects.toThrow(
+      "docker pull broken:1 failed: unexpected EOF",
     );
   });
 

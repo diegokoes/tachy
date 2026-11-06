@@ -9,9 +9,7 @@ import type {
   SpawnedProcess,
 } from "@anthropic-ai/claude-agent-sdk";
 import { agentHome, log } from "@tachy/core/infra";
-import { openSandbox } from "@tachy/sandbox";
-
-const DEFAULT_LAUNCHER_SOCKET = "/run/tachy-sandbox/launcher.sock";
+import { LAUNCHER_SOCKET, openSandbox } from "@tachy/sandbox";
 
 export const isSandboxed = () => process.env.TACHY_TURN_SANDBOX === "on";
 
@@ -39,7 +37,7 @@ export function sandboxedSpawn(
         ...(state ? { state } : {}),
       },
       {
-        socketPath: process.env.TACHY_SANDBOX_SOCKET ?? DEFAULT_LAUNCHER_SOCKET,
+        socketPath: process.env.TACHY_SANDBOX_SOCKET ?? LAUNCHER_SOCKET,
         onStderr: (text) => log("debug", "sandbox_stderr", { text }),
       },
     );
