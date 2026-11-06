@@ -1,13 +1,15 @@
 /**
  * A turn's tachy tools: the tools process the api starts for the turn, offered
  * to Claude Code as an in-process server over Claude Code's own channel. A
- * write reaches the tools process only as the person approved it.
+ * write reaches the tools process only as the person approved it. With
+ * TACHY_TURN_SANDBOX on, the process runs in a container of its own.
  */
 import { isDeepStrictEqual } from "node:util";
 import type { McpSdkServerConfigWithInstance } from "@anthropic-ai/claude-agent-sdk";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import {
   CallToolRequestSchema,
   CallToolResultSchema,
@@ -16,6 +18,9 @@ import {
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import { errorText, log } from "@tachy/core/infra";
+import { openSandbox } from "@tachy/sandbox";
+import { SandboxTransport } from "./sandbox-transport";
+import { isSandboxed, launcherSocket } from "./sandboxed-spawn";
 import { classifyCall, MCP_SERVER, qualify } from "./tools";
 
 /** Claude Code bounds no tool call; this keeps a hung tools process from holding a turn. */
@@ -96,17 +101,35 @@ export class TurnTools {
   }
 }
 
-export async function startTurnTools(
+/** The container's command is fixed, so it takes only the process's env. */
+function toolsTransport(
   toolsProcess: ToolsProcess,
-  proxiedTools: readonly string[] = [],
-): Promise<TurnTools> {
+  onStderr: (text: string) => void,
+): Transport {
+  if (isSandboxed()) {
+    const sandbox = openSandbox(
+      { kind: "tools", args: [], env: toolsProcess.env },
+      { socketPath: launcherSocket(), onStderr },
+    );
+    // A launcher refusal arrives as an error, not on stderr.
+    sandbox.on("error", (error: Error) => onStderr(`${error.message}\n`));
+    return new SandboxTransport(sandbox);
+  }
   const transport = new StdioClientTransport({
     ...toolsProcess,
     stderr: "pipe",
   });
+  transport.stderr?.on("data", (chunk: Buffer) => onStderr(chunk.toString()));
+  return transport;
+}
+
+export async function startTurnTools(
+  toolsProcess: ToolsProcess,
+  proxiedTools: readonly string[] = [],
+): Promise<TurnTools> {
   let stderrTail = "";
-  transport.stderr?.on("data", (chunk: Buffer) => {
-    stderrTail = (stderrTail + chunk.toString()).slice(-STDERR_TAIL_CHARS);
+  const transport = toolsTransport(toolsProcess, (text) => {
+    stderrTail = (stderrTail + text).slice(-STDERR_TAIL_CHARS);
   });
   const client = new Client({ name: "tachy-turn", version: "1" });
   try {

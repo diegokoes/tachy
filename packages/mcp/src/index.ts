@@ -1,7 +1,7 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { pathToFileURL } from "node:url";
 import { loadSettingsIntoEnv } from "@tachy/core/config";
-import { errorText, log } from "@tachy/core/infra";
+import { backgroundSettled, errorText, log, sql } from "@tachy/core/infra";
 import { registerSource, setSourceOrigin } from "@tachy/core/sources";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
@@ -35,6 +35,19 @@ import "./tools/buckets";
 export { server, registerProxiedTools };
 export { runTool } from "./server";
 
+/** Inside the grace the api gives a closed tools process before it stops it. */
+const SETTLE_MS = 1_500;
+
+/** The api closes stdin when the turn is over: the counts still being written land first. */
+async function exitWhenSettled(): Promise<void> {
+  const settled = backgroundSettled().then(() => sql.end({ timeout: 1 }));
+  await Promise.race([
+    settled,
+    new Promise((elapsed) => setTimeout(elapsed, SETTLE_MS)),
+  ]);
+  process.exit(0);
+}
+
 const isMain =
   process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
@@ -51,4 +64,5 @@ if (isMain) {
   }
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  process.stdin.once("end", () => void exitWhenSettled());
 }
