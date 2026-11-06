@@ -5,12 +5,21 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import type { SandboxProcess } from "../../packages/sandbox/src/client";
 import { mkdtempSync } from "node:fs";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { openSandbox } from "../../packages/sandbox/src/client";
+import {
+  openSandbox,
+  type SandboxProcess,
+} from "../../packages/sandbox/src/client";
+import {
+  encodeFrame,
+  FrameReader,
+  STREAM,
+  type SandboxExit,
+} from "../../packages/sandbox/src/protocol";
 import {
   startLauncher,
   type Launcher,
@@ -100,6 +109,31 @@ describe("the sandbox launcher", () => {
     const [[exitCode]] = await Promise.all([exited, drained]);
     return { stdout, exitCode, error };
   }
+
+  /** Sends `bytes` in one write and reads the answer to its exit frame. */
+  function rawExchange(
+    bytes: Buffer,
+  ): Promise<{ stdout: string; exit: SandboxExit }> {
+    return new Promise((resolve, reject) => {
+      const socket = connect(settings.socketPath);
+      const frames = new FrameReader();
+      let stdout = "";
+      socket.on("data", (chunk: Buffer) => {
+        for (const frame of frames.read(chunk))
+          if (frame.stream === STREAM.stdout)
+            stdout += frame.payload.toString();
+          else if (frame.stream === STREAM.exit) {
+            socket.destroy();
+            resolve({ stdout, exit: JSON.parse(frame.payload.toString()) });
+          }
+      });
+      socket.on("error", reject);
+      socket.write(bytes);
+    });
+  }
+
+  const requestLine = (args: string[]) =>
+    Buffer.from(`${JSON.stringify({ kind: "claude", args, env: {} })}\n`);
 
   beforeAll(async () => {
     ensureImage();
@@ -192,6 +226,40 @@ describe("the sandbox launcher", () => {
     expect(refusedState).toMatchObject({ exitCode: null });
     expect(refusedState.error).toMatch(/state folder/);
     expect(ownContainers()).toEqual([]);
+  });
+
+  it("takes stdin sent in the same write as the request", async () => {
+    const { stdout, exit } = await rawExchange(
+      Buffer.concat([
+        requestLine(["cat"]),
+        encodeFrame(STREAM.stdin, Buffer.from("same write\n")),
+        encodeFrame(STREAM.stdinEnd, Buffer.alloc(0)),
+      ]),
+    );
+    expect(stdout).toBe("same write\n");
+    expect(exit).toEqual({ exitCode: 0 });
+  });
+
+  it("refuses a request line that is not JSON, or past its size limit", async () => {
+    const notJson = await rawExchange(Buffer.from("not json\n"));
+    expect(notJson.exit.exitCode).toBeNull();
+    expect(notJson.exit.error).toBeTruthy();
+    const tooLong = await rawExchange(Buffer.alloc(1024 * 1024 + 1, "x"));
+    expect(tooLong.exit).toEqual({
+      exitCode: null,
+      error: "the request line is too long",
+    });
+    expect(ownContainers()).toEqual([]);
+  });
+
+  it("carries on after a client that leaves before its request", async () => {
+    const leaving = connect(settings.socketPath);
+    await once(leaving, "connect");
+    leaving.destroy();
+    expect((await run(["cat"], { stdin: "still here\n" })).stdout).toBe(
+      "still here\n",
+    );
+    expect(launcher.running).toBe(0);
   });
 
   it("removes the container when its client goes away", async () => {
