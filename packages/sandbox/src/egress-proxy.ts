@@ -1,8 +1,15 @@
 /**
- * The sandboxes' only way out: an HTTP CONNECT proxy that tunnels to the
- * host:port pairs it was given and refuses everything else.
+ * The sandboxes' only way out: an HTTP proxy that tunnels (CONNECT) or
+ * forwards (absolute-form HTTP) to the host:port pairs it was given, and
+ * refuses everything else.
  */
-import { createServer, type Server } from "node:http";
+import {
+  createServer,
+  request as httpRequest,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
 import { connect } from "node:net";
 import { logEvent } from "./log";
 
@@ -30,10 +37,52 @@ function splitDestination(destination: string): { host: string; port: number } {
   };
 }
 
+const DEFAULT_HTTP_PORT = "80";
+/** Headers meant for this hop, not for the destination. */
+const HOP_HEADERS = [
+  "proxy-connection",
+  "proxy-authorization",
+  "connection",
+  "keep-alive",
+];
+
+/** Claude Code sends a plain-http model address through the proxy in absolute form. */
+function forwardHttp(
+  request: IncomingMessage,
+  response: ServerResponse,
+  allowed: ReadonlySet<string>,
+): void {
+  const target = URL.canParse(request.url ?? "") ? new URL(request.url!) : null;
+  if (target?.protocol !== "http:") return void response.writeHead(405).end();
+  const port = target.port || DEFAULT_HTTP_PORT;
+  const destination = `${target.hostname.toLowerCase()}:${port}`;
+  if (!allowed.has(destination)) {
+    logEvent("warn", "egress_refused", { destination });
+    return void response.writeHead(403).end();
+  }
+  const headers = { ...request.headers };
+  for (const name of HOP_HEADERS) delete headers[name];
+  const upstream = httpRequest(
+    {
+      host: target.hostname,
+      port,
+      method: request.method,
+      path: target.pathname + target.search,
+      headers,
+    },
+    (answer) => {
+      response.writeHead(answer.statusCode ?? 502, answer.headers);
+      answer.pipe(response);
+    },
+  );
+  upstream.on("error", () => response.destroy());
+  request.pipe(upstream);
+}
+
 export function startEgressProxy(settings: EgressSettings): Promise<Server> {
   const allowed = new Set(settings.allowed.map((entry) => entry.toLowerCase()));
-  const server = createServer((_request, response) =>
-    response.writeHead(405).end(),
+  const server = createServer((request, response) =>
+    forwardHttp(request, response, allowed),
   );
   server.on("clientError", (_error, socket) => socket.destroy());
   server.on("connect", (request, client, head) => {
