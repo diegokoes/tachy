@@ -10,6 +10,7 @@
     "packages/sources/freshdesk",
     "packages/sources/github",
     "packages/sources/azure-devops",
+    "packages/sandbox",
     "packages/mcp",
     "packages/agent",
     "packages/api",

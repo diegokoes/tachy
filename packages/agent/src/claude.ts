@@ -23,6 +23,7 @@ import {
 } from "./backend";
 import { TurnBase, type ApprovalGate } from "./turn";
 import { startTurnTools, type TurnTools } from "./turn-tools";
+import { sandboxOption, stateNameOf } from "./sandboxed-spawn";
 
 interface ContentBlock {
   type: string;
@@ -158,6 +159,9 @@ export function claudeOptions(
     canUseTool: turn.canUseTool,
     includePartialMessages: false,
     ...(turn.resume ? { resume: turn.resume } : {}),
+    ...sandboxOption(
+      config.configDir ? stateNameOf(config.configDir) : undefined,
+    ),
     env: claudeEnv(config),
   };
 }
