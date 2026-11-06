@@ -105,6 +105,9 @@ describe("database roles", () => {
       `;
       expect(seen.role).toBe("member");
       await tx`insert into teams (slug, name) values ('mcp-test', 'Mcp')`;
+      await tx`select slug from mcp_servers`;
+      await tx`select name from mcp_server_tools`;
+      await tx`select team_id from mcp_server_teams`;
       await tx`
         insert into audit_events (actor_user_id, actor_email, actor, action)
         values (${user.id}, (select email from users where id = ${user.id}),
@@ -126,6 +129,12 @@ describe("database roles", () => {
     "select count(*) from audit_events",
     "delete from audit_events",
     "create table mcp_probe (id int)",
+    "insert into mcp_servers (slug, name, transport, credential_mode, tool_prefix) values ('x', 'x', 'stdio', 'shared', 'x')",
+    "update mcp_servers set enabled = false",
+    "delete from mcp_servers",
+    "update mcp_server_tools set exposed = true",
+    "delete from mcp_server_tools",
+    "delete from mcp_server_teams",
   ])("refuses tachy_mcp: %s", async (statement) => {
     await expect(
       asRole("tachy_mcp", (tx) => tx.unsafe(statement).then()),

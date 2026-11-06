@@ -44,8 +44,8 @@ end $$;
 alter role tachy_mcp set statement_timeout = '60s';
 
 -- tachy_app's grants, then less: no vault, no API tokens, no password hashes,
--- and the audit trail write-only. A new table holding secrets needs a revoke
--- here, because the default below grants it.
+-- the audit trail write-only and the linked servers read-only. A new table
+-- holding secrets needs a revoke here, because the default below grants it.
 do $$
 declare s text := current_schema();
 begin
@@ -61,6 +61,9 @@ begin
     -- Enough to record who a tool acted as and to read their rights.
     execute format('grant select (id, email, display_name, role, disabled, service_account, created_at), insert (email, display_name), update (display_name) on %I.users to tachy_mcp', s);
     execute format('revoke select, update, delete, truncate on %I.audit_events from tachy_mcp', s);
+    -- Which servers a turn links, and which of their tools it offers, are an
+    -- admin's: the console and the refresh job write them as tachy_app.
+    execute format('revoke insert, update, delete, truncate on %I.mcp_servers, %I.mcp_server_teams, %I.mcp_server_tools from tachy_mcp', s, s, s);
 end $$;
 
 -- The audit trail and a customer's history are append-only for the
