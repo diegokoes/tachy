@@ -2,10 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   BUILTIN_COMMANDS,
   findCommand,
-  commandAutoApprove,
+  commandWrite,
+  namedWorkItem,
 } from "../../packages/api/src/commands";
 import { CHAT_MODE_LIST, findMode } from "../../packages/api/src/modes";
-import { buildPrompt, turnChoice } from "../../packages/api/src/turn-config";
+import {
+  buildPrompt,
+  turnChoice,
+  turnPreApprovals,
+} from "../../packages/api/src/turn-config";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,14 +48,57 @@ describe("slash command registry", () => {
     expect(expanded).toContain("User arguments: fd 59577");
   });
 
-  it("only the commands that exist to post carry a write auto-approval", () => {
-    expect(commandAutoApprove("compact")).toEqual(["compact_work_item"]);
-    expect(commandAutoApprove("summary")).toEqual(["post_work_item_summary"]);
+  it("only the commands that exist to post name a write", () => {
+    expect(commandWrite("compact")).toBe("compact_work_item");
+    expect(commandWrite("summary")).toBe("post_work_item_summary");
     for (const command of BUILTIN_COMMANDS)
       if (command.name !== "compact" && command.name !== "summary")
-        expect(commandAutoApprove(command.name)).toEqual([]);
-    expect(commandAutoApprove("save_knowledge_entry")).toEqual([]);
-    expect(commandAutoApprove("")).toEqual([]);
+        expect(commandWrite(command.name)).toBeUndefined();
+    expect(commandWrite("save_knowledge_entry")).toBeUndefined();
+    expect(commandWrite("constructor")).toBeUndefined();
+  });
+
+  it("reads the work item a ticket command names, and nothing looser", () => {
+    expect(namedWorkItem("fd 59577")).toEqual({
+      source: "fd",
+      externalId: "59577",
+    });
+    expect(namedWorkItem(" fd #59577 --no-note")).toEqual({
+      source: "fd",
+      externalId: "59577",
+    });
+    for (const args of ["59577", "fd", "fd 59577x", ""])
+      expect(namedWorkItem(args)).toBeNull();
+  });
+
+  it("pre-approves a command's write on the work item it names, on a known connection", async () => {
+    expect(
+      await turnPreApprovals(
+        { name: "summary", args: "test-freshdesk 4521" },
+        undefined,
+      ),
+    ).toEqual([
+      {
+        tool: "post_work_item_summary",
+        workItem: { source: "test-freshdesk", externalId: "4521" },
+      },
+    ]);
+    for (const args of ["no-such-desk 4521", "4521", ""])
+      expect(
+        await turnPreApprovals({ name: "summary", args }, undefined),
+      ).toEqual([]);
+    expect(
+      await turnPreApprovals(
+        { name: "analyze", args: "test-freshdesk 4521" },
+        undefined,
+      ),
+    ).toEqual([]);
+  });
+
+  it("keeps an attached artifact's utilities pre-approved", async () => {
+    expect(
+      await turnPreApprovals(undefined, { utilities: ["export_table"] }),
+    ).toEqual([{ tool: "export_table" }]);
   });
 
   // Written by the wiki's gap list, so both arguments name themselves.

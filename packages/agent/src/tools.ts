@@ -123,6 +123,37 @@ export const CONDITIONAL_WRITES: Record<
   ingest_context: (i) => Array.isArray(i.urls) && i.urls.length > 0,
 };
 
+export interface WorkItemRef {
+  /** A connection slug. */
+  source: string;
+  externalId: string;
+}
+
+export interface PreApprovedCall {
+  tool: string;
+  /** Set when the command named a work item: only a call on it is covered. */
+  workItem?: WorkItemRef;
+}
+
+const targetsWorkItem = (
+  input: Record<string, unknown>,
+  workItem: WorkItemRef,
+) =>
+  input.source === workItem.source &&
+  String(input.external_id) === workItem.externalId;
+
+export function isPreApproved(
+  calls: readonly PreApprovedCall[],
+  tool: string,
+  input: Record<string, unknown>,
+): boolean {
+  return calls.some(
+    (call) =>
+      call.tool === tool &&
+      (!call.workItem || targetsWorkItem(input, call.workItem)),
+  );
+}
+
 /**
  * Same as `classify`, but lets a tool that only sometimes writes stay read-only
  * on the calls where it does not.

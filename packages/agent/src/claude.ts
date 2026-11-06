@@ -8,10 +8,9 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import {
   classifyCall,
-  proxiedReads,
-  qualify,
-  READ_TOOLS,
+  isPreApproved,
   MCP_SERVER,
+  type PreApprovedCall,
 } from "./tools";
 import {
   effectiveModel,
@@ -149,9 +148,6 @@ export function claudeOptions(
     // Set so Claude Code does not spend a model call naming each session.
     title: "tachy",
     permissionMode: "default",
-    allowedTools: [...READ_TOOLS, ...proxiedReads(config.proxiedTools)].map(
-      qualify,
-    ),
     mcpServers: {
       [MCP_SERVER]: {
         type: "stdio",
@@ -160,6 +156,7 @@ export function claudeOptions(
         env: config.mcpEnv,
       },
     },
+    // No allowedTools: a pre-approved tool skips canUseTool, the only gate.
     canUseTool,
     includePartialMessages: false,
     ...(opts.resume ? { resume: opts.resume } : {}),
@@ -167,24 +164,32 @@ export function claudeOptions(
   };
 }
 
+interface PermissionRequest {
+  toolName: string;
+  input: Record<string, unknown>;
+  toolUseID: string;
+}
+
+interface ApprovalPolicy {
+  gate: ApprovalGate;
+  preApproved?: readonly PreApprovedCall[];
+  proxiedTools?: readonly string[];
+}
+
 export async function claudePermission(
-  toolName: string,
-  input: Record<string, unknown>,
-  toolUseID: string,
-  gate: ApprovalGate,
-  autoApprove: string[] = [],
-  proxied: readonly string[] = [],
+  request: PermissionRequest,
+  policy: ApprovalPolicy,
 ): Promise<PermissionResult> {
-  const { cls, base } = classifyCall(toolName, input, proxied);
-  if (cls === "read") return { behavior: "allow", updatedInput: input };
-  if (cls === "write" && autoApprove.includes(base))
-    return { behavior: "allow", updatedInput: input };
+  const { toolName, input, toolUseID } = request;
+  const { cls, base } = classifyCall(toolName, input, policy.proxiedTools);
   if (cls === "denied")
     return {
       behavior: "deny",
       message: `Tool ${toolName} is not permitted. Only tachy knowledge tools are available.`,
     };
-  const decision = await gate(toolUseID, toolName, input);
+  if (cls === "read" || isPreApproved(policy.preApproved ?? [], base, input))
+    return { behavior: "allow", updatedInput: input };
+  const decision = await policy.gate(toolUseID, toolName, input);
   return decision.approve
     ? { behavior: "allow", updatedInput: decision.updatedInput ?? input }
     : { behavior: "deny", message: decision.message ?? "Denied by user." };
@@ -249,12 +254,12 @@ export class ClaudeTurn extends TurnBase {
       this.controller,
       async (toolName, input, { toolUseID }) => {
         const permission = await claudePermission(
-          toolName,
-          input,
-          toolUseID,
-          this.requestApproval,
-          config.autoApprove,
-          config.proxiedTools,
+          { toolName, input, toolUseID },
+          {
+            gate: this.requestApproval,
+            preApproved: config.preApproved,
+            proxiedTools: config.proxiedTools,
+          },
         );
         // A read is announced from its assistant block. A write is announced
         // here, once allowed, so the UI shows it running.
