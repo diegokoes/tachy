@@ -16,11 +16,12 @@ const SESSION: AgentEvent = {
   plugins: [],
 };
 type ResultEvent = Extract<AgentEvent, { type: "result" }>;
+const SESSION_ID = "0b6f7c3e-5d1a-4f2b-9e8c-7a6d5c4b3a21";
 const RESULT: ResultEvent = {
   type: "result",
   result: "done",
   costUsd: 0,
-  sessionId: "session-1",
+  sessionId: SESSION_ID,
   usage: {
     inputTokens: 1,
     outputTokens: 2,
@@ -60,12 +61,15 @@ afterAll(() => sql.end());
 const app = createApp({ passwordAuth: true });
 const cookies: Record<string, string> = {};
 
-/** Runs one chat turn to its end and returns every frame it sent. */
-async function framesOf(who: string, body: Record<string, unknown>) {
-  const response = await app.request("/api/agent/chat", {
+const postChat = (who: string, body: Record<string, unknown>) =>
+  app.request("/api/agent/chat", {
     ...json({ message: "hi", ...body }),
     headers: { "Content-Type": "application/json", Cookie: cookies[who] },
   });
+
+/** Runs one chat turn to its end and returns every frame it sent. */
+async function framesOf(who: string, body: Record<string, unknown>) {
+  const response = await postChat(who, body);
   expect(response.status).toBe(200);
   const frames: { event: string; data: any }[] = [];
   for (const raw of (await response.text()).split("\n\n")) {
@@ -139,8 +143,16 @@ describe("chat debug", () => {
   });
 
   it("says a turn is resumed when it continues a session", async () => {
-    const frames = await framesOf("ada", { debug: true, sessionId: "s-1" });
+    const frames = await framesOf("ada", {
+      debug: true,
+      sessionId: SESSION_ID,
+    });
     expect(frames[1].data.resumed).toBe(true);
+  });
+
+  it("refuses a session id that is not a UUID", async () => {
+    const response = await postChat("ada", { sessionId: "tachy" });
+    expect(response.status).toBe(400);
   });
 
   it("ignores the flag from a member", async () => {
@@ -165,7 +177,7 @@ describe("chat debug", () => {
           cacheWriteTokens: 2000,
         },
       };
-      await framesOf("mel", { sessionId: "session-1" });
+      await framesOf("mel", { sessionId: SESSION_ID });
     }
     const runs = await sql`
       select meta from analysis_runs where mode = 'chat' order by created_at
