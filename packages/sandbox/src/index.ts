@@ -16,6 +16,13 @@ export {
   type LauncherSettings,
 } from "./launcher";
 export {
+  egressSettingsFromEnv,
+  launcherSettingsFromEnv,
+  LAUNCHER_SOCKET,
+  runEgressProxy,
+  runLauncher,
+} from "./services";
+export {
   startEgressProxy,
   parseDestinations,
   DEFAULT_EGRESS,

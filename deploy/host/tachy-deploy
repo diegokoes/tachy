@@ -3,7 +3,8 @@
 # `tachy` user or root, on the host. The host never builds.
 #
 #   tachy-deploy <commit|branch>      deploy it; roll back by itself on failure
-#   tachy-deploy <commit> --no-pull   the image is already local (tagged sha-<commit>)
+#   tachy-deploy <commit> --no-pull   the images are already local (tagged
+#                                     sha-<commit> and sandbox-sha-<commit>)
 #   tachy-deploy stamp                record that the live database matches the
 #                                     checked-out db/schema.sql (once, after
 #                                     verifying it by hand on a pre-stamp database)
@@ -131,22 +132,29 @@ smoke() {
     "$image" run --quiet /load/smoke.js
 }
 
+# resolve_image <commit> [tag prefix]: the image CI built from the commit, by
+# digest once pulled
 resolve_image() {
-  local sha=$1 tag digest
-  tag="$IMAGE_REPO:sha-${sha:0:12}"
+  local sha=$1 prefix=${2:-} tag digest
+  tag="$IMAGE_REPO:${prefix}sha-${sha:0:12}"
   $PULL && docker pull -q "$tag" >/dev/null
   digest=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$tag" 2>/dev/null |
     grep "^$IMAGE_REPO@" | head -1)
   echo "${digest:-$tag}"
 }
 
-# roll <commit> <image>: check out the commit, point .env at the image, recreate.
-# One step that fails as a whole: a stack Compose will not bring up, such as a
-# release that needs a variable .env lacks, is rolled back like an unready one.
+# roll <commit> <image> <sandbox image>: check out the commit, point .env at the
+# images, recreate. One step that fails as a whole: a stack Compose will not
+# bring up, such as a release that needs a variable .env lacks, is rolled back
+# like an unready one. The api and the workers stop first, so the turns they
+# drain keep the sandbox launcher they started on.
 roll() {
   git_ checkout -q --detach "$1" &&
     set_env TACHY_IMAGE "$2" &&
+    set_env TACHY_SANDBOX_IMAGE "$3" &&
     set_env TACHY_COMMIT "${1:0:12}" &&
+    set_env TACHY_DOCKER_GID "$(stat -c %g /var/run/docker.sock)" &&
+    dc stop api worker-light worker-heavy &&
     dc up -d --remove-orphans
 }
 
@@ -175,11 +183,20 @@ else
 fi
 PREV_COMMIT=$(git_ rev-parse HEAD)
 PREV_IMAGE=$(app_env TACHY_IMAGE)
+PREV_SANDBOX_IMAGE=$(app_env TACHY_SANDBOX_IMAGE)
 log "deploying $COMMIT (from ${PREV_COMMIT:0:12}, image $PREV_IMAGE)"
 
 IMAGE=$(resolve_image "$COMMIT")
 docker image inspect "$IMAGE" >/dev/null || { log "image $IMAGE is not available"; exit 1; }
 log "image $IMAGE"
+
+# A release with turn sandboxes runs the sandbox image of its own commit.
+SANDBOX_IMAGE=
+if git_ show "$COMMIT:deploy/compose.prod.yml" | grep -q TACHY_SANDBOX_IMAGE; then
+  SANDBOX_IMAGE=$(resolve_image "$COMMIT" sandbox-)
+  docker image inspect "$SANDBOX_IMAGE" >/dev/null || { log "image $SANDBOX_IMAGE is not available"; exit 1; }
+  log "sandbox image $SANDBOX_IMAGE"
+fi
 
 # schema_diff <plan|apply> [args]: pg-schema-diff from the new image, against the
 # live database, to the new image's db/schema.sql and db/roles.sql (the tool
@@ -244,7 +261,7 @@ git_ show "$COMMIT:deploy/postgres/role-passwords.sh" |
     -e TACHY_MCP_DB_PASSWORD="$(app_env TACHY_MCP_DB_PASSWORD)" \
     -e TACHY_BACKUP_DB_PASSWORD="$(app_env TACHY_BACKUP_DB_PASSWORD)" postgres bash -s >/dev/null
 
-if roll "$COMMIT" "$IMAGE" && wait_ready && smoke; then
+if roll "$COMMIT" "$IMAGE" "$SANDBOX_IMAGE" && wait_ready && smoke; then
   record "$COMMIT" "$IMAGE" "$PREV_IMAGE" "$SCHEMA" "deployed"
   log "deployed $COMMIT"
   exit 0
@@ -261,7 +278,7 @@ else
   restore_stamp "$LIVE_SCHEMA" "$NEW_SCHEMA" ||
     log "could not restore the schema stamp; the previous release may not report ready"
 fi
-if roll "$PREV_COMMIT" "$PREV_IMAGE" && wait_ready; then
+if roll "$PREV_COMMIT" "$PREV_IMAGE" "$PREV_SANDBOX_IMAGE" && wait_ready; then
   record "$COMMIT" "$IMAGE" "$PREV_IMAGE" "$SCHEMA" "rolled_back"
   log "rolled back to ${PREV_COMMIT:0:12}"
 else

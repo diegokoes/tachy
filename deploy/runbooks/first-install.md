@@ -28,7 +28,9 @@
    `SMOKE_EMAIL`/`SMOKE_PASSWORD`, and `WATCH_DOWNLOADS=0` until two people
    have downloaded.
 6. **App settings.** As `tachy`, in `/opt/tachy`: `cp .env.example .env`,
-   `chmod 600 .env`, and set `TACHY_IMAGE` (a digest from CI),
+   `chmod 600 .env`, and set `TACHY_IMAGE` and `TACHY_SANDBOX_IMAGE` (the two
+   digests a CI run records), `TACHY_DOCKER_GID`
+   (`stat -c %g /var/run/docker.sock`),
    `TACHY_HOSTNAME` (without DNS, `tachy.local` resolves by mDNS on most
    clients, and `TACHY_HOST_IP` adds the host's address), `POSTGRES_PASSWORD`,
    `TACHY_APP_DB_PASSWORD`, `TACHY_MCP_DB_PASSWORD`, `TACHY_BACKUP_DB_PASSWORD`,

@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# The container smoke test CI runs on the built image (tachy:ci by default):
+# The container smoke test CI runs on the built images (tachy:ci and
+# tachy:ci-sandbox by default):
 #
 #   scripts/container-smoke.sh up      write a throwaway .env, start the stack
 #   scripts/container-smoke.sh smoke   seed small data, run load/smoke.js
 #   scripts/container-smoke.sh prod    the same data under deploy/compose.prod.yml:
 #                                      smoke.js again, then one chat turn against
-#                                      the mock model
+#                                      the mock model, in a turn sandbox
 #
 # It writes .env in the current checkout, so run it only in a CI checkout or a
 # scratch clone. On a machine that already runs a stack, set SMOKE_PROJECT,
@@ -13,6 +14,7 @@
 set -euo pipefail
 
 image=${TACHY_IMAGE:-tachy:ci}
+sandbox_image=${TACHY_SANDBOX_IMAGE:-tachy:ci-sandbox}
 project=${SMOKE_PROJECT:-tachy}
 api_port=${SMOKE_API_PORT:-8787}
 pg_port=${SMOKE_PG_PORT:-5433}
@@ -56,8 +58,9 @@ smoke)
   ;;
 prod)
   # What only the overlay has: Caddy and TLS, the read-only root, the
-  # least-privilege roles, the embedder and the two workers. The CPU limits
-  # are the runner's, which has fewer cores than the overlay's defaults ask for.
+  # least-privilege roles, the embedder, the two workers and the turn
+  # sandboxes. The CPU limits are the runner's, which has fewer cores than the
+  # overlay's defaults ask for. The mock model is one more egress destination.
   cat >>.env <<ENV
 TACHY_HOSTNAME=$host
 TACHY_INTERNAL_SECRET=$(openssl rand -hex 32)
@@ -65,6 +68,9 @@ TACHY_SECRET_KEY=$(openssl rand -base64 32)
 TACHY_STATUS_HOST_DIR=$PWD/.smoke-status
 TACHY_EMBEDDER_CPUS=2
 TACHY_WORKER_HEAVY_CPUS=2
+TACHY_SANDBOX_IMAGE=$sandbox_image
+TACHY_DOCKER_GID=$(stat -c %g /var/run/docker.sock)
+TACHY_SANDBOX_EGRESS=api.anthropic.com:443,mock-llm:4010
 ANTHROPIC_BASE_URL=http://mock-llm:4010
 ANTHROPIC_API_KEY=sk-mock-not-a-key
 ENV
@@ -93,11 +99,14 @@ ENV
     -e BASE_URL=http://api:8787 "$k6" run --quiet /load/smoke.js
 
   # One chat turn, so the tools process runs as tachy_mcp on the read-only
-  # root and embeds through the embedder. The mock model is the image's own.
+  # root and embeds through the embedder, and Claude Code runs in a sandbox
+  # that reaches the model through the egress proxy. The mock model is the
+  # image's own.
   docker run -d --rm --name "$project-mock-llm" --network "$project" \
     --network-alias mock-llm -e MOCK_PORT=4010 -e MOCK_DELAY_MS=200 \
     "$image" node load/mock-llm/server.mjs >/dev/null
   trap 'docker rm -f "$project-mock-llm" >/dev/null 2>&1 || true' EXIT
+  docker network connect --alias mock-llm "$project-outbound" "$project-mock-llm"
   turns=$(docker compose "${overlay[@]}" exec -T -e LEVELS=1 \
     -e BASE_URL=http://127.0.0.1:8787 api node load/turns.mjs)
   echo "$turns"
@@ -113,6 +122,14 @@ ENV
     exit 1
   fi
   echo "tool calls ok: $(grep -c '"ok":true' <<<"$tools")"
+  sandboxes=$(docker compose "${overlay[@]}" logs --no-log-prefix sandbox-launcher |
+    grep '"event":"sandbox_exited"' || true)
+  if ! grep -q '"exitCode":0' <<<"$sandboxes"; then
+    docker compose "${overlay[@]}" logs --no-log-prefix sandbox-launcher egress
+    echo "the chat turn did not run in a sandbox" >&2
+    exit 1
+  fi
+  echo "sandboxes ok: $(grep -c '"exitCode":0' <<<"$sandboxes")"
   ;;
 *)
   echo "usage: container-smoke.sh up|smoke|prod" >&2
