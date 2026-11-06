@@ -83,15 +83,15 @@ export default defineConfig({
           branches: 61,
         },
         "packages/agent/src/**": {
-          lines: 82,
-          statements: 81,
-          functions: 78,
-          branches: 71,
+          lines: 84,
+          statements: 83,
+          functions: 82,
+          branches: 72,
         },
         "packages/sandbox/src/**": {
           lines: 97,
           statements: 96,
-          functions: 91,
+          functions: 93,
           branches: 87,
         },
         "packages/web/src/**": {
