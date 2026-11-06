@@ -1,5 +1,6 @@
 /** The launcher and the egress proxy as services: their settings come from the environment. */
 import type { Server } from "node:http";
+import type { ToolsSandboxSettings } from "./container-spec";
 import { DockerEngine } from "./docker";
 import {
   DEFAULT_EGRESS,
@@ -21,7 +22,8 @@ const DEFAULT_EGRESS_PORT = 3128;
 const DEFAULT_MEMORY_MB = 512;
 const DEFAULT_PIDS_LIMIT = 256;
 const DEFAULT_CPUS = 1;
-const DEFAULT_MAX_SANDBOXES = 20;
+const DEFAULT_MAX_SANDBOXES = 32;
+const DEFAULT_TOOLS_MEMORY_MB = 512;
 
 function required(env: Env, name: string): string {
   const value = env[name]?.trim();
@@ -38,7 +40,26 @@ function positiveNumber(env: Env, name: string, fallback: number): number {
   return value;
 }
 
+/** Without TACHY_TOOLS_IMAGE the launcher refuses a tools sandbox. */
+function toolsSettingsFromEnv(env: Env): ToolsSandboxSettings | undefined {
+  const image = env.TACHY_TOOLS_IMAGE?.trim();
+  if (!image) return undefined;
+  return {
+    image,
+    network: required(env, "TACHY_TOOLS_NETWORK"),
+    repoVolume: required(env, "TACHY_TOOLS_REPO_VOLUME"),
+    memoryMb: positiveNumber(
+      env,
+      "TACHY_TOOLS_MEMORY_MB",
+      DEFAULT_TOOLS_MEMORY_MB,
+    ),
+    pidsLimit: positiveNumber(env, "TACHY_TOOLS_PIDS", DEFAULT_PIDS_LIMIT),
+    cpus: positiveNumber(env, "TACHY_TOOLS_CPUS", DEFAULT_CPUS),
+  };
+}
+
 export function launcherSettingsFromEnv(env: Env): LauncherSettings {
+  const tools = toolsSettingsFromEnv(env);
   return {
     instance: env.TACHY_SANDBOX_INSTANCE?.trim() || "tachy",
     image: required(env, "TACHY_SANDBOX_IMAGE"),
@@ -55,6 +76,7 @@ export function launcherSettingsFromEnv(env: Env): LauncherSettings {
       "TACHY_SANDBOX_MAX",
       DEFAULT_MAX_SANDBOXES,
     ),
+    ...(tools ? { tools } : {}),
   };
 }
 
@@ -67,10 +89,12 @@ export function egressSettingsFromEnv(env: Env): EgressSettings {
   };
 }
 
-/** The image is pulled first if the daemon lacks it, so a deploy need not. */
+/** The images are pulled first if the daemon lacks them, so a deploy need not. */
 export async function runLauncher(env: Env): Promise<Launcher> {
   const settings = launcherSettingsFromEnv(env);
-  await new DockerEngine(settings.dockerSocket).ensureImage(settings.image);
+  const docker = new DockerEngine(settings.dockerSocket);
+  await docker.ensureImage(settings.image);
+  if (settings.tools) await docker.ensureImage(settings.tools.image);
   return startLauncher(settings);
 }
 

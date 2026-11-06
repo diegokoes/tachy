@@ -38,11 +38,13 @@ describe("a sandbox request", () => {
         JSON.stringify({ ...VALID, state: "users/_default" }),
       ),
     ).toEqual({ ...VALID, state: "users/_default" });
+    const tools = { kind: "tools", args: [], env: { LANG: "C" } };
+    expect(parseSandboxRequest(JSON.stringify(tools))).toEqual(tools);
   });
 
   it("is refused in any other shape", () => {
     for (const invalid of [
-      { ...VALID, kind: "tools" },
+      { ...VALID, kind: "shell" },
       { ...VALID, args: "--print" },
       { ...VALID, args: [1] },
       { ...VALID, env: { LANG: 1 } },

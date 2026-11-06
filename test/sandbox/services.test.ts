@@ -57,7 +57,7 @@ describe("the launcher's settings", () => {
       cpus: 1,
       socketPath: LAUNCHER_SOCKET,
       dockerSocket: "/var/run/docker.sock",
-      maxSandboxes: 20,
+      maxSandboxes: 32,
     });
   });
 
@@ -82,6 +82,35 @@ describe("the launcher's settings", () => {
     expect(() =>
       launcherSettingsFromEnv({ ...REQUIRED, TACHY_SANDBOX_PIDS: "many" }),
     ).toThrow("TACHY_SANDBOX_PIDS must be a positive number, not 'many'");
+  });
+});
+
+describe("the tools sandbox's settings", () => {
+  const TOOLS = {
+    ...REQUIRED,
+    TACHY_TOOLS_IMAGE: "ghcr.io/team/tachy@sha256:abc",
+    TACHY_TOOLS_NETWORK: "tachy",
+    TACHY_TOOLS_REPO_VOLUME: "tachy_tachy-repo-data",
+  };
+
+  it("are absent without an image, so the launcher starts no tools", () => {
+    expect(launcherSettingsFromEnv(REQUIRED).tools).toBeUndefined();
+  });
+
+  it("take the image, network and clones, and fill the limits", () => {
+    expect(
+      launcherSettingsFromEnv({ ...TOOLS, TACHY_TOOLS_MEMORY_MB: "768" }).tools,
+    ).toEqual({
+      image: TOOLS.TACHY_TOOLS_IMAGE,
+      network: "tachy",
+      repoVolume: "tachy_tachy-repo-data",
+      memoryMb: 768,
+      pidsLimit: 256,
+      cpus: 1,
+    });
+    expect(() =>
+      launcherSettingsFromEnv({ ...TOOLS, TACHY_TOOLS_NETWORK: "" }),
+    ).toThrow("TACHY_TOOLS_NETWORK is not set");
   });
 });
 

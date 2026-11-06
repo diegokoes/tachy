@@ -22,7 +22,7 @@ export class SandboxProcess extends EventEmitter {
   readonly stdout = new PassThrough();
   killed = false;
   exitCode: number | null = null;
-  private exited = false;
+  exited = false;
   private readonly launcher: Socket;
   private readonly frames = new FrameReader();
 
