@@ -1,10 +1,11 @@
 name: Image gates
 
-# What vitest cannot see: the built image itself. It must start, answer
-# readiness, pass smoke.js against seeded data, do the same under the
-# production overlay with one chat turn, and carry no critical vulnerability
-# that already has a fix. Only pull requests that can change the image or the
-# stack it starts in pay for the build.
+# What vitest cannot see: the built images themselves. The server image must
+# start, answer readiness, pass smoke.js against seeded data, and do the same
+# under the production overlay with one chat turn in a turn sandbox. Neither it
+# nor the sandbox image may carry a critical vulnerability that already has a
+# fix. Only pull requests that can change the images or the stack they start in
+# pay for the build.
 on:
   pull_request:
 
@@ -56,10 +57,28 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # The stages it shares with the server image come from the build above.
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: claude-sandbox
+          load: true
+          tags: tachy:ci-sandbox
+          cache-from: type=gha,scope=sandbox
+          cache-to: type=gha,mode=max,scope=sandbox
+
       - name: Scan the image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: tachy:ci
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Scan the sandbox image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: tachy:ci-sandbox
           severity: CRITICAL
           ignore-unfixed: true
           exit-code: "1"
@@ -72,7 +91,8 @@ jobs:
         run: scripts/container-smoke.sh smoke
 
       # The stack a host runs: Caddy, the read-only root, the least-privilege
-      # roles, the embedder and the workers, and one chat turn through them.
+      # roles, the embedder and the workers, and one chat turn through them in
+      # a turn sandbox.
       - name: Production overlay
         id: overlay
         run: scripts/container-smoke.sh prod

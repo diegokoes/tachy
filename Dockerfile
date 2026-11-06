@@ -24,10 +24,9 @@ FROM grafana/k6:2.3.0@sha256:2dd4756ec6e14e62778916e1eb850108e4b499304c02df56760
 FROM golang:1.27@sha256:2920bb124f1a2e12a1d39f0cab756ae0068441ee1da7655dec7f5e374944095b AS schema-diff
 RUN CGO_ENABLED=0 go install github.com/stripe/pg-schema-diff/cmd/pg-schema-diff@v1.0.9
 
-# Build stage: devDependencies, the model download, the SPA and the bundles.
-FROM base AS build
-
-# The package.jsons alone first, so `npm ci` is cached unless a dependency changed.
+# All dependencies, devDependencies included. The package.jsons alone first, so
+# `npm ci` is cached unless a dependency changed.
+FROM base AS deps
 COPY package.json package-lock.json ./
 COPY packages/contract/package.json packages/contract/package.json
 COPY packages/core/package.json packages/core/package.json
@@ -42,6 +41,9 @@ COPY packages/cli/package.json packages/cli/package.json
 COPY packages/worker/package.json packages/worker/package.json
 COPY packages/web/package.json packages/web/package.json
 RUN npm ci
+
+# Build stage: the model download, the SPA and the bundles.
+FROM deps AS build
 
 # Pre-download the embedding model at build time so a freshly pulled container
 # doesn't need network access (or a multi-second stall) on its first embed.
@@ -58,6 +60,29 @@ COPY . .
 # TACHY_ENV_BADGE at runtime, so the same image serves dev and production.
 RUN npm run web:build \
  && npm run build:server
+
+# The per-turn sandbox (packages/sandbox): Claude Code alone, as the SDK
+# bundles it, with the C library it links against, CA certificates and one
+# user. No shell, so nothing but Claude Code can start in it, an org hook
+# included. The Debian release files and the dpkg record are what lets a
+# scanner see the C library. Built with `--target claude-sandbox`.
+FROM deps AS claude-sandbox-root
+RUN mkdir -p /sandbox-root/usr/local/bin /sandbox-root/etc/ssl/certs /sandbox-root/var/lib/dpkg/status.d \
+ && cp node_modules/@anthropic-ai/claude-agent-sdk-linux-*/claude /sandbox-root/usr/local/bin/claude \
+ && ldd /sandbox-root/usr/local/bin/claude | grep -o '/[^ ]*' | sort -u > /tmp/libraries \
+ && xargs -a /tmp/libraries -I{} cp --parents -L {} /sandbox-root \
+ && xargs -a /tmp/libraries readlink -f | xargs dpkg -S | cut -d: -f1 | sort -u \
+  | while read -r package; do dpkg -s "$package" > "/sandbox-root/var/lib/dpkg/status.d/$package"; done \
+ && cp -L /etc/os-release /etc/debian_version /sandbox-root/etc/ \
+ && cp /etc/ssl/certs/ca-certificates.crt /sandbox-root/etc/ssl/certs/ \
+ && echo 'claude:x:1000:1000::/home/claude:/nonexistent' > /sandbox-root/etc/passwd \
+ && echo 'claude:x:1000:' > /sandbox-root/etc/group
+
+FROM scratch AS claude-sandbox
+COPY --from=claude-sandbox-root /sandbox-root /
+USER 1000:1000
+WORKDIR /app
+ENTRYPOINT ["/usr/local/bin/claude"]
 
 # Runtime stage: production dependencies, the bundles, and the three files the
 # server reads from disk. No TypeScript, no tsx, no test tooling.
@@ -104,8 +129,8 @@ ENV TACHY_AGENT_HOME=/home/node/.claude
 # server writes at runtime is created and handed over here, because Docker only
 # chowns a named volume it creates itself - an existing one keeps the ownership
 # it was populated with.
-RUN mkdir -p /app/data/repos /app/backups /home/node/.claude \
- && chown -R node:node /app/data /app/backups /home/node/.claude
+RUN mkdir -p /app/data/repos /app/backups /home/node/.claude /run/tachy-sandbox \
+ && chown -R node:node /app/data /app/backups /home/node/.claude /run/tachy-sandbox
 
 USER node
 

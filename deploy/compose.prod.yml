@@ -2,9 +2,10 @@
 #
 #   docker compose -f docker-compose.yml -f deploy/compose.prod.yml up -d
 #
-# Needs in .env: TACHY_IMAGE (by digest), TACHY_HOSTNAME, POSTGRES_PASSWORD,
-# TACHY_APP_DB_PASSWORD, TACHY_MCP_DB_PASSWORD, TACHY_BACKUP_DB_PASSWORD, plus
-# the app secrets.
+# Needs in .env: TACHY_IMAGE and TACHY_SANDBOX_IMAGE (by digest),
+# TACHY_DOCKER_GID, TACHY_HOSTNAME, POSTGRES_PASSWORD, TACHY_APP_DB_PASSWORD,
+# TACHY_MCP_DB_PASSWORD, TACHY_BACKUP_DB_PASSWORD, plus the app secrets.
+# tachy-deploy writes the first three.
 #
 # Every size below is a variable whose default fits the 16 GB laptop (§3.2):
 # the memory limits sum to what that host has left after the OS. Another host
@@ -57,6 +58,8 @@ services:
     depends_on:
       embedder:
         condition: service_healthy
+      sandbox-launcher:
+        condition: service_healthy
     ports: !reset []
     init: true
     environment:
@@ -80,10 +83,12 @@ services:
       # Chat turns at once, sized to mem_limit below (§3.2). A cap saved in
       # Admin › system wins over it.
       TACHY_AGENT_SLOT_CAP: ${TACHY_AGENT_SLOT_CAP:-12}
+      TACHY_TURN_SANDBOX: ${TACHY_TURN_SANDBOX:-on}
     volumes:
       - ${TACHY_STATUS_HOST_DIR:-/srv/tachy/status}:/status:ro
+      - tachy-sandbox-run:/run/tachy-sandbox:ro
     stop_grace_period: 210s
-    mem_limit: ${TACHY_API_MEM_LIMIT:-6000m}
+    mem_limit: ${TACHY_API_MEM_LIMIT:-5808m}
     cpu_shares: 2048
     pids_limit: ${TACHY_API_PIDS_LIMIT:-2048}
     cap_drop: [ALL]
@@ -146,12 +151,16 @@ services:
       TACHY_DB_APP_NAME: tachy-worker-light
       TACHY_DB_POOL_MAX: ${TACHY_WORKER_DB_POOL_MAX:-5}
       TACHY_DRAIN_SECONDS: "60"
+      TACHY_TURN_SANDBOX: ${TACHY_TURN_SANDBOX:-on}
     depends_on:
       postgres:
+        condition: service_healthy
+      sandbox-launcher:
         condition: service_healthy
     volumes:
       - tachy-repo-data:/app/data
       - tachy-agent-home:/home/node/.claude
+      - tachy-sandbox-run:/run/tachy-sandbox:ro
     stop_grace_period: 90s
     mem_limit: ${TACHY_WORKER_LIGHT_MEM_LIMIT:-512m}
     cpus: ${TACHY_WORKER_LIGHT_CPUS:-1}
@@ -181,9 +190,79 @@ services:
       TACHY_DB_APP_NAME: tachy-worker-heavy
       TACHY_DB_POOL_MAX: ${TACHY_WORKER_DB_POOL_MAX:-5}
       TACHY_DRAIN_SECONDS: "60"
+      TACHY_TURN_SANDBOX: ${TACHY_TURN_SANDBOX:-on}
     mem_limit: ${TACHY_WORKER_HEAVY_MEM_LIMIT:-1536m}
     cpus: ${TACHY_WORKER_HEAVY_CPUS:-4}
     cpu_shares: 256
+
+  # Starts the container each Claude Code run gets (§5.17): the only service
+  # with the Docker socket, so it has no network and no app secret.
+  sandbox-launcher:
+    image: ${TACHY_IMAGE:-ghcr.io/diegokoes/tachy:main}
+    container_name: ${COMPOSE_PROJECT_NAME:-tachy}-sandbox-launcher
+    restart: unless-stopped
+    command: ["node", "dist/launcher.js"]
+    init: true
+    network_mode: none
+    group_add:
+      - ${TACHY_DOCKER_GID:?set TACHY_DOCKER_GID (stat -c %g /var/run/docker.sock)}
+    environment:
+      NODE_ENV: production
+      # A release runs the sandbox image built from its own commit.
+      TACHY_SANDBOX_IMAGE: ${TACHY_SANDBOX_IMAGE:-ghcr.io/diegokoes/tachy:sandbox-sha-${TACHY_COMMIT:?set TACHY_SANDBOX_IMAGE or TACHY_COMMIT}}
+      TACHY_SANDBOX_INSTANCE: ${COMPOSE_PROJECT_NAME:-tachy}
+      TACHY_SANDBOX_NETWORK: ${COMPOSE_PROJECT_NAME:-tachy}-sandbox
+      TACHY_SANDBOX_STATE_VOLUME: ${COMPOSE_PROJECT_NAME:-tachy}_tachy-agent-home
+      TACHY_SANDBOX_MAX: ${TACHY_SANDBOX_MAX:-20}
+      TACHY_SANDBOX_MEMORY_MB: ${TACHY_SANDBOX_MEMORY_MB:-512}
+      TACHY_SANDBOX_CPUS: ${TACHY_SANDBOX_CPUS:-1}
+      TACHY_SANDBOX_PIDS: ${TACHY_SANDBOX_PIDS:-256}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - tachy-sandbox-run:/run/tachy-sandbox
+    # Healthy once listening, which it does after pulling its image and
+    # reaching the Docker socket. A probe that sends nothing is no request.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('node:net').connect('/run/tachy-sandbox/launcher.sock').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      start_interval: 2s
+    mem_limit: ${TACHY_SANDBOX_LAUNCHER_MEM_LIMIT:-128m}
+    pids_limit: 64
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: [/tmp]
+    logging: *logging
+
+  # The sandboxes' only way out, to the host:port pairs in TACHY_SANDBOX_EGRESS
+  # (api.anthropic.com:443 when empty). It is on no network the database is.
+  egress:
+    image: ${TACHY_IMAGE:-ghcr.io/diegokoes/tachy:main}
+    container_name: ${COMPOSE_PROJECT_NAME:-tachy}-egress
+    restart: unless-stopped
+    command: ["node", "dist/egress.js"]
+    init: true
+    environment:
+      NODE_ENV: production
+      TACHY_SANDBOX_EGRESS: ${TACHY_SANDBOX_EGRESS:-}
+    networks: [sandbox, outbound]
+    mem_limit: ${TACHY_EGRESS_MEM_LIMIT:-64m}
+    pids_limit: 64
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: [/tmp]
+    healthcheck:
+      disable: true
+    logging: *logging
 
   postgres:
     command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
@@ -218,6 +297,16 @@ services:
     tmpfs: [/tmp]
     logging: *logging
 
+networks:
+  # The sandboxes' network: it reaches the egress proxy and nothing else.
+  sandbox:
+    name: ${COMPOSE_PROJECT_NAME:-tachy}-sandbox
+    internal: true
+  outbound:
+    name: ${COMPOSE_PROJECT_NAME:-tachy}-outbound
+
 volumes:
   caddy-data:
   caddy-config:
+  # The launcher's socket, which the api and the workers connect to.
+  tachy-sandbox-run:

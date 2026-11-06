@@ -72,7 +72,7 @@ jobs:
   # host; the host never builds. `dev` and `main` are convenience tags only.
   image:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     needs: build
     if: github.event_name == 'push'
     permissions:
@@ -99,6 +99,21 @@ jobs:
           echo "image=ghcr.io/${owner}/tachy" >> "$GITHUB_OUTPUT"
           echo "short=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
 
+      # The image each turn sandbox runs (DEPLOYMENT-ARCHITECTURE.md §5.17),
+      # from the same commit, so its Claude Code is the one the SDK expects.
+      # Pushed first: a host takes a published sha- tag as a complete release.
+      - id: push-sandbox
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: claude-sandbox
+          push: true
+          tags: |
+            ${{ steps.name.outputs.image }}:sandbox-sha-${{ steps.name.outputs.short }}
+            ${{ steps.name.outputs.image }}:sandbox-${{ github.ref_name }}
+          cache-from: type=gha,scope=sandbox
+          cache-to: type=gha,mode=max,scope=sandbox
+
       - id: push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -111,11 +126,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Record the digest
+      - name: Record the digests
         run: |
           ref="${{ steps.name.outputs.image }}@${{ steps.push.outputs.digest }}"
+          sandbox="${{ steps.name.outputs.image }}@${{ steps.push-sandbox.outputs.digest }}"
           echo "$ref" > image-ref.txt
+          echo "$sandbox" >> image-ref.txt
           echo "Image: \`$ref\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Sandbox image: \`$sandbox\`" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -150,12 +168,44 @@ jobs:
           push-to-registry: true
           create-storage-record: false
 
+      - name: List what the sandbox image holds
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.name.outputs.image }}@${{ steps.push-sandbox.outputs.digest }}
+          format: cyclonedx
+          output: sandbox-sbom.cdx.json
+
+      - name: Attest where the sandbox image was built
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.name.outputs.image }}
+          subject-digest: ${{ steps.push-sandbox.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest what the sandbox image holds
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.name.outputs.image }}
+          subject-digest: ${{ steps.push-sandbox.outputs.digest }}
+          sbom-path: sandbox-sbom.cdx.json
+          push-to-registry: true
+          create-storage-record: false
+
       # The pull request scanned a build of the same tree; this is the image a
       # host pulls, against what is known today.
       - name: Scan the published image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ steps.name.outputs.image }}@${{ steps.push.outputs.digest }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Scan the published sandbox image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.name.outputs.image }}@${{ steps.push-sandbox.outputs.digest }}
           severity: CRITICAL
           ignore-unfixed: true
           exit-code: "1"
