@@ -1,15 +1,32 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentConfig, AgentEvent } from "../../packages/agent/src/index";
 
 type Script = (signal: AbortSignal) => AsyncGenerator<unknown>;
 
 const claude = vi.hoisted(() => ({ script: undefined as Script | undefined }));
+const toolsProcess = vi.hoisted(() => ({
+  start: undefined as (() => Promise<unknown>) | undefined,
+}));
 
 vi.mock("@anthropic-ai/claude-agent-sdk", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@anthropic-ai/claude-agent-sdk")>()),
   query: ({ options }: { options: { abortController: AbortController } }) =>
     claude.script!(options.abortController.signal),
 }));
+
+vi.mock("../../packages/agent/src/turn-tools", () => ({
+  startTurnTools: () => toolsProcess.start!(),
+}));
+
+const RUNNING_TOOLS = {
+  serverConfig: { type: "sdk", name: "tachy", instance: {} },
+  allow: () => {},
+  close: async () => {},
+};
+
+beforeEach(() => {
+  toolsProcess.start = async () => RUNNING_TOOLS;
+});
 
 const { ClaudeTurn } = await import("../../packages/agent/src/claude");
 
@@ -84,6 +101,24 @@ describe("a stopped Claude turn", () => {
       { type: "text", text: "so far" },
       { type: "error", kind: "other", message: "the model is on fire" },
     ]);
+  });
+});
+
+describe("a Claude turn whose tools did not start", () => {
+  it("ends with that error and never starts Claude Code", async () => {
+    const failure =
+      "tachy's tools did not start for this turn; the server log has the reason";
+    toolsProcess.start = async () => {
+      throw new Error(failure);
+    };
+    let claudeStarted = false;
+    const events = await eventsOf(async function* () {
+      claudeStarted = true;
+    });
+    expect(events).toEqual([
+      { type: "error", kind: "other", message: failure },
+    ]);
+    expect(claudeStarted).toBe(false);
   });
 });
 

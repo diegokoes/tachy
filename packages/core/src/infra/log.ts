@@ -32,9 +32,10 @@ const shipUrl = process.env.TACHY_LOG_URL;
 const shipSecret = rememberSecret(process.env.TACHY_INTERNAL_SECRET ?? "");
 
 /**
- * An MCP child spawned for a turn cannot rely on stderr: Claude Code does not
- * pass it on. Its lines go to the API instead, which writes them to the
- * container log. Fire and forget: a lost count line must not slow a tool down.
+ * An MCP child spawned for a turn cannot rely on stderr: the api reads it only
+ * when the child fails to start. Its lines go to the API instead, which writes
+ * them to the container log. Fire and forget: a lost count line must not slow
+ * a tool down.
  */
 function ship(line: string): void {
   fetch(shipUrl!, {
