@@ -89,10 +89,10 @@ export default defineConfig({
           branches: 71,
         },
         "packages/sandbox/src/**": {
-          lines: 94,
-          statements: 92,
-          functions: 85,
-          branches: 78,
+          lines: 97,
+          statements: 96,
+          functions: 91,
+          branches: 87,
         },
         "packages/web/src/**": {
           lines: 53,
