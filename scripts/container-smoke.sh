@@ -6,7 +6,7 @@
 #   scripts/container-smoke.sh smoke   seed small data, run load/smoke.js
 #   scripts/container-smoke.sh prod    the same data under deploy/compose.prod.yml:
 #                                      smoke.js again, then one chat turn against
-#                                      the mock model, in a turn sandbox
+#                                      the mock model, in turn sandboxes
 #
 # It writes .env in the current checkout, so run it only in a CI checkout or a
 # scratch clone. On a machine that already runs a stack, set SMOKE_PROJECT,
@@ -98,8 +98,8 @@ ENV
   docker run --rm --network "$project" -v "$PWD/load:/load:ro" \
     -e BASE_URL=http://api:8787 "$k6" run --quiet /load/smoke.js
 
-  # One chat turn, so the tools process runs as tachy_mcp on the read-only
-  # root and embeds through the embedder, and Claude Code runs in a sandbox
+  # One chat turn, so the tools process runs as tachy_mcp in a container of
+  # its own and embeds through the embedder, and Claude Code runs in a sandbox
   # that reaches the model through the egress proxy. The mock model is the
   # image's own.
   docker run -d --rm --name "$project-mock-llm" --network "$project" \
@@ -124,11 +124,13 @@ ENV
   echo "tool calls ok: $(grep -c '"ok":true' <<<"$tools")"
   sandboxes=$(docker compose "${overlay[@]}" logs --no-log-prefix sandbox-launcher |
     grep '"event":"sandbox_exited"' || true)
-  if ! grep -q '"exitCode":0' <<<"$sandboxes"; then
-    docker compose "${overlay[@]}" logs --no-log-prefix sandbox-launcher egress
-    echo "the chat turn did not run in a sandbox" >&2
-    exit 1
-  fi
+  for kind in claude tools; do
+    if ! grep -q "\"kind\":\"$kind\",\"exitCode\":0" <<<"$sandboxes"; then
+      docker compose "${overlay[@]}" logs --no-log-prefix sandbox-launcher egress
+      echo "the chat turn's $kind sandbox did not run and exit cleanly" >&2
+      exit 1
+    fi
+  done
   echo "sandboxes ok: $(grep -c '"exitCode":0' <<<"$sandboxes")"
   ;;
 *)
