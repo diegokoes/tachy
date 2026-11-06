@@ -1,4 +1,5 @@
 import type { AgentEffort } from "@tachy/contract";
+import type { PreApprovedCall } from "./tools";
 
 export { AGENT_EFFORTS, type AgentEffort } from "@tachy/contract";
 
@@ -45,12 +46,8 @@ export interface AgentConfig {
    */
   agentAuth?: AgentAuth;
 
-  /**
-   * Base tool names whose write path this turn may take without an approval
-   * box, because the user already authorised it by typing the slash command
-   * that performs it. Never set it from anything the model controls.
-   */
-  autoApprove?: string[];
+  /** Writes this turn runs without a review box. Never set from model output. */
+  preApproved?: PreApprovedCall[];
 
   /** Linked-server tools offered this turn. All read-only, so unreviewed. */
   proxiedTools?: string[];

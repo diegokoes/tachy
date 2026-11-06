@@ -67,7 +67,7 @@ import {
   buildPrompt,
   mcpConfig,
   systemPrompt,
-  turnAutoApprove,
+  turnPreApprovals,
   turnDebug,
   turnChoice,
 } from "../turn-config";
@@ -248,7 +248,7 @@ export const agent = new Hono()
       dateFormat: user ? await dateFormatOf(ctx) : undefined,
     });
 
-    const autoApprove = turnAutoApprove(command?.name, artifact?.spec);
+    const preApproved = await turnPreApprovals(command, artifact?.spec);
 
     // Minted before the config so the MCP subprocess can carry it: a knowledge
     // edit made mid-turn records which conversation made it.
@@ -269,7 +269,7 @@ export const agent = new Hono()
     const config: AgentConfig = {
       ...base,
       systemPrompt: await systemPrompt(),
-      ...(autoApprove.length ? { autoApprove } : {}),
+      ...(preApproved.length ? { preApproved } : {}),
     };
 
     if (activeByUser.has(userKey))

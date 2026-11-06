@@ -21,6 +21,14 @@ describe("approval titles", () => {
     ).toBe("create a work item · eng-ado Portal");
   });
 
+  it("says a URL ingest fetches a web page", () => {
+    expect(
+      approvalTitle("mcp__tachy__ingest_context", {
+        urls: ["https://example.com/page"],
+      }),
+    ).toBe("fetch a web page");
+  });
+
   it("falls back to the tool's name in words, alone when it has no target", () => {
     expect(approvalTitle("set_project_area_map", {})).toBe(
       "set project area map",

@@ -116,10 +116,10 @@ describe("chat debug", () => {
 
     const sent = frames[1].data;
     expect(Object.keys(sent).sort()).toEqual([
-      "autoApprove",
       "effort",
       "linkedServers",
       "model",
+      "preApproved",
       "prompt",
       "redactionForced",
       "resumed",
