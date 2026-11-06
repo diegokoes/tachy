@@ -1,15 +1,17 @@
 # Deploy and roll back
 
-CI builds `ghcr.io/diegokoes/tachy:sha-<commit>` for every push to `dev` and
-`main` that passed the tests. The host only pulls.
+CI builds `ghcr.io/diegokoes/tachy:sha-<commit>`, and the turn sandbox image
+`sandbox-sha-<commit>`, for every push to `dev` and `main` that passed the
+tests. The host only pulls.
 
 ```sh
 ssh tachy@<host> tachy-deploy main          # or a commit sha
 ```
 
-It resolves the commit to an image digest, refuses a schema change it cannot
-apply, takes an encrypted pre-deploy backup, checks out that commit, recreates
-the stack (the api drains running chat turns for up to 3 minutes), waits for
+It resolves the commit to its image digests, refuses a schema change it cannot
+apply, takes an encrypted pre-deploy backup, checks out that commit, stops the
+api and the workers (the api drains running chat turns for up to 3 minutes),
+recreates the stack, waits for
 `/readyz` through Caddy and runs `smoke.js`. If the stack does not come up, or
 readiness or smoke fails, it rolls back to the previous commit and digest by
 itself and exits 1.
@@ -19,7 +21,8 @@ start: the deploy rolls back and its output names the variable. The production
 overlay requires `POSTGRES_PASSWORD`, `TACHY_APP_DB_PASSWORD`,
 `TACHY_MCP_DB_PASSWORD`, `TACHY_INTERNAL_SECRET` and `TACHY_HOSTNAME`. Add what
 is missing to `/opt/tachy/.env` and deploy again; the role passwords are set
-from it on every deploy.
+from it on every deploy. `tachy-deploy` writes `TACHY_IMAGE`,
+`TACHY_SANDBOX_IMAGE`, `TACHY_COMMIT` and `TACHY_DOCKER_GID` itself.
 
 A deploy does not update the host's own scripts. `tachy-deploy`,
 `tachy-update`, `tachy-backup` and `tachy-watch` are copies the playbook
@@ -54,6 +57,11 @@ release.
 
 **Roll back by hand:** `tachy-deploy <previous commit>`. Safe while the older
 image accepts the current schema, which is what expand and contract is for.
+
+**Turn sandboxes off** (DEPLOYMENT-ARCHITECTURE.md §5.17), while a sandbox
+problem is fixed: `TACHY_TURN_SANDBOX=off` in `/opt/tachy/.env`, then
+`sudo systemctl restart tachy`. Claude Code runs in the api and the workers
+again, and so do an organization's hooks. Remove the line once it is fixed.
 
 **What happened:**
 
