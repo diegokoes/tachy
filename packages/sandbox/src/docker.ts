@@ -162,6 +162,14 @@ export class DockerEngine {
     });
   }
 
+  /** The runtime names the daemon was configured with, runc among them. */
+  async runtimes(): Promise<string[]> {
+    const info = (await this.call("GET", "/info")) as {
+      Runtimes?: Record<string, unknown>;
+    };
+    return Object.keys(info.Runtimes ?? {});
+  }
+
   async listLabelled(label: string): Promise<string[]> {
     const filters = encodeURIComponent(JSON.stringify({ label: [label] }));
     const containers = await this.call(

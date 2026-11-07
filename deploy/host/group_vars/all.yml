@@ -13,6 +13,9 @@ backup_recipients: []
 tailscale_enabled: false
 tailscale_cidr: "100.64.0.0/10"
 docker_major: "29"
+# CI's image gates install the same release from these two lines.
+gvisor_release: "20261026.0"
+gvisor_sha512: "e6aa030fb8379fe92b53e9b8b696419e0dce8a3bbcc7d4c1cf76b2ea3d6569eabd7360e694deda6ccbdcd77095b3e82ca0f90a3d8fd13a3e5d6b11cd29fe4649"
 dns_probe_name: api.anthropic.com
 dns_wait_seconds: 60
 battery_stop_threshold: 80
