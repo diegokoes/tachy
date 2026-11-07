@@ -11,9 +11,15 @@ export interface SandboxLimits {
   cpus: number;
 }
 
-export interface ClaudeSandboxSettings extends SandboxLimits {
+/** What every sandbox of a deployment shares. */
+export interface SandboxHost {
   /** Labels this deployment's sandboxes, so a launcher removes only its own. */
   instance: string;
+  /** A Docker runtime other than runc, gVisor's `runsc`; unset, Docker's default. */
+  runtime?: string;
+}
+
+export interface ClaudeSandboxSettings extends SandboxHost, SandboxLimits {
   image: string;
   network: string;
   /** The Docker volume holding each person's agent state under `users/<id>`. */
@@ -135,6 +141,7 @@ export interface ContainerSpec {
     MemorySwap: number;
     NanoCpus: number;
     IpcMode: "private";
+    Runtime?: string;
     NetworkMode: string;
     Tmpfs: Record<string, string>;
     Mounts: VolumeMount[];
@@ -165,7 +172,7 @@ function allowedEnv(
 
 /** Everything a sandbox shares, whatever runs in it. */
 function lockedDown(
-  instance: string,
+  host: SandboxHost,
   shape: Pick<ContainerSpec, "Image" | "Cmd" | "Env"> & {
     limits: SandboxLimits;
     network: string;
@@ -180,7 +187,7 @@ function lockedDown(
     Env: shape.Env,
     User: `${SANDBOX_UID}:${SANDBOX_UID}`,
     WorkingDir: WORKING_DIR,
-    Labels: { [SANDBOX_LABEL]: instance },
+    Labels: { [SANDBOX_LABEL]: host.instance },
     AttachStdin: true,
     AttachStdout: true,
     AttachStderr: true,
@@ -197,6 +204,7 @@ function lockedDown(
       MemorySwap: memoryBytes,
       NanoCpus: Math.round(shape.limits.cpus * NANO_CPUS_PER_CPU),
       IpcMode: "private",
+      ...(host.runtime ? { Runtime: host.runtime } : {}),
       NetworkMode: shape.network,
       Tmpfs: shape.tmpfs,
       Mounts: shape.mounts,
@@ -213,7 +221,7 @@ export function claudeSandboxSpec(
   assertArgs(request.args);
   if (request.state !== undefined && !STATE_RE.test(request.state))
     throw new Error(`'${request.state}' is not a person's state folder`);
-  return lockedDown(settings.instance, {
+  return lockedDown(settings, {
     Image: settings.image,
     Cmd: request.args,
     Env: [
@@ -249,12 +257,12 @@ export function claudeSandboxSpec(
  */
 export function toolsSandboxSpec(
   request: SandboxRequest,
-  instance: string,
+  host: SandboxHost,
   settings: ToolsSandboxSettings,
 ): ContainerSpec {
   if (request.args.length || request.state !== undefined)
     throw new Error("a tools sandbox takes no arguments and no state");
-  return lockedDown(instance, {
+  return lockedDown(host, {
     Image: settings.image,
     Cmd: TOOLS_COMMAND,
     Env: [

@@ -60,8 +60,10 @@ function toolsSettingsFromEnv(env: Env): ToolsSandboxSettings | undefined {
 
 export function launcherSettingsFromEnv(env: Env): LauncherSettings {
   const tools = toolsSettingsFromEnv(env);
+  const runtime = env.TACHY_SANDBOX_RUNTIME?.trim();
   return {
     instance: env.TACHY_SANDBOX_INSTANCE?.trim() || "tachy",
+    ...(runtime ? { runtime } : {}),
     image: required(env, "TACHY_SANDBOX_IMAGE"),
     network: required(env, "TACHY_SANDBOX_NETWORK"),
     stateVolume: required(env, "TACHY_SANDBOX_STATE_VOLUME"),

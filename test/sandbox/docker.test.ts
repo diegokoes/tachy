@@ -28,6 +28,10 @@ function answerPull(fromImage: string, response: ServerResponse): void {
 function standInDaemon(socketPath: string): Promise<Server> {
   const daemon = createServer((request, response) => {
     const path = request.url ?? "";
+    if (path.endsWith("/info"))
+      return response
+        .writeHead(200)
+        .end(JSON.stringify({ Runtimes: { runc: {}, runsc: {} } }));
     if (path.includes("/images/create")) {
       const query = new URL(path, "http://daemon").searchParams;
       pulls.push({ fromImage: query.get("fromImage"), tag: query.get("tag") });
@@ -107,6 +111,10 @@ describe("the Docker client", () => {
     await expect(docker.ensureImage("broken:1")).rejects.toThrow(
       "docker pull broken:1 failed: unexpected EOF",
     );
+  });
+
+  it("lists the runtimes the daemon was configured with", async () => {
+    expect(await docker.runtimes()).toEqual(["runc", "runsc"]);
   });
 
   it("takes a container already gone, or going, as removed", async () => {

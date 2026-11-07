@@ -279,6 +279,15 @@ describe("the sandbox launcher", () => {
     expect(launcher.running).toBe(0);
   });
 
+  it("does not start with a runtime Docker lacks", async () => {
+    await expect(
+      startLauncher({
+        ...settingsFor(mkdtempSync(join(tmpdir(), "tachy-runtime-"))),
+        runtime: "tachy-test-absent",
+      }),
+    ).rejects.toThrow("Docker has no runtime 'tachy-test-absent'");
+  });
+
   it("refuses a tools sandbox when the deployment gave it none", async () => {
     const sandbox = openSandbox(
       { kind: "tools", args: [], env: {} },
