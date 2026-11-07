@@ -46,6 +46,8 @@
       ansible.builtin.import_tasks: tasks/ssh.yml
     - name: Docker
       ansible.builtin.import_tasks: tasks/docker.yml
+    - name: gVisor for the turn sandboxes
+      ansible.builtin.import_tasks: tasks/gvisor.yml
     - name: Firewall
       ansible.builtin.import_tasks: tasks/firewall.yml
     - name: Backup downloads over SFTP

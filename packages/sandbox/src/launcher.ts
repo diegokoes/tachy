@@ -102,7 +102,19 @@ function specFor(
 ): ContainerSpec {
   if (request.kind === "claude") return claudeSandboxSpec(request, settings);
   if (!settings.tools) throw new Error("this launcher starts no tools sandbox");
-  return toolsSandboxSpec(request, settings.instance, settings.tools);
+  return toolsSandboxSpec(request, settings, settings.tools);
+}
+
+/** A runtime Docker lacks fails every sandbox, so the launcher does not start without it. */
+async function assertRuntime(
+  docker: DockerEngine,
+  runtime: string,
+): Promise<void> {
+  const runtimes = await docker.runtimes();
+  if (!runtimes.includes(runtime))
+    throw new Error(
+      `Docker has no runtime '${runtime}' (it has ${runtimes.join(", ")}): install it, or set TACHY_SANDBOX_RUNTIME=runc`,
+    );
 }
 
 async function removeLeftovers(
@@ -119,6 +131,7 @@ export async function startLauncher(
   settings: LauncherSettings,
 ): Promise<Launcher> {
   const docker = new DockerEngine(settings.dockerSocket);
+  if (settings.runtime) await assertRuntime(docker, settings.runtime);
   await removeLeftovers(docker, settings.instance);
   let admitted = 0;
   const clients = new Set<Socket>();
@@ -202,6 +215,7 @@ export async function startLauncher(
   logEvent("info", "sandbox_launcher_ready", {
     image: settings.image,
     network: settings.network,
+    runtime: settings.runtime ?? "default",
   });
 
   return {

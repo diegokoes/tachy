@@ -61,6 +61,14 @@ describe("the launcher's settings", () => {
     });
   });
 
+  it("names a runtime only when the deployment does", () => {
+    expect(launcherSettingsFromEnv(REQUIRED)).not.toHaveProperty("runtime");
+    expect(
+      launcherSettingsFromEnv({ ...REQUIRED, TACHY_SANDBOX_RUNTIME: " runsc " })
+        .runtime,
+    ).toBe("runsc");
+  });
+
   it("refuses to start without an image, a network or a state volume", () => {
     for (const name of Object.keys(REQUIRED))
       expect(() =>

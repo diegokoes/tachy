@@ -215,6 +215,8 @@ services:
       TACHY_SANDBOX_INSTANCE: ${COMPOSE_PROJECT_NAME:-tachy}
       TACHY_SANDBOX_NETWORK: ${COMPOSE_PROJECT_NAME:-tachy}-sandbox
       TACHY_SANDBOX_STATE_VOLUME: ${COMPOSE_PROJECT_NAME:-tachy}_tachy-agent-home
+      # gVisor, which the host playbook installs; runc runs them without it.
+      TACHY_SANDBOX_RUNTIME: ${TACHY_SANDBOX_RUNTIME:-runsc}
       # A chat turn takes two: Claude Code's and its tools'.
       TACHY_SANDBOX_MAX: ${TACHY_SANDBOX_MAX:-32}
       TACHY_SANDBOX_MEMORY_MB: ${TACHY_SANDBOX_MEMORY_MB:-512}

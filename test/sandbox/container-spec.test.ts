@@ -85,6 +85,7 @@ describe("the claude sandbox container", () => {
     });
     expect(Env.sort()).toEqual([
       "ANTHROPIC_API_KEY=sk-test",
+      "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
       "CLAUDE_CODE_ENTRYPOINT=sdk-ts",
       "CLAUDE_CONFIG_DIR=/home/claude/.claude",
       "HOME=/home/claude",
@@ -113,7 +114,7 @@ describe("the tools sandbox container", () => {
   ) =>
     toolsSandboxSpec(
       { kind: "tools", args: [], env: {}, ...request },
-      "tachy",
+      { instance: "tachy" },
       TOOLS,
     );
 
@@ -122,6 +123,7 @@ describe("the tools sandbox container", () => {
       Image: TOOLS.image,
       Cmd: ["node", "dist/mcp.js"],
       User: "1000:1000",
+      Healthcheck: { Test: ["NONE"] },
       WorkingDir: "/app",
       Labels: { [SANDBOX_LABEL]: "tachy" },
       HostConfig: {
@@ -174,5 +176,33 @@ describe("the tools sandbox container", () => {
       "TACHY_MCP_SERVER_TOKENS={}",
       "TACHY_REPO_DIR=/app/data/repos",
     ]);
+  });
+});
+
+describe("a sandbox's runtime", () => {
+  const request = { kind: "claude" as const, args: [], env: {} };
+
+  it("is Docker's default unless the deployment names one", () => {
+    expect(claudeSandboxSpec(request, SETTINGS).HostConfig).not.toHaveProperty(
+      "Runtime",
+    );
+    expect(
+      claudeSandboxSpec(request, { ...SETTINGS, runtime: "runsc" }).HostConfig
+        .Runtime,
+    ).toBe("runsc");
+    expect(
+      toolsSandboxSpec(
+        { kind: "tools", args: [], env: {} },
+        { instance: "tachy", runtime: "runsc" },
+        {
+          image: "tachy",
+          network: "tachy",
+          repoVolume: "repos",
+          memoryMb: 512,
+          pidsLimit: 256,
+          cpus: 1,
+        },
+      ).HostConfig.Runtime,
+    ).toBe("runsc");
   });
 });
