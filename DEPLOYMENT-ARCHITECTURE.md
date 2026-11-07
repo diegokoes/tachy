@@ -371,6 +371,25 @@ container from the production image (`--network none`, no database), measured
   events took 1.7 to 5.1 s. The tools exit by themselves 0.4 s after Claude
   Code.
 
+**The same under gVisor** (§5.17), measured 2026-11-06 on the workstation with
+gVisor release-20261026.0, run rootless (`runsc do`) with the host's network,
+each run in a cgroup of its own. Medians of seven warm runs:
+
+| Per sandbox                             |    runc | gVisor (systrap) | gVisor (KVM) |
+| --------------------------------------- | ------: | ---------------: | -----------: |
+| Claude Code, start to its first message |  193 ms |           422 ms |       356 ms |
+| Claude Code, memory peak                | 113 MiB |          156 MiB |      161 MiB |
+| tools server, start to `initialize`     |  172 ms |           436 ms |       346 ms |
+| tools server, one `tools/list`          |   11 ms |            16 ms |        12 ms |
+| tools server, memory peak               |  54 MiB |           91 MiB |       95 MiB |
+
+- A turn starts about 0.5 s later under systrap, gVisor's default platform,
+  and holds about 85 MiB more.
+- Git reads over this repository took 143 ms under runc and 0.5 to 0.6 s
+  under gVisor, a fresh sandbox's 26 to 40 ms start included: 3.5 to 4 times.
+- Not measured here: Docker's own runsc path, and gVisor's network stack in
+  place of the host's.
+
 **Conclusion.** Before Phase 1 the laptop could hold about 5 turns before it
 ran out of memory, and nothing stopped a sixth. Taking the model out of the MCP
 child is what made 15 possible (§5.4).
@@ -434,7 +453,8 @@ ceilings, and each is a variable in `.env` (§4.3):
   (`TACHY_SANDBOX_MEMORY_MB`, `TACHY_TOOLS_MEMORY_MB`), and the api holds
   neither. Its limit still has room for both, so that `TACHY_TURN_SANDBOX=off`
   stays a way back: the sandboxes' ceilings and the api's share for turns are
-  the same memory, counted twice (§15.2).
+  the same memory, counted twice (§15.2). gVisor adds about 45 MiB to each
+  sandbox (§3.1).
 
 **Admission.**
 
@@ -2084,7 +2104,16 @@ proxy, plain http included, and the proxy passes only what is listed.
 
 **Costs** are in §3.1.
 
-**Not built:** gVisor (`runsc`) as the sandboxes' runtime.
+**gVisor.** Every sandbox runs under gVisor's `runsc` runtime
+(`TACHY_SANDBOX_RUNTIME`, `runsc` in the overlay): a process in it makes its
+system calls to gVisor's own kernel, so breaking out of a sandbox needs a
+gVisor bug as well as a host kernel one. The host playbook installs one pinned
+release, checked against its digest, and registers it in Docker's
+`daemon.json`; CI's image gates install the same release. The launcher does not
+start when Docker lacks the runtime it is given, so a host without it fails its
+deploy and rolls back. `TACHY_SANDBOX_RUNTIME=runc` runs the sandboxes without
+gVisor. It costs a turn about 0.5 s and 85 MiB, and git reads 3.5 times as
+long (§3.1).
 
 ## 6. Durability, backup, restore
 
@@ -2400,7 +2429,7 @@ and the SFTP pull keeps working as it is.
   SETUID), and has a tmpfs for its socket directory too.
 - Only `sandbox-launcher` mounts the Docker socket, which is root on the host
   (§5.17). It has no network and no app secret, and builds every container it
-  starts itself. The watch script runs on the host, outside every container.
+  starts itself, under gVisor. The watch script runs on the host, outside every container.
 - `/srv/tachy/status` is mounted read-only into `api`, so the admin page can
   show backup and host state without any access to the host.
 - Operators aren't in the `docker` group, which is root-equivalent. Deploys run
@@ -2686,17 +2715,17 @@ Docker starts anyway, so a host with no uplink still serves the LAN.
 
 **GitHub Actions**
 
-| Workflow            | Runs on                                                 | Does                                                                                                                                                                                                                   |
-| ------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`            | pull requests; pushes to `main` and `dev`               | `build`: typecheck, `web:check`, the server build, `coverage` with its ratchet at 74/72/71/63                                                                                                                          |
-|                     | pushes only                                             | builds the server and sandbox images once and pushes `sha-<12 characters>`, `sandbox-sha-<12 characters>` and the branch tags to GHCR; records the digests; attests where each was built and what it holds; scans them |
-|                     | both                                                    | `secrets`: gitleaks                                                                                                                                                                                                    |
-| `image-gates.yml`   | pull requests that touch the image                      | Buildx builds of both images, a Trivy scan of each that fails on critical findings with a fix, and the container smoke test on the base stack and under the production overlay                                         |
-| `schema-plan.yml`   | pull requests that touch `db/schema.sql` or `roles.sql` | loads the merge-base schema and fixtures, diffs to the PR's schema, applies, and requires an empty re-diff                                                                                                             |
-| `load-scripts.yml`  | pull requests that touch `load/`                        | bundles every k6 script on a pinned k6 image                                                                                                                                                                           |
-| `image-cleanup.yml` | a schedule                                              | keeps the images of the 30 newest commits                                                                                                                                                                              |
-| `image-scan.yml`    | weekly                                                  | the same Trivy scan on the published `main`, `dev` and `sandbox-dev` images                                                                                                                                            |
-| `codeql.yml`        | pull requests; pushes to `main` and `dev`; weekly       | CodeQL over the TypeScript and the workflows. Not a required check                                                                                                                                                     |
+| Workflow            | Runs on                                                 | Does                                                                                                                                                                                                                            |
+| ------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`            | pull requests; pushes to `main` and `dev`               | `build`: typecheck, `web:check`, the server build, `coverage` with its ratchet at 74/72/71/63                                                                                                                                   |
+|                     | pushes only                                             | builds the server and sandbox images once and pushes `sha-<12 characters>`, `sandbox-sha-<12 characters>` and the branch tags to GHCR; records the digests; attests where each was built and what it holds; scans them          |
+|                     | both                                                    | `secrets`: gitleaks                                                                                                                                                                                                             |
+| `image-gates.yml`   | pull requests that touch the image                      | Buildx builds of both images, a Trivy scan of each that fails on critical findings with a fix, gVisor installed from the release the host pins, and the container smoke test on the base stack and under the production overlay |
+| `schema-plan.yml`   | pull requests that touch `db/schema.sql` or `roles.sql` | loads the merge-base schema and fixtures, diffs to the PR's schema, applies, and requires an empty re-diff                                                                                                                      |
+| `load-scripts.yml`  | pull requests that touch `load/`                        | bundles every k6 script on a pinned k6 image                                                                                                                                                                                    |
+| `image-cleanup.yml` | a schedule                                              | keeps the images of the 30 newest commits                                                                                                                                                                                       |
+| `image-scan.yml`    | weekly                                                  | the same Trivy scan on the published `main`, `dev` and `sandbox-dev` images                                                                                                                                                     |
+| `codeql.yml`        | pull requests; pushes to `main` and `dev`; weekly       | CodeQL over the TypeScript and the workflows. Not a required check                                                                                                                                                              |
 
 - **The container smoke test** starts the built image with the base Compose
   file and a CI `.env` (token auth), waits for readyz, seeds a small database
@@ -3176,6 +3205,8 @@ None of these blocks a deploy.
   sandbox outside the turn budget, refused past `TACHY_SANDBOX_MAX`.
 - **A turn's two containers start one after the other:** the tools first,
   about 0.7 s, then Claude Code (§3.1). Starting them together is open.
+- **gVisor has not been measured on the laptop** (§3.1): one turn and one
+  code-tool call after the first deploy give its figures there.
 - **The api's limit still counts Claude Code and the tools** while sandboxes
   run them (§3.2). Giving that share to the sandboxes waits for a load window with
   sandboxed turns on the laptop, and makes `TACHY_TURN_SANDBOX=off` a
