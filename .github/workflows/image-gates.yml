@@ -83,6 +83,25 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
+      # The turn sandboxes run under gVisor, from the release the host
+      # playbook pins.
+      - name: Install gVisor
+        run: |
+          vars=deploy/host/group_vars/all.yml
+          release=$(sed -n 's/^gvisor_release: "\(.*\)"$/\1/p' "$vars")
+          sha512=$(sed -n 's/^gvisor_sha512: "\(.*\)"$/\1/p' "$vars")
+          curl -fsSL -o gvisor.tar.zstd \
+            "https://storage.googleapis.com/gvisor/releases/release/$release/x86_64/gvisor.tar.zstd"
+          echo "$sha512  gvisor.tar.zstd" | sha512sum -c -
+          sudo mkdir -p "/usr/local/lib/gvisor/release-$release"
+          sudo tar --zstd -xf gvisor.tar.zstd -C "/usr/local/lib/gvisor/release-$release"
+          sudo ln -sf "/usr/local/lib/gvisor/release-$release/runsc" /usr/local/bin/runsc
+          config=$( (sudo cat /etc/docker/daemon.json 2>/dev/null || echo '{}') |
+            jq '.runtimes.runsc = {"path": "/usr/local/bin/runsc"}')
+          echo "$config" | sudo tee /etc/docker/daemon.json >/dev/null
+          sudo systemctl reload docker
+          docker info --format '{{range $name, $_ := .Runtimes}}{{$name}} {{end}}' | grep -qw runsc
+
       - name: Start the stack
         id: stack
         run: scripts/container-smoke.sh up
@@ -92,7 +111,7 @@ jobs:
 
       # The stack a host runs: Caddy, the read-only root, the least-privilege
       # roles, the embedder and the workers, and one chat turn through them in
-      # a turn sandbox.
+      # turn sandboxes under gVisor.
       - name: Production overlay
         id: overlay
         run: scripts/container-smoke.sh prod
