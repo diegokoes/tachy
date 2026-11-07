@@ -45,7 +45,9 @@
 7. **Registry login.** Only if the image package is private. As `tachy`:
    `docker login ghcr.io -u <github user>` with a classic token carrying only
    `read:packages`.
-8. **Start.** `sudo systemctl start tachy`. A fresh volume applies
+8. **Start.** `docker info --format '{{json .Runtimes}}'` lists `runsc`,
+   gVisor's runtime the playbook installs; the sandbox launcher does not start
+   without it. Then `sudo systemctl start tachy`. A fresh volume applies
    `schema.sql`, `roles.sql`, the role passwords and the schema stamp.
 9. **Trust.** Export Caddy's root and follow
    [tls-client-trust.md](tls-client-trust.md). Save a copy as
