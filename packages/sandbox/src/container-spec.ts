@@ -131,6 +131,7 @@ export interface ContainerSpec {
   OpenStdin: true;
   StdinOnce: true;
   Tty: false;
+  Healthcheck: { Test: ["NONE"] };
   HostConfig: {
     AutoRemove: true;
     ReadonlyRootfs: true;
@@ -194,6 +195,8 @@ function lockedDown(
     OpenStdin: true,
     StdinOnce: true,
     Tty: false,
+    // The tachy image's check polls an api port a tools sandbox never serves.
+    Healthcheck: { Test: ["NONE"] },
     HostConfig: {
       AutoRemove: true,
       ReadonlyRootfs: true,
@@ -233,6 +236,8 @@ export function claudeSandboxSpec(
       `HOME=${HOME_DIR}`,
       `CLAUDE_CONFIG_DIR=${STATE_DIR}`,
       `HTTPS_PROXY=${settings.proxyUrl}`,
+      // Telemetry and error reports go to hosts the egress proxy refuses anyway.
+      "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
     ],
     limits: settings,
     network: settings.network,

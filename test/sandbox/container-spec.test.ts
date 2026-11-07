@@ -85,6 +85,7 @@ describe("the claude sandbox container", () => {
     });
     expect(Env.sort()).toEqual([
       "ANTHROPIC_API_KEY=sk-test",
+      "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
       "CLAUDE_CODE_ENTRYPOINT=sdk-ts",
       "CLAUDE_CONFIG_DIR=/home/claude/.claude",
       "HOME=/home/claude",
@@ -122,6 +123,7 @@ describe("the tools sandbox container", () => {
       Image: TOOLS.image,
       Cmd: ["node", "dist/mcp.js"],
       User: "1000:1000",
+      Healthcheck: { Test: ["NONE"] },
       WorkingDir: "/app",
       Labels: { [SANDBOX_LABEL]: "tachy" },
       HostConfig: {
