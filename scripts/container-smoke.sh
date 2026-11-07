@@ -6,7 +6,8 @@
 #   scripts/container-smoke.sh smoke   seed small data, run load/smoke.js
 #   scripts/container-smoke.sh prod    the same data under deploy/compose.prod.yml:
 #                                      smoke.js again, then one chat turn against
-#                                      the mock model, in turn sandboxes
+#                                      the mock model, in turn sandboxes under
+#                                      TACHY_SANDBOX_RUNTIME (runsc, gVisor)
 #
 # It writes .env in the current checkout, so run it only in a CI checkout or a
 # scratch clone. On a machine that already runs a stack, set SMOKE_PROJECT,
@@ -15,6 +16,7 @@ set -euo pipefail
 
 image=${TACHY_IMAGE:-tachy:ci}
 sandbox_image=${TACHY_SANDBOX_IMAGE:-tachy:ci-sandbox}
+sandbox_runtime=${TACHY_SANDBOX_RUNTIME:-runsc}
 project=${SMOKE_PROJECT:-tachy}
 api_port=${SMOKE_API_PORT:-8787}
 pg_port=${SMOKE_PG_PORT:-5433}
@@ -69,6 +71,7 @@ TACHY_STATUS_HOST_DIR=$PWD/.smoke-status
 TACHY_EMBEDDER_CPUS=2
 TACHY_WORKER_HEAVY_CPUS=2
 TACHY_SANDBOX_IMAGE=$sandbox_image
+TACHY_SANDBOX_RUNTIME=$sandbox_runtime
 TACHY_DOCKER_GID=$(stat -c %g /var/run/docker.sock)
 TACHY_SANDBOX_EGRESS=api.anthropic.com:443,mock-llm:4010
 ANTHROPIC_BASE_URL=http://mock-llm:4010
@@ -122,8 +125,13 @@ ENV
     exit 1
   fi
   echo "tool calls ok: $(grep -c '"ok":true' <<<"$tools")"
-  sandboxes=$(docker compose "${overlay[@]}" logs --no-log-prefix sandbox-launcher |
-    grep '"event":"sandbox_exited"' || true)
+  launcher_log=$(docker compose "${overlay[@]}" logs --no-log-prefix sandbox-launcher)
+  if ! grep -q "\"runtime\":\"$sandbox_runtime\"" <<<"$launcher_log"; then
+    echo "$launcher_log"
+    echo "the sandboxes did not run under $sandbox_runtime" >&2
+    exit 1
+  fi
+  sandboxes=$(grep '"event":"sandbox_exited"' <<<"$launcher_log" || true)
   for kind in claude tools; do
     if ! grep -q "\"kind\":\"$kind\",\"exitCode\":0" <<<"$sandboxes"; then
       docker compose "${overlay[@]}" logs --no-log-prefix sandbox-launcher egress

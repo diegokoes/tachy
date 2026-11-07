@@ -1,0 +1,37 @@
+# gVisor's runsc, the Docker runtime every turn sandbox runs under
+# (DEPLOYMENT-ARCHITECTURE.md §5.17). One pinned release, checked against its
+# digest; docker.yml registers it in daemon.json. CI installs the same release
+# from these variables.
+- name: zstd, which gVisor's release archive is packed with
+  ansible.builtin.apt:
+    name: zstd
+    state: present
+
+- name: gVisor's release folder
+  ansible.builtin.file:
+    path: "/usr/local/lib/gvisor/release-{{ gvisor_release }}"
+    state: directory
+    mode: "0755"
+
+- name: gVisor's release archive, checked against its digest
+  ansible.builtin.get_url:
+    url: "https://storage.googleapis.com/gvisor/releases/release/{{ gvisor_release }}/{{ ansible_architecture }}/gvisor.tar.zstd"
+    dest: "/usr/local/lib/gvisor/gvisor-{{ gvisor_release }}.tar.zstd"
+    checksum: "sha512:{{ gvisor_sha512 }}"
+    mode: "0644"
+
+- name: gVisor unpacked
+  ansible.builtin.command:
+    cmd: >-
+      tar --zstd -xf /usr/local/lib/gvisor/gvisor-{{ gvisor_release }}.tar.zstd
+      -C /usr/local/lib/gvisor/release-{{ gvisor_release }}
+    creates: "/usr/local/lib/gvisor/release-{{ gvisor_release }}/runsc"
+
+# runsc finds its gvisor-bin/ helpers next to its resolved path.
+- name: runsc and its containerd shim on PATH
+  ansible.builtin.file:
+    src: "/usr/local/lib/gvisor/release-{{ gvisor_release }}/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+  loop: [runsc, containerd-shim-runsc-v1]
+  notify: Restart docker
