@@ -83,8 +83,8 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
-      # The turn sandboxes run under gVisor, from the release the host
-      # playbook pins.
+      # The turn sandboxes run under gVisor, from the release and with the
+      # runtime settings the host playbook uses.
       - name: Install gVisor
         run: |
           vars=deploy/host/group_vars/all.yml
@@ -97,7 +97,7 @@ jobs:
           sudo tar --zstd -xf gvisor.tar.zstd -C "/usr/local/lib/gvisor/release-$release"
           sudo ln -sf "/usr/local/lib/gvisor/release-$release/runsc" /usr/local/bin/runsc
           config=$( (sudo cat /etc/docker/daemon.json 2>/dev/null || echo '{}') |
-            jq '.runtimes.runsc = {"path": "/usr/local/bin/runsc"}')
+            jq '.runtimes.runsc = {"path": "/usr/local/bin/runsc", "runtimeArgs": ["--network=host"]}')
           echo "$config" | sudo tee /etc/docker/daemon.json >/dev/null
           sudo systemctl reload docker
           docker info --format '{{range $name, $_ := .Runtimes}}{{$name}} {{end}}' | grep -qw runsc

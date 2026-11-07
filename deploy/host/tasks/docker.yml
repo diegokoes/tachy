@@ -53,7 +53,9 @@
     mode: "0644"
   notify: Restart docker
 
-# runsc is gVisor's, installed by gvisor.yml.
+# runsc is gVisor's, installed by gvisor.yml. Host network mode: gVisor's own
+# network stack cannot reach Docker's DNS, which listens inside the container's
+# namespace, so socket calls go to the kernel there.
 - name: Docker data-root on /srv, logs rotated by the local driver, gVisor's runtime
   ansible.builtin.copy:
     dest: /etc/docker/daemon.json
@@ -62,7 +64,9 @@
         "data-root": "/srv/docker",
         "log-driver": "local",
         "log-opts": { "max-size": "20m", "max-file": "10" },
-        "runtimes": { "runsc": { "path": "/usr/local/bin/runsc" } }
+        "runtimes": {
+          "runsc": { "path": "/usr/local/bin/runsc", "runtimeArgs": ["--network=host"] }
+        }
       }
     mode: "0644"
   notify: Restart docker

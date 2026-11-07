@@ -383,12 +383,17 @@ each run in a cgroup of its own. Medians of seven warm runs:
 | tools server, one `tools/list`          |   11 ms |            16 ms |        12 ms |
 | tools server, memory peak               |  54 MiB |           91 MiB |       95 MiB |
 
-- A turn starts about 0.5 s later under systrap, gVisor's default platform,
-  and holds about 85 MiB more.
+- Run this way, a turn would start about 0.5 s later under systrap, gVisor's
+  default platform, and hold about 85 MiB more.
 - Git reads over this repository took 143 ms under runc and 0.5 to 0.6 s
   under gVisor, a fresh sandbox's 26 to 40 ms start included: 3.5 to 4 times.
-- Not measured here: Docker's own runsc path, and gVisor's network stack in
-  place of the host's.
+- **Through Docker itself**, measured 2026-11-07 on the workstation: the
+  production overlay with runsc in host network mode (§5.17), the mock model,
+  four turns each, memory sampled every 0.2 s. First events took 1.6 to 1.75 s
+  under runc and 2.7 to 2.85 s under gVisor, whole turns 3.2 to 3.4 s against
+  4.3 to 4.6 s. Claude Code's container peaked at about 139 MiB under runc and
+  130 MiB under gVisor, the tools' at 57 and 68 MiB. So gVisor costs a turn
+  about 1.1 s, most of it the two containers starting one after the other.
 
 **Conclusion.** Before Phase 1 the laptop could hold about 5 turns before it
 ran out of memory, and nothing stopped a sixth. Taking the model out of the MCP
@@ -453,8 +458,8 @@ ceilings, and each is a variable in `.env` (§4.3):
   (`TACHY_SANDBOX_MEMORY_MB`, `TACHY_TOOLS_MEMORY_MB`), and the api holds
   neither. Its limit still has room for both, so that `TACHY_TURN_SANDBOX=off`
   stays a way back: the sandboxes' ceilings and the api's share for turns are
-  the same memory, counted twice (§15.2). gVisor adds about 45 MiB to each
-  sandbox (§3.1).
+  the same memory, counted twice (§15.2). Under gVisor a sandbox holds about
+  as much, the tools' about 10 MiB more (§3.1).
 
 **Admission.**
 
@@ -2112,8 +2117,20 @@ release, checked against its digest, and registers it in Docker's
 `daemon.json`; CI's image gates install the same release. The launcher does not
 start when Docker lacks the runtime it is given, so a host without it fails its
 deploy and rolls back. `TACHY_SANDBOX_RUNTIME=runc` runs the sandboxes without
-gVisor. It costs a turn about 0.5 s and 85 MiB, and git reads 3.5 times as
-long (§3.1).
+gVisor.
+
+gVisor runs in its host network mode (`--network=host` in `daemon.json`).
+Docker resolves service names through a server inside each container's
+network namespace, and gVisor's own network stack cannot reach it, with or
+without its NAT copying flags (tried on Docker 29). In host network mode the
+sandbox's socket calls go to the kernel, inside the container's own
+namespace: the networks and the egress proxy above still decide what is
+reachable, and files, processes and memory stay with gVisor. The stricter
+alternative, gVisor's stack for Claude Code with the proxy at a fixed
+address, is not built.
+
+gVisor costs a turn about 1.1 s at its start and little memory, and git reads
+take 3.5 times as long (§3.1).
 
 ## 6. Durability, backup, restore
 
@@ -3204,7 +3221,8 @@ None of these blocks a deploy.
 - **One-shot model calls take no slot** (§2.4). In production each is a
   sandbox outside the turn budget, refused past `TACHY_SANDBOX_MAX`.
 - **A turn's two containers start one after the other:** the tools first,
-  about 0.7 s, then Claude Code (§3.1). Starting them together is open.
+  then Claude Code, about 0.7 s under runc and most of gVisor's 1.1 s (§3.1).
+  Starting them together is open.
 - **gVisor has not been measured on the laptop** (§3.1): one turn and one
   code-tool call after the first deploy give its figures there.
 - **The api's limit still counts Claude Code and the tools** while sandboxes
