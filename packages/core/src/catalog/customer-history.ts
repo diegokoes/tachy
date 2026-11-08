@@ -5,7 +5,7 @@
  * batch writes its `before` rows back, newest first, as a batch of its own.
  */
 import { randomUUID } from "node:crypto";
-import type { ParameterOrJSON } from "postgres";
+import type postgres from "postgres";
 import type {
   CustomerChange,
   CustomerChangeBatch,
@@ -444,7 +444,7 @@ async function writeBack(
             deferred,
           )
         : change.before;
-    const values = row as Record<string, ParameterOrJSON<never>>;
+    const values = row as Record<string, postgres.ParameterOrJSON<never>>;
     const columns = Object.keys(values);
     await db`
         insert into ${db(RECORD_TABLES[change.record])} ${db(values, columns)}
