@@ -100,7 +100,13 @@ jobs:
             jq '.runtimes.runsc = {"path": "/usr/local/bin/runsc", "runtimeArgs": ["--network=host"]}')
           echo "$config" | sudo tee /etc/docker/daemon.json >/dev/null
           sudo systemctl reload docker
-          docker info --format '{{range $name, $_ := .Runtimes}}{{$name}} {{end}}' | grep -qw runsc
+          # reload only sends SIGHUP; dockerd reads daemon.json after it returns
+          for _ in $(seq 30); do
+            docker info --format '{{range $name, $_ := .Runtimes}}{{$name}} {{end}}' | grep -qw runsc && exit 0
+            sleep 1
+          done
+          echo "dockerd did not register the runsc runtime" >&2
+          exit 1
 
       - name: Start the stack
         id: stack
