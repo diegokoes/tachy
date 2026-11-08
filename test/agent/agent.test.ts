@@ -299,6 +299,39 @@ describe("claudePermission (approval gate)", () => {
     expect(gate).not.toHaveBeenCalled();
   });
 
+  it("logs the refusal with the tool, the reason and the turn", async () => {
+    const lines: Record<string, unknown>[] = [];
+    const spy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk: unknown) => {
+        lines.push(JSON.parse(String(chunk)));
+        return true;
+      });
+    try {
+      const inputProblem = () => "symptoms must be array";
+      const gate = gateWith({ approve: true });
+      await ask(
+        "save_knowledge_entry",
+        {},
+        { gate, inputProblem, turnId: "t-1" },
+      );
+      await ask("save_knowledge_entry", {}, { gate, inputProblem });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(lines).toMatchObject([
+      {
+        level: "warn",
+        event: "tool_input_refused",
+        turn: "t-1",
+        tool: "save_knowledge_entry",
+        reason: "symptoms must be array",
+      },
+      { event: "tool_input_refused", tool: "save_knowledge_entry" },
+    ]);
+    expect(lines[1]).not.toHaveProperty("turn");
+  });
+
   it("does not check a read's input: the tools process does", async () => {
     const inputProblem = vi.fn(() => "query must be string");
     const decision = await ask(
