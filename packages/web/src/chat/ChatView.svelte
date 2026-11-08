@@ -14,6 +14,7 @@
     canRestore,
     chat,
     forgetCleared,
+    noteFailure,
     type Entry,
   } from "./chatState.svelte";
   import { clearConversation, restoreConversation } from "./clearing";
@@ -81,7 +82,13 @@
   } from "../work-items/peek.svelte";
   import { parseTicketLine, ticketArgs } from "../work-items/ticketCommand";
   import { tallyCalls, tallyLabel } from "./toolCalls";
-  import { recordFrame, type TurnSent, type TurnTrace } from "./trace";
+  import {
+    failureReason,
+    recordFrame,
+    type TurnSent,
+    type TurnTrace,
+  } from "./trace";
+  import { ApiError } from "../problems";
   import TracePanel from "./TracePanel.svelte";
   import { isGlobalAdmin } from "../access/session.svelte";
   import Walkthrough from "../code/Walkthrough.svelte";
@@ -223,10 +230,10 @@
   });
 
   /** One row holds a run of tool calls, so a search-heavy turn stays short. */
-  function noteCall(tool: string) {
+  function noteCall(tool: string, id: string) {
     const last = chat.entries[chat.entries.length - 1];
-    if (last?.kind === "tools") last.calls.push(tool);
-    else addEntry({ kind: "tools", calls: [tool] });
+    if (last?.kind === "tools") last.calls.push({ tool, id });
+    else addEntry({ kind: "tools", calls: [{ tool, id }] });
   }
 
   /** The tools whose result lists the files of the ticket they read. */
@@ -810,6 +817,8 @@
         chat.queuePosition =
           event === "queued" ? (data.position as number) : null;
         if (event === "tool_result") showFiles(data);
+        if (event === "tool_result" && data.isError === true)
+          noteFailure(data.id as string, failureReason(data.result));
         if (event === "start") chat.turnId = data.turnId as string;
         else if (event === "text") appendAssistant(data.text as string);
         else if (event === "tool_use") {
@@ -838,7 +847,7 @@
             });
           } else if (tool === "export_table") {
             addEntry({ kind: "output", id: data.id as string });
-          } else noteCall(tool);
+          } else noteCall(tool, data.id as string);
         } else if (
           event === "tool_result" &&
           short(data.tool as string) === "compact_work_item"
@@ -978,6 +987,7 @@
     reason?: string,
   ) {
     if (!chat.turnId) return;
+    entry.refusal = undefined;
     try {
       await approve(
         chat.turnId,
@@ -987,6 +997,10 @@
         reason,
       );
     } catch (e) {
+      if (e instanceof ApiError && e.status === 400) {
+        entry.refusal = e.message;
+        return;
+      }
       addEntry({
         kind: "error",
         text: e instanceof Error ? e.message : String(e),
@@ -1156,7 +1170,15 @@
             <span class="calls">
               {#each tallyCalls(entry.calls) as tally, n (n)}
                 {#if n > 0}<span class="sep" aria-hidden="true">·</span>{/if}
-                <span>{tallyLabel(tally)}</span>
+                {#if tally.failure !== undefined}
+                  <span class="failed" use:tip={tally.failure}
+                    ><del>{tallyLabel(tally)}</del><span class="unseen">
+                      failed</span
+                    ></span
+                  >
+                {:else}
+                  <span>{tallyLabel(tally)}</span>
+                {/if}
               {/each}
             </span>
           </div>
@@ -1699,6 +1721,18 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0 0.75ch;
+  }
+  .failed {
+    color: var(--danger);
+  }
+  /* Read by a screen reader, which does not announce the strike. */
+  .unseen {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   /* The user's turn is positioned right and its text stays left-aligned:

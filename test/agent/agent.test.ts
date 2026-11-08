@@ -280,6 +280,36 @@ describe("claudePermission (approval gate)", () => {
     expect(gate).toHaveBeenCalledOnce();
   });
 
+  it("sends a write whose input does not fit back to the model, asking no one", async () => {
+    const gate = gateWith({ approve: true });
+    const inputProblem = vi.fn(() => "symptoms must be array");
+    const decision = await ask(
+      "save_knowledge_entry",
+      { symptoms: "a" },
+      { gate, inputProblem, preApproved: [{ tool: "save_knowledge_entry" }] },
+    );
+    expect(decision).toEqual({
+      behavior: "deny",
+      message:
+        "Invalid arguments for save_knowledge_entry: symptoms must be array. Nothing ran and no one was asked; call it again with arguments that fit the tool's schema.",
+    });
+    expect(inputProblem).toHaveBeenCalledWith("save_knowledge_entry", {
+      symptoms: "a",
+    });
+    expect(gate).not.toHaveBeenCalled();
+  });
+
+  it("does not check a read's input: the tools process does", async () => {
+    const inputProblem = vi.fn(() => "query must be string");
+    const decision = await ask(
+      "search_knowledge",
+      { query: 1 },
+      { gate: gateWith({ approve: true }), inputProblem },
+    );
+    expect(decision).toMatchObject({ behavior: "allow" });
+    expect(inputProblem).not.toHaveBeenCalled();
+  });
+
   it("denies write tools with the user's message on reject", async () => {
     const gate = gateWith({ approve: false, message: "wrong customer" });
     const decision = await ask("save_knowledge_entry", {}, { gate });
@@ -290,15 +320,22 @@ describe("claudePermission (approval gate)", () => {
 describe("turnCanUseTool", () => {
   const USE = { toolUseID: "use-1", signal: new AbortController().signal };
 
-  function gateWithTools(decision: Decision) {
+  function gateWithTools(
+    decision: Decision,
+    inputProblem: () => string | null = () => null,
+  ) {
     const handed: { tool: string; input: Record<string, unknown> }[] = [];
     const announced: string[] = [];
+    const gate = gateWith(decision);
     const canUseTool = turnCanUseTool({
-      gate: gateWith(decision),
-      tools: { allow: (tool, input) => handed.push({ tool, input }) },
+      gate,
+      tools: {
+        allow: (tool, input) => handed.push({ tool, input }),
+        inputProblem,
+      },
       onWriteAllowed: ({ tool }) => announced.push(tool),
     });
-    return { canUseTool, handed, announced };
+    return { canUseTool, handed, announced, gate };
   }
 
   it("hands the tools a write as the person approved it, edits included", async () => {
@@ -315,6 +352,19 @@ describe("turnCanUseTool", () => {
       { tool: "post_private_note", input: { body: "edited" } },
     ]);
     expect(turn.announced).toEqual(["post_private_note"]);
+  });
+
+  it("asks no one about a write the tools' schema refuses, and hands over nothing", async () => {
+    const turn = gateWithTools({ approve: true }, () => "body must be string");
+    const decision = await turn.canUseTool(
+      qualify("post_private_note"),
+      { body: ["x"] },
+      USE as never,
+    );
+    expect(decision).toMatchObject({ behavior: "deny" });
+    expect(turn.gate).not.toHaveBeenCalled();
+    expect(turn.handed).toEqual([]);
+    expect(turn.announced).toEqual([]);
   });
 
   it("hands over nothing for a read or a refused write", async () => {
@@ -422,6 +472,37 @@ describe("TurnBase approval lifecycle", () => {
     expect(turn.finished).toBe(false);
     turn.end();
     expect(turn.finished).toBe(true);
+  });
+
+  it("refuses an edit that does not fit, and keeps the approval waiting", async () => {
+    class CheckedTurn extends FakeTurn {
+      protected editProblem(tool: string, input: unknown): string | null {
+        const { title } = input as { title?: unknown };
+        return typeof title === "string"
+          ? null
+          : `${tool}: title must be string`;
+      }
+    }
+    const turn = new CheckedTurn();
+    const pending = turn.ask("a4");
+    expect(() =>
+      turn.approve("a4", { approve: true, updatedInput: { title: 1 } }),
+    ).toThrow(
+      expect.objectContaining({
+        code: "bad_input",
+        message:
+          "the edited input does not fit: save_knowledge_entry: title must be string",
+      }),
+    );
+    expect(turn.pendingApprovals).toBe(1);
+    turn.approve("a4", { approve: false });
+    expect(await pending).toEqual({ approve: false });
+    const next = turn.ask("a5");
+    turn.approve("a5", { approve: true, updatedInput: { title: "ok" } });
+    expect(await next).toEqual({
+      approve: true,
+      updatedInput: { title: "ok" },
+    });
   });
 
   it("auto-denies an approval after the timeout", async () => {

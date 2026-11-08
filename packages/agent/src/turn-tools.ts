@@ -17,6 +17,11 @@ import {
   type CallToolRequest,
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv";
+import type {
+  JsonSchemaType,
+  JsonSchemaValidator,
+} from "@modelcontextprotocol/sdk/validation";
 import { errorText, log } from "@tachy/core/infra";
 import { openSandbox } from "@tachy/sandbox";
 import { SandboxTransport } from "./sandbox-transport";
@@ -40,9 +45,20 @@ interface Approval {
   input: Record<string, unknown>;
 }
 
+/** Ajv starts each of its comma-joined errors with `data`: `data/symptoms must be array`. */
+const readable = (ajvMessage: string) =>
+  ajvMessage.replace(/(^|, )data\//g, "$1").replace(/(^|, )data /g, "$1input ");
+
 export class TurnTools {
   readonly server: McpServer;
   private readonly approvals: Approval[] = [];
+  private readonly schemas = new Map<string, JsonSchemaType>();
+  /** Null for a schema Ajv cannot compile: that tool is left to the tools process. */
+  private readonly validators = new Map<
+    string,
+    JsonSchemaValidator<unknown> | null
+  >();
+  private readonly ajv = new AjvJsonSchemaValidator();
 
   constructor(
     private readonly client: Client,
@@ -54,8 +70,14 @@ export class TurnTools {
       { name: MCP_SERVER, version: "1" },
       { capabilities: { tools: {} }, instructions: client.getInstructions() },
     );
-    this.server.server.setRequestHandler(ListToolsRequestSchema, (request) =>
-      client.listTools(request.params),
+    this.server.server.setRequestHandler(
+      ListToolsRequestSchema,
+      async (request) => {
+        const listed = await client.listTools(request.params);
+        for (const tool of listed.tools)
+          this.schemas.set(tool.name, tool.inputSchema as JsonSchemaType);
+        return listed;
+      },
     );
     this.server.server.setRequestHandler(CallToolRequestSchema, (request) =>
       this.forward(request),
@@ -69,6 +91,18 @@ export class TurnTools {
   /** Lets one write through, once, with exactly this input. */
   allow(tool: string, input: Record<string, unknown>): void {
     this.approvals.push({ tool, input });
+  }
+
+  /**
+   * Why `input` does not fit the schema the tools process listed for `tool`,
+   * or null when it fits or the tool was not listed. Never stricter than the
+   * tools process: its own check also runs a tool's refinements.
+   */
+  inputProblem(tool: string, input: unknown): string | null {
+    const validate = this.validatorFor(tool);
+    if (!validate) return null;
+    const result = validate(input);
+    return result.valid ? null : readable(result.errorMessage);
   }
 
   close(): Promise<void> {
@@ -88,6 +122,21 @@ export class TurnTools {
       CallToolResultSchema,
       { timeout: TOOL_CALL_TIMEOUT_MS },
     );
+  }
+
+  private validatorFor(tool: string): JsonSchemaValidator<unknown> | null {
+    const cached = this.validators.get(tool);
+    if (cached !== undefined) return cached;
+    const schema = this.schemas.get(tool);
+    if (!schema) return null;
+    let validator: JsonSchemaValidator<unknown> | null = null;
+    try {
+      validator = this.ajv.getValidator(schema);
+    } catch (err) {
+      log("warn", "tool_schema_unchecked", { tool, error: errorText(err) });
+    }
+    this.validators.set(tool, validator);
+    return validator;
   }
 
   private takeApproval(tool: string, input: Record<string, unknown>): boolean {

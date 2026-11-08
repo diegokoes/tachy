@@ -1,3 +1,4 @@
+import { badInput } from "@tachy/core/infra";
 import { AsyncQueue } from "./queue";
 import type { AgentEvent, AgentTurn, Decision } from "./backend";
 
@@ -20,7 +21,7 @@ export abstract class TurnBase implements AgentTurn {
   protected queue = new AsyncQueue<AgentEvent>();
   private pending = new Map<
     string,
-    { resolve: (decision: Decision) => void; at: number }
+    { resolve: (decision: Decision) => void; at: number; tool: string }
   >();
   finished = false;
 
@@ -41,10 +42,19 @@ export abstract class TurnBase implements AgentTurn {
 
   approve(id: string, decision: Decision): void {
     const entry = this.pending.get(id);
-    if (entry) {
-      this.pending.delete(id);
-      entry.resolve(decision);
-    }
+    if (!entry) return;
+    const problem =
+      decision.approve && decision.updatedInput
+        ? this.editProblem(entry.tool, decision.updatedInput)
+        : null;
+    if (problem) throw badInput(`the edited input does not fit: ${problem}`);
+    this.pending.delete(id);
+    entry.resolve(decision);
+  }
+
+  /** Why the input a person approved does not fit `tool`, or null. */
+  protected editProblem(_tool: string, _input: unknown): string | null {
+    return null;
   }
 
   abort(): void {
@@ -67,6 +77,7 @@ export abstract class TurnBase implements AgentTurn {
           resolve(answer);
         },
         at: Date.now(),
+        tool,
       });
       this.queue.push({ type: "approval_request", tool, input, id });
     });

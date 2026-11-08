@@ -31,6 +31,9 @@ interface ContentBlock {
   name?: string;
   input?: unknown;
   id?: string;
+  tool_use_id?: string;
+  content?: unknown;
+  is_error?: boolean;
 }
 
 /**
@@ -176,6 +179,8 @@ interface ApprovalPolicy {
   gate: ApprovalGate;
   preApproved?: readonly PreApprovedCall[];
   proxiedTools?: readonly string[];
+  /** Why a call's input does not fit its tool's schema, or null. */
+  inputProblem?: (tool: string, input: unknown) => string | null;
 }
 
 export async function claudePermission(
@@ -189,7 +194,16 @@ export async function claudePermission(
       behavior: "deny",
       message: `Tool ${toolName} is not permitted. Only tachy knowledge tools are available.`,
     };
-  if (cls === "read" || isPreApproved(policy.preApproved ?? [], base, input))
+  if (cls === "read") return { behavior: "allow", updatedInput: input };
+  // The tools process would refuse it after the person approved it, and the
+  // model's corrected call would ask them again.
+  const problem = policy.inputProblem?.(base, input);
+  if (problem)
+    return {
+      behavior: "deny",
+      message: `Invalid arguments for ${base}: ${problem}. Nothing ran and no one was asked; call it again with arguments that fit the tool's schema.`,
+    };
+  if (isPreApproved(policy.preApproved ?? [], base, input))
     return { behavior: "allow", updatedInput: input };
   const decision = await policy.gate(toolUseID, toolName, input);
   return decision.approve
@@ -209,14 +223,16 @@ interface AllowedWrite {
  */
 export function turnCanUseTool(
   turn: ApprovalPolicy & {
-    tools: Pick<TurnTools, "allow">;
+    tools: Pick<TurnTools, "allow" | "inputProblem">;
     onWriteAllowed?: (write: AllowedWrite) => void;
   },
 ): CanUseTool {
+  const inputProblem = (tool: string, input: unknown) =>
+    turn.tools.inputProblem(tool, input);
   return async (toolName, input, { toolUseID }) => {
     const permission = await claudePermission(
       { toolName, input, toolUseID },
-      turn,
+      { inputProblem, ...turn },
     );
     const { cls, base } = classifyCall(toolName, input, turn.proxiedTools);
     if (permission.behavior !== "allow" || cls !== "write") return permission;
@@ -260,6 +276,8 @@ export function sessionFacts(init: SDKSystemMessage): SessionFacts {
 
 export class ClaudeTurn extends TurnBase {
   private controller = new AbortController();
+  private tools: TurnTools | undefined;
+  private proxiedTools: readonly string[] | undefined;
 
   constructor(
     prompt: string,
@@ -272,6 +290,11 @@ export class ClaudeTurn extends TurnBase {
 
   protected onAbort(): void {
     this.controller.abort();
+  }
+
+  protected editProblem(tool: string, input: unknown): string | null {
+    const { base } = classifyCall(tool, input, this.proxiedTools);
+    return this.tools?.inputProblem(base, input) ?? null;
   }
 
   private async pump(
@@ -295,6 +318,8 @@ export class ClaudeTurn extends TurnBase {
       this.finish();
       return;
     }
+    this.tools = tools;
+    this.proxiedTools = config.proxiedTools;
     const options = claudeOptions(config, {
       abortController: this.controller,
       toolServer: tools.serverConfig,
@@ -360,7 +385,7 @@ export class ClaudeTurn extends TurnBase {
           if (Array.isArray(content))
             for (const block of content as ContentBlock[]) {
               if (block.type !== "tool_result") continue;
-              const id = (block as { tool_use_id?: string }).tool_use_id ?? "";
+              const id = block.tool_use_id ?? "";
               const tool = pending.get(id);
               if (!tool) continue;
               pending.delete(id);
@@ -368,9 +393,8 @@ export class ClaudeTurn extends TurnBase {
                 type: "tool_result",
                 tool,
                 id,
-                result: withoutImageData(
-                  (block as { content?: unknown }).content,
-                ),
+                result: withoutImageData(block.content),
+                ...(block.is_error ? { isError: true as const } : {}),
               });
             }
         } else if (sdkMessage.type === "result") {
