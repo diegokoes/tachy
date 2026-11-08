@@ -89,6 +89,26 @@ describe("a turn's tools", () => {
     expect(ran()).toEqual(["post_private_note edited"]);
   });
 
+  it("says why an input does not fit the schema the tools listed", async () => {
+    await claudeCode.listTools();
+    expect(
+      tools.inputProblem("post_private_note", { ...NOTE, body: ["x"] }),
+    ).toBe("body must be string");
+    expect(
+      tools.inputProblem("post_private_note", { source: "fd", body: "x" }),
+    ).toBe("input must have required property 'external_id'");
+  });
+
+  it("finds no problem in a fitting input, an extra key or a tool not listed", async () => {
+    expect(tools.inputProblem("post_private_note", { body: 1 })).toBeNull();
+    await claudeCode.listTools();
+    expect(tools.inputProblem("post_private_note", NOTE)).toBeNull();
+    expect(
+      tools.inputProblem("post_private_note", { ...NOTE, extra: true }),
+    ).toBeNull();
+    expect(tools.inputProblem("no_such_tool", {})).toBeNull();
+  });
+
   it("holds a URL fetch for approval, but not pasted text", async () => {
     const fetched = await call("ingest_context", {
       urls: ["https://example.com/page"],

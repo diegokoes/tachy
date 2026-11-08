@@ -150,7 +150,7 @@ export async function* chatStream(
 /**
  * A turn that has finished (approval timed out, or the TTL reaped it) answers
  * 404. Thrown, so the card does not sit pending with a button that does
- * nothing.
+ * nothing. An edited input that does not fit the tool is a 400 ApiError.
  */
 export async function approve(
   turnId: string,
@@ -174,12 +174,9 @@ export async function approve(
     onUnauthorized();
     return;
   }
-  if (!response.ok)
-    throw new Error(
-      response.status === 404
-        ? "this turn already finished; the approval expired"
-        : `could not record the decision (${response.status})`,
-    );
+  if (response.status === 404)
+    throw new Error("this turn already finished; the approval expired");
+  if (!response.ok) throw await readError(response);
 }
 
 export async function stopTurn(turnId: string): Promise<void> {
