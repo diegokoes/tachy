@@ -1,4 +1,4 @@
-import { errorText } from "@tachy/core/infra";
+import { errorText, log } from "@tachy/core/infra";
 import {
   query,
   type CanUseTool,
@@ -181,6 +181,8 @@ interface ApprovalPolicy {
   proxiedTools?: readonly string[];
   /** Why a call's input does not fit its tool's schema, or null. */
   inputProblem?: (tool: string, input: unknown) => string | null;
+  /** The id the turn's tools log under, so a refused call joins their lines. */
+  turnId?: string;
 }
 
 export async function claudePermission(
@@ -198,11 +200,17 @@ export async function claudePermission(
   // The tools process would refuse it after the person approved it, and the
   // model's corrected call would ask them again.
   const problem = policy.inputProblem?.(base, input);
-  if (problem)
+  if (problem) {
+    log("warn", "tool_input_refused", {
+      ...(policy.turnId ? { turn: policy.turnId } : {}),
+      tool: base,
+      reason: problem,
+    });
     return {
       behavior: "deny",
       message: `Invalid arguments for ${base}: ${problem}. Nothing ran and no one was asked; call it again with arguments that fit the tool's schema.`,
     };
+  }
   if (isPreApproved(policy.preApproved ?? [], base, input))
     return { behavior: "allow", updatedInput: input };
   const decision = await policy.gate(toolUseID, toolName, input);
@@ -329,6 +337,7 @@ export class ClaudeTurn extends TurnBase {
         gate: this.requestApproval,
         preApproved: config.preApproved,
         proxiedTools: config.proxiedTools,
+        turnId: config.mcpEnv.TACHY_TURN_ID,
         // A read is announced from its assistant block, a write here once
         // allowed, so the UI shows it running.
         onWriteAllowed: ({ toolUseID, tool, input }) =>
