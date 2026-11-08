@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk";
 import type { AgentConfig, AgentEvent } from "../../packages/agent/src/index";
 
-type Script = (signal: AbortSignal) => AsyncGenerator<unknown>;
+type Script = (
+  signal: AbortSignal,
+  options: { canUseTool: CanUseTool },
+) => AsyncGenerator<unknown>;
 
 const claude = vi.hoisted(() => ({ script: undefined as Script | undefined }));
 const toolsProcess = vi.hoisted(() => ({
@@ -10,8 +14,11 @@ const toolsProcess = vi.hoisted(() => ({
 
 vi.mock("@anthropic-ai/claude-agent-sdk", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@anthropic-ai/claude-agent-sdk")>()),
-  query: ({ options }: { options: { abortController: AbortController } }) =>
-    claude.script!(options.abortController.signal),
+  query: ({
+    options,
+  }: {
+    options: { abortController: AbortController; canUseTool: CanUseTool };
+  }) => claude.script!(options.abortController.signal, options),
 }));
 
 vi.mock("../../packages/agent/src/turn-tools", () => ({
@@ -21,6 +28,10 @@ vi.mock("../../packages/agent/src/turn-tools", () => ({
 const RUNNING_TOOLS = {
   serverConfig: { type: "sdk", name: "tachy", instance: {} },
   allow: () => {},
+  inputProblem: (_tool: string, input: unknown) =>
+    typeof (input as { body?: unknown }).body === "string"
+      ? null
+      : "body must be string",
   close: async () => {},
 };
 
@@ -198,6 +209,87 @@ describe("a Claude turn's own account of its model", () => {
     expect(events.at(-1)).toMatchObject({
       type: "result",
       models: ["claude-haiku-5-5", "claude-sonnet-5-5"],
+    });
+  });
+});
+
+describe("a Claude turn's tool results", () => {
+  const CALL = {
+    type: "assistant",
+    session_id: "session-1",
+    message: {
+      content: [
+        {
+          type: "tool_use",
+          id: "use-1",
+          name: "mcp__tachy__search_knowledge",
+          input: {},
+        },
+        {
+          type: "tool_use",
+          id: "use-2",
+          name: "mcp__tachy__search_knowledge",
+          input: {},
+        },
+      ],
+    },
+  };
+  const resultOf = (id: string, extra: object) => ({
+    type: "user",
+    message: {
+      content: [{ type: "tool_result", tool_use_id: id, ...extra }],
+    },
+  });
+
+  it("says which failed", async () => {
+    const events = await eventsOf(async function* () {
+      yield CALL;
+      yield resultOf("use-1", { content: "refused", is_error: true });
+      yield resultOf("use-2", { content: "hits" });
+      yield RESULT;
+    });
+    const results = events.filter((event) => event.type === "tool_result");
+    expect(results).toEqual([
+      {
+        type: "tool_result",
+        tool: "search_knowledge",
+        id: "use-1",
+        result: "refused",
+        isError: true,
+      },
+      {
+        type: "tool_result",
+        tool: "search_knowledge",
+        id: "use-2",
+        result: "hits",
+      },
+    ]);
+  });
+});
+
+describe("a Claude turn's approvals", () => {
+  it("refuses an edit its tool's schema does not take, and keeps waiting", async () => {
+    let decided: unknown;
+    claude.script = async function* (signal, options) {
+      decided = await options.canUseTool(
+        "mcp__tachy__post_private_note",
+        { body: "draft" },
+        { signal, toolUseID: "use-1" } as never,
+      );
+      yield RESULT;
+    };
+    const turn = new ClaudeTurn("hi", CONFIG);
+    for await (const event of turn.events()) {
+      if (event.type !== "approval_request") continue;
+      expect(() =>
+        turn.approve("use-1", { approve: true, updatedInput: { body: 1 } }),
+      ).toThrow("the edited input does not fit: body must be string");
+      expect(turn.pendingApprovals).toBe(1);
+      turn.approve("use-1", { approve: true, updatedInput: { body: "ok" } });
+    }
+    expect(decided).toEqual({
+      behavior: "allow",
+      updatedInput: { body: "ok" },
     });
   });
 });

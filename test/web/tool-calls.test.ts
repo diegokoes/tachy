@@ -5,22 +5,48 @@ import {
   toolWords,
 } from "../../packages/web/src/chat/toolCalls";
 
+const calls = (...tools: string[]) =>
+  tools.map((tool, n) => ({ tool, id: `call-${n}` }));
+
 describe("tallyCalls", () => {
   it("counts back-to-back repeats and keeps the order called", () => {
-    const tallies = tallyCalls([
-      "list_repos",
-      "search_code",
-      "search_code",
-      "search_code",
-      "read_code_file",
-      "search_code",
-      "search_code",
-    ]);
+    const tallies = tallyCalls(
+      calls(
+        "list_repos",
+        "search_code",
+        "search_code",
+        "search_code",
+        "read_code_file",
+        "search_code",
+        "search_code",
+      ),
+    );
     expect(tallies.map(tallyLabel)).toEqual([
       "list repos",
       "searched code ×3",
       "read a file",
       "searched code ×2",
+    ]);
+  });
+
+  it("never counts a failed call with one that ran, and keeps its reason", () => {
+    const [first, second, third] = calls(
+      "save_knowledge_entry",
+      "save_knowledge_entry",
+      "save_knowledge_entry",
+    );
+    const tallies = tallyCalls([
+      { ...first, failure: "symptoms must be array" },
+      { ...second, failure: "title must not be empty" },
+      third,
+    ]);
+    expect(tallies).toEqual([
+      {
+        tool: "save_knowledge_entry",
+        count: 2,
+        failure: "symptoms must be array",
+      },
+      { tool: "save_knowledge_entry", count: 1 },
     ]);
   });
 

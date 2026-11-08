@@ -112,7 +112,14 @@ export interface SessionFacts {
 export type AgentEvent =
   | { type: "text"; text: string }
   | { type: "tool_use"; tool: string; input: unknown; id: string }
-  | { type: "tool_result"; tool: string; id: string; result: unknown }
+  | {
+      type: "tool_result";
+      tool: string;
+      id: string;
+      result: unknown;
+      /** Set when the call failed: the result is its reason. */
+      isError?: true;
+    }
   | { type: "approval_request"; tool: string; input: unknown; id: string }
   | { type: "approval_resolved"; id: string; approved: boolean }
   | {
@@ -143,6 +150,7 @@ export interface AgentTurn {
   /** When the longest-waiting approval was requested (ms epoch), or null. */
   readonly oldestPendingApprovalAt: number | null;
   events(): AsyncGenerator<AgentEvent>;
+  /** Throws a bad_input error, the approval still pending, when an edited input does not fit its tool. */
   approve(id: string, decision: Decision): void;
   abort(): void;
 }
