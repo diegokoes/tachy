@@ -41,6 +41,11 @@ const CALLS: ScriptedCall[] = [
     input: { urls: ["https://example.com/page?d=1"] },
   },
   { name: `${TACHY}ingest_context`, input: { text: "pasted notes" } },
+  // A list where the schema takes a string: refused before anyone is asked.
+  {
+    name: `${TACHY}post_private_note`,
+    input: { source: "fd", external_id: "1", body: ["note"] },
+  },
   {
     name: `${TACHY}post_private_note`,
     input: { source: "fd", external_id: "1", body: "note" },
@@ -166,5 +171,15 @@ describe("Claude Code under tachy's options", () => {
 
   it("runs an approved write with the person's edit", () => {
     expect(turn.ran).toContain("post_private_note edited by the person");
+  });
+
+  it("sends a write its schema refuses back to the model, unasked and unrun", () => {
+    const notes = turn.results.filter(
+      (result) => result.tool === `${TACHY}post_private_note`,
+    );
+    expect(notes.map((note) => note.isError)).toEqual([true, false]);
+    expect(
+      turn.ran.filter((line) => line.startsWith("post_private_note")),
+    ).toEqual(["post_private_note edited by the person"]);
   });
 });

@@ -102,6 +102,10 @@
           <span>{call.text.length} chars</span>
           <span class="sep" aria-hidden="true">·</span>
           <span>{call.redacted} redacted</span>
+          {#if call.failed}
+            <span class="sep" aria-hidden="true">·</span>
+            <span class="bad">failed</span>
+          {/if}
         {/if}
       </summary>
       {#if call.input !== undefined}

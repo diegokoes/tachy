@@ -20,6 +20,13 @@
     ondecide: (approve: boolean, reason?: string) => void;
   } = $props();
 
+  const TONES = {
+    pending: "warn",
+    approved: "accent",
+    denied: "danger",
+    failed: "danger",
+  } as const;
+
   const pending = $derived(entry.status === "pending");
   const keys = $derived(Object.keys(entry.input));
 
@@ -120,6 +127,7 @@
 
   function editRaw(text: string) {
     entry.raw = text;
+    entry.refusal = undefined;
     try {
       entry.input = JSON.parse(text) as Record<string, unknown>;
       rawBad = false;
@@ -140,6 +148,7 @@
 
   function set(key: string, value: unknown) {
     entry.input = { ...entry.input, [key]: value };
+    entry.refusal = undefined;
   }
 
   function deny() {
@@ -154,11 +163,7 @@
 <div class="wrap">
   <Panel
     title={approvalTitle(entry.tool, entry.input)}
-    tone={entry.status === "denied"
-      ? "danger"
-      : entry.status === "approved"
-        ? "accent"
-        : "warn"}
+    tone={TONES[entry.status]}
   >
     {#snippet meta()}
       <span>{pending ? "review" : entry.status}</span>
@@ -170,6 +175,7 @@
       {:else}
         <p class="peek">{peek}</p>
       {/if}
+      {#if entry.failure}<p class="missing">{entry.failure}</p>{/if}
     {:else if raw}
       <textarea
         class="raw"
@@ -237,6 +243,7 @@
         </div>
       {/if}
       {#if adoptNote}<p class="missing">{adoptNote}</p>{/if}
+      {#if entry.refusal}<p class="missing">{entry.refusal}</p>{/if}
       <div class="acts">
         {#if isAdoCreate}
           <Button

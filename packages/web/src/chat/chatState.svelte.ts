@@ -8,6 +8,7 @@ import type {
 } from "@tachy/contract";
 import type { ShownStep, WalkStep } from "../code/walkthrough";
 import type { ModelPick } from "./modelCommand";
+import type { ToolCall } from "./toolCalls";
 import type { TurnTrace } from "./trace";
 
 export type EntryData =
@@ -19,7 +20,7 @@ export type EntryData =
       code?: true;
     }
   // Every tool called between two other entries, in the order called.
-  | { kind: "tools"; calls: string[] }
+  | { kind: "tools"; calls: ToolCall[] }
   | { kind: "compact"; id: string; title: string; stats?: CompactStats }
   | { kind: "output"; id: string; file?: OutputFile }
   // What a ticket the agent just read has attached.
@@ -40,7 +41,12 @@ export type EntryData =
       /** Set only while the raw-JSON editor is open, so a half-typed payload
           can be invalid without destroying the parsed fields behind it. */
       raw?: string;
-      status: "pending" | "approved" | "denied";
+      /** `failed`: approved, then refused by the tool. */
+      status: "pending" | "approved" | "denied" | "failed";
+      /** Why the tool refused it, once failed. */
+      failure?: string;
+      /** Why the server would not take the edited input; the card stays open. */
+      refusal?: string;
     }
   // Made from the composer, with no turn behind it.
   | {
@@ -60,6 +66,26 @@ export type EntryData =
 export type Entry = EntryData & { key: number };
 
 let nextKey = 1;
+
+/**
+ * A call its tool refused: its place in a tools row is marked, and an approved
+ * card says so. A denial also comes back as an error, and stays a denial.
+ */
+export function noteFailure(id: string, failure: string): void {
+  for (const entry of chat.entries) {
+    if (entry.kind === "tools") {
+      const call = entry.calls.find((c) => c.id === id);
+      if (call) call.failure = failure;
+    } else if (
+      entry.kind === "approval" &&
+      entry.id === id &&
+      entry.status === "approved"
+    ) {
+      entry.status = "failed";
+      entry.failure = failure;
+    }
+  }
+}
 
 /** Push an entry, stamping it with a stable key. */
 export function addEntry(e: EntryData): Entry {

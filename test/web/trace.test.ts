@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  failureReason,
   modelMismatch,
   ranOn,
   recordFrame,
@@ -58,6 +59,37 @@ describe("recordFrame", () => {
     ]);
   });
 
+  it("marks a call whose result was its error", () => {
+    const trace = traceOf();
+    recordFrame(trace, "tool_use", { id: "a", tool: "save_knowledge_entry" });
+    recordFrame(trace, "tool_result", {
+      id: "a",
+      result: "refused",
+      isError: true,
+    });
+    recordFrame(trace, "tool_result", {
+      id: "d",
+      tool: "post_private_note",
+      result: "invalid arguments",
+      isError: true,
+    });
+    expect(trace.calls).toEqual([
+      {
+        id: "a",
+        tool: "save_knowledge_entry",
+        input: undefined,
+        result: "refused",
+        failed: true,
+      },
+      {
+        id: "d",
+        tool: "post_private_note",
+        result: "invalid arguments",
+        failed: true,
+      },
+    ]);
+  });
+
   it("takes the session and the answering models, and passes on the rest", () => {
     const trace = traceOf();
     recordFrame(trace, "session", SESSION);
@@ -86,6 +118,26 @@ describe("resultText", () => {
   it("shows any other shape as JSON, and nothing for no result", () => {
     expect(resultText({ ok: true })).toBe('{\n  "ok": true\n}');
     expect(resultText(undefined)).toBe("");
+  });
+});
+
+describe("failureReason", () => {
+  it("is the first line the tool answered with", () => {
+    const result = [
+      {
+        type: "text",
+        text: "\n  MCP error -32602: symptoms must be array\nmore",
+      },
+    ];
+    expect(failureReason(result)).toBe(
+      "MCP error -32602: symptoms must be array",
+    );
+  });
+
+  it("is shortened when long, and stands in when there is no text", () => {
+    expect(failureReason("x".repeat(300))).toBe(`${"x".repeat(200)}…`);
+    expect(failureReason([])).toBe("the tool reported an error");
+    expect(failureReason(undefined)).toBe("the tool reported an error");
   });
 });
 

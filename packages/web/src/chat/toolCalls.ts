@@ -1,15 +1,35 @@
+export interface ToolCall {
+  tool: string;
+  id: string;
+  /** The tool's reason, once the call has failed. */
+  failure?: string;
+}
+
 export interface ToolTally {
   tool: string;
   count: number;
+  /** The first failed call's reason; set only on a tally of failed calls. */
+  failure?: string;
 }
 
-/** A run of tool calls in order, with back-to-back repeats counted as one. */
-export function tallyCalls(calls: readonly string[]): ToolTally[] {
+const failed = (item: { failure?: string }) => item.failure !== undefined;
+
+/**
+ * A run of tool calls in order, with back-to-back repeats counted as one. A
+ * failed call never counts with one that ran.
+ */
+export function tallyCalls(calls: readonly ToolCall[]): ToolTally[] {
   const tallies: ToolTally[] = [];
-  for (const tool of calls) {
+  for (const call of calls) {
     const last = tallies[tallies.length - 1];
-    if (last?.tool === tool) last.count += 1;
-    else tallies.push({ tool, count: 1 });
+    if (last?.tool === call.tool && failed(last) === failed(call))
+      last.count += 1;
+    else
+      tallies.push({
+        tool: call.tool,
+        count: 1,
+        ...(failed(call) ? { failure: call.failure } : {}),
+      });
   }
   return tallies;
 }

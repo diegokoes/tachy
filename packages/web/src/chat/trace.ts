@@ -31,6 +31,8 @@ export interface ToolTrace {
   input?: unknown;
   /** Unset until the tool answers. */
   result?: unknown;
+  /** The answer was the tool's error. */
+  failed?: true;
 }
 
 /** One turn as the agent layer saw it, kept only while debug is on. */
@@ -63,13 +65,15 @@ export function recordFrame(
     const call = trace.calls.find(
       (c) => c.id === data.id && c.result === undefined,
     );
+    const failed = data.isError === true ? { failed: true as const } : {};
     // A tool the stream never announced, such as ToolSearch, still answered.
-    if (call) call.result = data.result;
+    if (call) Object.assign(call, { result: data.result, ...failed });
     else
       trace.calls.push({
         id: String(data.id ?? ""),
         tool: short(String(data.tool ?? "")),
         result: data.result,
+        ...failed,
       });
   }
 }
@@ -99,6 +103,20 @@ export function resultText(result: unknown): string {
       return JSON.stringify(block, null, 2);
     })
     .join("\n\n");
+}
+
+const FAILURE_MAX_CHARS = 200;
+
+/** A failed call's result as one line: its first, or a stand-in when it has none. */
+export function failureReason(result: unknown): string {
+  const line = resultText(result)
+    .split("\n")
+    .map((text) => text.trim())
+    .find(Boolean);
+  if (!line) return "the tool reported an error";
+  return line.length > FAILURE_MAX_CHARS
+    ? `${line.slice(0, FAILURE_MAX_CHARS)}…`
+    : line;
 }
 
 /** The stand-ins redaction leaves: `[EMAIL_1]`, `[USER_12]`, `[CUSTOMER]`. */
