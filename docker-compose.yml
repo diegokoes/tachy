@@ -7,7 +7,7 @@ services:
     # The image ships pg_trgm, pgcrypto and vector, so no postgresql-contrib is
     # needed; test/global-setup.ts relies on the same for the suite's
     # Testcontainers database.
-    image: pgvector/pgvector:0.8.7-pg16@sha256:7b822b0aac60967beb1ea5e576b8602c94c300a157d187f385ae3e0da199b90a
+    image: pgvector/pgvector:0.8.7-pg16@sha256:0dd3149a06e4579a0d70d8fef9945636cd514005e7237deb27f9b67886f8dc4f
     container_name: ${COMPOSE_PROJECT_NAME:-tachy}-postgres
     restart: unless-stopped
     # Docker's default /dev/shm is 64MB. A parallel index build allocates its
