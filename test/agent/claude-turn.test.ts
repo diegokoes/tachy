@@ -294,6 +294,43 @@ describe("a Claude turn's approvals", () => {
   });
 });
 
+describe("a Claude turn's refused calls", () => {
+  it("are logged under the id its tools log under", async () => {
+    const lines: Record<string, unknown>[] = [];
+    const spy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk: unknown) => {
+        lines.push(JSON.parse(String(chunk)));
+        return true;
+      });
+    claude.script = async function* (signal, options) {
+      await options.canUseTool(
+        "mcp__tachy__post_private_note",
+        { body: ["x"] },
+        { signal, toolUseID: "use-1" } as never,
+      );
+      yield RESULT;
+    };
+    try {
+      const turn = new ClaudeTurn("hi", {
+        ...CONFIG,
+        mcpEnv: { TACHY_TURN_ID: "turn-7" },
+      });
+      for await (const _event of turn.events());
+    } finally {
+      spy.mockRestore();
+    }
+    expect(lines).toContainEqual(
+      expect.objectContaining({
+        event: "tool_input_refused",
+        turn: "turn-7",
+        tool: "post_private_note",
+        reason: "body must be string",
+      }),
+    );
+  });
+});
+
 describe("a Claude turn's usage", () => {
   it("reports the turn's cache reads and writes apart from its input", async () => {
     const events = await eventsOf(async function* () {
