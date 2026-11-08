@@ -15,7 +15,7 @@
     "fflate": "^0.8.2",
     "material-icon-theme": "^5.40.0",
     "postal-mime": "^4.2.0",
-    "postgres": "^3.4.5",
+    "postgres": "^4.0.0",
     "sharp": "^0.35.5",
     "unpdf": "^2.1.0",
     "zod": "^4.6.7"
