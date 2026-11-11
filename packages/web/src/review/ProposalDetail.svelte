@@ -8,6 +8,7 @@
   import { Badge, Button, Field, Note, Time } from "../tui";
   import { fieldLabels, proposedChanges } from "./changes";
   import FieldChanges from "./FieldChanges.svelte";
+  import { adviceLines, checkLine } from "./precheck";
   import { PROPOSAL_TONES, proposalPath } from "./queue";
 
   let { id, onChanged }: { id: string; onChanged: () => void } = $props();
@@ -30,6 +31,12 @@
     proposal && entry ? proposedChanges(draftFrom(entry), proposal) : [],
   );
   const conflicts = $derived(proposal?.conflicting_fields ?? []);
+  const checks = $derived(proposal?.precheck?.checks ?? []);
+  const remarks = $derived(
+    adviceLines(proposal?.precheck ?? null, {
+      waiting: proposal?.status === "open",
+    }),
+  );
   const isPending = $derived(
     proposal?.status === "open" || proposal?.status === "returned",
   );
@@ -120,6 +127,32 @@
         {fieldLabels(conflicts).join(", ")}: edit it to settle which value
         stands
       </Note>
+    {/if}
+
+    {#if checks.length || remarks.length}
+      <section class="precheck">
+        <h3>pre-check</h3>
+        <ul>
+          {#each checks as finding (finding.code)}
+            <li>
+              {checkLine(finding)}
+              {#each finding.copies ?? [] as copy (copy.id)}
+                {@const copyPath = `/library/entries/${copy.id}`}
+                <a
+                  href={copyPath}
+                  onclick={(e) => {
+                    e.preventDefault();
+                    navigate(copyPath);
+                  }}>{copy.title}</a
+                >
+              {/each}
+            </li>
+          {/each}
+          {#each remarks as remark}
+            <li class="remark">{remark}</li>
+          {/each}
+        </ul>
+      </section>
     {/if}
 
     <FieldChanges {changes} />
@@ -241,6 +274,21 @@
     border-left: 2px solid var(--border);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+  .precheck h3 {
+    margin: 0 0 var(--pad-1);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--label-spacing);
+    text-transform: uppercase;
+    color: var(--warn);
+  }
+  .precheck ul {
+    margin: 0;
+    padding-left: var(--pad-4);
+    font-size: var(--fs-sm);
+  }
+  .precheck .remark {
+    color: var(--muted);
   }
   .thread {
     display: flex;
