@@ -52,6 +52,7 @@ import {
   type FiledRow,
 } from "../library/filing";
 import { syncLinks } from "../library/links";
+import { assertWorkItemExists, insertEntryTicket } from "./tickets";
 import { MAX_UNIT_DEPTH, unitNeighbourhood } from "../catalog/units";
 
 const searchedStatuses = [...SEARCHED_ENTRY_STATUSES];
@@ -139,6 +140,8 @@ export interface KnowledgeUpdateInput extends KnowledgeFacets {
   tags?: string[];
   relatedLinks?: string[];
   expectedVersion?: number;
+  /** The ticket this update draws on; it joins the entry's tickets. */
+  workItemId?: string;
 }
 
 /** The stored form: one line, each run of whitespace a single space. */
@@ -760,6 +763,7 @@ async function resolveEntryUpdate(
   `;
   if (!current) throw notFound(`knowledge entry '${id}' not found`);
   assertExpectedVersion(current.version, patch.expectedVersion);
+  if (patch.workItemId) await assertWorkItemExists(db, patch.workItemId);
 
   const filing = await patchedFiling(
     current,
@@ -903,6 +907,8 @@ export async function updateKnowledgeEntry(
     returning id, version, ${REVISION_COLUMNS}
   `;
     assertUpdated(row, `knowledge entry '${id}'`);
+    if (patch.workItemId)
+      await insertEntryTicket(tx, id, patch.workItemId, actor.userId ?? null);
     await syncLinks(tx, { entryId: id }, linkText(merged), current.product_id);
     return recordUpdate(tx, { entryId: id }, current, row, actor);
   });

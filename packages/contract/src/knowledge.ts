@@ -53,3 +53,14 @@ export interface ComponentKnowledge {
   /** In one of SEARCHED_ENTRY_STATUSES. */
   searchable: number;
 }
+
+/** A ticket an entry draws on. */
+export interface EntryTicket {
+  work_item_id: string;
+  external_id: string;
+  external_url: string | null;
+  title: string | null;
+  status: string | null;
+  /** The ticket the entry was written from; the rest were added later. */
+  is_source: boolean;
+}

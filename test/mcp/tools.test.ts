@@ -187,6 +187,33 @@ describe("knowledge round trip", () => {
     expect(feedback.isError).toBe(false);
   });
 
+  it("joins the ticket an update draws on and lists it on the entry", async () => {
+    const saved = await call("save_knowledge_entry", {
+      product_slug: "tqx",
+      title: "Spooler holds a stale lock after an update",
+    });
+    const id = (saved.json as { id: string }).id;
+    const [ticket] = await sql`
+      insert into work_items (source_connection_id, external_id, title)
+      select id, '9001', 'lock again' from source_connections
+      where slug = 'test-freshdesk'
+      returning id
+    `;
+
+    const updated = await call("update_knowledge_entry", {
+      id,
+      resolution: "remove the lock before restarting",
+      work_item_id: ticket.id,
+    });
+
+    expect(updated.json).toMatchObject({ updated: true, version: 2 });
+    expect(
+      (await call("get_knowledge_entry", { id })).json as { tickets: unknown },
+    ).toMatchObject({
+      tickets: [{ external_id: "9001", is_source: false }],
+    });
+  });
+
   it("updates an entry through its own tool", async () => {
     const saved = await call("save_knowledge_entry", {
       product_slug: "tqx",

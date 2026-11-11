@@ -14,13 +14,14 @@ import {
   getProposal,
 } from "./proposals";
 
-type OpenProposal = NoticeSubject & Pick<ProposalRow, "patch" | "base_version">;
+type OpenProposal = NoticeSubject &
+  Pick<ProposalRow, "patch" | "base_version" | "work_item_id">;
 
 /** The proposal, row-locked, so two reviewers cannot both decide it. */
 async function lockOpenProposal(db: Db, id: string): Promise<OpenProposal> {
   const [proposal] = await db<(OpenProposal & { status: string })[]>`
     select p.id, p.kind, p.status, p.knowledge_entry_id, p.patch, p.base_version,
-           p.submitted_by, e.title as entry_title
+           p.work_item_id, p.submitted_by, e.title as entry_title
     from library_proposals p
     join knowledge_entries e on e.id = p.knowledge_entry_id
     where p.id = ${id}
@@ -52,7 +53,8 @@ async function stampDecision(
 /**
  * What accepting writes to the entry. A reviewer's own `edits` replace the
  * proposed patch; without them, a patch that overlaps a later edit is refused,
- * with the overlapping fields in the error's `fields`.
+ * with the overlapping fields in the error's `fields`. The ticket an edit
+ * draws on joins the entry's tickets either way.
  */
 async function acceptedChange(
   db: Db,
@@ -60,14 +62,17 @@ async function acceptedChange(
   edits: KnowledgeUpdateInput | undefined,
 ): Promise<KnowledgeUpdateInput> {
   if (proposal.kind === "new") return { ...edits, status: "approved" };
-  if (edits) return edits;
+  const drawnOn = proposal.work_item_id
+    ? { workItemId: proposal.work_item_id }
+    : {};
+  if (edits) return { ...edits, ...drawnOn };
   const fields = await conflictingFields(db, proposal);
   if (fields.length)
     throw conflict(
       `the entry changed since this was proposed: ${fields.join(", ")}`,
       { fields },
     );
-  return proposal.patch as KnowledgeUpdateInput;
+  return { ...(proposal.patch as KnowledgeUpdateInput), ...drawnOn };
 }
 
 export async function acceptProposal(

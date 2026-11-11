@@ -222,6 +222,7 @@ export {
 } from "./knowledge";
 export type {
   ComponentKnowledge,
+  EntryTicket,
   KnowledgeCensus,
   KnowledgeStale,
 } from "./knowledge";
