@@ -1,13 +1,16 @@
 import type { ProposalRow, ProposalStatus, ReviewQueue } from "@tachy/contract";
+import { SIGNAL_LABELS, signalPath } from "./signals";
 
-export type ReviewGroupKey = "waiting" | "returned" | "drafts" | "mine";
+export type ReviewGroupKey =
+  "waiting" | "flagged" | "returned" | "drafts" | "mine";
 
 export interface ReviewRow {
   key: string;
   title: string;
-  /** Where the row opens: its proposal, or the entry of a draft nobody proposed. */
+  /** Where the row opens: its proposal, its signal, or the entry of a loose draft. */
   path: string;
-  kind: "new" | "edit" | "draft";
+  /** What waits: a new entry, an edit, a draft, or why an entry is flagged. */
+  badge: string;
   by: string | null;
   at: string;
   status?: ProposalStatus;
@@ -22,6 +25,10 @@ export interface ReviewGroup {
 
 const HEADS: Record<ReviewGroupKey, { title: string; detail: string }> = {
   waiting: { title: "waiting", detail: "proposed, and not decided yet" },
+  flagged: {
+    title: "flagged",
+    detail: "entries the daily sweep found a reason to read again",
+  },
   returned: {
     title: "sent back",
     detail: "returned to the person who proposed it, and waiting on them",
@@ -47,7 +54,7 @@ const proposalRow = (proposal: ProposalRow): ReviewRow => ({
   key: proposal.id,
   title: proposal.entry_title,
   path: proposalPath(proposal.id),
-  kind: proposal.kind,
+  badge: proposal.kind,
   by: proposal.submitter_name,
   at: proposal.updated_at,
   status: proposal.status,
@@ -55,8 +62,9 @@ const proposalRow = (proposal: ProposalRow): ReviewRow => ({
 
 /**
  * The review list, in the order it is worked: what a reviewer decides, what
- * waits on submitters, loose drafts, then the reader's own proposals that the
- * groups before did not already show. Empty groups are left out.
+ * the sweep flagged, what waits on submitters, loose drafts, then the reader's
+ * own proposals that the groups before did not already show. Empty groups are
+ * left out.
  */
 export function reviewGroups(
   queue: ReviewQueue,
@@ -67,6 +75,14 @@ export function reviewGroups(
     waiting: queue.proposals
       .filter((proposal) => proposal.status === "open")
       .map(proposalRow),
+    flagged: queue.signals.map((signal) => ({
+      key: signal.id,
+      title: signal.entry_title,
+      path: signalPath(signal.id),
+      badge: SIGNAL_LABELS[signal.kind],
+      by: null,
+      at: signal.first_seen_at,
+    })),
     returned: queue.proposals
       .filter((proposal) => proposal.status === "returned")
       .map(proposalRow),
@@ -74,7 +90,7 @@ export function reviewGroups(
       key: draft.id,
       title: draft.title,
       path: `/library/entries/${draft.id}`,
-      kind: "draft",
+      badge: "draft",
       by: draft.author_name,
       at: draft.updated_at,
     })),
@@ -85,7 +101,8 @@ export function reviewGroups(
     .map((key) => ({ key, ...HEADS[key], rows: rows[key] }));
 }
 
-/** The proposal a bare /review opens on: the first one a group lists. */
-export const firstProposalPath = (groups: ReviewGroup[]): string | null =>
-  groups.flatMap((group) => group.rows).find((row) => row.kind !== "draft")
-    ?.path ?? null;
+/** What a bare /review opens on: the first row that opens inside the tab. */
+export const firstReviewPath = (groups: ReviewGroup[]): string | null =>
+  groups
+    .flatMap((group) => group.rows)
+    .find((row) => row.path.startsWith("/review/"))?.path ?? null;

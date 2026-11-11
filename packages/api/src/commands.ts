@@ -112,7 +112,7 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
     // Self-contained for the same reason as /az explain: paid on the click.
     expand: (args) =>
       [
-        "Update one existing knowledge entry from tickets it does not draw on yet. Call get_knowledge_entry first: its `tickets` are the ones already folded in. With no ticket named here, ask which one before doing anything else.",
+        "Update one existing knowledge entry from tickets it does not draw on yet. Call get_knowledge_entry first: its `tickets` are the ones already folded in. With no ticket named here, ask which one before doing anything else. A ticket named as source:id is that connection's item, as fetch_work_item takes it.",
         "fetch_work_item each named ticket and read it whole. Change only what the ticket adds or contradicts: a better cause, a fix that held or did not, a version, a symptom the entry lacks. Do not restate what the entry already says, and say so first if the ticket shows the entry is wrong rather than incomplete.",
         "Then one update_knowledge_entry per ticket, with its work_item_id, the entry's version as expected_version and a one-line reason. A ticket that adds nothing gets no update: say that instead.",
         argsLine(args),

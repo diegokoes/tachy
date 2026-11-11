@@ -44,6 +44,10 @@ export function relevance(signals: Ranked): number {
   return clamp01(SEM_WEIGHT * sem + LEX_WEIGHT * lex);
 }
 
+/** The cosine at which the vector arm alone grades a match strong. */
+export const STRONG_COSINE =
+  SEM_FLOOR + (STRONG / SEM_WEIGHT) * (SEM_CEIL - SEM_FLOOR);
+
 export const gradeOf = (r: Ranked): Grade => grade(relevance(r));
 
 /**

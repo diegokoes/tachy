@@ -4,6 +4,7 @@ import { defineFlowJobs } from "../flows/jobs";
 import { defineRetentionJobs } from "../compliance/retention";
 import { defineMcpServerJobs } from "../mcp-servers/jobs";
 import { defineReferenceJobs } from "../reference/jobs";
+import { defineReviewJobs } from "../review/jobs";
 import { sql } from "../infra/db";
 import { log } from "../infra/log";
 import { defineSearchJobs } from "../search/jobs";
@@ -29,6 +30,7 @@ export function registerCoreJobs(): void {
   defineReferenceJobs();
   defineMcpServerJobs();
   defineWorkItemJobs();
+  defineReviewJobs();
 }
 
 /**
