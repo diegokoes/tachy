@@ -53,6 +53,7 @@ export const NOTIFICATION_KINDS = [
   "report_reply",
   "work_item_changed",
   "flow_notice",
+  "review_reply",
 ] as const;
 /** Who a report_messages row came from: the admin working it or the reporter. */
 export const REPORT_DIRECTIONS = ["admin", "reporter"] as const;
