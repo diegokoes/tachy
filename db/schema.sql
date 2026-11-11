@@ -1177,6 +1177,63 @@ create unique index library_views_doc_idx
     on library_views(reference_doc_id, user_id, day)
     nulls not distinct where reference_doc_id is not null;
 
+-- A change to a library item that waits for a curator. A new item is its own
+-- row in 'draft' with the proposal pointing at it; an edit leaves the live row
+-- alone and holds the changed fields in `patch`.
+create table library_proposals (
+    id                 uuid primary key default gen_random_uuid(),
+    knowledge_entry_id uuid references knowledge_entries(id) on delete cascade,
+    reference_doc_id   uuid references reference_docs(id) on delete cascade,
+    check (num_nonnulls(knowledge_entry_id, reference_doc_id) = 1),
+    kind               text not null check (kind in ('new','edit')),
+    -- The proposed fields, keyed as the item's update takes them.
+    patch              jsonb,
+    -- The item version the patch was written against.
+    base_version       integer,
+    check ((kind = 'edit') = (patch is not null and base_version is not null)),
+    -- The ticket the change draws on.
+    work_item_id       uuid references work_items(id) on delete set null,
+    note               text,
+    -- 'open' waits on a reviewer, 'returned' on the submitter.
+    status             text not null default 'open'
+                           check (status in ('open','returned','accepted','rejected','withdrawn')),
+    submitted_by       uuid references users(id) on delete set null,
+    actor              text not null check (actor in ('web','agent','mcp','api','ingest')),
+    turn_id            text,
+    decided_by         uuid references users(id) on delete set null,
+    decided_at         timestamptz,
+    -- The item version the acceptance produced.
+    accepted_version   integer,
+    created_at         timestamptz not null default now(),
+    updated_at         timestamptz not null default now()
+);
+
+create index library_proposals_entry_idx on library_proposals(knowledge_entry_id);
+create index library_proposals_submitter_idx on library_proposals(submitted_by, created_at desc);
+create index library_proposals_pending_idx on library_proposals(status)
+    where status in ('open','returned');
+-- One waiting edit per person and entry: a second submit replaces the first.
+create unique index library_proposals_pending_edit_idx
+    on library_proposals(knowledge_entry_id, submitted_by)
+    where kind = 'edit' and status in ('open','returned');
+
+create trigger library_proposals_updated_at
+    before update on library_proposals
+    for each row execute function set_updated_at();
+
+-- The thread on a proposal: the reviewer's replies and the submitter's answers.
+create table library_proposal_messages (
+    id           uuid primary key default gen_random_uuid(),
+    proposal_id  uuid not null references library_proposals(id) on delete cascade,
+    author_id    uuid references users(id) on delete set null,
+    direction    text not null check (direction in ('reviewer','submitter')),
+    body_text    text not null,
+    created_at   timestamptz not null default now()
+);
+
+create index library_proposal_messages_proposal_idx
+    on library_proposal_messages(proposal_id, created_at);
+
 -- Traffic to source systems, bucketed per connection, day and origin. Counts,
 -- never timings. What this answers is whose traffic it is (the agent reading on
 -- somebody's behalf, a sync, or the app itself) and how often the far end
@@ -1601,7 +1658,7 @@ create index report_messages_report_idx on report_messages(report_id, created_at
 create table notifications (
     id          uuid primary key default gen_random_uuid(),
     user_id     uuid not null references users(id) on delete cascade,
-    kind        text not null check (kind in ('report_reply','work_item_changed','flow_notice')),
+    kind        text not null check (kind in ('report_reply','work_item_changed','flow_notice','review_reply')),
     title       text,
     body_text   text,
     ref         jsonb not null default '{}'::jsonb,

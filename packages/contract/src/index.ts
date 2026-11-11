@@ -235,6 +235,24 @@ export type {
 } from "./reports";
 
 export {
+  PROPOSAL_KINDS,
+  PROPOSAL_STATUSES,
+  PENDING_PROPOSAL_STATUSES,
+  PROPOSAL_DIRECTIONS,
+} from "./review";
+export type {
+  ProposalKind,
+  ProposalStatus,
+  ProposalDirection,
+  ProposalMessageRow,
+  ProposalRow,
+  UnproposedDraft,
+  ReviewQueue,
+  ReviewCount,
+  Submission,
+} from "./review";
+
+export {
   LIBRARY_ASSET_TYPES,
   MAX_ASSET_BYTES,
   assetPath,

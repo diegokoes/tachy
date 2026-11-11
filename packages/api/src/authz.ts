@@ -5,7 +5,9 @@ import {
   assertCanEditScope,
   assertCanManageTeamBySlug,
   assertAnyTeamAdmin,
+  canEditScope,
   isAnyTeamAdmin,
+  teamAdminTeams,
   userSoleTeamId,
   userTeams,
   type EntryScope,
@@ -57,6 +59,23 @@ export async function assertScopeEditor(
 ): Promise<void> {
   if (isAdminIdentity(c)) return;
   await assertCanEditScope(await requireCaller(c), scope);
+}
+
+export async function isScopeEditor(
+  c: Context,
+  scope: EntryScope,
+): Promise<boolean> {
+  if (isAdminIdentity(c)) return true;
+  const userId = await callerUserId(c);
+  return userId !== null && (await canEditScope(userId, scope));
+}
+
+/** The teams whose proposals the caller decides: null for an app admin, who decides all. */
+export async function reviewerTeams(c: Context): Promise<string[] | null> {
+  if (isAdminIdentity(c)) return null;
+  const userId = await callerUserId(c);
+  if (!userId) return [];
+  return (await teamAdminTeams(userId)).map((team) => team.team_id);
 }
 
 /** The customer's own record; a part tied to a product goes through `assertScopeEditor`. */

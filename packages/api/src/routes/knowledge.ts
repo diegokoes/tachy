@@ -2,9 +2,7 @@ import { Hono } from "hono";
 import { validate } from "../validation";
 import { z } from "zod";
 import {
-  saveKnowledgeEntry,
   searchKnowledge,
-  updateKnowledgeEntry,
   revertKnowledgeEntry,
   getKnowledgeEntry,
   listKnowledgeEntries,
@@ -30,6 +28,8 @@ import {
   viewStats,
   viewHistory,
 } from "@tachy/core/library";
+import { saveOrProposeEntry, updateOrProposeEntry } from "@tachy/core/review";
+import type { Submitter } from "@tachy/core/review";
 import { recordRun } from "@tachy/core/analytics";
 import { sql, notFound } from "@tachy/core/infra";
 import {
@@ -38,15 +38,22 @@ import {
 } from "@tachy/core/catalog";
 import type { EntryScope } from "@tachy/core/access";
 import type { RunInput } from "@tachy/core/analytics";
+import type { Context } from "hono";
 import {
   assertScopeEditor,
   callerActor,
   callerUserId,
+  isScopeEditor,
   requireCaller,
 } from "../authz";
 import { csv } from "../query";
 
+const MAX_NOTE_CHARS = 2000;
+/** Why a change is proposed; read only when the write becomes a proposal. */
+const noteSchema = z.string().trim().max(MAX_NOTE_CHARS).optional();
+
 const knowledgeInputSchema = z.object({
+  note: noteSchema,
   workItemId: z.string().optional(),
   productId: z.string().optional(),
   teamId: z.string().optional(),
@@ -72,7 +79,7 @@ const knowledgeInputSchema = z.object({
   fixedVersion: z.string().optional(),
 });
 
-const knowledgeUpdateSchema = z.object({
+export const knowledgeUpdateSchema = z.object({
   status: knowledgeStatusSchema.optional(),
   title: entryTitleSchema.optional(),
   issueSummary: z.string().nullable().optional(),
@@ -169,6 +176,20 @@ async function entryScope(id: string): Promise<EntryScope> {
   return { productId: row.product_id, teamId: row.team_id };
 }
 
+async function submitterOf(
+  c: Context,
+  scope: EntryScope,
+  note: string | undefined,
+): Promise<Submitter> {
+  return {
+    actor: await callerActor(c),
+    canEdit: await isScopeEditor(c, scope),
+    note,
+  };
+}
+
+const PROPOSED = 202;
+
 export const knowledge = new Hono()
   .get("/search", async (c) => {
     const rows = await searchKnowledge(
@@ -248,13 +269,20 @@ export const knowledge = new Hono()
     countView({ entryId: id }, await callerUserId(c));
     return c.json(entry);
   })
-  .patch("/:id", validate("json", knowledgeUpdateSchema), async (c) => {
-    const id = c.req.param("id");
-    await assertScopeEditor(c, await entryScope(id));
-    return c.json(
-      await updateKnowledgeEntry(id, c.req.valid("json"), await callerActor(c)),
-    );
-  })
+  .patch(
+    "/:id",
+    validate("json", knowledgeUpdateSchema.extend({ note: noteSchema })),
+    async (c) => {
+      const id = c.req.param("id");
+      const { note, ...patch } = c.req.valid("json");
+      const submission = await updateOrProposeEntry(
+        id,
+        patch,
+        await submitterOf(c, await entryScope(id), note),
+      );
+      return c.json(submission, submission.proposed ? PROPOSED : 200);
+    },
+  )
   .get("/", async (c) => {
     const rows = await listKnowledgeEntries({
       status: c.req.query("status"),
@@ -263,15 +291,13 @@ export const knowledge = new Hono()
     return c.json(rows);
   })
   .post("/", validate("json", knowledgeInputSchema), async (c) => {
-    const body = c.req.valid("json");
-    await assertScopeEditor(c, await newEntryScope(body));
-    return c.json(
-      await saveKnowledgeEntry({
-        ...body,
-        createdById: await callerUserId(c),
-        actor: await callerActor(c),
-      }),
+    const { note, ...body } = c.req.valid("json");
+    const submitter = await submitterOf(c, await newEntryScope(body), note);
+    const submission = await saveOrProposeEntry(
+      { ...body, createdById: await callerUserId(c), actor: submitter.actor },
+      submitter,
     );
+    return c.json(submission, submission.proposed ? PROPOSED : 200);
   });
 
 const runSchema = z.object({

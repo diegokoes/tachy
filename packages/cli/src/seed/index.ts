@@ -29,6 +29,7 @@ import { seedActivity, seedTelemetry } from "./activity";
 import { seedLibrary } from "./library";
 import { seedWiki } from "./wiki";
 import { seedReports } from "./reports";
+import { seedReview } from "./review";
 import { seedAudit } from "./audit";
 import { seedFlows } from "./flows";
 import { seedBuckets } from "./buckets";
@@ -390,6 +391,7 @@ export async function seed(opts: SeedOptions): Promise<void> {
     );
     await phases.run("wiki", () => seedWiki(tx, org.products, org.users));
     await phases.run("reports", () => seedReports(tx, volumes, org.users));
+    await phases.run("review", () => seedReview(tx, org.users));
     await phases.run("audit", () => seedAudit(tx, org.users));
     await phases.run("jobs", () =>
       seedJobs(tx, volumes, org.users, sources.connections),
