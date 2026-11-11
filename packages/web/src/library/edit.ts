@@ -9,7 +9,12 @@ import { errText } from "../resource.svelte";
  * drifted to different wordings for the same situation.
  */
 export type PatchOutcome =
-  { ok: true } | { ok: false; conflict: boolean; message: string };
+  | {
+      ok: true;
+      /** The edit went to a reviewer, and the item stays as it was. */
+      proposed: boolean;
+    }
+  | { ok: false; conflict: boolean; message: string };
 
 export async function patchLibraryItem(
   path: string,
@@ -18,8 +23,11 @@ export async function patchLibraryItem(
   noun: string,
 ): Promise<PatchOutcome> {
   try {
-    await api.patch(path, { ...body, expectedVersion });
-    return { ok: true };
+    const answer = await api.patch<{ proposed?: boolean } | undefined>(path, {
+      ...body,
+      expectedVersion,
+    });
+    return { ok: true, proposed: answer?.proposed === true };
   } catch (e) {
     if (e instanceof ApiError && e.status === 409)
       return {

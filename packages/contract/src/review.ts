@@ -60,6 +60,16 @@ export interface ProposalRow {
   /** Patch fields changed on the entry since `base_version`; on a single read only. */
   conflicting_fields?: string[];
   messages?: ProposalMessageRow[];
+  /** Which sides of the proposal the caller is on; set by the API on a single read. */
+  viewer?: { submitter: boolean; reviewer: boolean };
+}
+
+/** What waits on one entry, as its page shows it. */
+export interface EntryProposals {
+  /** The caller's own waiting proposal on the entry. */
+  mine: ProposalRow | null;
+  /** Open proposals on the entry, whoever made them. */
+  open: number;
 }
 
 /** A draft entry nobody has proposed: a curator's own unfinished work. */

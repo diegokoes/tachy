@@ -1,11 +1,12 @@
 <script lang="ts">
   import type { NotificationRow } from "@tachy/contract";
   import { ring } from "../motion/motion";
+  import { proposalPath } from "../review/queue";
   import { navigate, router } from "../shell/router.svelte";
   import { Button, Time } from "../tui";
   import { boardItemPath } from "../work-items/board";
   import {
-    itemChanges,
+    bellNotices,
     markNotificationsRead,
     markNotificationsSeen,
     notifyState,
@@ -19,7 +20,7 @@
   let menuEl = $state<HTMLElement>();
   let nudgePx = $state(0);
 
-  const changes = $derived(itemChanges());
+  const changes = $derived(bellNotices());
   const unreadIds = $derived(
     changes.filter((change) => !change.read_at).map((change) => change.id),
   );
@@ -79,9 +80,16 @@
   /** A flow notice links to the item in its source, outside tachy. */
   function open(change: NotificationRow) {
     void markNotificationsRead([change.id]);
-    const { url } = change.ref as Record<string, unknown>;
+    const { url, proposal_id: proposalId } = change.ref as Record<
+      string,
+      unknown
+    >;
     if (change.kind === "flow_notice") {
       if (typeof url === "string") window.open(url, "_blank", "noopener");
+      return;
+    }
+    if (change.kind === "review_reply") {
+      if (typeof proposalId === "string") navigate(proposalPath(proposalId));
       return;
     }
     const path = itemPath(change);

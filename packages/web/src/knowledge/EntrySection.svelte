@@ -4,6 +4,7 @@
   let {
     label,
     unsaved = false,
+    mark = "unsaved",
     active = false,
     compact = false,
     action,
@@ -12,6 +13,8 @@
     label: string;
     /** Holds an edit not saved yet. */
     unsaved?: boolean;
+    /** The word drawn beside an edited heading. */
+    mark?: string;
     /** Being edited: the heading and its rule take the accent. */
     active?: boolean;
     /** A quieter heading, for the column beside the text. */
@@ -25,7 +28,7 @@
 <section class:compact class:active>
   <h3>
     <span class="label" class:unsaved>{label}</span>
-    {#if unsaved}<span class="mark">unsaved</span>{/if}
+    {#if unsaved}<span class="mark">{mark}</span>{/if}
     {#if action}<span class="action">{@render action()}</span>{/if}
   </h3>
   {@render children()}

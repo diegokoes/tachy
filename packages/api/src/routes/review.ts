@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { z } from "zod";
 import {
   acceptProposal,
+  entryProposals,
   getProposal,
   listMyProposals,
   listProposalQueue,
@@ -48,14 +49,18 @@ async function reviewedProposal(c: Context): Promise<ProposalRow> {
   return proposal;
 }
 
-type Party = "submitter" | "reviewer";
+type Viewer = NonNullable<ProposalRow["viewer"]>;
 
-/** Which side of the proposal the caller is on; throws for anyone else. */
-async function partyTo(c: Context, proposal: ProposalRow): Promise<Party> {
+/** The sides of the proposal the caller is on; throws for someone on neither. */
+async function viewerOf(c: Context, proposal: ProposalRow): Promise<Viewer> {
   const userId = await callerUserId(c);
-  if (userId && userId === proposal.submitted_by) return "submitter";
-  if (await isScopeEditor(c, scopeOf(proposal))) return "reviewer";
-  throw forbidden("this proposal is neither yours nor yours to review");
+  const viewer = {
+    submitter: userId !== null && userId === proposal.submitted_by,
+    reviewer: await isScopeEditor(c, scopeOf(proposal)),
+  };
+  if (!viewer.submitter && !viewer.reviewer)
+    throw forbidden("this proposal is neither yours nor yours to review");
+  return viewer;
 }
 
 export const review = new Hono()
@@ -78,9 +83,12 @@ export const review = new Hono()
 
   .get("/proposals/:id", async (c) => {
     const proposal = await getProposal(c.req.param("id"));
-    await partyTo(c, proposal);
-    return c.json(proposal);
+    return c.json({ ...proposal, viewer: await viewerOf(c, proposal) });
   })
+
+  .get("/entries/:entryId", async (c) =>
+    c.json(await entryProposals(c.req.param("entryId"), await callerUserId(c))),
+  )
 
   .post("/proposals/:id/accept", validate("json", acceptSchema), async (c) => {
     const proposal = await reviewedProposal(c);
@@ -141,10 +149,13 @@ export const review = new Hono()
     validate("json", messageSchema),
     async (c) => {
       const proposal = await getProposal(c.req.param("id"));
-      const direction = await partyTo(c, proposal);
+      const viewer = await viewerOf(c, proposal);
       const posted = await replyOnProposal(
         proposal,
-        { userId: await callerUserId(c), direction },
+        {
+          userId: await callerUserId(c),
+          direction: viewer.submitter ? "submitter" : "reviewer",
+        },
         c.req.valid("json").message,
       );
       return c.json(posted, 201);

@@ -246,6 +246,45 @@ describe("review routes", () => {
     });
   });
 
+  it("tells each caller which side of a proposal they are on", async () => {
+    const { submission } = await proposedEntry();
+    const proposalPath = `/api/review/proposals/${submission.proposal_id}`;
+    const viewerFor = async (cookie: string) =>
+      (await (await requestAs(cookie, "GET", proposalPath)).json()).viewer;
+
+    expect(await viewerFor(memberCookie)).toEqual({
+      submitter: true,
+      reviewer: false,
+    });
+    expect(await viewerFor(leadCookie)).toEqual({
+      submitter: false,
+      reviewer: true,
+    });
+  });
+
+  it("reports what waits on one entry, and whose it is", async () => {
+    const saved = await (
+      await requestAs(leadCookie, "POST", "/api/knowledge", lesson())
+    ).json();
+    const entryPath = `/api/review/entries/${saved.id}`;
+    const waitingFor = async (cookie: string) =>
+      (await requestAs(cookie, "GET", entryPath)).json();
+
+    expect(await waitingFor(memberCookie)).toEqual({ mine: null, open: 0 });
+
+    await requestAs(memberCookie, "PATCH", `/api/knowledge/${saved.id}`, {
+      resolution: "renew the lease on wake",
+    });
+
+    const own = await waitingFor(memberCookie);
+    expect(own.open).toBe(1);
+    expect(own.mine).toMatchObject({
+      kind: "edit",
+      patch: { resolution: "renew the lease on wake" },
+    });
+    expect(await waitingFor(leadCookie)).toEqual({ mine: null, open: 1 });
+  });
+
   it("answers 404 for a proposal that does not exist", async () => {
     const response = await requestAs(
       leadCookie,

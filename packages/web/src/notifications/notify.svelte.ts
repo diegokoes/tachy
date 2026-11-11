@@ -44,11 +44,18 @@ export const unread = (): NotificationRow[] =>
 export const unreadReplies = (): NotificationRow[] =>
   unread().filter((n) => n.kind === "report_reply");
 
-/** Changes on items the reader follows, and flow notices, newest first. */
-export const itemChanges = (): NotificationRow[] =>
-  notifyState.items.filter(
-    (n) => n.kind === "work_item_changed" || n.kind === "flow_notice",
-  );
+const BELL_KINDS: readonly NotificationRow["kind"][] = [
+  "work_item_changed",
+  "flow_notice",
+  "review_reply",
+];
+
+/**
+ * What the bell lists, newest first: changes on followed items, flow notices
+ * and what reviewers did with the reader's proposals.
+ */
+export const bellNotices = (): NotificationRow[] =>
+  notifyState.items.filter((n) => BELL_KINDS.includes(n.kind));
 
 export async function refreshNotifications(): Promise<void> {
   if (!session.me) return;

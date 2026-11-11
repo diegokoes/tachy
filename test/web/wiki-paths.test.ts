@@ -66,6 +66,7 @@ describe("library tabs", () => {
     expect(libraryTab("/wiki/tpd/glossary")).toBe("wiki");
     expect(libraryTab("/wiki/tpd/gaps")).toBe("gaps");
     expect(libraryTab("/customers/itg/tlc191")).toBe("customers");
+    expect(libraryTab("/review/p1")).toBe("review");
   });
 
   it("offers the customers tab only where customers exist", () => {
@@ -73,9 +74,18 @@ describe("library tabs", () => {
       "all",
       "wiki",
       "gaps",
+      "review",
     ]);
-    expect(libraryTabs({ customers: true }).at(-1)?.key).toBe("customers");
+    expect(libraryTabs({ customers: true }).map((t) => t.key)).toContain(
+      "customers",
+    );
     expect(libraryTabPath("customers", "tpd")).toBe("/customers");
+  });
+
+  it("ends on the review tab, carrying what waits there", () => {
+    const review = libraryTabs({ customers: true, waiting: 4 }).at(-1);
+    expect(review).toMatchObject({ key: "review", count: 4 });
+    expect(libraryTabPath("review", "tpd")).toBe("/review");
   });
 
   it("sends the wiki tabs to the wiki in view", () => {

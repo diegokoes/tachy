@@ -88,6 +88,9 @@ export function isCurator(): boolean {
   return !!me && (me.role === "admin" || (me.team_admin?.length ?? 0) > 0);
 }
 
+/** Anyone signed in may propose a change; a reviewer decides whether it lands. */
+export const canPropose = (): boolean => !!session.me;
+
 export function canCurateScope(scope: {
   team_id?: string | null;
   team_slug?: string | null;

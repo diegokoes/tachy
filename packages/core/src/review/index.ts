@@ -4,6 +4,7 @@ export {
   listUnproposedDrafts,
   listMyProposals,
   reviewCount,
+  entryProposals,
   type ReviewerTeams,
 } from "./proposals";
 export {

@@ -145,6 +145,22 @@ export const blankDraft = (): EntryDraft => ({
   unit: "",
 });
 
+/**
+ * `draft` with a stored patch laid over it. The patch is keyed as the API
+ * takes it, where null clears a field; here a cleared field holds what a blank
+ * draft does.
+ */
+export function patched(
+  draft: EntryDraft,
+  patch: Record<string, unknown>,
+): EntryDraft {
+  const blank = blankDraft();
+  const result: Record<string, unknown> = { ...draft };
+  for (const field of Object.keys(blank) as DraftField[])
+    if (field in patch) result[field] = patch[field] ?? blank[field];
+  return result as EntryDraft;
+}
+
 /** Text that differs only in surrounding whitespace is the same value. */
 function sameValue(before: unknown, after: unknown): boolean {
   if (Array.isArray(before) && Array.isArray(after))

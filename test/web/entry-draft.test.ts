@@ -8,6 +8,7 @@ import {
   entryPatch,
   fieldLabel,
   holdsProperties,
+  patched,
   rebase,
   withStatus,
   type EntryDraft,
@@ -150,6 +151,35 @@ describe("an entry's draft", () => {
       ...theirs,
       resolution: "Raise the batch limit.",
     });
+  });
+});
+
+describe("a stored patch over a draft", () => {
+  it("replaces the fields it names and leaves the rest", () => {
+    const over = patched(draftFrom(row), {
+      resolution: "Clear the queue first.",
+      tags: ["printing", "queue"],
+    });
+    expect(over.resolution).toBe("Clear the queue first.");
+    expect(over.tags).toEqual(["printing", "queue"]);
+    expect(over.title).toBe(row.title);
+  });
+
+  it("reads a null as the field cleared, and ignores keys the page lacks", () => {
+    const over = patched(draftFrom(row), {
+      resolution: null,
+      supersededBy: null,
+      expectedVersion: 3,
+    });
+    expect(over.resolution).toBe("");
+    expect(over.supersededBy).toBeNull();
+    expect("expectedVersion" in over).toBe(false);
+  });
+
+  it("round-trips the patch an edit produces", () => {
+    const before = draftFrom(row);
+    const after = edited({ rootCause: "A stale lock.", confidence: "" });
+    expect(patched(before, entryPatch(before, after))).toEqual(after);
   });
 });
 
