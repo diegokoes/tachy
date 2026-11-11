@@ -33,7 +33,7 @@
             >
               <span class="title">{row.title}</span>
               <span class="meta">
-                <Badge>{row.kind}</Badge>
+                <Badge>{row.badge}</Badge>
                 {#if status}
                   <Badge tone={PROPOSAL_TONES[status]}>{status}</Badge>
                 {/if}

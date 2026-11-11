@@ -2,8 +2,13 @@ import { Hono, type Context } from "hono";
 import { z } from "zod";
 import {
   acceptProposal,
-  entryProposals,
+  dismissSignal,
+  entryReview,
   getProposal,
+  getSignal,
+  listSignals,
+  muteSignal,
+  sweepSignals,
   listMyProposals,
   listProposalQueue,
   listUnproposedDrafts,
@@ -15,8 +20,9 @@ import {
   withdrawProposal,
 } from "@tachy/core/review";
 import { forbidden } from "@tachy/core/infra";
-import type { ProposalRow } from "@tachy/core";
+import type { ProposalRow, SignalRow } from "@tachy/core";
 import {
+  assertAnyTeamAdminApi,
   assertScopeEditor,
   callerActor,
   callerUserId,
@@ -37,9 +43,9 @@ const resubmitSchema = z.object({
   note: z.string().trim().max(MAX_MESSAGE_CHARS).optional(),
 });
 
-const scopeOf = (proposal: ProposalRow) => ({
-  productId: proposal.product_id,
-  teamId: proposal.team_id,
+const scopeOf = (row: Pick<ProposalRow, "product_id" | "team_id">) => ({
+  productId: row.product_id,
+  teamId: row.team_id,
 });
 
 /** The proposal, for a caller who may decide it. */
@@ -47,6 +53,13 @@ async function reviewedProposal(c: Context): Promise<ProposalRow> {
   const proposal = await getProposal(c.req.param("id")!);
   await assertScopeEditor(c, scopeOf(proposal));
   return proposal;
+}
+
+/** The signal, for a caller who curates its entry. */
+async function reviewedSignal(c: Context): Promise<SignalRow> {
+  const signal = await getSignal(c.req.param("id")!);
+  await assertScopeEditor(c, scopeOf(signal));
+  return signal;
 }
 
 type Viewer = NonNullable<ProposalRow["viewer"]>;
@@ -66,11 +79,12 @@ async function viewerOf(c: Context, proposal: ProposalRow): Promise<Viewer> {
 export const review = new Hono()
   .get("/queue", async (c) => {
     const teams = await reviewerTeams(c);
-    const [proposals, drafts] = await Promise.all([
+    const [proposals, drafts, signals] = await Promise.all([
       listProposalQueue(teams),
       listUnproposedDrafts(teams),
+      listSignals(teams),
     ]);
-    return c.json({ proposals, drafts });
+    return c.json({ proposals, drafts, signals });
   })
 
   .get("/mine", async (c) =>
@@ -87,8 +101,25 @@ export const review = new Hono()
   })
 
   .get("/entries/:entryId", async (c) =>
-    c.json(await entryProposals(c.req.param("entryId"), await callerUserId(c))),
+    c.json(await entryReview(c.req.param("entryId"), await callerUserId(c))),
   )
+
+  .post("/signals/rescan", async (c) => {
+    await assertAnyTeamAdminApi(c);
+    return c.json(await sweepSignals());
+  })
+
+  .post("/signals/:id/dismiss", async (c) => {
+    const signal = await reviewedSignal(c);
+    await dismissSignal(signal.id, await callerUserId(c));
+    return c.json({ dismissed: signal.id });
+  })
+
+  .post("/signals/:id/mute", async (c) => {
+    const signal = await reviewedSignal(c);
+    await muteSignal(signal.id, await callerUserId(c));
+    return c.json({ muted: signal.id });
+  })
 
   .post("/proposals/:id/accept", validate("json", acceptSchema), async (c) => {
     const proposal = await reviewedProposal(c);

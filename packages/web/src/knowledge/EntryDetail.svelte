@@ -4,7 +4,7 @@
     MAX_ENTRY_TITLE_CHARS,
     RELATED_LINK_HINT,
     isRelatedLink,
-    type EntryProposals,
+    type EntryReview,
     type PatternRow,
     type ProductRow,
     type ProposalRow,
@@ -29,6 +29,7 @@
   import { toast } from "../notifications/notify.svelte";
   import { pendingLine } from "../review/changes";
   import { proposalPath } from "../review/queue";
+  import { signalLine } from "../review/signals";
   import { loadReviewCounts } from "../review/review.svelte";
   import { pushScope, type Binding } from "../keys/keys.svelte";
   import { setTopActions } from "../shell/subnav.svelte";
@@ -84,7 +85,7 @@
   const NEW_ENTRY_STATUSES = ["approved", "draft"] as const;
   const DISCARD_ARM_MS = 3000;
   const MAX_NOTE_CHARS = 2000;
-  const NO_PROPOSALS: EntryProposals = { mine: null, open: 0 };
+  const NO_PROPOSALS: EntryReview = { mine: null, open: 0, signals: [] };
   const liveStatuses: readonly string[] = SEARCHED_ENTRY_STATUSES;
 
   const creating = $derived(!id);
@@ -94,7 +95,7 @@
   let draft = $state<EntryDraft>(blankDraft());
   let deprecationReason = $state("");
   /** What waits for review on this entry. */
-  let proposals = $state.raw<EntryProposals>(NO_PROPOSALS);
+  let proposals = $state.raw<EntryReview>(NO_PROPOSALS);
   /** Why the reader proposes their change. */
   let note = $state("");
   let feedback = $state<Feedback[]>([]);
@@ -128,6 +129,12 @@
           }),
   );
   const pending = $derived(proposals.mine);
+  const flaggedSignals = $derived(
+    proposals.signals.filter((signal) => signal.flagged),
+  );
+  const recurrence = $derived(
+    proposals.signals.find((signal) => signal.kind === "recurring"),
+  );
   /** The reader's own draft, still with a reviewer: theirs to keep editing. */
   const ownsDraft = $derived(
     entry?.status === "draft" && pending?.kind === "new",
@@ -182,7 +189,7 @@
   const current = createSequence();
 
   /** Shows `row`, with the proposal being accepted or the reader's waiting change over it. */
-  function seed(row: KnowledgeRow, waiting: EntryProposals) {
+  function seed(row: KnowledgeRow, waiting: EntryReview) {
     entry = row;
     proposals = waiting;
     baseline = draftFrom(row);
@@ -195,7 +202,7 @@
 
   const entryProposals = (entryId: string) =>
     canPropose()
-      ? api.get<EntryProposals>(`/review/entries/${entryId}`)
+      ? api.get<EntryReview>(`/review/entries/${entryId}`)
       : NO_PROPOSALS;
 
   /** The team whose admins edit `row`'s product; asked only by someone who is one. */
@@ -632,6 +639,11 @@
               {/snippet}
             </Note>
           {/if}
+          {#if !accepting}
+            {#each flaggedSignals as signal (signal.id)}
+              <Note tone="warn">flagged: {signalLine(signal)}</Note>
+            {/each}
+          {/if}
           {#if conflict}
             <Note tone="danger">
               someone else saved this entry meanwhile; reload keeps your changes
@@ -767,6 +779,7 @@
             version={entry.version}
             canRemove={isEditor && !accepting}
             canUpdate={canEdit && !accepting}
+            {recurrence}
           />
         {/if}
       </div>

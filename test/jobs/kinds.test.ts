@@ -54,13 +54,14 @@ describe("core job kinds", () => {
   });
 
   it("creates default schedules once, and never brings back a deleted one", async () => {
-    expect(await ensureDefaultDefinitions()).toHaveLength(5);
+    expect(await ensureDefaultDefinitions()).toHaveLength(6);
     expect(await ensureDefaultDefinitions()).toEqual([]);
     const defs = await listJobDefinitions();
     expect(defs.map((d) => [d.kind, d.schedule]).sort()).toEqual([
       ["mcp-server.refresh", "30 4 * * *"],
       ["repos.refresh", "40 2 * * *"],
       ["retention.sweep", "30 3 * * *"],
+      ["review.signals", "23 4 * * *"],
       ["wiki.gaps", "7 * * * *"],
       ["work_items.follows", "*/10 * * * *"],
     ]);

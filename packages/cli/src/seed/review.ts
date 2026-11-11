@@ -1,4 +1,9 @@
-import type { ProposalStatus } from "@tachy/core";
+import type {
+  LibrarySignalKind,
+  ProposalStatus,
+  SignalEvidence,
+  SignalTicket,
+} from "@tachy/core";
 import { insertRows, type Tx } from "./batches";
 import { pastDate, rngFor, uuidFor } from "./deterministic";
 import { MEMBER_EMAIL, type SeededUser } from "./org";
@@ -53,6 +58,93 @@ const REPLY_TITLES: Partial<Record<ProposalStatus, string>> = {
   rejected: "your proposed change was rejected",
   accepted: "your proposed change was accepted",
 };
+
+/** How many approved entries, past the ones proposals use, get a signal. */
+const SIGNALS = 6;
+
+/**
+ * One signal of each kind, shaped like the sweep's. The sweep itself finds
+ * little in a seed: nobody opened a ticket, so no ticket has a vector.
+ */
+async function seedSignals(tx: Tx): Promise<void> {
+  const entries = await tx<{ id: string; title: string }[]>`
+    select id, title from knowledge_entries where status = 'approved'
+    order by id offset ${EDIT_SAMPLES.length} limit ${SIGNALS + 1}
+  `;
+  const tickets = await tx<SignalTicket[]>`
+    select wi.id as work_item_id, sc.slug as source, wi.external_id,
+           wi.title, wi.external_url as url
+    from work_items wi
+    join source_connections sc on sc.id = wi.source_connection_id
+    order by wi.id limit 4
+  `;
+  if (entries.length <= SIGNALS || !tickets.length) return;
+  const twin = entries[SIGNALS];
+  const lastAt = new Date().toISOString();
+  const samples: {
+    kind: LibrarySignalKind;
+    score: number;
+    flagged?: boolean;
+    evidence: SignalEvidence;
+  }[] = [
+    {
+      kind: "corrected",
+      score: 1,
+      evidence: {
+        notes: [
+          {
+            kind: "correction",
+            comment: "the restart does not help on firmware 9.2 and later",
+          },
+        ],
+      },
+    },
+    {
+      kind: "recurring",
+      score: tickets.length,
+      evidence: {
+        tickets,
+        since_edit: tickets.length,
+        last_at: lastAt,
+        reason: "fixed",
+      },
+    },
+    { kind: "rated_low", score: 3, evidence: { rating: 1.7, ratings: 3 } },
+    {
+      kind: "source_changed",
+      score: 2,
+      evidence: { messages: 2, ticket: tickets[0] },
+    },
+    {
+      kind: "duplicate",
+      score: 91,
+      evidence: { twin: { id: twin.id, title: twin.title, similarity: 0.91 } },
+    },
+    {
+      kind: "recurring",
+      score: 1,
+      flagged: false,
+      evidence: {
+        tickets: tickets.slice(0, 1),
+        since_edit: 1,
+        last_at: lastAt,
+      },
+    },
+  ];
+  await insertRows(
+    tx,
+    "library_signals",
+    ["id", "knowledge_entry_id", "kind", "score", "evidence", "flagged"],
+    samples.map((sample, i) => ({
+      id: uuidFor("signal", i),
+      knowledge_entry_id: entries[i].id,
+      kind: sample.kind,
+      score: sample.score,
+      evidence: tx.json(sample.evidence as never),
+      flagged: sample.flagged ?? true,
+    })),
+  );
+}
 
 /**
  * A review queue to look at: the dev member's proposals in every state, each
@@ -171,4 +263,5 @@ export async function seedReview(tx: Tx, users: SeededUser[]): Promise<void> {
     ["id", "user_id", "kind", "title", "body_text", "ref", "created_at"],
     notifications,
   );
+  await seedSignals(tx);
 }
