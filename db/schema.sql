@@ -735,6 +735,19 @@ create table knowledge_feedback (
 
 create index knowledge_feedback_entry_idx on knowledge_feedback(knowledge_entry_id);
 
+-- Tickets an entry draws on beyond the one it was written from, which stays in
+-- knowledge_entries.work_item_id. A later ticket that confirmed or changed the
+-- lesson is added here, so the entry can say what it rests on.
+create table knowledge_entry_work_items (
+    knowledge_entry_id uuid not null references knowledge_entries(id) on delete cascade,
+    work_item_id       uuid not null references work_items(id) on delete cascade,
+    added_by           uuid references users(id) on delete set null,
+    created_at         timestamptz not null default now(),
+    primary key (knowledge_entry_id, work_item_id)
+);
+
+create index knowledge_entry_work_items_item_idx on knowledge_entry_work_items(work_item_id);
+
 create table analysis_runs (
     id              uuid primary key default gen_random_uuid(),
     work_item_id    uuid references work_items(id) on delete set null,

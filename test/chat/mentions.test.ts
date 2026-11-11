@@ -216,6 +216,11 @@ describe("the command list", () => {
     const hidden = listed.builtins
       .filter((b: { hidden?: boolean }) => b.hidden)
       .map((b: { name: string }) => b.name);
-    expect(hidden).toEqual(["walkthrough", "ingest-wiki", "wiki-draft"]);
+    expect(hidden).toEqual([
+      "walkthrough",
+      "ingest-wiki",
+      "entry-update",
+      "wiki-draft",
+    ]);
   });
 });

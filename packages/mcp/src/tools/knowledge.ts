@@ -4,7 +4,7 @@
  */
 import { z } from "zod";
 import {
-  insertKnowledgeEntry,
+  listEntryTickets,
   nearDuplicateEntries,
   prepareKnowledgeEntry,
   searchKnowledge,
@@ -15,11 +15,11 @@ import {
   knowledgeStatusSchema,
   confidenceSchema,
   feedbackKindSchema,
-  updateKnowledgeEntry,
   getKnowledgeEntry,
   listKnowledgeEntries,
   listEnvironments,
 } from "@tachy/core/knowledge";
+import { insertOrProposeEntry, updateOrProposeEntry } from "@tachy/core/review";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import { resolveCustomerFilter } from "@tachy/core/catalog";
 import { DUPLICATE_FLOOR } from "@tachy/core/search";
@@ -27,10 +27,11 @@ import type { KnowledgeUpdateInput } from "@tachy/core/knowledge";
 import { tool } from "../server";
 import { GRADE_NOTE, out, searchOut, outScrubbed } from "../results";
 import {
+  canEditHere,
+  gateUserId,
   knowledgeEntryScope,
   mcpActor,
   newEntryScope,
-  requireCanEdit,
 } from "../permissions";
 import {
   investigationField,
@@ -106,7 +107,11 @@ tool(
 
 /** The way on from a save refused for a near-copy. */
 const DUPLICATE_NEXT =
-  "Not saved: an entry with nearly the same content exists. If it is the same lesson, add what this ticket adds to it with update_knowledge_entry (on a deprecated one, to its superseded_by). If it is a different case, save again with confirm_new: true. Say which in one line.";
+  "Not saved: an entry with nearly the same content exists. If it is the same lesson, add what this ticket adds to it with update_knowledge_entry (on a deprecated one, to its superseded_by), passing this ticket's work_item_id so it joins the entry's tickets. If it is a different case, save again with confirm_new: true. Say which in one line.";
+
+/** Travels with a write that became a proposal, so the agent does not report it as live. */
+const PROPOSED_NOTE =
+  "Not live yet: the user does not curate this product's team, so this waits for a team admin under library › review, and search does not return it until it is accepted. Say that in one line. Do not retry, and do not call it saved or published.";
 
 tool(
   "save_knowledge_entry",
@@ -229,9 +234,10 @@ tool(
     const resolved = await resolveScopeIds(args);
     const productId = args.product_id ?? resolved.productId;
     const teamId = args.team_id ?? resolved.teamId;
-    await requireCanEdit(
+    const canEdit = await canEditHere(
       await newEntryScope({ productId, teamId, workItemId: args.work_item_id }),
     );
+    const actor = await mcpActor();
     const prepared = await prepareKnowledgeEntry({
       workItemId: args.work_item_id,
       productId,
@@ -239,7 +245,7 @@ tool(
       customerSlug: args.customer_slug,
       unit: args.unit,
       createdById: await resolveCurrentUserId(),
-      actor: await mcpActor(),
+      actor,
       status: args.status ?? "approved",
       title: args.title,
       issueSummary: args.issue_summary,
@@ -269,8 +275,13 @@ tool(
         possible_duplicates: duplicates,
         next: DUPLICATE_NEXT,
       });
-    const saved = await insertKnowledgeEntry(prepared);
-    return out({ saved: true, id: saved.id, status: saved.status });
+    const saved = await insertOrProposeEntry(prepared, { actor, canEdit });
+    return out({
+      saved: true,
+      id: saved.id,
+      status: saved.status,
+      ...(saved.proposed && { proposed: true, note: PROPOSED_NOTE }),
+    });
   },
 );
 
@@ -293,7 +304,7 @@ tool(
     },
   },
   async (args) => {
-    await requireCanEdit(await knowledgeEntryScope(args.knowledge_entry_id));
+    await gateUserId();
     const row = await addFeedback({
       knowledgeEntryId: args.knowledge_entry_id,
       userId: await resolveCurrentUserId(),
@@ -313,6 +324,18 @@ tool(
       "Update fields on an existing knowledge entry, or change its status. Mark outdated knowledge with status 'deprecated' (it stays searchable but flagged; set superseded_by when a newer entry replaces it) - reserve 'archived' for entries that should vanish from search entirely. Pass only the fields you want to change; omitted fields are left as-is. Nullable fields (issue_summary, root_cause, etc.) accept null to clear them. component takes a slug/alias from list_components (product_area is re-derived from it; null clears both). The search results include 'version' - pass it as expected_version to guard against concurrent edits.",
     inputSchema: {
       id: z.string(),
+      work_item_id: z
+        .string()
+        .optional()
+        .describe(
+          "The ticket this update draws on (the id fetch_work_item returned). It joins the entry's tickets, so the entry says which cases it rests on. Pass it whenever a ticket is why the entry changes.",
+        ),
+      reason: z
+        .string()
+        .optional()
+        .describe(
+          "Why the entry changes, in one line. A reviewer reads it when the update has to wait for one.",
+        ),
       status: knowledgeStatusSchema.optional(),
       title: entryTitleSchema.optional(),
       issue_summary: z.string().nullable().optional(),
@@ -356,8 +379,9 @@ tool(
     },
   },
   async (args) => {
-    await requireCanEdit(await knowledgeEntryScope(args.id));
+    const canEdit = await canEditHere(await knowledgeEntryScope(args.id));
     const patch: KnowledgeUpdateInput = {};
+    if (args.work_item_id !== undefined) patch.workItemId = args.work_item_id;
     if (args.status !== undefined) patch.status = args.status;
     if (args.title !== undefined) patch.title = args.title;
     if (args.issue_summary !== undefined)
@@ -389,12 +413,17 @@ tool(
       patch.fixedVersion = args.fixed_version;
     if (args.expected_version !== undefined)
       patch.expectedVersion = args.expected_version;
-    const row = await updateKnowledgeEntry(args.id, patch, await mcpActor());
+    const row = await updateOrProposeEntry(args.id, patch, {
+      actor: await mcpActor(),
+      canEdit,
+      note: args.reason,
+    });
     return out({
-      updated: true,
+      updated: !row.proposed,
       id: row.id,
       status: row.status,
       version: row.version,
+      ...(row.proposed && { proposed: true, note: PROPOSED_NOTE }),
     });
   },
 );
@@ -403,11 +432,17 @@ tool(
   "get_knowledge_entry",
   {
     description:
-      "Fetch a single knowledge entry by id, including its current version. Use before update_knowledge_entry / add_knowledge_feedback when you have an id but not the latest version.",
+      "Fetch a single knowledge entry by id, including its current version and `tickets`, the tickets it already draws on. Use before update_knowledge_entry / add_knowledge_feedback when you have an id but not the latest version.",
     inputSchema: { id: z.string() },
     annotations: { readOnlyHint: true },
   },
-  async ({ id }) => outScrubbed(await getKnowledgeEntry(id)),
+  async ({ id }) => {
+    const [entry, tickets] = await Promise.all([
+      getKnowledgeEntry(id),
+      listEntryTickets(id),
+    ]);
+    return outScrubbed({ ...entry, tickets });
+  },
 );
 
 tool(

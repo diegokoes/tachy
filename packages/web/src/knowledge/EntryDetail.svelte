@@ -53,6 +53,7 @@
   import EntrySection from "./EntrySection.svelte";
   import ProseSection from "./ProseSection.svelte";
   import EntryProperties from "./EntryProperties.svelte";
+  import EntryTickets from "./EntryTickets.svelte";
   import DeprecatePanel from "./DeprecatePanel.svelte";
   import { linkLabel } from "./related";
 
@@ -646,7 +647,7 @@
       </header>
 
       <div class="side">
-        {#if canEdit || holdsProperties(draft) || entry?.work_item_external_id}
+        {#if canEdit || holdsProperties(draft)}
           <div class="facts">
             <EntryProperties
               bind:draft
@@ -656,7 +657,6 @@
               {filing}
               {patterns}
               {environments}
-              {entry}
               {problems}
             />
           </div>
@@ -760,6 +760,14 @@
               </EntrySection>
             {/if}
           </div>
+        {/if}
+        {#if entry}
+          <EntryTickets
+            entryId={entry.id}
+            version={entry.version}
+            canRemove={isEditor && !accepting}
+            canUpdate={canEdit && !accepting}
+          />
         {/if}
       </div>
 

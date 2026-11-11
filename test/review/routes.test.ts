@@ -285,6 +285,70 @@ describe("review routes", () => {
     expect(await waitingFor(leadCookie)).toEqual({ mine: null, open: 1 });
   });
 
+  it("lets an editor add and remove an entry's tickets, and a member only read them", async () => {
+    const saved = await (
+      await requestAs(leadCookie, "POST", "/api/knowledge", lesson())
+    ).json();
+    const [ticket] = await sql`
+      insert into work_items (source_connection_id, external_id, title)
+      select id, '77', 'lease lost again' from source_connections
+      where slug = 'test-freshdesk'
+      returning id
+    `;
+    const ticketsPath = `/api/knowledge/${saved.id}/tickets`;
+
+    const refused = await requestAs(memberCookie, "POST", ticketsPath, {
+      workItemId: ticket.id,
+    });
+    expect(refused.status).toBe(403);
+
+    const added = await requestAs(leadCookie, "POST", ticketsPath, {
+      workItemId: ticket.id,
+    });
+    expect(added.status).toBe(201);
+    expect(
+      await (await requestAs(memberCookie, "GET", ticketsPath)).json(),
+    ).toMatchObject([{ external_id: "77", is_source: false }]);
+
+    const removed = await requestAs(
+      leadCookie,
+      "DELETE",
+      `${ticketsPath}/${ticket.id}`,
+    );
+    expect(await removed.json()).toEqual([]);
+  });
+
+  it("adds the ticket a proposed change drew on when it is accepted", async () => {
+    const saved = await (
+      await requestAs(leadCookie, "POST", "/api/knowledge", lesson())
+    ).json();
+    const [ticket] = await sql`
+      insert into work_items (source_connection_id, external_id, title)
+      select id, '78', 'lease lost on wake' from source_connections
+      where slug = 'test-freshdesk'
+      returning id
+    `;
+    const proposed = await (
+      await requestAs(memberCookie, "PATCH", `/api/knowledge/${saved.id}`, {
+        resolution: "renew the lease on wake",
+        workItemId: ticket.id,
+      })
+    ).json();
+
+    await requestAs(
+      leadCookie,
+      "POST",
+      `/api/review/proposals/${proposed.proposal_id}/accept`,
+      {},
+    );
+
+    expect(
+      await (
+        await requestAs(leadCookie, "GET", `/api/knowledge/${saved.id}/tickets`)
+      ).json(),
+    ).toMatchObject([{ external_id: "78" }]);
+  });
+
   it("answers 404 for a proposal that does not exist", async () => {
     const response = await requestAs(
       leadCookie,

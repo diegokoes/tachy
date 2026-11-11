@@ -22,7 +22,10 @@ const OWN_PROPOSALS_LIMIT = 100;
 /** The teams a reviewer curates. Null is an app admin, who reviews every team's. */
 export type ReviewerTeams = string[] | null;
 
-type PatchField = Exclude<keyof KnowledgeUpdateInput, "expectedVersion">;
+type PatchField = Exclude<
+  keyof KnowledgeUpdateInput,
+  "expectedVersion" | "workItemId"
+>;
 
 /** The revision column each patch field writes, for holding a patch against history. */
 const PATCH_COLUMNS: Record<PatchField, string> = {

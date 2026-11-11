@@ -12,6 +12,27 @@ import type { SeededUser } from "./org";
 import type { Knowledge } from "./knowledge";
 import type { Volumes } from "./scale";
 
+/** Of 256: the share of approved entries that get later tickets. */
+const ENTRIES_WITH_LATER_TICKETS = 96;
+
+/** A share of the approved entries draw on two later tickets of their product. */
+async function seedEntryTickets(tx: Tx): Promise<void> {
+  await tx`
+    insert into knowledge_entry_work_items (knowledge_entry_id, work_item_id)
+    select e.id, later.id
+    from knowledge_entries e
+    cross join lateral (
+      select wi.id from work_items wi
+      where wi.product_id = e.product_id and wi.id <> e.work_item_id
+      order by md5(wi.id::text || e.id::text)
+      limit 2
+    ) later
+    where e.work_item_id is not null and e.status = 'approved'
+      and get_byte(decode(md5(e.id::text), 'hex'), 0) < ${ENTRIES_WITH_LATER_TICKETS}
+    on conflict do nothing
+  `;
+}
+
 /**
  * Edit history and read counts for the seeded library, which the history panel
  * and the "most read" sort render. `saveKnowledgeEntry` writes version 1 for
@@ -142,4 +163,6 @@ export async function seedLibrary(
     ],
     unique,
   );
+
+  await seedEntryTickets(tx);
 }

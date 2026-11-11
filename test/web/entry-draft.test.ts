@@ -14,6 +14,7 @@ import {
   type EntryDraft,
 } from "../../packages/web/src/knowledge/draft";
 import type { KnowledgeRow } from "../../packages/web/src/knowledge/rows";
+import { entryUpdateCommand } from "../../packages/web/src/knowledge/tickets";
 
 const row: KnowledgeRow = {
   id: "e1",
@@ -210,5 +211,17 @@ describe("what keeps a draft from being saved", () => {
     expect(
       draftProblems(edited({ relatedLinks: ["DevOps#50912"] })),
     ).toHaveProperty("relatedLinks");
+  });
+});
+
+describe("the agent hand-off for an entry", () => {
+  it("leaves room for a ticket when none is named", () => {
+    expect(entryUpdateCommand("e1")).toBe("/entry-update e1 ");
+  });
+
+  it("names the tickets it was given", () => {
+    expect(entryUpdateCommand("e1", ["w1", "w2"])).toBe(
+      "/entry-update e1 tickets=w1,w2",
+    );
   });
 });
