@@ -34,7 +34,9 @@ import {
 import { saveOrProposeEntry, updateOrProposeEntry } from "@tachy/core/review";
 import type { Submitter } from "@tachy/core/review";
 import { recordRun } from "@tachy/core/analytics";
-import { sql, notFound } from "@tachy/core/infra";
+import { inBackground, sql, notFound } from "@tachy/core/infra";
+import { adviseOnProposal } from "@tachy/agent";
+import type { Submission } from "@tachy/core";
 import {
   resolveComponentFilter,
   resolveCustomerFilter,
@@ -194,6 +196,15 @@ async function submitterOf(
 
 const PROPOSED = 202;
 
+/** Starts the model reading a new proposal; the answer does not wait for it. */
+function readInBackground(submission: Submission): void {
+  if (submission.proposal_id)
+    inBackground(
+      adviseOnProposal(submission.proposal_id),
+      "proposal_advice_failed",
+    );
+}
+
 export const knowledge = new Hono()
   .get("/search", async (c) => {
     const rows = await searchKnowledge(
@@ -307,6 +318,7 @@ export const knowledge = new Hono()
         patch,
         await submitterOf(c, await entryScope(id), note),
       );
+      readInBackground(submission);
       return c.json(submission, submission.proposed ? PROPOSED : 200);
     },
   )
@@ -324,6 +336,7 @@ export const knowledge = new Hono()
       { ...body, createdById: await callerUserId(c), actor: submitter.actor },
       submitter,
     );
+    readInBackground(submission);
     return c.json(submission, submission.proposed ? PROPOSED : 200);
   });
 

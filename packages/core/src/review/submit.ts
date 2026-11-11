@@ -17,6 +17,7 @@ import {
   type PreparedEntry,
 } from "../knowledge/knowledge";
 import type { ActorRef } from "../library/revisions";
+import { runProposalChecks } from "./precheck";
 import { upsertProposal } from "./proposals";
 
 const pendingStatuses: string[] = [...PENDING_PROPOSAL_STATUSES];
@@ -75,6 +76,7 @@ export async function insertOrProposeEntry(
       actor: submitter.actor.actor,
       turnId: submitter.actor.turnId,
     });
+    await runProposalChecks(tx, proposalId);
     return { ...entry, proposed: true, proposal_id: proposalId };
   });
 }
@@ -131,11 +133,9 @@ export async function updateOrProposeEntry(
     if (!proposalId) throw forbidden("this draft is someone else's to edit");
     if (patch.status !== undefined && patch.status !== "draft")
       throw badInput("a draft's status is the reviewer's to set");
-    return {
-      ...(await updateKnowledgeEntry(id, patch, submitter.actor)),
-      proposed: true,
-      proposal_id: proposalId,
-    };
+    const updated = await updateKnowledgeEntry(id, patch, submitter.actor);
+    await runProposalChecks(sql, proposalId);
+    return { ...updated, proposed: true, proposal_id: proposalId };
   }
   if (!liveStatuses.includes(entry.status))
     throw forbidden(
@@ -155,6 +155,7 @@ export async function updateOrProposeEntry(
     actor: submitter.actor.actor,
     turnId: submitter.actor.turnId,
   });
+  await runProposalChecks(sql, proposalId);
   return {
     id,
     status: entry.status,
@@ -200,6 +201,7 @@ export async function resubmitProposal(
       set status = 'open', note = coalesce(${note ?? null}, note)
       where id = ${id}
     `;
+    await runProposalChecks(tx, id);
   });
 }
 

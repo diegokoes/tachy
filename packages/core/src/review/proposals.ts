@@ -59,7 +59,7 @@ const PROPOSAL_COLUMNS = sql`
   p.submitted_by, coalesce(submitter.display_name, submitter.email) as submitter_name,
   p.actor,
   p.decided_by, coalesce(decider.display_name, decider.email) as decider_name,
-  p.decided_at, p.accepted_version, p.created_at, p.updated_at
+  p.decided_at, p.accepted_version, p.precheck, p.created_at, p.updated_at
 `;
 
 const PROPOSAL_SOURCE = sql`

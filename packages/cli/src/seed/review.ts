@@ -1,5 +1,6 @@
 import type {
   LibrarySignalKind,
+  ProposalPrecheck,
   ProposalStatus,
   SignalEvidence,
   SignalTicket,
@@ -9,6 +10,23 @@ import { pastDate, rngFor, uuidFor } from "./deterministic";
 import { MEMBER_EMAIL, type SeededUser } from "./org";
 
 const NEW_PROPOSALS = 3;
+
+/** What the checks and the model left on the first new entry and the first edit. */
+const NEW_PRECHECK: ProposalPrecheck = {
+  checks: [{ code: "no_component" }, { code: "no_source" }],
+  advice: {
+    available: true,
+    ok: false,
+    suggestions: [
+      "name the firmware version the fix was confirmed on",
+      "quote the error code as the console shows it",
+    ],
+  },
+};
+const EDIT_PRECHECK: ProposalPrecheck = {
+  checks: [],
+  advice: { available: true, ok: true, suggestions: [] },
+};
 
 interface EditSample {
   status: ProposalStatus;
@@ -175,6 +193,7 @@ export async function seedReview(tx: Tx, users: SeededUser[]): Promise<void> {
       knowledge_entry_id: draft.id,
       kind: "new",
       status: "open",
+      precheck: i === 0 ? tx.json(NEW_PRECHECK as never) : null,
       note: "written up from a ticket closed this week",
       submitted_by: submitter.id,
       actor: i === 0 ? "agent" : "web",
@@ -194,6 +213,7 @@ export async function seedReview(tx: Tx, users: SeededUser[]): Promise<void> {
       kind: "edit",
       status: sample.status,
       patch: tx.json(sample.patch as never),
+      precheck: i === 0 ? tx.json(EDIT_PRECHECK as never) : null,
       base_version: entry.version,
       note: sample.note,
       submitted_by: submitter.id,
@@ -239,6 +259,7 @@ export async function seedReview(tx: Tx, users: SeededUser[]): Promise<void> {
       "kind",
       "status",
       "patch",
+      "precheck",
       "base_version",
       "note",
       "submitted_by",

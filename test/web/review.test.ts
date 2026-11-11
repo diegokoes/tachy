@@ -20,6 +20,8 @@ const { firstReviewPath, reviewGroups } =
 const { settledByTicket, signalLine, signalTickets, ticketRef } =
   await import("../../packages/web/src/review/signals");
 const { blankDraft } = await import("../../packages/web/src/knowledge/draft");
+const { adviceLines, checkLine } =
+  await import("../../packages/web/src/review/precheck");
 
 const entry = {
   ...blankDraft(),
@@ -50,6 +52,7 @@ const proposal = (over: Partial<ProposalRow> = {}): ProposalRow => ({
   decider_name: null,
   decided_at: null,
   accepted_version: null,
+  precheck: null,
   created_at: "2026-11-01T08:00:00Z",
   updated_at: "2026-11-02T08:00:00Z",
   ...over,
@@ -270,6 +273,44 @@ describe("why an entry is flagged", () => {
     expect(settledByTicket(signal())).toBe(true);
     expect(settledByTicket(signal({ kind: "source_changed" }))).toBe(true);
     expect(settledByTicket(signal({ kind: "rated_low" }))).toBe(false);
+  });
+});
+
+describe("a proposal's pre-check", () => {
+  it("has a line for every finding", () => {
+    expect(checkLine({ code: "no_resolution" })).toBe("no resolution");
+    expect(checkLine({ code: "near_copy", copies: [] })).toMatch(
+      /nearly the same/,
+    );
+  });
+
+  it("says the model has not read an open proposal, and nothing once decided", () => {
+    expect(adviceLines({ checks: [] }, { waiting: true })).toEqual([
+      "the model has not read this yet",
+    ]);
+    expect(adviceLines(null, { waiting: false })).toEqual([]);
+  });
+
+  it("passes the model's suggestions through, or says it has none", () => {
+    const read = (suggestions: string[]) =>
+      adviceLines(
+        {
+          checks: [],
+          advice: { available: true, ok: !suggestions.length, suggestions },
+        },
+        { waiting: true },
+      );
+    expect(read(["name the lock file"])).toEqual(["name the lock file"]);
+    expect(read([])).toEqual(["the model has no remarks"]);
+  });
+
+  it("stays silent where no credential could read it", () => {
+    expect(
+      adviceLines(
+        { checks: [], advice: { available: false, ok: true, suggestions: [] } },
+        { waiting: true },
+      ),
+    ).toEqual([]);
   });
 });
 
