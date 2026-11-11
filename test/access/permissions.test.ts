@@ -19,7 +19,7 @@ import {
   addCustomer,
   linkCustomerProduct,
 } from "@tachy/core/catalog";
-import { saveKnowledgeEntry } from "@tachy/core/knowledge";
+import { getKnowledgeEntry, saveKnowledgeEntry } from "@tachy/core/knowledge";
 import { AppError } from "@tachy/core/infra";
 import { loginCookie } from "../http";
 import { resetData, sql, tpdProductId } from "../database";
@@ -255,18 +255,19 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
 
   beforeEach(() => clearPermissionCache());
 
-  it("team admin can PATCH an own-team entry but not a cross-team one", async () => {
+  it("team admin edits an own-team entry and only proposes on a cross-team one", async () => {
     const ok = await request(leadCookie, `/knowledge/${ownEntryId}`, "PATCH", {
       rootCause: "found it",
     });
     expect(ok.status).toBe(200);
-    const denied = await request(
+    const proposed = await request(
       leadCookie,
       `/knowledge/${otherEntryId}`,
       "PATCH",
       { rootCause: "nope" },
     );
-    expect(denied.status).toBe(403);
+    expect(proposed.status).toBe(202);
+    expect((await getKnowledgeEntry(otherEntryId)).root_cause).toBeNull();
   });
 
   it("work-item attribution is held to the item's own scope", async () => {
@@ -313,20 +314,27 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     ).toBe(403);
   });
 
-  it("plain member cannot PATCH or POST knowledge", async () => {
+  it("plain member's PATCH and POST to knowledge become proposals", async () => {
+    const before = await getKnowledgeEntry(ownEntryId);
     const patch = await request(
       devCookie,
       `/knowledge/${ownEntryId}`,
       "PATCH",
       {
-        rootCause: "x",
+        resolution: "x",
       },
     );
-    expect(patch.status).toBe(403);
+    expect(patch.status).toBe(202);
+    expect((await getKnowledgeEntry(ownEntryId)).version).toBe(before.version);
+
     const post = await request(devCookie, "/knowledge", "POST", {
       title: "y",
     });
-    expect(post.status).toBe(403);
+    expect(post.status).toBe(202);
+    expect(await post.json()).toMatchObject({
+      proposed: true,
+      status: "draft",
+    });
   });
 
   it("team admin creates entries and products in their team, not org-wide", async () => {
