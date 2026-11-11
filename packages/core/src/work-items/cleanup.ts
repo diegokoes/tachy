@@ -58,9 +58,12 @@ async function resolve(filter: StoredItemFilter): Promise<Resolved> {
   return resolveItemFilter(filter);
 }
 
-const LEARNED_FROM = sql`
+const LEARNED_FROM = sql`(
   exists (select 1 from knowledge_entries k where k.work_item_id = wi.id)
-`;
+  or exists (
+    select 1 from knowledge_entry_work_items drawn where drawn.work_item_id = wi.id
+  )
+)`;
 
 /** The tickets a cleanup deletes: what the filter reaches, less the ones it leaves. */
 function taken(resolved: Resolved, includeLearnedFrom: boolean) {

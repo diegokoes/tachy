@@ -8,8 +8,11 @@ import {
   listKnowledgeEntries,
   listEnvironments,
   listKnowledgeFacets,
+  addEntryTicket,
   addFeedback,
+  listEntryTickets,
   listFeedback,
+  removeEntryTicket,
   cloudSchema,
   entryTitleSchema,
   resolutionClaritySchema,
@@ -102,6 +105,7 @@ export const knowledgeUpdateSchema = z.object({
   affectedVersion: z.string().nullable().optional(),
   fixedVersion: z.string().nullable().optional(),
   expectedVersion: z.number().int().optional(),
+  workItemId: z.uuid().optional(),
 });
 
 const feedbackSchema = z.object({
@@ -244,6 +248,29 @@ export const knowledge = new Hono()
         await callerActor(c),
       ),
     );
+  })
+  .get("/:id/tickets", async (c) =>
+    c.json(await listEntryTickets(c.req.param("id"))),
+  )
+  .post(
+    "/:id/tickets",
+    validate("json", z.object({ workItemId: z.uuid() })),
+    async (c) => {
+      const id = c.req.param("id");
+      await assertScopeEditor(c, await entryScope(id));
+      await addEntryTicket(
+        id,
+        c.req.valid("json").workItemId,
+        await callerUserId(c),
+      );
+      return c.json(await listEntryTickets(id), 201);
+    },
+  )
+  .delete("/:id/tickets/:workItemId", async (c) => {
+    const id = c.req.param("id");
+    await assertScopeEditor(c, await entryScope(id));
+    await removeEntryTicket(id, c.req.param("workItemId"));
+    return c.json(await listEntryTickets(id));
   })
   .get("/:id/links", async (c) => {
     const id = c.req.param("id");

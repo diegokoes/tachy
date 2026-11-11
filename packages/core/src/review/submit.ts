@@ -93,7 +93,11 @@ async function ownPendingDraft(
 }
 
 function proposedFields(patch: KnowledgeUpdateInput): Record<string, unknown> {
-  const { expectedVersion: _expectedVersion, ...fields } = patch;
+  const {
+    expectedVersion: _expectedVersion,
+    workItemId: _workItemId,
+    ...fields
+  } = patch;
   if (!Object.keys(fields).length) throw badInput("the change is empty");
   if (fields.status !== undefined && fields.status !== PROPOSABLE_STATUS)
     throw badInput(
@@ -145,6 +149,7 @@ export async function updateOrProposeEntry(
     kind: "edit",
     patch: fields,
     baseVersion: patch.expectedVersion ?? entry.version,
+    workItemId: patch.workItemId,
     note: submitter.note,
     submittedBy: userId,
     actor: submitter.actor.actor,

@@ -7,7 +7,6 @@
   import type { Filing } from "../library/filing.svelte";
   import type { DraftField, DraftProblems, EntryDraft } from "./draft";
   import { qualityMeter } from "./quality";
-  import type { KnowledgeRow } from "./rows";
 
   let {
     draft = $bindable(),
@@ -17,7 +16,6 @@
     filing,
     patterns,
     environments,
-    entry,
     problems,
   }: {
     draft: EntryDraft;
@@ -29,8 +27,6 @@
     filing: Filing;
     patterns: PatternRow[];
     environments: { cloud: string; count: number }[];
-    /** The saved entry, for its source work item; null while creating. */
-    entry: KnowledgeRow | null;
     problems: DraftProblems;
   } = $props();
 
@@ -301,23 +297,6 @@
           />
         {:else}
           {@render text(draft.fixedVersion)}
-        {/if}
-      </dd>
-    </div>
-  {/if}
-
-  {#if entry?.work_item_external_id}
-    <div class="row">
-      <dt>source</dt>
-      <dd class="wide mono">
-        {#if entry.work_item_url}
-          <a
-            href={entry.work_item_url}
-            target="_blank"
-            rel="noopener noreferrer">#{entry.work_item_external_id}</a
-          >
-        {:else}
-          #{entry.work_item_external_id}
         {/if}
       </dd>
     </div>

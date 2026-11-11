@@ -5,6 +5,7 @@ import {
   canManageTeam,
   assertCanEditCustomer,
   assertCanEditScope,
+  canEditScope,
   assertAnyTeamAdmin,
   assertGlobalAdmin,
 } from "@tachy/core/access";
@@ -63,6 +64,12 @@ export async function gateUserId(): Promise<string | null> {
 export async function requireCanEdit(scope: EntryScope): Promise<void> {
   const userId = await gateUserId();
   if (userId) await assertCanEditScope(userId, scope);
+}
+
+/** Whether the caller's write lands directly; without the right it is proposed. */
+export async function canEditHere(scope: EntryScope): Promise<boolean> {
+  const userId = await gateUserId();
+  return userId === null || (await canEditScope(userId, scope));
 }
 
 export async function requireCanEditCustomer(

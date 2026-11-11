@@ -23,6 +23,7 @@ describe("slash command registry", () => {
       "az",
       "walkthrough",
       "ingest-wiki",
+      "entry-update",
       "wiki-draft",
     ]);
     expect(CHAT_MODE_LIST.map((m) => m.name)).toEqual(["analyze", "code"]);
@@ -101,6 +102,17 @@ describe("slash command registry", () => {
     ).toEqual([{ tool: "export_table" }]);
   });
 
+  it("entry-update reads the entry's tickets first and updates once per ticket", () => {
+    const expanded = findCommand("entry-update")!.expand(
+      "3f2a tickets=4711,4712",
+    );
+    expect(expanded).toContain("get_knowledge_entry");
+    expect(expanded).toContain("fetch_work_item");
+    expect(expanded).toContain("work_item_id");
+    expect(expanded).toContain("ask which one");
+    expect(expanded).toContain("User arguments: 3f2a tickets=4711,4712");
+  });
+
   // Written by the wiki's gap list, so both arguments name themselves.
   it("wiki-draft names its arguments and falls back to the gap list", () => {
     const expanded = findCommand("wiki-draft")!.expand(
@@ -164,9 +176,9 @@ describe("slash command registry", () => {
   });
 
   // Kept for the wiki to send; nobody picks them from the menu.
-  it("hides the wiki commands without dropping them", () => {
+  it("hides the commands only a control sends, without dropping them", () => {
     expect(BUILTIN_COMMANDS.filter((c) => c.hidden).map((c) => c.name)).toEqual(
-      ["walkthrough", "ingest-wiki", "wiki-draft"],
+      ["walkthrough", "ingest-wiki", "entry-update", "wiki-draft"],
     );
     expect(findCommand("ingest-wiki")!.expand("")).toContain(
       "CONTEXT DUMP MODE",
