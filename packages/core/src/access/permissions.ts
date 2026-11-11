@@ -7,6 +7,8 @@ export interface EntryScope {
 }
 
 interface PermissionContext {
+  /** False for an account that is disabled or gone. */
+  isEnabled: boolean;
   isGlobalAdmin: boolean;
 
   teamAdmin: Map<string, string>;
@@ -30,6 +32,7 @@ async function contextFor(userId: string): Promise<PermissionContext> {
     where u.id = ${userId} and not u.disabled
   `;
   const ctx: PermissionContext = {
+    isEnabled: rows.length > 0,
     isGlobalAdmin: rows.length > 0 && rows[0].user_role === "admin",
     teamAdmin: new Map(
       rows
@@ -107,6 +110,15 @@ export async function assertCanEditCustomer(
     throw forbidden(
       "you don't have edit rights on this customer: it needs team admin of a team whose product the customer uses, or app admin",
     );
+}
+
+/**
+ * Whether a person may propose a change to a library item. Anyone with an
+ * enabled account may, on any item: a proposal changes nothing until someone
+ * with `canEditScope` on the item accepts it.
+ */
+export async function canPropose(userId: string): Promise<boolean> {
+  return (await contextFor(userId)).isEnabled;
 }
 
 export async function canManageTeam(
