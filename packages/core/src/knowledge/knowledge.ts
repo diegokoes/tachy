@@ -6,6 +6,7 @@ import {
   type KnowledgeStale,
 } from "@tachy/contract";
 import { sql } from "../infra/db";
+import type { Db } from "../infra/db";
 import {
   embedPassage,
   embedQueryLiteral,
@@ -277,7 +278,10 @@ export async function prepareKnowledgeEntry(input: KnowledgeInput) {
   };
 }
 
-export async function insertKnowledgeEntry(prepared: PreparedEntry) {
+export async function insertKnowledgeEntry(
+  prepared: PreparedEntry,
+  db: Db = sql,
+) {
   const {
     input,
     title,
@@ -291,7 +295,7 @@ export async function insertKnowledgeEntry(prepared: PreparedEntry) {
     confidence,
     embedding,
   } = prepared;
-  return sql.begin(async (tx) => {
+  return db.begin(async (tx) => {
     const [row] = await tx<RevisedRow[]>`
       insert into knowledge_entries
         (work_item_id, product_id, team_id, customer_id, customer_unit_id, created_by, status,
@@ -743,12 +747,13 @@ export async function listKnowledgeFacets(
   };
 }
 
-export async function updateKnowledgeEntry(
+/** What an update leaves the entry holding, checked and not yet written. */
+async function resolveEntryUpdate(
+  db: Db,
   id: string,
   patch: KnowledgeUpdateInput,
-  actor: ActorRef = UNKNOWN_ACTOR,
 ) {
-  const [current] = await sql<
+  const [current] = await db<
     (FiledRow & { version: number } & Record<string, any>)[]
   >`
     select ${REVISION_COLUMNS}, version from knowledge_entries where id = ${id}
@@ -756,12 +761,11 @@ export async function updateKnowledgeEntry(
   if (!current) throw notFound(`knowledge entry '${id}' not found`);
   assertExpectedVersion(current.version, patch.expectedVersion);
 
-  const { componentId, productArea, customerId, customerUnitId } =
-    await patchedFiling(
-      current,
-      patch,
-      "component requires the entry to belong to a product",
-    );
+  const filing = await patchedFiling(
+    current,
+    patch,
+    "component requires the entry to belong to a product",
+  );
 
   let supersededBy: string | null = current.superseded_by;
   if ("supersededBy" in patch) {
@@ -770,7 +774,7 @@ export async function updateKnowledgeEntry(
       if (supersededBy === id)
         throw badInput("an entry cannot supersede itself");
       const [target] =
-        await sql`select id from knowledge_entries where id = ${supersededBy}`;
+        await db`select id from knowledge_entries where id = ${supersededBy}`;
       if (!target)
         throw badInput(`superseded_by target '${supersededBy}' not found`);
     }
@@ -810,6 +814,30 @@ export async function updateKnowledgeEntry(
     fixedVersion:
       "fixedVersion" in patch ? patch.fixedVersion : current.fixed_version,
   };
+  const patternDescription = await resolvePatternDescription(
+    merged.resolutionPattern ?? undefined,
+  );
+  return { current, filing, supersededBy, merged, patternDescription };
+}
+
+/** Throws what `updateKnowledgeEntry` would for this patch, and writes nothing. */
+export async function assertKnowledgeUpdateApplies(
+  id: string,
+  patch: KnowledgeUpdateInput,
+): Promise<void> {
+  await resolveEntryUpdate(sql, id, patch);
+}
+
+/** `db` is the caller's transaction when the update belongs to a larger write. */
+export async function updateKnowledgeEntry(
+  id: string,
+  patch: KnowledgeUpdateInput,
+  actor: ActorRef = UNKNOWN_ACTOR,
+  db: Db = sql,
+) {
+  const { current, filing, supersededBy, merged, patternDescription } =
+    await resolveEntryUpdate(db, id, patch);
+  const { componentId, productArea, customerId, customerUnitId } = filing;
 
   const contentChanged =
     merged.title !== current.title ||
@@ -826,9 +854,6 @@ export async function updateKnowledgeEntry(
 
   let embeddingUpdate = sql``;
   if (contentChanged) {
-    const patternDescription = await resolvePatternDescription(
-      merged.resolutionPattern ?? undefined,
-    );
     const text = buildEmbedText(
       {
         title: merged.title,
@@ -847,7 +872,7 @@ export async function updateKnowledgeEntry(
     embeddingUpdate = sql`, embedding = ${vec}::vector, embedding_model = ${EMBEDDING_MODEL}`;
   }
 
-  return sql.begin(async (tx) => {
+  return db.begin(async (tx) => {
     const [row] = await tx<RevisedRow[]>`
     update knowledge_entries set
       status             = ${merged.status},
