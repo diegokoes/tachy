@@ -25,6 +25,7 @@
   import GapsView from "./GapsView.svelte";
   import { renamedPage, wikiPath } from "./paths";
   import { libraryTabPath, libraryTabs } from "../library/tabs";
+  import { reviewTotal } from "../review/review.svelte";
   import { showCustomer } from "../terms";
   import {
     landingScope,
@@ -52,7 +53,10 @@
   // The library's tabs: the wiki is one of them, its gaps another.
   $effect(() =>
     setSubnav({
-      items: libraryTabs({ customers: showCustomer() }),
+      items: libraryTabs({
+        customers: showCustomer(),
+        waiting: reviewTotal(),
+      }),
       active: page === "gaps" ? "gaps" : "wiki",
       onpick: (tab) => navigate(libraryTabPath(tab, scope)),
     }),

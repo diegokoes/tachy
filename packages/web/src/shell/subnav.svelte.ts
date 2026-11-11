@@ -11,6 +11,8 @@ export type SubnavItem = {
   label: string;
   icon?: IconName;
   mark?: Component<{ size?: string }>;
+  /** Drawn after the label while above zero: what waits behind the tab. */
+  count?: number;
 };
 
 export type Subnav = {

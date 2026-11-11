@@ -2,6 +2,7 @@
   import { navigate, segment } from "../shell/router.svelte";
   import { setSubnav } from "../shell/subnav.svelte";
   import { libraryTabPath, libraryTabs } from "../library/tabs";
+  import { reviewTotal } from "../review/review.svelte";
   import { landingScope, loadWikis, wikis } from "../wiki/wikis.svelte";
   import { showCustomer } from "../terms";
   import CustomerList from "./CustomerList.svelte";
@@ -17,7 +18,10 @@
 
   $effect(() =>
     setSubnav({
-      items: libraryTabs({ customers: showCustomer() }),
+      items: libraryTabs({
+        customers: showCustomer(),
+        waiting: reviewTotal(),
+      }),
       active: "customers",
       onpick: (tab) => void openTab(tab),
     }),

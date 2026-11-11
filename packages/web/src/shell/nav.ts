@@ -18,6 +18,7 @@ export function navItems(): NavItem[] {
 const HOSTED: Record<string, string> = {
   wiki: "library",
   customers: "library",
+  review: "library",
 };
 
 /** The tab lit while `section` is open. */
