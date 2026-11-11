@@ -15,6 +15,8 @@
     icon?: IconName;
     /** A brand logo drawn in its own colours, in place of `icon`. */
     mark?: Component<{ size?: string }>;
+    /** Drawn after the label while above zero. */
+    count?: number;
   };
 
   let {
@@ -202,7 +204,8 @@
             ><Mark size="1em" /></span
           >{:else if icon}<span class="ico"
             ><Icon name={icon} weight={7} /></span
-          >{/if}{#if !bare}<span class="txt">{item.label}</span>{/if}<span
+          >{/if}{#if !bare}<span class="txt">{item.label}</span
+          >{/if}{#if item.count}<span class="n">{item.count}</span>{/if}<span
           class="br"
           aria-hidden="true">]</span
         ></span
@@ -275,6 +278,11 @@
   }
   .ico + .txt {
     margin-left: 0.4em;
+  }
+  .n {
+    margin-left: 0.4em;
+    color: var(--warn);
+    font-variant-numeric: tabular-nums;
   }
 
   .rule {

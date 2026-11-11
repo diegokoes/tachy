@@ -5,6 +5,8 @@
   import LibraryView from "./library/LibraryView.svelte";
   import BoardView from "./work-items/BoardView.svelte";
   import WikiView from "./wiki/WikiView.svelte";
+  import ReviewView from "./review/ReviewView.svelte";
+  import { loadReviewCounts } from "./review/review.svelte";
   import CustomersView from "./catalog/CustomersView.svelte";
   import AdminView from "./admin/AdminView.svelte";
   import SettingsView from "./settings/SettingsView.svelte";
@@ -37,6 +39,7 @@
     startRouter,
   } from "./shell/router.svelte";
   import {
+    notifyState,
     refreshNotifications,
     startNotifications,
   } from "./notifications/notify.svelte";
@@ -253,6 +256,12 @@
     if (session.me) void refreshNotifications();
   });
 
+  // Reruns with the notification poll, which is the review tab count's clock.
+  $effect(() => {
+    void notifyState.items;
+    if (session.me) void loadReviewCounts();
+  });
+
   $effect(() => {
     if (session.me) void loadDateFormat();
   });
@@ -423,6 +432,8 @@
                 <WikiView />
               {:else if view === "customers"}
                 <CustomersView />
+              {:else if view === "review"}
+                <ReviewView />
               {:else if view === "console"}
                 <AdminView />
               {:else if view === "settings"}

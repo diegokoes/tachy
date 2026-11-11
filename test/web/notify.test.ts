@@ -10,6 +10,7 @@ vi.mock("../../packages/web/src/api", async (importOriginal) => ({
 const { session } =
   await import("../../packages/web/src/access/session.svelte");
 const {
+  bellNotices,
   markNotificationsSeen,
   notifyState,
   refreshNotifications,
@@ -34,6 +35,18 @@ const notice = (
   read_at: readAt,
   seen_at: null,
   created_at: "2026-10-24T08:00:00Z",
+});
+
+describe("the bell", () => {
+  it("lists item changes, flow notices and review replies, not report replies", () => {
+    notifyState.items = [
+      notice("r1", "report_reply"),
+      notice("w1", "work_item_changed"),
+      notice("f1", "flow_notice"),
+      notice("p1", "review_reply"),
+    ];
+    expect(bellNotices().map((n) => n.id)).toEqual(["w1", "f1", "p1"]);
+  });
 });
 
 describe("report replies", () => {

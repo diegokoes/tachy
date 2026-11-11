@@ -14,6 +14,7 @@
     render,
     links,
     unsaved = false,
+    mark,
     open = false,
     problem,
     onchange,
@@ -25,6 +26,7 @@
     /** Follows a wikilink clicked in the rendered text. */
     links: LinkTargets;
     unsaved?: boolean;
+    mark?: string;
     /** Starts as its markdown, the way a new entry's sections do. */
     open?: boolean;
     problem?: string;
@@ -71,7 +73,7 @@
 </script>
 
 {#if onchange || text.trim()}
-  <EntrySection {label} {unsaved} active={editing}>
+  <EntrySection {label} {unsaved} {mark} active={editing}>
     {#if editing && onchange}
       <textarea
         class="frame"

@@ -1,5 +1,6 @@
 import {
   PENDING_PROPOSAL_STATUSES,
+  type EntryProposals,
   type LibraryActor,
   type ProposalDirection,
   type ProposalKind,
@@ -230,6 +231,25 @@ export async function listMyProposals(userId: string): Promise<ProposalRow[]> {
     order by p.updated_at desc
     limit ${OWN_PROPOSALS_LIMIT}
   `;
+}
+
+export async function entryProposals(
+  entryId: string,
+  userId: string | null,
+): Promise<EntryProposals> {
+  const [mine] = await sql<ProposalRow[]>`
+    select ${PROPOSAL_COLUMNS}
+    from ${PROPOSAL_SOURCE}
+    where p.knowledge_entry_id = ${entryId} and p.submitted_by = ${userId}
+      and p.status = any(${pendingStatuses})
+    order by p.updated_at desc
+    limit 1
+  `;
+  const [{ open }] = await sql<{ open: number }[]>`
+    select count(*)::int as open from library_proposals
+    where knowledge_entry_id = ${entryId} and status = 'open'
+  `;
+  return { mine: mine ?? null, open };
 }
 
 /** `teamIds` empty is a person who reviews nothing. */

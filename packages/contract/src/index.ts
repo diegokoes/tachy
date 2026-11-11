@@ -246,6 +246,7 @@ export type {
   ProposalDirection,
   ProposalMessageRow,
   ProposalRow,
+  EntryProposals,
   UnproposedDraft,
   ReviewQueue,
   ReviewCount,

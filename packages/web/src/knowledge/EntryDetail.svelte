@@ -4,8 +4,11 @@
     MAX_ENTRY_TITLE_CHARS,
     RELATED_LINK_HINT,
     isRelatedLink,
+    type EntryProposals,
     type PatternRow,
     type ProductRow,
+    type ProposalRow,
+    type Submission,
   } from "@tachy/contract";
   import { KNOWLEDGE_STATUSES, SEARCHED_ENTRY_STATUSES } from "../vocab";
   import { api } from "../api";
@@ -18,11 +21,19 @@
   import StatusMenu from "../library/StatusMenu.svelte";
   import { renderMarkdown, markBrokenLinks } from "../markdown/markdown";
   import { LinkTargets } from "../wiki/wikilinks.svelte";
-  import { canEditLibraryItem, isCurator } from "../access/session.svelte";
+  import {
+    canEditLibraryItem,
+    canPropose,
+    isCurator,
+  } from "../access/session.svelte";
+  import { toast } from "../notifications/notify.svelte";
+  import { pendingLine } from "../review/changes";
+  import { proposalPath } from "../review/queue";
+  import { loadReviewCounts } from "../review/review.svelte";
   import { pushScope, type Binding } from "../keys/keys.svelte";
   import { setTopActions } from "../shell/subnav.svelte";
-  import { setLeaveGuard } from "../shell/router.svelte";
-  import { Button, Modal, Note, ValueList } from "../tui";
+  import { navigate, setLeaveGuard } from "../shell/router.svelte";
+  import { Button, Field, Modal, Note, ValueList } from "../tui";
   import {
     blankDraft,
     createPayload,
@@ -32,8 +43,10 @@
     entryPatch,
     fieldLabel,
     holdsProperties,
+    patched,
     rebase,
     withStatus,
+    type DraftField,
     type EntryDraft,
   } from "./draft";
   import type { KnowledgeRow, Feedback } from "./rows";
@@ -49,6 +62,8 @@
     onOpen,
     onCreated,
     extra,
+    accepting,
+    onAccepted,
   }: {
     /** Absent for a new entry. */
     id?: string;
@@ -57,6 +72,9 @@
     onCreated?: (id: string) => void;
     /** Drawn above a new entry, such as the switch to a new doc. */
     extra?: Snippet;
+    /** A proposal on this entry a reviewer is changing before accepting it. */
+    accepting?: ProposalRow;
+    onAccepted?: () => void;
   } = $props();
 
   type ListField = "symptoms" | "signals" | "tags" | "relatedLinks";
@@ -64,6 +82,9 @@
   /** A new entry starts as one of these; the rest need an entry to judge. */
   const NEW_ENTRY_STATUSES = ["approved", "draft"] as const;
   const DISCARD_ARM_MS = 3000;
+  const MAX_NOTE_CHARS = 2000;
+  const NO_PROPOSALS: EntryProposals = { mine: null, open: 0 };
+  const liveStatuses: readonly string[] = SEARCHED_ENTRY_STATUSES;
 
   const creating = $derived(!id);
   let entry = $state<KnowledgeRow | null>(null);
@@ -71,6 +92,10 @@
   let baseline = $state.raw<EntryDraft>(blankDraft());
   let draft = $state<EntryDraft>(blankDraft());
   let deprecationReason = $state("");
+  /** What waits for review on this entry. */
+  let proposals = $state.raw<EntryProposals>(NO_PROPOSALS);
+  /** Why the reader proposes their change. */
+  let note = $state("");
   let feedback = $state<Feedback[]>([]);
   const links = new LinkTargets();
 
@@ -92,16 +117,50 @@
   /** The list a new value is being typed into. */
   let addingTo = $state<ListField | null>(null);
 
-  const canEdit = $derived(
-    creating ||
-      (!!entry &&
-        canEditLibraryItem({
-          team_id: entry.team_id,
-          product_team_slug: productTeamSlug,
-        })),
+  const isEditor = $derived(
+    creating
+      ? isCurator()
+      : !!entry &&
+          canEditLibraryItem({
+            team_id: entry.team_id,
+            product_team_slug: productTeamSlug,
+          }),
   );
-  const unsaved = $derived(new Set(editedFields(baseline, draft)));
+  const pending = $derived(proposals.mine);
+  /** The reader's own draft, still with a reviewer: theirs to keep editing. */
+  const ownsDraft = $derived(
+    entry?.status === "draft" && pending?.kind === "new",
+  );
+  /** The reader's edits go to a reviewer, and the entry stays as it is. */
+  const proposing = $derived(
+    !isEditor &&
+      !ownsDraft &&
+      canPropose() &&
+      (creating || (!!entry && liveStatuses.includes(entry.status))),
+  );
+  const canEdit = $derived(isEditor || ownsDraft || proposing);
+  const canSetStatus = $derived(
+    !accepting && (isEditor || (proposing && !creating)),
+  );
+  const statusChoices = $derived.by((): readonly string[] => {
+    if (creating) return NEW_ENTRY_STATUSES;
+    if (proposing && entry) return [...new Set([entry.status, "deprecated"])];
+    return KNOWLEDGE_STATUSES;
+  });
+  /** What the server holds of the reader's edits: the entry under their waiting change. */
+  const stored = $derived(
+    proposing && pending?.patch ? patched(baseline, pending.patch) : baseline,
+  );
+  /** The fields that differ from the entry as it is live. */
+  const marked = $derived(new Set(editedFields(baseline, draft)));
+  const unsaved = $derived(new Set(editedFields(stored, draft)));
   const dirty = $derived(unsaved.size > 0);
+
+  /** The word beside an edited field: on this page only, or already with a reviewer. */
+  function markOf(field: DraftField): string {
+    if (accepting || !unsaved.has(field)) return "proposed";
+    return "unsaved";
+  }
   const problems = $derived(draftProblems(draft, { requireSummary: creating }));
   const blocked = $derived(Object.keys(problems).length > 0);
   const listed = $derived(
@@ -121,12 +180,28 @@
 
   const current = createSequence();
 
-  function seed(row: KnowledgeRow) {
+  /** Shows `row`, with the proposal being accepted or the reader's waiting change over it. */
+  function seed(row: KnowledgeRow, waiting: EntryProposals) {
     entry = row;
+    proposals = waiting;
     baseline = draftFrom(row);
-    draft = structuredClone(baseline);
+    const patch = accepting?.patch ?? (proposing ? pending?.patch : null);
+    draft = patch ? patched(baseline, patch) : structuredClone(baseline);
     deprecationReason = "";
+    note = "";
     attempted = false;
+  }
+
+  const entryProposals = (entryId: string) =>
+    canPropose()
+      ? api.get<EntryProposals>(`/review/entries/${entryId}`)
+      : NO_PROPOSALS;
+
+  /** The team whose admins edit `row`'s product; asked only by someone who is one. */
+  async function productTeamOf(row: KnowledgeRow): Promise<string | null> {
+    if (!isCurator() || !row.product_id) return null;
+    const products = await api.get<ProductRow[]>("/products");
+    return products.find((p) => p.id === row.product_id)?.team_slug ?? null;
   }
 
   async function load(entryId: string) {
@@ -138,19 +213,17 @@
     productTeamSlug = null;
     try {
       const row = await api.get<KnowledgeRow>(`/knowledge/${entryId}`);
+      const [notes, waiting, teamSlug] = await Promise.all([
+        api.get<Feedback[]>(`/knowledge/${entryId}/feedback`),
+        entryProposals(entryId),
+        productTeamOf(row),
+      ]);
       if (!isCurrent()) return;
-      seed(row);
-      const notes = await api.get<Feedback[]>(`/knowledge/${entryId}/feedback`);
-      if (!isCurrent()) return;
+      productTeamSlug = teamSlug;
       feedback = notes;
+      seed(row, waiting);
       await links.load("knowledge", entryId);
       if (!isCurrent()) return;
-      if (isCurator() && row.product_id) {
-        const products = await api.get<ProductRow[]>("/products");
-        if (!isCurrent()) return;
-        productTeamSlug =
-          products.find((p) => p.id === row.product_id)?.team_slug ?? null;
-      }
       if (canEdit) await loadOptions(row);
     } catch (e) {
       if (!isCurrent()) return;
@@ -162,8 +235,11 @@
     // A load still in flight for the entry before lands nowhere.
     current();
     entry = null;
-    baseline = blankDraft();
-    draft = blankDraft();
+    proposals = NO_PROPOSALS;
+    note = "";
+    // A proposed entry is a draft until a reviewer accepts it.
+    baseline = isCurator() ? blankDraft() : withStatus(blankDraft(), "draft");
+    draft = structuredClone(baseline);
     void loadOptions(null);
   }
 
@@ -192,11 +268,12 @@
   async function refresh() {
     if (!entry) return;
     try {
-      const [row, notes] = await Promise.all([
+      const [row, notes, waiting] = await Promise.all([
         api.get<KnowledgeRow>(`/knowledge/${entry.id}`),
         api.get<Feedback[]>(`/knowledge/${entry.id}/feedback`),
+        entryProposals(entry.id),
       ]);
-      seed(row);
+      seed(row, waiting);
       feedback = notes;
       await followCustomer();
     } catch (e) {
@@ -210,15 +287,28 @@
       attempted = true;
       return;
     }
-    if (!dirty) return;
+    if (!dirty && !accepting) return;
     saving = true;
     saveError = null;
     conflict = false;
     try {
-      await (creating ? create() : update());
+      if (creating) await create();
+      else if (accepting) await accept();
+      else await update();
     } finally {
       saving = false;
     }
+  }
+
+  /** The reason sent with a proposal; a deprecation's reason stands in for it. */
+  function proposalNote(): { note?: string } {
+    const reason = (note || deprecationReason).trim();
+    return proposing && reason ? { note: reason } : {};
+  }
+
+  function sentForReview() {
+    toast("sent for review");
+    void loadReviewCounts();
   }
 
   async function create() {
@@ -226,10 +316,12 @@
       (p) => p.slug === filing.productSlug,
     )?.id;
     try {
-      const created = await api.post<{ id: string }>("/knowledge", {
+      const created = await api.post<Submission>("/knowledge", {
         ...createPayload(draft),
         ...(productId ? { productId } : {}),
+        ...proposalNote(),
       });
+      if (created.proposed) sentForReview();
       // Saved: nothing is left for the leave guard to hold.
       baseline = $state.snapshot(draft);
       onCreated?.(created.id);
@@ -243,7 +335,7 @@
     const reason = deprecating ? deprecationReason.trim() : "";
     const outcome = await patchLibraryItem(
       `/knowledge/${entry.id}`,
-      entryPatch(baseline, draft),
+      { ...entryPatch(baseline, draft), ...proposalNote() },
       entry.version,
       "entry",
     );
@@ -252,8 +344,27 @@
       saveError = outcome.message;
       return;
     }
-    if (reason) await recordDeprecation(entry.id, reason);
+    if (proposing) sentForReview();
+    else if (reason) await recordDeprecation(entry.id, reason);
     await refresh();
+  }
+
+  /** Accepts the proposal with the page's values, which may be the reviewer's own. */
+  async function accept() {
+    if (!entry || !accepting) return;
+    try {
+      await api.post(`/review/proposals/${accepting.id}/accept`, {
+        edits: {
+          ...entryPatch(baseline, draft),
+          expectedVersion: entry.version,
+        },
+      });
+      // Accepted: nothing is left for the leave guard to hold.
+      baseline = $state.snapshot(draft);
+      onAccepted?.();
+    } catch (e) {
+      saveError = errText(e);
+    }
   }
 
   async function recordDeprecation(entryId: string, comment: string) {
@@ -273,7 +384,7 @@
       const newer = await api.get<KnowledgeRow>(`/knowledge/${entry.id}`);
       const kept = rebase(draftFrom(newer), baseline, $state.snapshot(draft));
       const reason = deprecationReason;
-      seed(newer);
+      seed(newer, proposals);
       draft = kept;
       deprecationReason = reason;
       conflict = false;
@@ -293,8 +404,9 @@
       return;
     }
     discardArmed = false;
-    draft = structuredClone(baseline);
+    draft = structuredClone(stored);
     deprecationReason = "";
+    note = "";
     attempted = false;
     conflict = false;
     saveError = null;
@@ -362,7 +474,18 @@
       variant="primary"
       icon="create"
       busy={saving}
-      onclick={save}>create</Button
+      onclick={save}>{isEditor ? "create" : "propose"}</Button
+    >
+  {:else if accepting}
+    <Button size="sm" icon="back" disabled={saving} onclick={onClose}
+      >review</Button
+    >
+    <Button
+      size="sm"
+      variant="primary"
+      icon="approve"
+      busy={saving}
+      onclick={save}>accept</Button
     >
   {:else}
     {#if dirty}
@@ -381,7 +504,7 @@
         variant="primary"
         icon="save"
         busy={saving}
-        onclick={save}>save</Button
+        onclick={save}>{proposing ? "propose" : "save"}</Button
       >
     {:else}
       <Button size="sm" icon="back" onclick={onClose}>library</Button>
@@ -417,7 +540,7 @@
             <input
               class="title"
               class:empty={!draft.title}
-              class:unsaved={unsaved.has("title")}
+              class:unsaved={marked.has("title")}
               aria-label="title"
               maxlength={MAX_ENTRY_TITLE_CHARS}
               bind:value={draft.title}
@@ -434,9 +557,9 @@
           <div class="status-line">
             <StatusMenu
               status={draft.status}
-              statuses={creating ? NEW_ENTRY_STATUSES : KNOWLEDGE_STATUSES}
+              statuses={statusChoices}
               searched={SEARCHED_ENTRY_STATUSES}
-              onpick={canEdit
+              onpick={canSetStatus
                 ? (status) => (draft = withStatus(draft, status))
                 : undefined}
             />
@@ -453,7 +576,7 @@
                 id={entry.id}
                 at={entry.updated_at}
                 version={entry.version}
-                canEdit={canEdit && !dirty}
+                canEdit={isEditor && !accepting && !dirty}
                 onReverted={refresh}
               />
               <span class="sep" aria-hidden="true">·</span>
@@ -472,6 +595,41 @@
               bind:reason={deprecationReason}
               bind:supersededBy={draft.supersededBy}
             />
+          {/if}
+          {#if proposing && !deprecating && (dirty || creating)}
+            <Field
+              label="reason"
+              info="why the entry should change; the reviewer reads it with the change"
+            >
+              <input bind:value={note} maxlength={MAX_NOTE_CHARS} />
+            </Field>
+          {/if}
+          {#if pending && !accepting}
+            {@const waitingChange = pending}
+            <Note
+              tone={waitingChange.status === "returned" ? "warn" : "accent"}
+            >
+              {pendingLine(waitingChange)}
+              {#snippet action()}
+                <Button
+                  size="sm"
+                  onclick={() => navigate(proposalPath(waitingChange.id))}
+                  >open</Button
+                >
+              {/snippet}
+            </Note>
+          {:else if isEditor && proposals.open && !accepting}
+            <Note tone="accent">
+              {proposals.open}
+              {proposals.open === 1
+                ? "proposed change waits"
+                : "proposed changes wait"} for review
+              {#snippet action()}
+                <Button size="sm" onclick={() => navigate("/review")}
+                  >open</Button
+                >
+              {/snippet}
+            </Note>
           {/if}
           {#if conflict}
             <Note tone="danger">
@@ -492,7 +650,7 @@
           <div class="facts">
             <EntryProperties
               bind:draft
-              {unsaved}
+              unsaved={marked}
               {canEdit}
               {creating}
               {filing}
@@ -509,7 +667,8 @@
               <EntrySection
                 label="symptoms"
                 compact
-                unsaved={unsaved.has("symptoms")}
+                unsaved={marked.has("symptoms")}
+                mark={markOf("symptoms")}
                 active={addingTo === "symptoms"}
               >
                 {#snippet action()}{@render addButton(
@@ -532,7 +691,8 @@
               <EntrySection
                 label="signals"
                 compact
-                unsaved={unsaved.has("signals")}
+                unsaved={marked.has("signals")}
+                mark={markOf("signals")}
                 active={addingTo === "signals"}
               >
                 {#snippet action()}{@render addButton(
@@ -556,7 +716,8 @@
               <EntrySection
                 label="tags"
                 compact
-                unsaved={unsaved.has("tags")}
+                unsaved={marked.has("tags")}
+                mark={markOf("tags")}
                 active={addingTo === "tags"}
               >
                 {#snippet action()}{@render addButton("tags", "tags")}{/snippet}
@@ -575,7 +736,8 @@
               <EntrySection
                 label="related links"
                 compact
-                unsaved={unsaved.has("relatedLinks")}
+                unsaved={marked.has("relatedLinks")}
+                mark={markOf("relatedLinks")}
                 active={addingTo === "relatedLinks"}
               >
                 {#snippet action()}{@render addButton(
@@ -607,7 +769,8 @@
           text={draft.issueSummary}
           render={prose}
           {links}
-          unsaved={unsaved.has("issueSummary")}
+          unsaved={marked.has("issueSummary")}
+          mark={markOf("issueSummary")}
           open={creating}
           problem={attempted ? problems.issueSummary : undefined}
           onchange={canEdit ? (text) => (draft.issueSummary = text) : undefined}
@@ -617,7 +780,8 @@
           text={draft.rootCause}
           render={prose}
           {links}
-          unsaved={unsaved.has("rootCause")}
+          unsaved={marked.has("rootCause")}
+          mark={markOf("rootCause")}
           open={creating}
           onchange={canEdit ? (text) => (draft.rootCause = text) : undefined}
         />
@@ -626,7 +790,8 @@
           text={draft.resolution}
           render={prose}
           {links}
-          unsaved={unsaved.has("resolution")}
+          unsaved={marked.has("resolution")}
+          mark={markOf("resolution")}
           open={creating}
           onchange={canEdit ? (text) => (draft.resolution = text) : undefined}
         />
@@ -635,7 +800,8 @@
           text={draft.investigation}
           render={prose}
           {links}
-          unsaved={unsaved.has("investigation")}
+          unsaved={marked.has("investigation")}
+          mark={markOf("investigation")}
           open={creating}
           onchange={canEdit
             ? (text) => (draft.investigation = text)

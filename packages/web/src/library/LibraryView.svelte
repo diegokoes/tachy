@@ -16,7 +16,7 @@
   import { excerpt, type Seg } from "./matching";
   import ResultRow from "./ResultRow.svelte";
   import { fill, toDoc, toEntry, type Item } from "./items";
-  import { isCurator } from "../access/session.svelte";
+  import { canPropose, isCurator } from "../access/session.svelte";
   import { showCustomer, t } from "../terms";
   import { errText } from "../resource.svelte";
   import { componentOptions } from "../catalog/componentOptions";
@@ -49,6 +49,7 @@
   import { movedWikiPath, ORG_WIDE, wikiPath } from "../wiki/paths";
   import { landingScope, loadWikis, wikis } from "../wiki/wikis.svelte";
   import { libraryTabPath, libraryTabs } from "./tabs";
+  import { reviewTotal } from "../review/review.svelte";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
 
   // Entries, docs and articles are one corpus that search spans; narrowing to
@@ -103,7 +104,10 @@
   // actions in the row beside them.
   $effect(() =>
     setSubnav({
-      items: libraryTabs({ customers: showCustomer() }),
+      items: libraryTabs({
+        customers: showCustomer(),
+        waiting: reviewTotal(),
+      }),
       active: "all",
       onpick: (tab) => void openTab(tab),
       // Only over a list. A detail view claims the row for itself, and a
@@ -536,7 +540,7 @@
 
 <!-- Rendered by App into the window's top row, not here. -->
 {#snippet listActions()}
-  {#if isCurator()}
+  {#if canPropose()}
     <Button
       size="sm"
       tone="ok"
@@ -579,7 +583,7 @@
     <EntryDetail
       onClose={backToList}
       onCreated={(id) => navigate(`/library/entries/${id}`)}
-      extra={kindToggle}
+      extra={isCurator() ? kindToggle : undefined}
     />
   {/if}
 {:else}
