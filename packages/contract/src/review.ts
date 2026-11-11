@@ -21,6 +21,38 @@ export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
 export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
 export type ProposalDirection = (typeof PROPOSAL_DIRECTIONS)[number];
 
+/** What the checks at submit can find wrong with a proposal. */
+export const PRECHECK_CODES = [
+  "near_copy",
+  "no_root_cause",
+  "no_resolution",
+  "no_component",
+  "no_source",
+] as const;
+export type PrecheckCode = (typeof PRECHECK_CODES)[number];
+
+export interface PrecheckFinding {
+  code: PrecheckCode;
+  /** For `near_copy`: the entries it nearly repeats, closest first. */
+  copies?: { id: string; title: string; similarity: number }[];
+}
+
+/**
+ * The model's remarks on a proposal. `available` is false when the submitter
+ * has no model credential, and the proposal then waits with no remarks.
+ */
+export interface ProposalAdvice {
+  available: boolean;
+  ok: boolean;
+  suggestions: string[];
+}
+
+export interface ProposalPrecheck {
+  checks: PrecheckFinding[];
+  /** Absent until the model has read the proposal. */
+  advice?: ProposalAdvice;
+}
+
 export interface ProposalMessageRow {
   id: string;
   proposal_id: string;
@@ -55,6 +87,7 @@ export interface ProposalRow {
   decided_at: string | null;
   /** The entry version the acceptance produced. */
   accepted_version: number | null;
+  precheck: ProposalPrecheck | null;
   created_at: string;
   updated_at: string;
   /** Patch fields changed on the entry since `base_version`; on a single read only. */

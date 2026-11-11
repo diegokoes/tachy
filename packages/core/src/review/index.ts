@@ -29,3 +29,9 @@ export {
   rejectProposal,
   replyOnProposal,
 } from "./decide";
+export {
+  getAdviceSubject,
+  listUnadvisedProposals,
+  setProposalAdvice,
+  type AdviceSubject,
+} from "./precheck";

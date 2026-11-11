@@ -6,6 +6,7 @@ import { startJobProcess } from "@tachy/core/jobs";
 import {
   registerAgentFlowActions,
   registerAgentPageTranscriber,
+  registerAgentReviewJobs,
 } from "@tachy/agent";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
@@ -17,6 +18,7 @@ registerSource("azure-devops", createAzureDevopsSource);
 setSourceOrigin("sync");
 registerAgentFlowActions();
 registerAgentPageTranscriber();
+registerAgentReviewJobs();
 
 const commaSeparated = (value: string | undefined) =>
   (value ?? "")

@@ -14,6 +14,7 @@ import { startJobProcess } from "@tachy/core/jobs";
 import {
   registerAgentFlowActions,
   registerAgentPageTranscriber,
+  registerAgentReviewJobs,
 } from "@tachy/agent";
 import { createApp } from "./app";
 import { isBootstrapped } from "./auth";
@@ -168,6 +169,7 @@ console.log(
 let jobWorker: Awaited<ReturnType<typeof startJobProcess>> | null = null;
 registerAgentFlowActions();
 registerAgentPageTranscriber();
+registerAgentReviewJobs();
 if (process.env.TACHY_WORKER !== "external")
   // Not awaited: a database whose schema is behind must not hold up the server.
   void startJobProcess({

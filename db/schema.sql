@@ -1217,6 +1217,10 @@ create table library_proposals (
     decided_at         timestamptz,
     -- The item version the acceptance produced.
     accepted_version   integer,
+    -- What the checks at submit found, and the model's remarks once it has
+    -- read the proposal (contract ProposalPrecheck). Advisory: nothing here
+    -- blocks a decision.
+    precheck           jsonb,
     created_at         timestamptz not null default now(),
     updated_at         timestamptz not null default now()
 );
