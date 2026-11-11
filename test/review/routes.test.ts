@@ -164,8 +164,14 @@ describe("review routes", () => {
     const countFor = async (cookie: string) =>
       (await requestAs(cookie, "GET", "/api/review/count")).json();
 
-    expect(await countFor(leadCookie)).toEqual({ waiting: 1, returned: 0 });
-    expect(await countFor(outsiderCookie)).toEqual({ waiting: 0, returned: 0 });
+    expect(await countFor(leadCookie)).toMatchObject({
+      waiting: 1,
+      returned: 0,
+    });
+    expect(await countFor(outsiderCookie)).toMatchObject({
+      waiting: 0,
+      returned: 0,
+    });
 
     const noReason = await requestAs(
       leadCookie,
@@ -178,8 +184,14 @@ describe("review routes", () => {
       message: "which access point?",
     });
 
-    expect(await countFor(leadCookie)).toEqual({ waiting: 0, returned: 0 });
-    expect(await countFor(memberCookie)).toEqual({ waiting: 0, returned: 1 });
+    expect(await countFor(leadCookie)).toMatchObject({
+      waiting: 0,
+      returned: 0,
+    });
+    expect(await countFor(memberCookie)).toMatchObject({
+      waiting: 0,
+      returned: 1,
+    });
 
     const mine = await (
       await requestAs(memberCookie, "GET", "/api/review/mine")
@@ -270,7 +282,11 @@ describe("review routes", () => {
     const waitingFor = async (cookie: string) =>
       (await requestAs(cookie, "GET", entryPath)).json();
 
-    expect(await waitingFor(memberCookie)).toEqual({ mine: null, open: 0 });
+    expect(await waitingFor(memberCookie)).toEqual({
+      mine: null,
+      open: 0,
+      signals: [],
+    });
 
     await requestAs(memberCookie, "PATCH", `/api/knowledge/${saved.id}`, {
       resolution: "renew the lease on wake",
@@ -282,7 +298,7 @@ describe("review routes", () => {
       kind: "edit",
       patch: { resolution: "renew the lease on wake" },
     });
-    expect(await waitingFor(leadCookie)).toEqual({ mine: null, open: 1 });
+    expect(await waitingFor(leadCookie)).toMatchObject({ mine: null, open: 1 });
   });
 
   it("lets an editor add and remove an entry's tickets, and a member only read them", async () => {
@@ -347,6 +363,66 @@ describe("review routes", () => {
         await requestAs(leadCookie, "GET", `/api/knowledge/${saved.id}/tickets`)
       ).json(),
     ).toMatchObject([{ external_id: "78" }]);
+  });
+
+  it("lists flagged entries to their team's admin, who alone may dismiss or mute them", async () => {
+    const saved = await (
+      await requestAs(leadCookie, "POST", "/api/knowledge", lesson())
+    ).json();
+    await requestAs(
+      memberCookie,
+      "POST",
+      `/api/knowledge/${saved.id}/feedback`,
+      {
+        kind: "correction",
+        comment: "the lease is not the cause on the mc33",
+      },
+    );
+
+    expect(
+      (await requestAs(memberCookie, "POST", "/api/review/signals/rescan"))
+        .status,
+    ).toBe(403);
+    const sweep = await requestAs(
+      leadCookie,
+      "POST",
+      "/api/review/signals/rescan",
+    );
+    expect((await sweep.json()).flagged).toBe(1);
+
+    const queueFor = async (cookie: string) =>
+      (await requestAs(cookie, "GET", "/api/review/queue")).json();
+    const [signal] = (await queueFor(leadCookie)).signals;
+    expect(signal).toMatchObject({
+      kind: "corrected",
+      knowledge_entry_id: saved.id,
+    });
+    expect((await queueFor(outsiderCookie)).signals).toEqual([]);
+    expect(
+      (await (await requestAs(leadCookie, "GET", "/api/review/count")).json())
+        .flagged,
+    ).toBe(1);
+
+    const signalPath = `/api/review/signals/${signal.id}`;
+    expect(
+      (await requestAs(outsiderCookie, "POST", `${signalPath}/dismiss`)).status,
+    ).toBe(403);
+    expect(
+      (await requestAs(leadCookie, "POST", `${signalPath}/dismiss`)).status,
+    ).toBe(200);
+    expect((await queueFor(leadCookie)).signals).toEqual([]);
+
+    const onEntry = await (
+      await requestAs(leadCookie, "GET", `/api/review/entries/${saved.id}`)
+    ).json();
+    expect(onEntry.signals).toHaveLength(1);
+    expect(
+      (await requestAs(leadCookie, "POST", `${signalPath}/mute`)).status,
+    ).toBe(200);
+    const afterMute = await (
+      await requestAs(leadCookie, "GET", `/api/review/entries/${saved.id}`)
+    ).json();
+    expect(afterMute.signals).toEqual([]);
   });
 
   it("answers 404 for a proposal that does not exist", async () => {

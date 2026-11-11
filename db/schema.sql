@@ -1247,6 +1247,39 @@ create table library_proposal_messages (
 create index library_proposal_messages_proposal_idx
     on library_proposal_messages(proposal_id, created_at);
 
+-- A reason to read a library item again, as the scheduled sweep last found it.
+-- One row per item and kind, kept across sweeps the way wiki_gaps is: seen
+-- again it keeps its first_seen_at, no longer found it gets resolved_at, and
+-- found again later it reopens as new.
+--
+-- A dismissed signal stays hidden until its score grows well past
+-- dismissed_score; a muted one stays hidden whatever the score.
+create table library_signals (
+    id                 uuid primary key default gen_random_uuid(),
+    knowledge_entry_id uuid references knowledge_entries(id) on delete cascade,
+    reference_doc_id   uuid references reference_docs(id) on delete cascade,
+    check (num_nonnulls(knowledge_entry_id, reference_doc_id) = 1),
+    kind               text not null
+                           check (kind in ('corrected','recurring','rated_low','source_changed','duplicate','aged')),
+    score              integer not null default 0,
+    evidence           jsonb not null default '{}'::jsonb,
+    -- False: counted for the item's own page, and not listed for review.
+    flagged            boolean not null default true,
+    first_seen_at      timestamptz not null default now(),
+    last_seen_at       timestamptz not null default now(),
+    resolved_at        timestamptz,
+    dismissed_by       uuid references users(id) on delete set null,
+    dismissed_at       timestamptz,
+    dismissed_score    integer,
+    muted              boolean not null default false
+);
+
+create unique index library_signals_entry_idx
+    on library_signals(knowledge_entry_id, kind) where knowledge_entry_id is not null;
+create unique index library_signals_doc_idx
+    on library_signals(reference_doc_id, kind) where reference_doc_id is not null;
+create index library_signals_open_idx on library_signals(kind) where resolved_at is null;
+
 -- Traffic to source systems, bucketed per connection, day and origin. Counts,
 -- never timings. What this answers is whose traffic it is (the agent reading on
 -- somebody's behalf, a sync, or the app itself) and how often the far end

@@ -240,6 +240,7 @@ export {
   PROPOSAL_STATUSES,
   PENDING_PROPOSAL_STATUSES,
   PROPOSAL_DIRECTIONS,
+  LIBRARY_SIGNAL_KINDS,
 } from "./review";
 export type {
   ProposalKind,
@@ -247,7 +248,11 @@ export type {
   ProposalDirection,
   ProposalMessageRow,
   ProposalRow,
-  EntryProposals,
+  EntryReview,
+  LibrarySignalKind,
+  SignalTicket,
+  SignalEvidence,
+  SignalRow,
   UnproposedDraft,
   ReviewQueue,
   ReviewCount,

@@ -193,7 +193,7 @@ describe("proposing a new entry", () => {
     const { entryId, proposalId } = await proposeNew();
     await returnProposal(proposalId, asLead(), "name the lock file");
     expect((await getProposal(proposalId)).status).toBe("returned");
-    expect(await reviewCount(memberId, [])).toEqual({
+    expect(await reviewCount(memberId, [])).toMatchObject({
       waiting: 0,
       returned: 1,
     });
@@ -213,7 +213,7 @@ describe("proposing a new entry", () => {
       status: "open",
       note: "named it",
     });
-    expect(await reviewCount(leadId, [testTeamId])).toEqual({
+    expect(await reviewCount(leadId, [testTeamId])).toMatchObject({
       waiting: 1,
       returned: 0,
     });

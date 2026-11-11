@@ -17,7 +17,7 @@ export async function resetData() {
              resolution_patterns, components, project_area_map, labels,
              reference_docs, reference_doc_chunks, library_files, artifacts, generated_outputs, chat_uploads,
              settings, library_revisions, library_views, library_proposals,
-             library_proposal_messages, source_calls, mcp_tool_calls,
+             library_proposal_messages, library_signals, source_calls, mcp_tool_calls,
              -- Global-scope rows (user_id and team_id both null) survive the
              -- cascade from users, so name both or a credential written by one
              -- file turns up in the next file on this worker's schema.

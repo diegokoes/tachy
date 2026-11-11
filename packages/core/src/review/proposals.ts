@@ -1,6 +1,6 @@
 import {
   PENDING_PROPOSAL_STATUSES,
-  type EntryProposals,
+  type EntryReview,
   type LibraryActor,
   type ProposalDirection,
   type ProposalKind,
@@ -13,14 +13,13 @@ import { sql, jsonb } from "../infra/db";
 import type { Db } from "../infra/db";
 import { notFound } from "../infra/errors";
 import type { KnowledgeUpdateInput } from "../knowledge/knowledge";
+import { curatedBy, type ReviewerTeams } from "./scope";
+import { entrySignals, listedSignal } from "./signals";
 
 const pendingStatuses = [...PENDING_PROPOSAL_STATUSES];
 
 const QUEUE_LIMIT = 200;
 const OWN_PROPOSALS_LIMIT = 100;
-
-/** The teams a reviewer curates. Null is an app admin, who reviews every team's. */
-export type ReviewerTeams = string[] | null;
 
 type PatchField = Exclude<
   keyof KnowledgeUpdateInput,
@@ -69,19 +68,6 @@ const PROPOSAL_SOURCE = sql`
   left join users submitter on submitter.id = p.submitted_by
   left join users decider on decider.id = p.decided_by
 `;
-
-/** Written against the alias `e`: the entry's own team, or its product's. */
-const curatedBy = (teamIds: ReviewerTeams) =>
-  teamIds === null
-    ? sql`true`
-    : sql`(
-        e.team_id = any(${teamIds}::uuid[])
-        or exists (
-          select 1 from products product
-          where product.id = e.product_id
-            and product.team_id = any(${teamIds}::uuid[])
-        )
-      )`;
 
 export interface NewProposal {
   entryId: string;
@@ -236,10 +222,10 @@ export async function listMyProposals(userId: string): Promise<ProposalRow[]> {
   `;
 }
 
-export async function entryProposals(
+export async function entryReview(
   entryId: string,
   userId: string | null,
-): Promise<EntryProposals> {
+): Promise<EntryReview> {
   const [mine] = await sql<ProposalRow[]>`
     select ${PROPOSAL_COLUMNS}
     from ${PROPOSAL_SOURCE}
@@ -252,7 +238,7 @@ export async function entryProposals(
     select count(*)::int as open from library_proposals
     where knowledge_entry_id = ${entryId} and status = 'open'
   `;
-  return { mine: mine ?? null, open };
+  return { mine: mine ?? null, open, signals: await entrySignals(entryId) };
 }
 
 /** `teamIds` empty is a person who reviews nothing. */
@@ -260,7 +246,7 @@ export async function reviewCount(
   userId: string | null,
   teamIds: ReviewerTeams,
 ): Promise<ReviewCount> {
-  const [row] = await sql<ReviewCount[]>`
+  const [row] = await sql<Omit<ReviewCount, "flagged">[]>`
     select
       count(*) filter (
         where p.status = 'open' and ${curatedBy(teamIds)}
@@ -272,5 +258,11 @@ export async function reviewCount(
     join knowledge_entries e on e.id = p.knowledge_entry_id
     where p.status = any(${pendingStatuses})
   `;
-  return row;
+  const [{ flagged }] = await sql<{ flagged: number }[]>`
+    select count(*)::int as flagged
+    from library_signals s
+    join knowledge_entries e on e.id = s.knowledge_entry_id
+    where ${listedSignal()} and ${curatedBy(teamIds)}
+  `;
+  return { ...row, flagged };
 }

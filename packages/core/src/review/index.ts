@@ -4,9 +4,17 @@ export {
   listUnproposedDrafts,
   listMyProposals,
   reviewCount,
-  entryProposals,
-  type ReviewerTeams,
+  entryReview,
 } from "./proposals";
+export type { ReviewerTeams } from "./scope";
+export {
+  sweepSignals,
+  listSignals,
+  getSignal,
+  dismissSignal,
+  muteSignal,
+  type SignalSweep,
+} from "./signals";
 export {
   saveOrProposeEntry,
   insertOrProposeEntry,
