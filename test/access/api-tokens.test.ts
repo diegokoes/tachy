@@ -17,6 +17,10 @@ import { AppError } from "@tachy/core/infra";
 import { createApp } from "../../packages/api/src/app";
 import { toolsDatabaseUrl } from "../../packages/api/src/turn-config";
 import {
+  ensureServiceAccount,
+  serviceAccountCommand,
+} from "../../packages/cli/src/accounts";
+import {
   lifetimeDaysOf,
   mintTokenCommand,
   mintTokenFor,
@@ -429,5 +433,87 @@ describe("minting from the command line", () => {
       /disabled/,
     );
     expect(await sql`select 1 from api_tokens`).toHaveLength(0);
+  });
+});
+
+describe("service accounts from the command line", () => {
+  const noStdin = async () => "";
+
+  it("creates a member that cannot sign in with a password", async () => {
+    expect(
+      await serviceAccountCommand(["watch@example.com"], {}, noStdin),
+    ).toBe("created watch@example.com");
+    const [row] = await sql`
+      select role, service_account, password_login_allowed, password_hash
+      from users where email = 'watch@example.com'`;
+    expect(row).toMatchObject({
+      role: "member",
+      service_account: true,
+      password_login_allowed: false,
+      password_hash: null,
+    });
+    expect((await listAudit())[0]).toMatchObject({
+      action: "user_create",
+      target: "watch@example.com",
+      actor_email: null,
+      detail: { service_account: true, with_password: false, by: "cli" },
+    });
+  });
+
+  it("takes the password from stdin and lets the account sign in with it", async () => {
+    await serviceAccountCommand(
+      ["smoke@example.com"],
+      { "password-stdin": "true" },
+      async () => "a-long-smoke-password\n",
+    );
+    expect(
+      await loginCookie(app, "smoke@example.com", "a-long-smoke-password"),
+    ).toBeTruthy();
+    const [row] = await sql`
+      select service_account, password_login_allowed from users
+      where email = 'smoke@example.com'`;
+    expect(row).toMatchObject({
+      service_account: true,
+      password_login_allowed: true,
+    });
+  });
+
+  it("keeps an existing account and replaces its password", async () => {
+    const before = await createUser({ email: "smoke@example.com" });
+    expect(
+      await ensureServiceAccount("smoke@example.com", "the-second-password"),
+    ).toBe("updated");
+    const rows = await sql`
+      select id, service_account from users where email = 'smoke@example.com'`;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: before.id, service_account: true });
+    expect((await listAudit())[0].action).toBe("user_update");
+    expect(
+      await loginCookie(app, "smoke@example.com", "the-second-password"),
+    ).toBeTruthy();
+  });
+
+  it("refuses an admin, a disabled account, a short password and no address", async () => {
+    await createUser({ email: "root@example.com", role: "admin" });
+    await expect(ensureServiceAccount("root@example.com")).rejects.toThrow(
+      /is an admin/,
+    );
+    const gone = await createUser({ email: "gone@example.com" });
+    await setUserDisabled(gone.id, true);
+    await expect(ensureServiceAccount("gone@example.com")).rejects.toThrow(
+      /disabled/,
+    );
+    await expect(
+      ensureServiceAccount("new@example.com", "short"),
+    ).rejects.toThrow(/at least/);
+    await expect(ensureServiceAccount("not-an-address")).rejects.toThrow(
+      /not an address/,
+    );
+    await expect(serviceAccountCommand([], {}, noStdin)).rejects.toThrow(
+      /needs an <email>/,
+    );
+    expect(
+      await sql`select 1 from users where email = 'new@example.com'`,
+    ).toHaveLength(0);
   });
 });
