@@ -10,6 +10,10 @@ export type ApprovalGate = (
 
 const DEFAULT_APPROVAL_TIMEOUT_MS = 15 * 60_000;
 
+/** Read by the model, which takes any other denial for the person declining. */
+const APPROVAL_TIMED_OUT =
+  "No one answered the review box in time, so nothing ran. This is not a refusal: say that it timed out and stop, without calling the tool again.";
+
 function approvalTimeoutMs(): number {
   const configured = Number(process.env.TACHY_APPROVAL_TIMEOUT_MS);
   return Number.isFinite(configured) && configured > 0
@@ -73,7 +77,7 @@ export abstract class TurnBase implements AgentTurn {
     const decision = await new Promise<Decision>((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        resolve({ approve: false, message: "Approval timed out." });
+        resolve({ approve: false, message: APPROVAL_TIMED_OUT });
       }, approvalTimeoutMs());
       timer.unref?.();
       this.pending.set(id, {

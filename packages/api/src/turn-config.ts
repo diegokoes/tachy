@@ -46,17 +46,6 @@ import { findCommand, commandWrite, namedWorkItem } from "./commands";
 import { findMode } from "./modes";
 
 /**
- * The review box invariant lives in prompt.md, where the tool descriptions
- * agree with it. This only names the surface it renders on: anything more
- * would restate instructions the model already has, on every turn.
- */
-const UI_APPROVAL_NOTE = `
-
-## Web chat
-
-The review box named in the invariants renders here as an editable form, one per write tool call. The user edits the fields before approving, and the tool runs with their edits.`;
-
-/**
  * Byte-identical on every turn, which lets prompt caching amortise it: no
  * per-turn state (time, user, session) is interpolated, since a varying prefix
  * invalidates the cache. Not the root CLAUDE.md, which also loads into every
@@ -65,8 +54,7 @@ The review box named in the invariants renders here as an editable form, one per
  */
 export async function systemPrompt(): Promise<string> {
   const path = join(process.cwd(), "packages/agent/prompt.md");
-  const base = existsSync(path) ? await readFile(path, "utf8") : "";
-  return base + UI_APPROVAL_NOTE;
+  return existsSync(path) ? readFile(path, "utf8") : "";
 }
 
 /**

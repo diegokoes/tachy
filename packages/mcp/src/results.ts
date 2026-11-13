@@ -104,8 +104,8 @@ export function outWithImages(payload: unknown, images: ModelImage[]) {
 export function imageWithheld(from: "ticket" | "upload"): string {
   const where =
     from === "ticket"
-      ? "for this connection in console > sources (images under redaction)"
-      : "in console > system (Images under redaction)";
+      ? "for this connection under console › integrations › sources (images under redaction)"
+      : "under console › system › runtime settings (images under redaction)";
   return `This is an image, and it was withheld: PII redaction is on and a picture cannot be scrubbed. Say so, say that an administrator can allow images ${where}, and ask the user to describe what it shows.`;
 }
 

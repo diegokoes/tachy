@@ -73,7 +73,6 @@ const TOOL_WORDS: Record<string, string> = {
   compact_work_item: "compacted the ticket",
   show_code_walkthrough: "drew a walkthrough",
   export_table: "exported a table",
-  record_analysis_run: "recorded the analysis",
   add_knowledge_feedback: "left feedback",
   set_work_item_customer: "set the customer",
   set_customer_fact: "recorded a customer fact",

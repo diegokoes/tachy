@@ -190,6 +190,7 @@ describe("renderColumnContract", () => {
       'export_table with artifact_slug "escalation-register"',
     );
     expect(contract).toContain("</output-contract>");
+    expect(contract).toContain("Do what the message asks first.");
   });
 });
 

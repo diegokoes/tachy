@@ -75,7 +75,6 @@ export const WRITE_TOOLS = [
   "set_project_area_map",
   "post_private_note",
   "post_work_item_summary",
-  "record_analysis_run",
   "create_ado_work_item",
 ] as const;
 
