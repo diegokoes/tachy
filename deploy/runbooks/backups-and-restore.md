@@ -18,8 +18,8 @@ beside them, which is what the system overview charts. Run one now:
 
 1. On their Windows laptop, in PowerShell:
    `ssh-keygen -t ed25519 -f $HOME\.ssh\tachy_backup` (give it a passphrase).
-2. They send `tachy_backup.pub`. Add it to `backup_downloaders` in the
-   inventory and rerun the playbook.
+2. They send `tachy_backup.pub`. Add it to `backup_downloaders` in
+   `/etc/tachy/host.yml` and run `sudo tachy-install`.
 3. Give them the host key line for `~/.ssh/tachy_known_hosts`, taken on the
    host with `ssh-keyscan -t ed25519 <name>` and checked against
    `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`.
@@ -33,7 +33,8 @@ beside them, which is what the system overview charts. Run one now:
    `deploy/watch/tachy-watch` (`session opened for local user`,
    `close "…" bytes read`) and adjust them.
 
-**Removing one:** delete the entry and rerun the playbook; the login is removed.
+**Removing one:** delete the entry and run `sudo tachy-install`; the login is
+removed.
 
 ## Restoring
 
@@ -70,6 +71,6 @@ CA restore into their volumes:
 ## Rotating the team backup key
 
 When someone with access to it leaves: generate a new key, replace its public
-half in `backup_recipients`, rerun the playbook. Keep the old private key in
-the password manager until the last backup encrypted to it has aged out
-(8 weeks).
+half in `backup_recipients` in `/etc/tachy/host.yml`, run `sudo tachy-install`.
+Keep the old private key in the password manager until the last backup
+encrypted to it has aged out (8 weeks).

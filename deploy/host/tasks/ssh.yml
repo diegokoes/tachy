@@ -22,6 +22,7 @@
     user: "{{ item.name }}"
     key: "{{ item.ssh_pubkey }}"
   loop: "{{ admin_users }}"
+  when: item.ssh_pubkey | default('') | length > 0
 
 - name: The tachy user may log in (the docker group comes with Docker)
   ansible.builtin.user:

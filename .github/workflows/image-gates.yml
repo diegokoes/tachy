@@ -47,6 +47,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Nothing here runs the host scripts or the playbook: this is what can
+      # be said about them without a host.
+      - name: Lint the host scripts and the playbook
+        run: |
+          shellcheck -S warning -x -P deploy/host deploy/install.sh \
+            deploy/host/common.sh deploy/host/tachy-install deploy/host/tachy-deploy \
+            deploy/host/tachy-update deploy/backup/tachy-backup deploy/watch/tachy-watch
+          command -v ansible-playbook >/dev/null || pipx install ansible-core
+          ansible-playbook -i localhost, --syntax-check deploy/host/playbook.yml
+
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0

@@ -1,0 +1,71 @@
+# /etc/tachy/host.yml: what tachy-install sets a host up from. An install at a
+# terminal asks for these and writes the file; for an install with nobody at
+# it (cloud-init), write the file first and run `tachy-install --unattended`.
+# After a change: sudo tachy-install
+#
+# The secrets are not here. tachy-install makes them, and takes
+# OIDC_CLIENT_SECRET, TEAMS_WEBHOOK_URL and the HC_*_URL heartbeats from its
+# environment when they are set.
+
+# The name people open, never an address: the certificate and the single
+# sign-on redirect bind to it.
+hostname: tachy.office.lan
+# The host's address, served too while clients cannot resolve the name. Only
+# with tls: internal.
+host_ip: ""
+
+# internal: Caddy's own authority signs the certificate; clients install its
+#           root once.
+# acme:     Let's Encrypt, for a public name with 80 and 443 open to the
+#           internet. tls_email is where it writes about the certificate.
+# files:    tachy.crt and tachy.key from IT, in tls_cert_dir.
+tls: internal
+tls_email: ""
+tls_cert_dir: ""
+
+# The branch whose head is deployed at night. Empty: every deploy is by hand.
+update_branch: main
+
+# Single sign-on. Empty: people sign in with passwords. The redirect address
+# to register is https://<hostname>/auth/callback.
+oidc_issuer: ""
+oidc_client_id: ""
+
+# laptop: battery charge, lid, clean shutdown on battery, <name>.local by mDNS.
+# server: none of those.
+host_profile: laptop
+
+# The interface people reach the host on. Left out, it is the default route's.
+# lan_interface: enp0s31f6
+# Who may reach the site on 80 and 443, and who may reach SSH. 0.0.0.0/0 is
+# everyone.
+lan_cidrs: ["192.168.1.0/24"]
+ssh_allowed_cidrs: ["192.168.1.0/24"]
+# Added to both once Tailscale is joined (DEPLOYMENT-ARCHITECTURE.md §7).
+tailscale_enabled: false
+
+# Admins: key-only SSH and sudo. Not in the docker group, which is
+# root-equivalent; deploys run as the tachy user. The login that runs
+# tachy-install has to be one of them.
+admin_users:
+  - name: diego
+    ssh_pubkey: "ssh-ed25519 AAAA… diego@workstation"
+
+# One read-only SFTP login per person who downloads backups (§6.2).
+backup_downloaders:
+  - name: alice
+    ssh_pubkey: "ssh-ed25519 AAAA… alice-tachy-backup"
+  - name: bob
+    ssh_pubkey: "ssh-ed25519 AAAA… bob-tachy-backup"
+    from: "192.168.1.0/24"
+
+# Public halves of the team backup key and the break-glass key. Left out,
+# tachy-install makes both pairs, adds the public halves here and writes the
+# private halves to its kit folder.
+# backup_recipients:
+#   - "age1… team"
+#   - "age1… break-glass"
+
+# Checkout to deploy from.
+tachy_repo: "https://github.com/diegokoes/tachy.git"
+docker_major: "29"

@@ -358,6 +358,17 @@ check_nvme() {
   fi
 }
 
+# A backup beside its private key is not encrypted. tachy-install writes both
+# keys to its kit folder, for the admin to move to the password manager.
+check_admin_kit() {
+  local dir=${TACHY_KIT_DIR:-/root/tachy-admin-kit}
+  if compgen -G "$dir/*.key" >/dev/null; then
+    result admin_kit warn "present" "the backup private keys are still in $dir; move them to the password manager and delete the folder"
+  else
+    result admin_kit ok "removed" "no backup private key in $dir"
+  fi
+}
+
 host_status() {
   local temp
   temp=$(cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | sort -n | tail -1)
@@ -391,7 +402,7 @@ post_teams() {
 }
 
 fetch_runtime
-for check in readyz 5xx memory runtime turns_queued jobs postgres disk backups update downloads certificate thermal power nvme; do
+for check in readyz 5xx memory runtime turns_queued jobs postgres disk backups update downloads certificate thermal power nvme admin_kit; do
   "check_$check" || result "$check" warn "" "the check itself errored"
 done
 

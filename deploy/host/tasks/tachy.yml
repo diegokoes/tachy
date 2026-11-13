@@ -70,6 +70,7 @@
     - { src: host/common.sh, mode: "0644" }
     - { src: host/tachy-deploy, mode: "0755" }
     - { src: host/tachy-update, mode: "0755" }
+    - { src: host/tachy-install, mode: "0755" }
     - { src: postgres/schema-hazards.sh, mode: "0644" }
     - { src: backup/tachy-backup, mode: "0755" }
     - { src: watch/tachy-watch, mode: "0755" }
@@ -82,10 +83,18 @@
   loop:
     - { dir: host, name: tachy-deploy }
     - { dir: host, name: tachy-update }
+    - { dir: host, name: tachy-install }
     - { dir: backup, name: tachy-backup }
     - { dir: watch, name: tachy-watch }
 
-- name: Host settings file, created once (fill in the secrets by hand)
+- name: The release these host scripts came from
+  ansible.builtin.copy:
+    dest: /etc/tachy/host-release
+    content: "{{ host_commit }}\n"
+    mode: "0644"
+  when: host_commit | length > 0
+
+- name: Host settings file, created once (tachy-install fills in what it makes)
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/tachy.env.example"
     dest: /etc/tachy/tachy.env

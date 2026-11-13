@@ -21,10 +21,12 @@ table inet tachy_host {
     udp sport 67 udp dport 68 accept
     udp sport 547 udp dport 546 accept
     tcp dport 22 ip saddr @ssh_allowed accept
+{% if mdns_enabled | bool %}
 {% if lan_cidrs %}
     udp dport 5353 ip saddr { {{ lan_cidrs | join(', ') }} } accept
 {% endif %}
     udp dport 5353 ip6 saddr fe80::/10 accept
+{% endif %}
     tcp dport { 80, 443 } ip6 saddr fe80::/10 accept
   }
 }

@@ -63,10 +63,16 @@ prod)
   # least-privilege roles, the embedder, the two workers and the turn
   # sandboxes. The CPU limits are the runner's, which has fewer cores than the
   # overlay's defaults ask for. The mock model is one more egress destination.
+  # The names and secrets come from the installer, as on a host, so the
+  # overlay starts on what an install writes. It keeps the passwords the
+  # database was created with.
+  render=$(mktemp -d)
+  cp .env "$render/.env"
+  printf 'hostname: %s\n' "$host" >"$render/host.yml"
+  deploy/host/tachy-install render "$render"
+  cp "$render/.env" .env
+  rm -rf "$render"
   cat >>.env <<ENV
-TACHY_HOSTNAME=$host
-TACHY_INTERNAL_SECRET=$(openssl rand -hex 32)
-TACHY_SECRET_KEY=$(openssl rand -base64 32)
 TACHY_STATUS_HOST_DIR=$PWD/.smoke-status
 TACHY_EMBEDDER_CPUS=2
 TACHY_WORKER_HEAVY_CPUS=2
