@@ -229,6 +229,38 @@ describe("agent.summarize_item", () => {
     );
   });
 
+  it("scrubs the thread where only the connection redacts", async () => {
+    thread[0].bodyText = "Scanner offline, write to ana@dock.example.";
+    await addSourceConnection({
+      sourceType: "fake-summary",
+      slug: "summary-conn",
+      baseUrl: "https://example.invalid",
+      config: { redaction: { enabled: true } },
+    });
+    const step = flowAction("agent.summarize_item");
+    await step.run(await context(), step.params.parse({}));
+    const [advisory] = vi.mocked(runAdvisory).mock.calls[0];
+    expect(advisory.redact).toBe(true);
+    const prompt = advisory.prompt((text) => text);
+    expect(prompt).toContain("Scanner offline");
+    expect(prompt).not.toContain("ana@dock.example");
+  });
+
+  it("has a flow step's material scrubbed where the item's connection redacts", async () => {
+    const step = flowAction("agent.ask");
+    const ask = step.params.parse({ prompt: "Who reported it?" });
+    await step.run(await context(), ask);
+    expect(vi.mocked(runAdvisory).mock.calls[0][0].redact).toBe(false);
+    await addSourceConnection({
+      sourceType: "fake-summary",
+      slug: "summary-conn",
+      baseUrl: "https://example.invalid",
+      config: { redaction: { enabled: true } },
+    });
+    await step.run(await context(), ask);
+    expect(vi.mocked(runAdvisory).mock.calls[1][0].redact).toBe(true);
+  });
+
   it("keeps the summary in the run when told not to post", async () => {
     const step = flowAction("agent.summarize_item");
     const result = await step.run(

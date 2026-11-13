@@ -1,14 +1,15 @@
 import { z } from "zod";
 import { getCustomerName } from "@tachy/core/catalog";
+import { redactionPolicy } from "@tachy/core/compliance";
+import { effectiveSettings } from "@tachy/core/config";
 import {
-  applyIngest,
   assertModelCallAllowed,
   defineFlowAction,
   flowName,
-  ingestConfig,
+  readForModel,
 } from "@tachy/core/flows";
 import { badInput } from "@tachy/core/infra";
-import { resolveSource } from "@tachy/core/sources";
+import { connectionRedacts, resolveSource } from "@tachy/core/sources";
 import {
   fileLinker,
   ingestWorkItem,
@@ -75,6 +76,9 @@ export function registerAgentFlowActions(): void {
             params.material
               ? `${scrub(params.prompt)}\n\n---\n${scrub(params.material)}`
               : scrub(params.prompt),
+          redact: ctx.item
+            ? await connectionRedacts(ctx.item.connection)
+            : false,
           tier: params.tier,
           timeoutMs: 120_000,
           mode: "flow",
@@ -115,19 +119,22 @@ export function registerAgentFlowActions(): void {
       if (!ctx.item) throw badInput("this step needs an item to work on");
       await assertModelCallAllowed(ctx.flowId);
       const { external_id, connection, source_type } = ctx.item;
-      const { conn, source } = await resolveSource(connection, ctx.scope);
+      const resolved = await resolveSource(connection, ctx.scope);
+      const { conn, source } = resolved;
       if (params.post && !source.postNote)
         throw badInput(`${source_type} items cannot take notes`);
       const raw = await source.fetchItem(external_id);
       const { customerId } = await ingestWorkItem(conn.id, raw);
-      const { item, guidance } = applyIngest(
-        raw,
-        ingestConfig(conn.config),
-        source.modelOmits,
-      );
+      // A worker reads the org's switch from the settings, not its environment.
+      const { redaction_global } = await effectiveSettings();
+      const { item, guidance, redacted } = await readForModel(resolved, raw, {
+        customerId,
+        policy: redactionPolicy(conn.config, redaction_global.value),
+      });
       const summary = await summarizeTicket(item, ctx.scope, ctx.userId, {
         mode: "flow",
         guidance,
+        redact: redacted,
         meta: { flow_id: ctx.flowId, flow_run_id: ctx.flowRunId },
       });
       const text = renderSummaryText(summary);

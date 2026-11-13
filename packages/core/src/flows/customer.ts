@@ -1,14 +1,9 @@
 import type { CustomerProfile, FlowOption } from "@tachy/contract";
 import { getCustomerProfile } from "../catalog/customers";
-import {
-  customerStandIn,
-  resolveRedactionPolicy,
-  scrubDeep,
-  TokenMap,
-} from "../compliance/redaction";
+import { customerStandIn, scrubDeep, TokenMap } from "../compliance/redaction";
 import type { ScopeContext } from "../config/scoped";
-import { effectiveSettings } from "../config/settings";
 import { sql } from "../infra/db";
+import { connectionRedacts } from "../sources/connections";
 import { resolveSource } from "../sources/registry";
 import type { FlowSubject } from "./subject";
 
@@ -62,17 +57,6 @@ export async function customerPropertyOptions(
   ];
 }
 
-/** Whether what a flow reads about the item is scrubbed: by the deployment, or by its connection. */
-async function itemRedacts(item: Pick<FlowSubject, "connection">) {
-  const [conn] = await sql<{ config: Record<string, unknown> | null }[]>`
-    select config from source_connections where slug = ${item.connection}
-  `;
-  return (
-    (await effectiveSettings()).redaction_global.value ||
-    resolveRedactionPolicy(conn?.config).enabled
-  );
-}
-
 /**
  * The item's customer profile, read for the unit the item is filed under, and
  * scrubbed when the item's reads are.
@@ -83,7 +67,7 @@ export async function customerProfileOf(
   if (!item.customer_id) return null;
   const profile = await getCustomerProfile(item.customer_id, item.unit);
   if (!profile) return null;
-  return (await itemRedacts(item))
+  return (await connectionRedacts(item.connection))
     ? scrubDeep(profile, new TokenMap())
     : profile;
 }
@@ -134,7 +118,7 @@ export async function customerProperties(
     }
   }
 
-  const redact = await itemRedacts(item);
+  const redact = await connectionRedacts(item.connection);
   const name = asText(record?.name);
   const readable = redact
     ? Object.fromEntries(

@@ -24,8 +24,14 @@ import {
 import { type ComposerForm } from "@tachy/core";
 import { createApp } from "../../packages/api/src/app";
 import { reviewPrompt } from "../../packages/agent/src/ticket-review";
+import { runAdvisory } from "../../packages/agent/src/advisory";
 import { loginCookie } from "../http";
 import { resetData, sql } from "../database";
+
+vi.mock("../../packages/agent/src/advisory", async (original) => ({
+  ...(await original<typeof import("../../packages/agent/src/advisory")>()),
+  runAdvisory: vi.fn(async () => null),
+}));
 
 const ORG = "https://dev.azure.com/flowsorg";
 
@@ -346,6 +352,32 @@ describe("flows config", () => {
       await request(devCookie, `/projects/${projectId}/form?type=Bug&raw=1`)
     ).json();
     expect(raw.prefill["Custom.Cloud"]).toBeUndefined();
+  });
+
+  it("has the review scrubbed when a ticket it draws on comes off a redacting connection", async () => {
+    const review = (source: string) =>
+      request(devCookie, "/review", {
+        method: "POST",
+        body: JSON.stringify({
+          type: "Bug",
+          title: "t",
+          context: [{ source, external_id: "1", title: "c", text: "x" }],
+        }),
+      });
+    const redactOf = () => vi.mocked(runAdvisory).mock.calls.at(-1)![0].redact;
+
+    expect((await review("flows-ado")).status).toBe(200);
+    expect(redactOf()).toBe(false);
+
+    await addSourceConnection({
+      sourceType: "freshdesk",
+      slug: "flows-desk",
+      baseUrl: "https://flows.example.invalid",
+      config: { redaction: { enabled: true } },
+    });
+    await review("flows-desk");
+    expect(redactOf()).toBe(true);
+    await sql`delete from source_connections where slug = 'flows-desk'`;
   });
 
   it("puts the team's guidance into the review", () => {

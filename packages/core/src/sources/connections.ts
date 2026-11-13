@@ -6,6 +6,8 @@ import type {
 import { sql, jsonb } from "../infra/db";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { badInput, notFound } from "../infra/errors";
+import { resolveRedactionPolicy } from "../compliance/redaction";
+import { effectiveSettings } from "../config/settings";
 import { addSourceProject, deleteSourceProject } from "./projects";
 
 export interface SourceConnectionInput {
@@ -19,6 +21,20 @@ export async function listSourceConnections() {
   return sql<
     SourceConnectionRow[]
   >`select id, source_type, slug, base_url, config from source_connections order by slug`;
+}
+
+/**
+ * Whether a model reads this connection's items scrubbed: by the connection's
+ * own switch or the deployment's. An unknown slug follows the deployment.
+ */
+export async function connectionRedacts(slug: string): Promise<boolean> {
+  const [conn] = await sql<{ config: Record<string, unknown> | null }[]>`
+    select config from source_connections where slug = ${slug}
+  `;
+  return (
+    (await effectiveSettings()).redaction_global.value ||
+    resolveRedactionPolicy(conn?.config).enabled
+  );
 }
 
 export async function addSourceConnection(input: SourceConnectionInput) {

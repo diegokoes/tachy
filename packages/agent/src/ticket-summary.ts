@@ -38,6 +38,8 @@ export interface SummaryRun {
   mode: string;
   /** The admin's guidance for the ticket's group, from its ingest rules. */
   guidance?: string;
+  /** As `Advisory.redact`. */
+  redact?: boolean;
   meta?: Record<string, unknown>;
 }
 
@@ -52,6 +54,7 @@ export async function summarizeTicket(
     {
       system: SYSTEM,
       prompt: (scrub) => scrub(summaryPrompt(raw, run.guidance)),
+      redact: run.redact,
       tier: "caller",
       timeoutMs: 120_000,
       mode: run.mode,

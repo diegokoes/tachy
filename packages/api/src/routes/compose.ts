@@ -18,6 +18,7 @@ import {
   type CreatedTicket,
 } from "@tachy/core";
 import {
+  connectionRedacts,
   getSourceProject,
   sourceProjectScope,
   type NewWorkItem,
@@ -169,15 +170,21 @@ export const compose = new Hono()
     const userId = await requireCaller(c);
     const { project_id, ...draft } = c.req.valid("json");
     let guidance: string | undefined;
+    const connections = draft.context.map((item) => item.source);
     if (project_id) {
-      await assertProjectMember(c, await getSourceProject(project_id));
+      const project = await getSourceProject(project_id);
+      await assertProjectMember(c, project);
+      connections.push(project.source_slug);
       guidance = typeConfig(
         await getComposeConfig(project_id),
         draft.type,
       )?.guidance;
     }
+    const redacting = await Promise.all(connections.map(connectionRedacts));
     return c.json(
-      await reviewTicket({ ...draft, guidance }, await callerScope(c), userId),
+      await reviewTicket({ ...draft, guidance }, await callerScope(c), userId, {
+        redact: redacting.some(Boolean),
+      }),
     );
   })
 
