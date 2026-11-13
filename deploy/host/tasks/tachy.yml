@@ -103,11 +103,13 @@
     group: "{{ tachy_user }}"
     force: false
 
-- name: The tachy user may take the pre-deploy backup
+# The second line: a release's playbook, from a commit root fetches itself.
+- name: The tachy user may take the pre-deploy backup and apply a release's host scripts
   ansible.builtin.copy:
     dest: /etc/sudoers.d/tachy-deploy
     content: |
       {{ tachy_user }} ALL=(root) NOPASSWD: /usr/local/bin/tachy-backup db
+      {{ tachy_user }} ALL=(root) NOPASSWD: /usr/local/bin/tachy-install ^host --commit [0-9a-f]{40}$
     mode: "0440"
     validate: visudo -cf %s
 

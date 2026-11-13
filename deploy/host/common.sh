@@ -18,6 +18,10 @@ TACHY_DIR=${TACHY_DIR:-/opt/tachy}
 TACHY_SRV=${TACHY_SRV:-/srv/tachy}
 TACHY_STATUS_DIR=${TACHY_STATUS_DIR:-$TACHY_SRV/status}
 TACHY_COMPOSE_FILES=${TACHY_COMPOSE_FILES:--f docker-compose.yml -f deploy/compose.prod.yml}
+# The commit the playbook last ran from, which it writes.
+TACHY_HOST_RELEASE_FILE=${TACHY_HOST_RELEASE_FILE:-/etc/tachy/host-release}
+# What the playbook installs on the host out of a checkout.
+HOST_SCRIPT_PATHS=(deploy/host deploy/backup deploy/watch deploy/postgres/schema-hazards.sh)
 
 # app_env <name> [default]: a value from the stack's .env
 app_env() {
@@ -38,6 +42,27 @@ set_env() {
 
 project() {
   app_env COMPOSE_PROJECT_NAME tachy
+}
+
+# checkout_git <args>: git in the checkout, as its owner. git refuses a
+# repository that belongs to another user, root included.
+checkout_git() {
+  if [ "$(id -u)" = 0 ]; then
+    runuser -u "$(stat -c %U "$TACHY_DIR")" -- git -C "$TACHY_DIR" "$@"
+  else
+    git -C "$TACHY_DIR" "$@"
+  fi
+}
+
+# host_scripts_differ <commit>: whether that commit's host scripts are other
+# than the installed ones. True as well when the commit they came from is not
+# in the checkout; false while the host records none.
+host_scripts_differ() {
+  local installed
+  installed=$(cat "$TACHY_HOST_RELEASE_FILE" 2>/dev/null || true)
+  [ -n "$installed" ] && [ "$installed" != "$1" ] || return 1
+  checkout_git cat-file -e "$installed^{commit}" 2>/dev/null || return 0
+  ! checkout_git diff --quiet "$installed" "$1" -- "${HOST_SCRIPT_PATHS[@]}"
 }
 
 dc() {

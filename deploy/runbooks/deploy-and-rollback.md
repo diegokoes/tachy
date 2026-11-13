@@ -24,11 +24,26 @@ is missing to `/opt/tachy/.env` and deploy again; the role passwords are set
 from it on every deploy. `tachy-deploy` writes `TACHY_IMAGE`,
 `TACHY_SANDBOX_IMAGE`, `TACHY_COMMIT` and `TACHY_DOCKER_GID` itself.
 
-A deploy does not update the host's own scripts. `tachy-deploy`,
-`tachy-update`, `tachy-backup` and `tachy-watch` are copies the playbook
-installs, so a release that changes `deploy/host`, `deploy/backup` or
-`deploy/watch` needs the playbook run again: `sudo tachy-install host --commit
-<the release's full commit id>`.
+**The host's own scripts come with the release.** `tachy-deploy`,
+`tachy-update`, `tachy-install`, `tachy-backup` and `tachy-watch` are
+root-owned copies the playbook installs. A release that changes `deploy/host`,
+`deploy/backup` or `deploy/watch` has its playbook run first, by
+`tachy-deploy` itself: `sudo tachy-install host --commit <commit>`, from a
+copy of the commit that root fetches from the repository. The deploy then
+starts over on the scripts just installed.
+
+- A playbook that fails refuses the deploy before anything of the release
+  started. The log records `refused` with `host step failed`, and
+  `tachy-update` does not try that commit again.
+- A playbook that changes Docker's settings restarts Docker, and the running
+  release with it, before the new one is rolled.
+- A rollback does not take the scripts back. `tachy-deploy <previous commit>`
+  by hand does.
+- `TACHY_HOST_SYNC=off` in `/etc/tachy/tachy.env` leaves the playbook to a
+  person: the deploy goes on, says which command to run, and `sudo
+tachy-install status` lists the host scripts as differing until it is.
+- A host set up before `tachy-install` has no `/etc/tachy/host-release`; a
+  deploy there says so and leaves the scripts alone.
 
 A rollback does not undo a schema change. The database keeps the new schema
 and the stamp goes back to the previous release's, so that release reports
