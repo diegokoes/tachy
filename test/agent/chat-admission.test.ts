@@ -21,7 +21,7 @@ class FakeTurn implements AgentTurn {
     this.finished = true;
     this.emit(null);
   }
-  approve() {}
+  async approve() {}
   abort() {
     this.finish();
   }

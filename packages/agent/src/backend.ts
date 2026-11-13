@@ -150,7 +150,7 @@ export interface AgentTurn {
   /** When the longest-waiting approval was requested (ms epoch), or null. */
   readonly oldestPendingApprovalAt: number | null;
   events(): AsyncGenerator<AgentEvent>;
-  /** Throws a bad_input error, the approval still pending, when an edited input does not fit its tool. */
-  approve(id: string, decision: Decision): void;
+  /** Rejects with a bad_input error, the approval still pending, when its tool would refuse an edited input. */
+  approve(id: string, decision: Decision): Promise<void>;
   abort(): void;
 }

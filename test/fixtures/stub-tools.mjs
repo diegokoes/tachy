@@ -49,4 +49,23 @@ server.registerTool(
   },
 );
 
+// Stands in for the real check: one note the tool throws on, one it answers
+// with a result that says why.
+if (process.env.STUB_TOOLS_CHECK)
+  server.registerTool(
+    "check_write",
+    {
+      inputSchema: {
+        tool: z.string(),
+        input: z.record(z.string(), z.unknown()),
+      },
+    },
+    async ({ input }) => {
+      if (input.body === "forbidden")
+        return { ...answer("no right to post here"), isError: true };
+      if (input.body === "duplicate") return answer("already posted");
+      return { content: [] };
+    },
+  );
+
 await server.connect(new StdioServerTransport());

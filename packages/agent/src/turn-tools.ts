@@ -22,7 +22,7 @@ import type {
   JsonSchemaType,
   JsonSchemaValidator,
 } from "@modelcontextprotocol/sdk/validation";
-import { errorText, log } from "@tachy/core/infra";
+import { CHECK_TOOL, errorText, log } from "@tachy/core/infra";
 import { openSandbox } from "@tachy/sandbox";
 import { SandboxTransport } from "./sandbox-transport";
 import { isSandboxed, launcherSocket } from "./sandboxed-spawn";
@@ -30,6 +30,9 @@ import { classifyCall, MCP_SERVER, qualify } from "./tools";
 
 /** Claude Code bounds no tool call; this keeps a hung tools process from holding a turn. */
 const TOOL_CALL_TIMEOUT_MS = 10 * 60_000;
+/** A check reads and embeds at most; past this the box is shown without it. */
+const CHECK_TIMEOUT_MS = 30_000;
+const EDITED_VALUE_CHARS = 300;
 /** Kept for the log when the process does not start. Its own log lines reach the api over TACHY_LOG_URL. */
 const STDERR_TAIL_CHARS = 2_000;
 
@@ -43,7 +46,44 @@ export interface ToolsProcess {
 interface Approval {
   tool: string;
   input: Record<string, unknown>;
+  /** Set when the person changed the model's draft in the review box. */
+  editNote?: string;
 }
+
+export interface Refusal {
+  text: string;
+  /** The tool throws it, in words a person can act on; else it is a result the tool returns. */
+  thrown: boolean;
+}
+
+const clipped = (value: unknown) =>
+  typeof value === "string" && value.length > EDITED_VALUE_CHARS
+    ? `${value.slice(0, EDITED_VALUE_CHARS)}…`
+    : (value ?? null);
+
+/**
+ * What a result tells the model of a person's edit: the transcript keeps the
+ * model's own draft. Null when they changed nothing.
+ */
+export function editNote(
+  drafted: Record<string, unknown>,
+  approved: Record<string, unknown>,
+): string | null {
+  const fields = [
+    ...new Set([...Object.keys(drafted), ...Object.keys(approved)]),
+  ].filter((field) => !isDeepStrictEqual(drafted[field], approved[field]));
+  if (!fields.length) return null;
+  const values = Object.fromEntries(
+    fields.map((field) => [field, clipped(approved[field])]),
+  );
+  return `The user edited this call in the review box, and it ran with their values, not yours: ${JSON.stringify(values)}. Report their values, and keep them in any call that follows from this one.`;
+}
+
+const textOf = (result: CallToolResult) =>
+  result.content
+    .map((block) => (block.type === "text" ? block.text : ""))
+    .join("")
+    .trim();
 
 /** Ajv starts each of its comma-joined errors with `data`: `data/symptoms must be array`. */
 const readable = (ajvMessage: string) =>
@@ -59,6 +99,7 @@ export class TurnTools {
     JsonSchemaValidator<unknown> | null
   >();
   private readonly ajv = new AjvJsonSchemaValidator();
+  private offersCheck = false;
 
   constructor(
     private readonly client: Client,
@@ -76,7 +117,12 @@ export class TurnTools {
         const listed = await client.listTools(request.params);
         for (const tool of listed.tools)
           this.schemas.set(tool.name, tool.inputSchema as JsonSchemaType);
-        return listed;
+        this.offersCheck ||= this.schemas.has(CHECK_TOOL);
+        // The gate's own tool: a model has no use for it.
+        return {
+          ...listed,
+          tools: listed.tools.filter((tool) => tool.name !== CHECK_TOOL),
+        };
       },
     );
     this.server.server.setRequestHandler(CallToolRequestSchema, (request) =>
@@ -88,9 +134,37 @@ export class TurnTools {
     return { type: "sdk", name: MCP_SERVER, instance: this.server };
   }
 
-  /** Lets one write through, once, with exactly this input. */
-  allow(tool: string, input: Record<string, unknown>): void {
-    this.approvals.push({ tool, input });
+  /** Lets one write through, once, with exactly this input. `drafted`: the model's own. */
+  allow(
+    tool: string,
+    input: Record<string, unknown>,
+    drafted: Record<string, unknown> = input,
+  ): void {
+    const note = editNote(drafted, input);
+    this.approvals.push({ tool, input, ...(note ? { editNote: note } : {}) });
+  }
+
+  /**
+   * Why the tools process would refuse this write, asked before a person is;
+   * null when it would run, or when the check itself fails.
+   */
+  async refusal(tool: string, input: unknown): Promise<Refusal | null> {
+    if (!this.offersCheck) return null;
+    try {
+      const answer = await this.client.request(
+        {
+          method: "tools/call",
+          params: { name: CHECK_TOOL, arguments: { tool, input } },
+        },
+        CallToolResultSchema,
+        { timeout: CHECK_TIMEOUT_MS },
+      );
+      const text = textOf(answer);
+      return text ? { text, thrown: answer.isError === true } : null;
+    } catch (err) {
+      log("warn", "tool_check_failed", { tool, error: errorText(err) });
+      return null;
+    }
   }
 
   /**
@@ -112,16 +186,23 @@ export class TurnTools {
   private async forward(request: CallToolRequest): Promise<CallToolResult> {
     const { name, arguments: input = {} } = request.params;
     const { cls } = classifyCall(qualify(name), input, this.proxiedTools);
-    if (cls !== "read" && !this.takeApproval(name, input))
+    const approval =
+      cls === "read" ? undefined : this.takeApproval(name, input);
+    if (cls !== "read" && !approval)
       return {
         isError: true,
         content: [{ type: "text", text: `${name} was not approved` }],
       };
-    return this.client.request(
+    const result = await this.client.request(
       { method: "tools/call", params: request.params },
       CallToolResultSchema,
       { timeout: TOOL_CALL_TIMEOUT_MS },
     );
+    if (!approval?.editNote) return result;
+    return {
+      ...result,
+      content: [...result.content, { type: "text", text: approval.editNote }],
+    };
   }
 
   private validatorFor(tool: string): JsonSchemaValidator<unknown> | null {
@@ -139,14 +220,15 @@ export class TurnTools {
     return validator;
   }
 
-  private takeApproval(tool: string, input: Record<string, unknown>): boolean {
+  private takeApproval(
+    tool: string,
+    input: Record<string, unknown>,
+  ): Approval | undefined {
     const index = this.approvals.findIndex(
       (approval) =>
         approval.tool === tool && isDeepStrictEqual(approval.input, input),
     );
-    if (index < 0) return false;
-    this.approvals.splice(index, 1);
-    return true;
+    return index < 0 ? undefined : this.approvals.splice(index, 1)[0];
   }
 }
 

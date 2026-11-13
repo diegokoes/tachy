@@ -80,6 +80,13 @@ async function requesterName(): Promise<string | null> {
 const askedInChat = (name: string | null) =>
   name ? `${name} in chat` : undefined;
 
+async function assertCanPostNote(source: string, externalId: string) {
+  const { conn, source: src } = await resolveSource(source);
+  if (!src.postNote)
+    throw badInput(`source '${source}' does not support notes`);
+  await requireCanEdit(await externalWorkItemScope(conn.id, externalId));
+}
+
 tool(
   "fetch_work_item",
   {
@@ -398,12 +405,10 @@ tool(
       external_id: z.string(),
       ...ticketSummarySchema.shape,
     },
+    check: ({ source, external_id }) => assertCanPostNote(source, external_id),
   },
   async ({ source, external_id, ...summary }) => {
     const { conn, source: src } = await resolveSource(source);
-    if (!src.postNote)
-      throw badInput(`source '${source}' does not support notes`);
-    await requireCanEdit(await externalWorkItemScope(conn.id, external_id));
     const raw = await src.fetchItem(external_id);
     const { customerId } = await ingestWorkItem(conn.id, raw);
     const linkOf = fileLinker(raw, {
@@ -535,12 +540,10 @@ tool(
           `Code the note rests on: only ranges you read with read_code_file in this conversation, at most ${MAX_CITED_CODE}. Cite each one in body as [[n]], n counting from 1, where the text talks about it. The note turns each citation into a link to the file in its repo at the commit you read, with the cited lines selected, and quotes those lines after that paragraph. Empty when no code was read.`,
         ),
     },
+    check: ({ source, external_id }) => assertCanPostNote(source, external_id),
   },
   async ({ source, external_id, title, body, code }) => {
-    const { conn, source: src } = await resolveSource(source);
-    if (!src.postNote)
-      throw badInput(`source '${source}' does not support notes`);
-    await requireCanEdit(await externalWorkItemScope(conn.id, external_id));
+    const { source: src } = await resolveSource(source);
     const userId = await resolveCurrentUserId();
     const cited: CitedCode[] = [];
     for (const ref of code) cited.push(await citedCode(ref, userId));
@@ -555,7 +558,7 @@ tool(
         ? `Written by a model in a chat with ${name}.`
         : "Written by a model in a chat.",
     });
-    await src.postNote(external_id, note, { private: true });
+    await src.postNote!(external_id, note, { private: true });
     return out({
       posted: true,
       private: true,
@@ -585,9 +588,10 @@ tool(
         ),
       customer_slug: z.string().nullable(),
     },
+    check: async ({ work_item_id }) =>
+      requireCanEdit(await workItemScope(work_item_id)),
   },
   async ({ work_item_id, customer_slug, unit }) => {
-    await requireCanEdit(await workItemScope(work_item_id));
     const customerId = customer_slug
       ? await getCustomerIdBySlug(customer_slug)
       : null;
@@ -607,9 +611,10 @@ tool(
     description:
       "Record (or clear) the product version observed/mentioned on a specific ticket. Only set this when a version is actually known from the ticket - leave unset otherwise.",
     inputSchema: { work_item_id: z.string(), version: z.string().nullable() },
+    check: async ({ work_item_id }) =>
+      requireCanEdit(await workItemScope(work_item_id)),
   },
   async ({ work_item_id, version }) => {
-    await requireCanEdit(await workItemScope(work_item_id));
     await setObservedVersion(work_item_id, version);
     return out({ updated: true, work_item_id, observed_version: version });
   },

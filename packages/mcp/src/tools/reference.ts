@@ -236,14 +236,17 @@ tool(
           "The wiki page path. With source_project_id, re-importing the page supersedes the previous revision instead of duplicating it.",
         ),
     },
+    check: async (args) => {
+      if (!args.body === !args.body_path)
+        throw badInput("provide exactly one of body or body_path");
+      const { productId, teamId } = await resolveScopeIds(args);
+      if (productId || teamId || !args.supersedes)
+        await requireCanEdit({ productId, teamId });
+      else await requireCanEdit(await referenceDocScope(args.supersedes));
+    },
   },
   async (args) => {
-    if (!args.body === !args.body_path)
-      throw badInput("provide exactly one of body or body_path");
     const { productId, teamId } = await resolveScopeIds(args);
-    if (productId || teamId || !args.supersedes)
-      await requireCanEdit({ productId, teamId });
-    else await requireCanEdit(await referenceDocScope(args.supersedes));
 
     let body = args.body;
     let extracted: (ExtractedFile & { redact: boolean }) | undefined;
@@ -458,9 +461,9 @@ tool(
         ),
       expected_version: z.number().int().optional(),
     },
+    check: async ({ id }) => requireCanEdit(await referenceDocScope(id)),
   },
   async (args) => {
-    await requireCanEdit(await referenceDocScope(args.id));
     const patch: ReferenceDocUpdate = {};
     if (args.title !== undefined) patch.title = args.title;
     if (args.body !== undefined) patch.body = args.body;

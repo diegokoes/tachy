@@ -9,6 +9,8 @@ export interface ScriptedCall {
 
 export interface ScriptedModel {
   url: string;
+  /** The messages of the latest request that offered tools. */
+  transcript(): { role: string; content: unknown }[];
   close(): Promise<void>;
 }
 
@@ -98,6 +100,7 @@ function answer(response: ServerResponse, block: Block, streamed: boolean) {
 export async function startScriptedModel(
   calls: ScriptedCall[],
 ): Promise<ScriptedModel> {
+  let transcript: { role: string; content: unknown }[] = [];
   const server = createServer(async (request, response) => {
     let raw = "";
     for await (const chunk of request) raw += chunk;
@@ -109,6 +112,8 @@ export async function startScriptedModel(
     }
     if (request.method === "POST" && path === "/v1/messages") {
       const body = JSON.parse(raw);
+      if (Array.isArray(body.tools) && body.tools.length)
+        transcript = body.messages ?? [];
       answer(response, nextBlock(body, calls), body.stream === true);
       return;
     }
@@ -121,6 +126,7 @@ export async function startScriptedModel(
   const { port } = server.address() as AddressInfo;
   return {
     url: `http://127.0.0.1:${port}`,
+    transcript: () => transcript,
     close: () => new Promise((resolve) => server.close(() => resolve())),
   };
 }

@@ -32,6 +32,12 @@ const RUNNING_TOOLS = {
     typeof (input as { body?: unknown }).body === "string"
       ? null
       : "body must be string",
+  refusal: async (_tool: string, input: unknown) => {
+    const { body } = input as { body?: unknown };
+    if (body === "forbidden") return { text: "no right here", thrown: true };
+    if (body === "duplicate") return { text: "already there", thrown: false };
+    return null;
+  },
   close: async () => {},
 };
 
@@ -281,16 +287,55 @@ describe("a Claude turn's approvals", () => {
     const turn = new ClaudeTurn("hi", CONFIG);
     for await (const event of turn.events()) {
       if (event.type !== "approval_request") continue;
-      expect(() =>
+      await expect(
         turn.approve("use-1", { approve: true, updatedInput: { body: 1 } }),
-      ).toThrow("the edited input does not fit: body must be string");
+      ).rejects.toThrow("the edited input does not fit: body must be string");
+      await expect(
+        turn.approve("use-1", {
+          approve: true,
+          updatedInput: { body: "forbidden" },
+        }),
+      ).rejects.toThrow("the edited input does not fit: no right here");
       expect(turn.pendingApprovals).toBe(1);
-      turn.approve("use-1", { approve: true, updatedInput: { body: "ok" } });
+      await turn.approve("use-1", {
+        approve: true,
+        updatedInput: { body: "duplicate" },
+      });
     }
     expect(decided).toEqual({
       behavior: "allow",
-      updatedInput: { body: "ok" },
+      updatedInput: { body: "duplicate" },
     });
+  });
+
+  it("answers the model for a write its tool would refuse, asking no one", async () => {
+    const decided: unknown[] = [];
+    claude.script = async function* (signal, options) {
+      for (const body of ["forbidden", "duplicate"])
+        decided.push(
+          await options.canUseTool("mcp__tachy__post_private_note", { body }, {
+            signal,
+            toolUseID: `use-${body}`,
+          } as never),
+        );
+      yield RESULT;
+    };
+    const events = [];
+    for await (const event of new ClaudeTurn("hi", CONFIG).events())
+      events.push(event.type);
+    expect(events).not.toContain("approval_request");
+    expect(decided).toEqual([
+      {
+        behavior: "deny",
+        message:
+          "post_private_note did not run and no one was asked: no right here",
+      },
+      {
+        behavior: "deny",
+        message:
+          "post_private_note did not run and no one was asked: already there",
+      },
+    ]);
   });
 });
 

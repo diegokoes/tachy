@@ -147,10 +147,11 @@ tool(
           "The product whose library it belongs to, when there is one.",
         ),
     },
+    check: async ({ product_slug }) =>
+      requireCanEdit(await resolveScopeIds({ product_slug })),
   },
   async ({ path, member, alt, product_slug }) => {
     const { productId } = await resolveScopeIds({ product_slug });
-    await requireCanEdit({ productId });
     const { file } = await openSource(path, { member });
     if (!isImageFile(file)) throw badInput(`${file.filename} is not an image`);
     const image = await imageWithin(file.bytes, MAX_ASSET_BYTES);
