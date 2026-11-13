@@ -155,6 +155,7 @@ async function restore(opts: { file?: string; yes?: boolean }) {
 import { seed, SCALE_NAMES, type ScaleName } from "./seed";
 import { cleanTicketsCommand } from "./tickets";
 import { mintTokenCommand } from "./tokens";
+import { serviceAccountCommand } from "./accounts";
 import type { EmbedMode } from "./seed/embed";
 
 const USAGE = `usage:
@@ -167,6 +168,8 @@ const USAGE = `usage:
   restore --file=PATH [--yes]                      pg_restore (overwrites the DB)
   mint-token <email> <name> [--days=N|--never]     a bearer token for an account, shown once
                                                    (90 days unless told otherwise)
+  service-account <email> [--password-stdin]       a member a host script acts as; with a password
+                                                   on stdin it may sign in with one under SSO too
   clean-tickets [--connection=SLUG] [--status=A,B] delete stored tickets that match every filter given;
        [--product=SLUG] [--team=SLUG]              prints what matches and deletes only with --yes.
        [--customer=SLUG] [--requester=WHO]         Tickets a knowledge entry was learned from are left
@@ -187,6 +190,12 @@ const args = Object.fromEntries(
       return [key, value ?? "true"];
     }),
 ) as Record<string, string>;
+
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString("utf8");
+}
 
 async function main() {
   switch (cmd) {
@@ -227,6 +236,10 @@ async function main() {
       const { token, note } = await mintTokenCommand(positional, args);
       console.log(token);
       console.error(note);
+      return;
+    }
+    case "service-account": {
+      console.log(await serviceAccountCommand(positional, args, readStdin));
       return;
     }
     case "clean-tickets": {

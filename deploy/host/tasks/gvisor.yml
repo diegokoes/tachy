@@ -13,25 +13,28 @@
     state: directory
     mode: "0755"
 
+# Outside the release folder, which a dry run on a fresh host does not create.
 - name: gVisor's release archive, checked against its digest
   ansible.builtin.get_url:
     url: "https://storage.googleapis.com/gvisor/releases/release/{{ gvisor_release }}/{{ ansible_architecture }}/gvisor.tar.zstd"
-    dest: "/usr/local/lib/gvisor/gvisor-{{ gvisor_release }}.tar.zstd"
+    dest: "/var/cache/gvisor-{{ gvisor_release }}.tar.zstd"
     checksum: "sha512:{{ gvisor_sha512 }}"
     mode: "0644"
 
 - name: gVisor unpacked
   ansible.builtin.command:
     cmd: >-
-      tar --zstd -xf /usr/local/lib/gvisor/gvisor-{{ gvisor_release }}.tar.zstd
+      tar --zstd -xf /var/cache/gvisor-{{ gvisor_release }}.tar.zstd
       -C /usr/local/lib/gvisor/release-{{ gvisor_release }}
     creates: "/usr/local/lib/gvisor/release-{{ gvisor_release }}/runsc"
 
-# runsc finds its gvisor-bin/ helpers next to its resolved path.
+# runsc finds its gvisor-bin/ helpers next to its resolved path. `force`: a
+# dry run on a host without gVisor has not unpacked the target yet.
 - name: runsc and its containerd shim on PATH
   ansible.builtin.file:
     src: "/usr/local/lib/gvisor/release-{{ gvisor_release }}/{{ item }}"
     dest: "/usr/local/bin/{{ item }}"
     state: link
+    force: true
   loop: [runsc, containerd-shim-runsc-v1]
   notify: Restart docker
