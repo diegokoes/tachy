@@ -24,10 +24,13 @@
 
 # /var is a 12 GB partition. With the containerd image store, layers live in
 # containerd's root, not Docker's data-root, so both move to /srv.
-- name: Is there containerd data still under /var?
+# A fresh containerd leaves its empty folders under /var at its first start;
+# only image content there is worth refusing over.
+- name: Are there images in containerd's store under /var?
   ansible.builtin.find:
-    paths: /var/lib/containerd
-    file_type: any
+    paths: /var/lib/containerd/io.containerd.content.v1.content
+    file_type: file
+    recurse: true
   register: containerd_var
 
 - name: Is /srv/containerd already in place?
@@ -38,7 +41,7 @@
 - name: Refuse to hide existing containerd data
   ansible.builtin.fail:
     msg: >-
-      /var/lib/containerd holds data and /srv/containerd does not exist. Stop
+      /var/lib/containerd holds images and /srv/containerd does not exist. Stop
       Docker, move /var/lib/containerd to /srv/containerd by hand (runbook:
       deploy/runbooks/full-disk.md), then run the playbook again.
   when: containerd_var.matched > 0 and not containerd_srv.stat.exists
@@ -51,7 +54,7 @@
     insertbefore: BOF
     create: true
     mode: "0644"
-  notify: Restart docker
+  notify: [Restart containerd, Restart docker]
 
 # runsc is gVisor's, installed by gvisor.yml. Host network mode: gVisor's own
 # network stack cannot reach Docker's DNS, which listens inside the container's

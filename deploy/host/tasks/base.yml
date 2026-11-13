@@ -1,11 +1,22 @@
 - name: Packages the host scripts and monitoring need
   ansible.builtin.apt:
     name: [age, zstd, jq, curl, git, ca-certificates, openssl, smartmontools, nvme-cli,
-           nftables, iptables, unattended-upgrades, apt-listchanges, tlp, upower, sudo,
-           avahi-daemon]
+           nftables, iptables, unattended-upgrades, apt-listchanges, sudo]
     state: present
     update_cache: true
     cache_valid_time: 3600
+
+- name: What holds a laptop's battery charge and shuts it down in time
+  ansible.builtin.apt:
+    name: [tlp, upower]
+    state: present
+  when: host_profile == 'laptop'
+
+- name: avahi
+  ansible.builtin.apt:
+    name: avahi-daemon
+    state: present
+  when: mdns_enabled | bool
 
 # The service cannot start while its socket stays masked.
 - name: avahi's socket is not masked
@@ -13,6 +24,7 @@
     name: avahi-daemon.socket
     masked: false
     enabled: true
+  when: mdns_enabled | bool
 
 - name: mDNS answers for <hostname>.local on the LAN
   ansible.builtin.systemd_service:
@@ -20,6 +32,7 @@
     masked: false
     enabled: true
     state: started
+  when: mdns_enabled | bool
 
 - name: Unattended security upgrades
   ansible.builtin.copy:

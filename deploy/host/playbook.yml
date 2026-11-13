@@ -1,5 +1,6 @@
-# Provisions the office laptop as the tachy host (DEPLOYMENT-ARCHITECTURE.md §12).
-# Idempotent: run it again after any change to the inventory.
+# Provisions a tachy host (DEPLOYMENT-ARCHITECTURE.md §12). tachy-install runs
+# it on the host itself, with /etc/tachy/host.yml as its variables.
+# Idempotent: tachy-install runs it again after any change to that file.
 - name: Tachy host
   hosts: all
   become: true
@@ -16,6 +17,12 @@
     - name: Restart journald
       ansible.builtin.systemd_service:
         name: systemd-journald
+        state: restarted
+    # Ahead of Docker's: restarting docker leaves containerd running, on the
+    # root it started with.
+    - name: Restart containerd
+      ansible.builtin.systemd_service:
+        name: containerd
         state: restarted
     - name: Restart docker
       ansible.builtin.systemd_service:
@@ -42,6 +49,7 @@
       ansible.builtin.import_tasks: tasks/base.yml
     - name: Laptop as a server
       ansible.builtin.import_tasks: tasks/laptop.yml
+      when: host_profile == 'laptop'
     - name: Users and SSH
       ansible.builtin.import_tasks: tasks/ssh.yml
     - name: Docker

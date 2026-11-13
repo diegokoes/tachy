@@ -1,7 +1,13 @@
-# Defaults for deploy/host/playbook.yml. They live here and not in the play's
-# `vars:` because play vars outrank the inventory: there, these empty lists
-# replace the inventory's admin_users and lan_cidrs.
+# Defaults for deploy/host/playbook.yml, under what /etc/tachy/host.yml sets.
+# They live here and not in the play's `vars:` because play vars outrank an
+# inventory: there, these empty lists replace its admin_users and lan_cidrs.
 tachy_user: tachy
+tachy_repo: "https://github.com/diegokoes/tachy.git"
+# laptop: battery, lid and mDNS are looked after. server: none of them exist.
+host_profile: laptop
+mdns_enabled: "{{ host_profile == 'laptop' }}"
+# The commit the playbook runs from, which tachy-install passes.
+host_commit: ""
 tachy_dir: /opt/tachy
 tachy_srv: /srv/tachy
 tachy_lib: /usr/local/lib/tachy
