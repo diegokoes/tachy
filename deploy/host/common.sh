@@ -26,6 +26,16 @@ app_env() {
   echo "${v:-${2:-}}"
 }
 
+# set_env <name> <value>: sets or replaces one line of the stack's .env
+set_env() {
+  local key=$1 value=$2 file="$TACHY_DIR/.env"
+  if grep -q "^$key=" "$file"; then
+    sed -i "s|^$key=.*|$key=$value|" "$file"
+  else
+    printf '%s=%s\n' "$key" "$value" >>"$file"
+  fi
+}
+
 project() {
   app_env COMPOSE_PROJECT_NAME tachy
 }
@@ -33,6 +43,32 @@ project() {
 dc() {
   # shellcheck disable=SC2086
   (cd "$TACHY_DIR" && docker compose $TACHY_COMPOSE_FILES "$@")
+}
+
+# wait_ready: readyz through Caddy, for up to TACHY_READY_TIMEOUT seconds
+wait_ready() {
+  local host deadline port=${TACHY_HTTPS_PORT:-443}
+  host=$(app_env TACHY_HOSTNAME localhost)
+  deadline=$(($(date +%s) + ${TACHY_READY_TIMEOUT:-300}))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    if curl -fsk -m 5 --resolve "$host:$port:127.0.0.1" \
+      "https://$host:$port/readyz" 2>/dev/null | grep -q '"ready":true'; then
+      return 0
+    fi
+    sleep 3
+  done
+  return 1
+}
+
+# resolve_image <commit> [tag prefix]: the image CI built from the commit, by
+# digest once pulled. PULL=false takes the image already on the host.
+resolve_image() {
+  local sha=$1 prefix=${2:-} repo=${TACHY_IMAGE_REPO:-ghcr.io/diegokoes/tachy} tag digest
+  tag="$repo:${prefix}sha-${sha:0:12}"
+  ${PULL:-true} && docker pull -q "$tag" >/dev/null
+  digest=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$tag" 2>/dev/null |
+    grep "^$repo@" | head -1)
+  echo "${digest:-$tag}"
 }
 
 utc_now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
