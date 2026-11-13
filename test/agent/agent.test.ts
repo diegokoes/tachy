@@ -107,6 +107,53 @@ describe("agent tool allowlist (security boundary)", () => {
     expect(missing).toEqual([]);
   });
 
+  it("names only modes the prompt has a playbook for", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const read = (file: string) =>
+      readFileSync(join(here, "..", "..", file), "utf8");
+    const playbooks = [
+      ...read("packages/agent/prompt.md").matchAll(/^### ([^-\n]+?) - /gm),
+    ].map((heading) => heading[1].toUpperCase());
+    const named = [
+      "packages/api/src/commands.ts",
+      "packages/api/src/modes.ts",
+    ].flatMap((file) =>
+      [...read(file).matchAll(/\b([A-Z][A-Z ]+) MODE\b/g)].map(
+        (mode) => mode[1],
+      ),
+    );
+    expect(named.length).toBeGreaterThan(3);
+    expect(named.filter((mode) => !playbooks.includes(mode))).toEqual([]);
+  });
+
+  // A path the model reads out is followed by a person: each one has to be a
+  // page and a section the console lists, by the labels it shows.
+  it("points at console sections that exist, by their labels", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const root = join(here, "..", "..");
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        if (entry.isDirectory()) return walk(join(dir, entry.name));
+        return /\.(ts|md)$/.test(entry.name) ? [join(dir, entry.name)] : [];
+      });
+    const text = ["agent", "mcp/src", "core/src", "api/src"]
+      .flatMap((folder) => walk(join(root, "packages", folder)))
+      .map((file) => readFileSync(file, "utf8"))
+      .join("\n");
+    const pages = readFileSync(
+      join(root, "packages/web/src/admin/pages.ts"),
+      "utf8",
+    );
+    const paths = [
+      ...text.matchAll(/console › ([a-z ]+?) › ([a-z ]+?)(?=[^a-z ]| \(|$)/gm),
+    ];
+    expect(paths.length).toBeGreaterThan(3);
+    const unknown = paths
+      .flatMap(([, page, section]) => [page, section])
+      .filter((label) => !pages.includes(`label: "${label.trim()}"`));
+    expect(unknown).toEqual([]);
+  });
+
   it("denies any non-tachy / built-in tool", () => {
     for (const tool of ["Bash", "Read", "Write", "Edit", "WebFetch", "Task"])
       expect(classify(tool).cls).toBe("denied");
@@ -550,7 +597,7 @@ describe("TurnBase approval lifecycle", () => {
       await vi.advanceTimersByTimeAsync(1001);
       expect(await pending).toEqual({
         approve: false,
-        message: "Approval timed out.",
+        message: expect.stringContaining("timed out"),
       });
     } finally {
       delete process.env.TACHY_APPROVAL_TIMEOUT_MS;

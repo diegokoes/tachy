@@ -863,11 +863,13 @@ describe("reading one attached file", () => {
       expect(withheld.images).toHaveLength(0);
       expect(withheld.json.note).toMatch(/withheld: PII redaction is on/);
       // An upload has no connection: the switch is the server's own.
-      expect(withheld.json.note).toMatch(/console > system/);
+      expect(withheld.json.note).toMatch(/console › system › runtime settings/);
 
       const viaIngest = await read("ingest_context", { paths: [ref] });
       expect(viaIngest.images).toHaveLength(0);
-      expect(viaIngest.json.sources[0].note).toMatch(/console > system/);
+      expect(viaIngest.json.sources[0].note).toMatch(
+        /console › system › runtime settings/,
+      );
 
       process.env.TACHY_REDACT_IMAGES = "true";
       expect((await read("read_file", { path: ref })).images).toHaveLength(1);

@@ -577,8 +577,14 @@ tool(
     inputSchema: {},
     annotations: { readOnlyHint: true },
   },
-  async () => out(await listTeams()),
+  async () => {
+    const teams = await listTeams();
+    return out(teams.length ? teams : { teams, note: NO_TEAMS });
+  },
 );
+
+const NO_TEAMS =
+  "No team exists: this system is new. Set it up with the user, each step in its own box: add_team, then add_product under it, then list_source_connections.";
 
 tool(
   "add_team",

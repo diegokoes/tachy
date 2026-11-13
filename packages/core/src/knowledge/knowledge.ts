@@ -164,7 +164,7 @@ async function resolvePatternDescription(
   `;
   if (!pattern) {
     throw badInput(
-      `unknown resolution_pattern '${slug}'. call list_resolution_patterns to see existing ones, or add_resolution_pattern first`,
+      `unknown resolution_pattern '${slug}'. call list_resolution_patterns and reuse one, or leave it unset`,
     );
   }
   return pattern.description;

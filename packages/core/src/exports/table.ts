@@ -225,7 +225,7 @@ export function renderColumnContract(
   });
   return [
     `<output-contract utility="export_table" artifact="${slug}" format="${output.format}">`,
-    "Produce one row per record with EXACTLY these columns - no extras, no renames:",
+    "Do what the message asks first. Then produce one row per record with EXACTLY these columns - no extras, no renames:",
     ...columns,
     `Then call export_table with artifact_slug "${slug}" and those rows.`,
     "Do not print the table in chat - the user gets a download.",

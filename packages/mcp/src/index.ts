@@ -21,7 +21,6 @@ setSourceOrigin("agent");
 // the name core gives it.
 import "./tools/work-items";
 import "./tools/knowledge";
-import "./tools/analytics";
 import "./tools/catalog";
 import "./tools/wiki";
 import "./tools/reference";

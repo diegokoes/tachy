@@ -30,8 +30,16 @@ tool(
     inputSchema: {},
     annotations: { readOnlyHint: true },
   },
-  async () => out(await listSourceConnections()),
+  async () => {
+    const connections = await listSourceConnections();
+    return out(
+      connections.length ? connections : { connections, note: NO_CONNECTIONS },
+    );
+  },
 );
+
+const NO_CONNECTIONS =
+  "No source is connected. An admin adds one, with its token, under console › integrations › sources: a token never passes through a tool. Once it exists, add_source_project registers the source's grouping under a product.";
 
 tool(
   "add_source_connection",
