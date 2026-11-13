@@ -18,6 +18,10 @@
 #                                     otherwise needs SMOKE_EMAIL and
 #                                     SMOKE_PASSWORD; recorded as skipped
 #
+# A release that changes the host's own scripts brings them along: its playbook
+# runs first (tachy-install host), and the deploy starts over on the scripts it
+# installed. TACHY_HOST_SYNC=off in tachy.env leaves that to a person.
+#
 # Rollback is `tachy-deploy <previous commit>`: safe while the previous image
 # accepts the current schema, which is what expand-and-contract is for.
 set -euo pipefail
@@ -31,6 +35,7 @@ HERE=$(dirname "$(readlink -f "$0")")
 DEPLOY_LOG=${TACHY_DEPLOY_LOG:-$TACHY_SRV/deploy.log}
 read -ra BACKUP <<<"${TACHY_BACKUP_BIN:-tachy-backup}"
 
+ARGS=("$@")
 PULL=true
 ALLOW_DESTRUCTIVE=false
 SMOKE=run
@@ -148,6 +153,31 @@ fi
 PREV_COMMIT=$(git_ rev-parse HEAD)
 PREV_IMAGE=$(app_env TACHY_IMAGE)
 PREV_SANDBOX_IMAGE=$(app_env TACHY_SANDBOX_IMAGE)
+
+# Before anything of the release starts: a host step that fails leaves the
+# running release as it is.
+sync_host_scripts() {
+  [ -z "${TACHY_HOST_SYNCED:-}" ] || return 0
+  if [ ! -s "$TACHY_HOST_RELEASE_FILE" ]; then
+    log "host scripts: no $TACHY_HOST_RELEASE_FILE, so they stay as they are; tachy-install writes it"
+    return 0
+  fi
+  host_scripts_differ "$COMMIT" || return 0
+  if [ "${TACHY_HOST_SYNC:-on}" = off ]; then
+    log "host scripts: this release changes them and TACHY_HOST_SYNC is off. Apply them: sudo tachy-install host --commit $COMMIT"
+    return 0
+  fi
+  log "host scripts: this release changes them; running its playbook"
+  if ! sudo -n /usr/local/bin/tachy-install host --commit "$COMMIT"; then
+    record "$COMMIT" "" "$PREV_IMAGE" "host step failed" "refused"
+    log "refused: the release's playbook did not finish, and nothing of the release was started"
+    exit 1
+  fi
+  # The playbook restarts Docker when its settings change, and the stack with it.
+  dc up -d --wait postgres >&2
+  TACHY_HOST_SYNCED=1 exec "$0" "${ARGS[@]}"
+}
+sync_host_scripts
 log "deploying $COMMIT (from ${PREV_COMMIT:0:12}, image $PREV_IMAGE)"
 
 IMAGE=$(resolve_image "$COMMIT")

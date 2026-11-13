@@ -28,7 +28,6 @@ HERE=$(dirname "$(readlink -f "$0")")
 DEFAULT_REPO=https://github.com/diegokoes/tachy.git
 KIT_DIR=${TACHY_KIT_DIR:-/root/tachy-admin-kit}
 SOURCE_DIR=${TACHY_SOURCE_DIR:-/var/lib/tachy/src}
-HOST_RELEASE_FILE=${TACHY_HOST_RELEASE_FILE:-/etc/tachy/host-release}
 PASSWORD_SSH_FILE=/etc/ssh/sshd_config.d/05-password-login.conf
 INSTALL_LOG=${TACHY_INSTALL_LOG:-/var/log/tachy-install.log}
 WATCH_TOKEN_DAYS=365
@@ -453,7 +452,8 @@ operator() {
   local admins
   admins=$(host_query names admin_users)
   [ -n "$admins" ] || die "$HOST_FILE names no admin_users: nobody could use SSH afterwards"
-  if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
+  # tachy-deploy runs this as the tachy user, whose login the playbook keeps.
+  if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ] && [ "$SUDO_USER" != tachy ]; then
     grep -qx "$SUDO_USER" <<<"$admins" ||
       die "$SUDO_USER is not in admin_users in $HOST_FILE: SSH would lock you out"
     echo "$SUDO_USER"
@@ -517,8 +517,8 @@ run_playbook() {
     tree=$(readlink -f "$HERE/../..")
     commit=$(git -C "$tree" rev-parse -q --verify HEAD 2>/dev/null || true)
   else
-    commit=$(cat "$HOST_RELEASE_FILE" 2>/dev/null || true)
-    [ -n "$commit" ] || die "no $HOST_RELEASE_FILE: run deploy/install.sh from a checkout"
+    commit=$(cat "$TACHY_HOST_RELEASE_FILE" 2>/dev/null || true)
+    [ -n "$commit" ] || die "no $TACHY_HOST_RELEASE_FILE: run deploy/install.sh from a checkout"
     export_commit "$commit"
     tree=$EXPORT_DIR
   fi
@@ -685,12 +685,14 @@ status() {
   line info release "${running:-none} ($(app_env TACHY_IMAGE))"
   site_get /readyz 2>/dev/null | grep -q '"ready":true' && line ok stack "ready at https://$name" ||
     line todo stack "not ready: docker compose logs api, in $TACHY_DIR"
-  host_release=$(cat "$HOST_RELEASE_FILE" 2>/dev/null || true)
-  release=$(as_tachy git -C "$TACHY_DIR" rev-parse -q --verify HEAD 2>/dev/null || true)
-  if [ -n "$host_release" ] && [ "$host_release" = "$release" ]; then
-    line ok "host scripts" "from ${host_release:0:12}, the release that runs"
+  host_release=$(cat "$TACHY_HOST_RELEASE_FILE" 2>/dev/null || true)
+  release=$(checkout_git rev-parse -q --verify HEAD 2>/dev/null || true)
+  if [ -z "$host_release" ]; then
+    line todo "host scripts" "no $TACHY_HOST_RELEASE_FILE: sudo tachy-install"
+  elif host_scripts_differ "$release"; then
+    line todo "host scripts" "from ${host_release:0:12}; the release that runs has others: sudo tachy-install host --commit $release"
   else
-    line info "host scripts" "from ${host_release:0:12}; the stack runs ${release:0:12}"
+    line ok "host scripts" "from ${host_release:0:12}, as in the release that runs"
   fi
 
   if has_admin; then
