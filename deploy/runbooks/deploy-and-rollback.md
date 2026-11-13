@@ -27,7 +27,8 @@ from it on every deploy. `tachy-deploy` writes `TACHY_IMAGE`,
 A deploy does not update the host's own scripts. `tachy-deploy`,
 `tachy-update`, `tachy-backup` and `tachy-watch` are copies the playbook
 installs, so a release that changes `deploy/host`, `deploy/backup` or
-`deploy/watch` needs the playbook run again.
+`deploy/watch` needs the playbook run again: `sudo tachy-install host --commit
+<the release's full commit id>`.
 
 A rollback does not undo a schema change. The database keeps the new schema
 and the stamp goes back to the previous release's, so that release reports

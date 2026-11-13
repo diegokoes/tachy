@@ -15,8 +15,8 @@ Teams before a window that falls in working hours.
 
 1. Announce it; drain as above.
 2. `sudo apt update && sudo apt full-upgrade`. Docker stays on its pinned major;
-   to move to the next, change `docker_major` in the inventory and rerun the
-   playbook.
+   to move to the next, change `docker_major` in `/etc/tachy/host.yml` and run
+   `sudo tachy-install`.
 3. `sudo reboot`. This also tests unattended boot: LUKS unlocks by TPM2, and
    `tachy.service` starts the stack.
 4. After boot: `sudo tachy-watch --dry-run` shows every check ok, and

@@ -1,0 +1,826 @@
+#!/usr/bin/env bash
+# Sets a host up from nothing, and applies later changes to it
+# (deploy/runbooks/first-install.md). As root, on Debian 13.
+#
+#   tachy-install                  install, or apply /etc/tachy/host.yml again
+#   tachy-install --unattended     ask nothing and wait for nobody: host.yml is
+#                                  complete (cloud-init)
+#   tachy-install --ref <commit|branch>
+#                                  first start on that release, not on the head
+#                                  of the followed branch
+#   tachy-install host [--commit <sha>] [--check]
+#                                  the playbook alone. --commit runs it from a
+#                                  root-owned export of that commit; --check
+#                                  changes nothing and prints what would
+#   tachy-install finish           once the wizard has made an admin: removes
+#                                  the first-start token and checks the host
+#   tachy-install status           what is set up and what is not; no secrets
+#   tachy-install render <dir> [--commit <sha>]
+#                                  writes .env and tachy.env into <dir> from
+#                                  <dir>/host.yml and touches nothing else;
+#                                  --commit also names that release's images
+#
+# It writes a key of .env or tachy.env only while that key is missing or empty,
+# so running it again keeps every secret and every edit.
+set -euo pipefail
+
+HERE=$(dirname "$(readlink -f "$0")")
+DEFAULT_REPO=https://github.com/diegokoes/tachy.git
+KIT_DIR=${TACHY_KIT_DIR:-/root/tachy-admin-kit}
+SOURCE_DIR=${TACHY_SOURCE_DIR:-/var/lib/tachy/src}
+HOST_RELEASE_FILE=${TACHY_HOST_RELEASE_FILE:-/etc/tachy/host-release}
+PASSWORD_SSH_FILE=/etc/ssh/sshd_config.d/05-password-login.conf
+INSTALL_LOG=${TACHY_INSTALL_LOG:-/var/log/tachy-install.log}
+WATCH_TOKEN_DAYS=365
+WIZARD_POLL_SECONDS=5
+
+die() {
+  echo "tachy-install: $*" >&2
+  exit 1
+}
+say() { printf '%s\n' "$*" >&2; }
+
+COMMAND=install
+case "${1:-}" in
+host | finish | status | render)
+  COMMAND=$1
+  shift
+  ;;
+esac
+
+UNATTENDED=false
+CHECK=false
+REF=""
+COMMIT=""
+RENDER_DIR=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+  --unattended) UNATTENDED=true ;;
+  --check) CHECK=true ;;
+  --ref) REF=${2:?--ref needs a commit or a branch}; shift ;;
+  --commit) COMMIT=${2:?--commit needs a commit}; shift ;;
+  -*) die "unknown option $1" ;;
+  *)
+    [ "$COMMAND" = render ] && [ -z "$RENDER_DIR" ] || die "unexpected argument $1"
+    RENDER_DIR=$1
+    ;;
+  esac
+  shift
+done
+
+# What the caller's environment gives for the optional settings. Read here:
+# common.sh sources tachy.env, which sets the same names.
+GIVEN_OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
+GIVEN_TEAMS_WEBHOOK_URL=${TEAMS_WEBHOOK_URL:-}
+GIVEN_HC_BACKUP_URL=${HC_BACKUP_URL:-}
+GIVEN_HC_RESTORE_URL=${HC_RESTORE_URL:-}
+GIVEN_HC_WATCH_URL=${HC_WATCH_URL:-}
+
+if [ "$COMMAND" = render ]; then
+  [ -n "$RENDER_DIR" ] || die "render needs a directory"
+  RENDER_DIR=$(readlink -f "$RENDER_DIR")
+  HOST_FILE=$RENDER_DIR/host.yml
+  export TACHY_DIR=$RENDER_DIR TACHY_ENV_FILE=$RENDER_DIR/tachy.env
+else
+  HOST_FILE=${TACHY_HOST_FILE:-/etc/tachy/host.yml}
+  [ "$(id -u)" = 0 ] || die "run it as root: sudo tachy-install $COMMAND"
+fi
+
+# shellcheck source=common.sh
+. "${TACHY_COMMON:-$HERE/common.sh}"
+
+# host_query <value|count|names|holds> <key> [address]: reads host.yml.
+# `value` is a top-level scalar, `count` the length of a list, `names` the name
+# of each list entry, `holds` whether a list of networks contains the address.
+host_query() {
+  python3 - "$HOST_FILE" "$@" <<'PY'
+import ipaddress
+import sys
+import yaml
+
+path, mode, key = sys.argv[1:4]
+try:
+    with open(path) as handle:
+        doc = yaml.safe_load(handle) or {}
+except FileNotFoundError:
+    doc = {}
+value = doc.get(key)
+if mode == "count":
+    print(len(value) if isinstance(value, list) else 0)
+elif mode == "names":
+    for entry in value if isinstance(value, list) else []:
+        print(entry.get("name", "") if isinstance(entry, dict) else entry)
+elif mode == "holds":
+    address = ipaddress.ip_address(sys.argv[4])
+    networks = [ipaddress.ip_network(n, strict=False) for n in value or []]
+    print("yes" if any(address in network for network in networks) else "no")
+elif isinstance(value, bool):
+    print(str(value).lower())
+elif value is not None and not isinstance(value, (list, dict)):
+    print(value)
+PY
+}
+
+# host_value <key> [default]
+host_value() {
+  local value
+  value=$(host_query value "$1")
+  echo "${value:-${2:-}}"
+}
+
+has_host_key() { grep -q "^$1:" "$HOST_FILE" 2>/dev/null; }
+
+# add_host_lines <key> <yaml>: appends a top-level key host.yml does not have
+add_host_lines() {
+  has_host_key "$1" && return 0
+  printf '%s\n' "$2" >>"$HOST_FILE"
+}
+
+# host_env <key>: a value of tachy.env, unquoted
+host_env() {
+  local value
+  value=$(sed -n "s/^$1=//p" "$TACHY_ENV_FILE" 2>/dev/null | tail -1)
+  value=${value#[\'\"]}
+  echo "${value%[\'\"]}"
+}
+
+# put_host_env <key> <value>: sets or replaces one line of tachy.env. The file
+# is sourced by a shell, so the value is single-quoted.
+put_host_env() {
+  local key=$1 quoted partial="$TACHY_ENV_FILE.partial"
+  quoted="'${2//\'/\'\\\'\'}'"
+  touch "$TACHY_ENV_FILE"
+  (umask 077 && LINE="$key=$quoted" awk -v key="$key" -F= '
+    $1 == key && !done { print ENVIRON["LINE"]; done = 1; next }
+    { print }
+    END { if (!done) print ENVIRON["LINE"] }' "$TACHY_ENV_FILE" >"$partial")
+  cat "$partial" >"$TACHY_ENV_FILE"
+  rm -f "$partial"
+}
+
+ensure_host_env() {
+  [ -n "$2" ] || return 0
+  [ -n "$(host_env "$1")" ] || put_host_env "$1" "$2"
+}
+
+ensure_env() {
+  [ -n "$2" ] || return 0
+  [ -n "$(app_env "$1")" ] || set_env "$1" "$2"
+}
+
+secret_hex() { openssl rand -hex "${1:-32}"; }
+
+GENERATED=()
+# ensure_secret <key> [value]: a secret .env lacks, kept for the admin kit
+ensure_secret() {
+  [ -z "$(app_env "$1")" ] || return 0
+  local value=${2:-$(secret_hex)}
+  set_env "$1" "$value"
+  GENERATED+=("$1=$value")
+}
+
+# The address a service account gets: the api accepts only a dotted domain.
+account_domain() {
+  local name
+  name=$(host_value hostname)
+  case "$name" in
+  *.*) echo "$name" ;;
+  *) echo "$name.local" ;;
+  esac
+}
+
+# Writes what .env and tachy.env lack. FRESH: no stack was configured here
+# before this run, so a first-start token belongs in it.
+render_env() {
+  local name tls
+  name=$(host_value hostname)
+  [ -n "$name" ] || die "$HOST_FILE has no hostname"
+  tls=$(host_value tls internal)
+
+  FRESH=false
+  [ -n "$(app_env POSTGRES_PASSWORD)" ] || FRESH=true
+  (umask 077 && touch "$TACHY_DIR/.env" "$TACHY_ENV_FILE")
+
+  ensure_env TACHY_HOSTNAME "$name"
+  case "$tls" in
+  internal)
+    ensure_env TACHY_TLS internal
+    ensure_env TACHY_HOST_IP "$(host_value host_ip)"
+    ;;
+  acme)
+    [ -n "$(host_value tls_email)" ] || die "tls: acme needs tls_email in $HOST_FILE"
+    ensure_env TACHY_TLS "$(host_value tls_email)"
+    ;;
+  files)
+    [ -n "$(host_value tls_cert_dir)" ] || die "tls: files needs tls_cert_dir in $HOST_FILE"
+    ensure_env TACHY_TLS "/certs/tachy.crt /certs/tachy.key"
+    ensure_env TACHY_TLS_CERT_DIR "$(host_value tls_cert_dir)"
+    ;;
+  *) die "tls is '$tls' in $HOST_FILE; it is internal, acme or files" ;;
+  esac
+
+  ensure_secret POSTGRES_PASSWORD
+  ensure_secret TACHY_APP_DB_PASSWORD
+  ensure_secret TACHY_MCP_DB_PASSWORD
+  ensure_secret TACHY_BACKUP_DB_PASSWORD
+  ensure_secret TACHY_SECRET_KEY "$(openssl rand -base64 32)"
+  ensure_secret TACHY_SESSION_SECRET
+  ensure_secret TACHY_INTERNAL_SECRET
+
+  local issuer
+  issuer=$(host_value oidc_issuer)
+  if [ -n "$issuer" ]; then
+    ensure_env OIDC_ISSUER "$issuer"
+    ensure_env OIDC_CLIENT_ID "$(host_value oidc_client_id)"
+    ensure_env OIDC_CLIENT_SECRET "$GIVEN_OIDC_CLIENT_SECRET"
+    ensure_env OIDC_REDIRECT_URI "https://$name/auth/callback"
+    [ -n "$(app_env OIDC_CLIENT_ID)" ] && [ -n "$(app_env OIDC_CLIENT_SECRET)" ] ||
+      die "oidc_issuer is set: it needs oidc_client_id in $HOST_FILE and OIDC_CLIENT_SECRET in the environment"
+  elif $FRESH; then
+    # Without auth the api listens on its own loopback only, out of Caddy's
+    # reach; `finish` removes this once the wizard has made an admin.
+    ensure_secret TACHY_API_TOKEN
+  fi
+
+  ensure_host_env TACHY_UPDATE_BRANCH "$(host_value update_branch)"
+  ensure_host_env TEAMS_WEBHOOK_URL "$GIVEN_TEAMS_WEBHOOK_URL"
+  ensure_host_env HC_BACKUP_URL "$GIVEN_HC_BACKUP_URL"
+  ensure_host_env HC_RESTORE_URL "$GIVEN_HC_RESTORE_URL"
+  ensure_host_env HC_WATCH_URL "$GIVEN_HC_WATCH_URL"
+  if $FRESH; then
+    put_host_env WATCH_MOUNTS "$(watched_mounts)"
+    [ "$(host_query count backup_downloaders)" -gt 0 ] || put_host_env WATCH_DOWNLOADS 0
+    # tachy-watch verifies readyz against this file; only Caddy's own CA needs one.
+    case "$tls" in
+    acme) put_host_env TACHY_CA_FILE /etc/ssl/certs/ca-certificates.crt ;;
+    files) put_host_env TACHY_CA_FILE "" ;;
+    esac
+  fi
+}
+
+watched_mounts() {
+  local mount mounts=/
+  for mount in /var /srv; do
+    mountpoint -q "$mount" 2>/dev/null && mounts="$mounts $mount"
+  done
+  echo "$mounts"
+}
+
+# pin_release <commit>: points .env at the two images CI built from the commit
+pin_release() {
+  local commit=$1 image sandbox_image
+  image=$(resolve_image "$commit")
+  sandbox_image=$(resolve_image "$commit" sandbox-)
+  if ${PULL:-true}; then
+    docker image inspect "$image" "$sandbox_image" >/dev/null 2>&1 ||
+      die "CI has published no image for ${commit:0:12} yet; run this again later, or pass --ref"
+  fi
+  set_env TACHY_COMMIT "${commit:0:12}"
+  set_env TACHY_IMAGE "$image"
+  set_env TACHY_SANDBOX_IMAGE "$sandbox_image"
+  set_env TACHY_DOCKER_GID "$(stat -c %g /var/run/docker.sock 2>/dev/null || echo 0)"
+}
+
+if [ "$COMMAND" = render ]; then
+  [ -f "$HOST_FILE" ] || die "no $HOST_FILE"
+  render_env
+  [ -z "$COMMIT" ] || PULL=false pin_release "$COMMIT"
+  exit 0
+fi
+
+# --- the host ---------------------------------------------------------------
+
+PREREQUISITES=(git ansible python3-apt python3-yaml sudo age openssl curl ca-certificates iproute2)
+
+ensure_prerequisites() {
+  local package missing=()
+  for package in "${PREREQUISITES[@]}"; do
+    dpkg-query -W -f '${Status}' "$package" 2>/dev/null | grep -q "install ok installed" ||
+      missing+=("$package")
+  done
+  [ ${#missing[@]} -gt 0 ] || return 0
+  say "installing ${missing[*]}"
+  DEBIAN_FRONTEND=noninteractive apt-get update -qq
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null
+}
+
+# ask <question> [default]: reads the terminal, also when the script is piped in
+ask() {
+  local answer
+  if [ -n "${2:-}" ]; then
+    read -r -p "$1 [$2]: " answer </dev/tty
+  else
+    read -r -p "$1: " answer </dev/tty
+  fi
+  echo "${answer:-${2:-}}"
+}
+
+# ask_choice <question> <default> <choice>...
+ask_choice() {
+  local question=$1 default=$2 answer choice
+  shift 2
+  while true; do
+    answer=$(ask "$question ($(IFS=/; echo "$*"))" "$default")
+    for choice in "$@"; do
+      [ "$answer" != "$choice" ] || { echo "$answer"; return 0; }
+    done
+    say "one of: $*"
+  done
+}
+
+lan_interface() { ip -o -4 route show default | awk '{print $5; exit}'; }
+lan_subnet() { ip -o -4 route show dev "$1" proto kernel scope link | awk '{print $1; exit}'; }
+lan_address() { ip -o -4 addr show dev "$1" | awk '{print $4; exit}' | cut -d/ -f1; }
+
+# yaml_list <comma or space separated>: a flow sequence; `any` is every address
+yaml_list() {
+  local item items=()
+  for item in ${1//,/ }; do
+    [ "$item" = any ] && item=0.0.0.0/0
+    items+=("\"$item\"")
+  done
+  (IFS=,; echo "[${items[*]}]")
+}
+
+first_public_key() {
+  local home
+  home=$(getent passwd "$1" | cut -d: -f6)
+  grep -m1 -E '^(ssh-|ecdsa-|sk-)' "$home/.ssh/authorized_keys" 2>/dev/null || true
+}
+
+# Asks what a host needs and writes host.yml. Only when there is none.
+ask_host() {
+  local interface subnet profile name address reach ssh_from tls tls_email="" tls_cert_dir=""
+  local branch admin key issuer client_id=""
+  interface=$(lan_interface)
+  subnet=$(lan_subnet "$interface")
+
+  profile=server
+  compgen -G '/sys/class/power_supply/BAT*' >/dev/null && profile=laptop
+  profile=$(ask_choice "what is this machine" "$profile" laptop server)
+
+  name=$(hostname -f 2>/dev/null || hostname)
+  [ "$profile" = laptop ] && case "$name" in *.*) ;; *) name="$name.local" ;; esac
+  name=$(ask "the name people open in a browser" "$name")
+
+  reach=$(ask "who may reach the site, as networks, or 'any'" "$subnet")
+  ssh_from=$(ask "who may reach SSH, as networks" "$subnet")
+
+  tls=$(ask_choice "certificate: caddy's own authority, let's encrypt, or files from IT" internal internal acme files)
+  address=""
+  case "$tls" in
+  internal) address=$(ask "also answer on this address, for clients that cannot resolve the name yet (empty: no)" "$(lan_address "$interface")") ;;
+  acme) tls_email=$(ask "address let's encrypt mails about the certificate") ;;
+  files) tls_cert_dir=$(ask "directory holding tachy.crt and tachy.key") ;;
+  esac
+
+  branch=$(ask "branch to follow at night (empty: deploys by hand)" main)
+
+  admin=${SUDO_USER:-}
+  [ -n "$admin" ] && [ "$admin" != root ] || admin=$(ask "admin login on this host (created if it does not exist)")
+  [ -n "$admin" ] && [ "$admin" != root ] || die "an admin login other than root is needed: root cannot use SSH afterwards"
+  key=$(first_public_key "$admin")
+  [ -n "$key" ] || key=$(ask "public SSH key for $admin (empty: keep password login for now)")
+  if [ -z "$key" ]; then
+    mkdir -p "$(dirname "$PASSWORD_SSH_FILE")"
+    echo "PasswordAuthentication yes" >"$PASSWORD_SSH_FILE"
+    say "password SSH stays on through $PASSWORD_SSH_FILE; delete it once a key is in place"
+  fi
+
+  issuer=$(ask "single sign-on issuer, e.g. https://login.microsoftonline.com/<tenant>/v2.0 (empty: passwords)")
+  if [ -n "$issuer" ]; then
+    say "register the redirect address https://$name/auth/callback with it"
+    client_id=$(ask "its client id")
+    [ -n "$GIVEN_OIDC_CLIENT_SECRET" ] || {
+      read -r -s -p "its client secret: " GIVEN_OIDC_CLIENT_SECRET </dev/tty
+      echo >&2
+    }
+  fi
+
+  mkdir -p "$(dirname "$HOST_FILE")"
+  (umask 077 && cat >"$HOST_FILE" <<YAML
+# This host, as tachy-install set it up. Edit it, then run: sudo tachy-install
+# deploy/host/host.example.yml explains every key.
+
+hostname: "$name"
+host_ip: "$address"
+tls: $tls
+tls_email: "$tls_email"
+tls_cert_dir: "$tls_cert_dir"
+update_branch: "$branch"
+oidc_issuer: "$issuer"
+oidc_client_id: "$client_id"
+
+host_profile: $profile
+lan_interface: $interface
+lan_cidrs: $(yaml_list "$reach")
+ssh_allowed_cidrs: $(yaml_list "$ssh_from")
+
+admin_users:
+  - name: $admin
+    ssh_pubkey: "$key"
+
+backup_downloaders: []
+YAML
+  )
+}
+
+# What host.yml may leave out and the playbook needs.
+complete_host() {
+  has_host_key lan_interface || add_host_lines lan_interface "lan_interface: $(lan_interface)"
+
+  if [ "$(host_query count backup_recipients)" -eq 0 ]; then
+    has_host_key backup_recipients && die "backup_recipients is empty in $HOST_FILE; remove the key to have a pair of keys made"
+    mkdir -p "$KIT_DIR"
+    chmod 0700 "$KIT_DIR"
+    local name recipients=()
+    for name in team breakglass; do
+      [ -s "$KIT_DIR/backup-$name.key" ] ||
+        (umask 077 && age-keygen -o "$KIT_DIR/backup-$name.key" 2>/dev/null)
+      recipients+=("$(age-keygen -y "$KIT_DIR/backup-$name.key")")
+    done
+    add_host_lines backup_recipients "
+# Public halves of the two backup keys. The private halves were written to
+# $KIT_DIR and belong in the password manager only.
+backup_recipients:
+  - \"${recipients[0]}\"
+  - \"${recipients[1]}\""
+  fi
+}
+
+# The login the playbook must leave able to use SSH.
+operator() {
+  local admins
+  admins=$(host_query names admin_users)
+  [ -n "$admins" ] || die "$HOST_FILE names no admin_users: nobody could use SSH afterwards"
+  if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
+    grep -qx "$SUDO_USER" <<<"$admins" ||
+      die "$SUDO_USER is not in admin_users in $HOST_FILE: SSH would lock you out"
+    echo "$SUDO_USER"
+  else
+    head -1 <<<"$admins"
+  fi
+}
+
+# The address this run's SSH session comes from; empty at a console. sudo
+# drops SSH_CLIENT, so it is read from the shell that called it.
+ssh_client() {
+  local pid=$$ address=""
+  while [ "${pid:-1}" -gt 1 ] && [ -z "$address" ]; do
+    address=$(tr '\0' '\n' <"/proc/$pid/environ" 2>/dev/null | sed -n 's/^SSH_CLIENT=\([^ ]*\) .*/\1/p')
+    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+  done
+  echo "$address"
+}
+
+# The firewall the playbook loads must still let this session in.
+assert_ssh_stays_open() {
+  local address
+  address=$(ssh_client)
+  [ -n "$address" ] || return 0
+  [ "$(host_query holds ssh_allowed_cidrs "$address")" = yes ] ||
+    die "this SSH session comes from $address, which ssh_allowed_cidrs in $HOST_FILE leaves out: the firewall would cut it off. Add its network there."
+}
+
+EXPORT_DIR=""
+cleanup() { [ -z "$EXPORT_DIR" ] || rm -rf "$EXPORT_DIR"; }
+trap cleanup EXIT
+
+# export_commit <sha>: unpacks the commit's deploy/ from a clone root fetches
+# itself, into $EXPORT_DIR. The checkout in /opt/tachy belongs to the tachy
+# user and is never run as root.
+export_commit() {
+  local commit=$1
+  [[ $commit =~ ^[0-9a-f]{40}$ ]] || die "'$commit' is not a full commit id"
+  if [ -d "$SOURCE_DIR/.git" ]; then
+    git -C "$SOURCE_DIR" fetch -q --prune origin
+  else
+    mkdir -p "$(dirname "$SOURCE_DIR")"
+    git clone -q "$(host_value tachy_repo "$DEFAULT_REPO")" "$SOURCE_DIR"
+  fi
+  [ -n "$(git -C "$SOURCE_DIR" branch -r --contains "$commit" 2>/dev/null)" ] ||
+    die "no branch of $(git -C "$SOURCE_DIR" remote get-url origin) holds $commit"
+  EXPORT_DIR=$(mktemp -d "$(dirname "$SOURCE_DIR")/export.XXXXXX")
+  git -C "$SOURCE_DIR" archive "$commit" deploy | tar -x -C "$EXPORT_DIR"
+}
+
+# run_playbook [commit]: from that commit's export; without one, from the tree
+# this script is in, or from the release the host scripts came from.
+run_playbook() {
+  local commit=${1:-} tree login args=()
+  login=$(operator)
+  assert_ssh_stays_open
+  if [ -n "$commit" ]; then
+    export_commit "$commit"
+    tree=$EXPORT_DIR
+  elif [ -f "$HERE/playbook.yml" ]; then
+    tree=$(readlink -f "$HERE/../..")
+    commit=$(git -C "$tree" rev-parse -q --verify HEAD 2>/dev/null || true)
+  else
+    commit=$(cat "$HOST_RELEASE_FILE" 2>/dev/null || true)
+    [ -n "$commit" ] || die "no $HOST_RELEASE_FILE: run deploy/install.sh from a checkout"
+    export_commit "$commit"
+    tree=$EXPORT_DIR
+  fi
+  $CHECK && args+=(--check --diff)
+  ANSIBLE_DISPLAY_SKIPPED_HOSTS=false ANSIBLE_NOCOWS=1 ANSIBLE_PYTHON_INTERPRETER=auto_silent ansible-playbook \
+    -i localhost, -c local \
+    -e "@$HOST_FILE" -e "ansible_user=$login" -e "host_commit=$commit" \
+    "${args[@]}" "$tree/deploy/host/playbook.yml" >&2
+}
+
+as_tachy() { runuser -u tachy -- "$@"; }
+cli() { dc run --rm -T cli node dist/cli.js "$@"; }
+
+site_url() { echo "https://$(app_env TACHY_HOSTNAME)"; }
+
+# site_get <path>: through Caddy, on the loopback
+site_get() {
+  local name
+  name=$(app_env TACHY_HOSTNAME)
+  curl -fsk -m 10 --resolve "$name:443:127.0.0.1" "https://$name$1"
+}
+
+has_admin() { site_get /api/setup/status 2>/dev/null | grep -q '"bootstrapped":true'; }
+
+setup_code() {
+  dc logs api 2>/dev/null | grep '"event":"setup_code"' | tail -1 |
+    sed -n 's/.*"code":"\([0-9a-f]*\)".*/\1/p'
+}
+
+# The accounts the host scripts act as, once: tachy-watch reads the api with a
+# token, and every deploy's smoke run signs in with a password.
+ensure_accounts() {
+  local domain token password
+  domain=$(account_domain)
+  if [ -z "$(host_env WATCH_API_TOKEN)" ]; then
+    cli service-account "watch@$domain" </dev/null >&2
+    token=$(cli mint-token "watch@$domain" tachy-watch "--days=$WATCH_TOKEN_DAYS" </dev/null | tail -1)
+    [[ $token == tachy_pat_* ]] || die "mint-token did not print a token"
+    put_host_env WATCH_API_TOKEN "$token"
+  fi
+  if [ -z "$(host_env SMOKE_PASSWORD)" ]; then
+    password=$(secret_hex 16)
+    printf '%s' "$password" | cli service-account "smoke@$domain" --password-stdin >&2
+    put_host_env SMOKE_EMAIL "smoke@$domain"
+    put_host_env SMOKE_PASSWORD "$password"
+  fi
+}
+
+# A first start that was cut short is taken up again: every step of it can
+# run twice.
+has_first_deploy() { grep -q '"result":"deployed"' "$TACHY_SRV/deploy.log" 2>/dev/null; }
+
+# Brings the stack up for the first time, on the release --ref names or the
+# head of the followed branch.
+first_start() {
+  local branch ref commit volume
+  branch=$(host_value update_branch)
+  ref=${REF:-${branch:-main}}
+  as_tachy git -C "$TACHY_DIR" fetch -q --all --prune
+  commit=$(as_tachy git -C "$TACHY_DIR" rev-parse -q --verify "origin/$ref^{commit}" ||
+    as_tachy git -C "$TACHY_DIR" rev-parse -q --verify "$ref^{commit}") ||
+    die "the repository has no commit or branch '$ref'"
+
+  volume="$(project)_tachy-postgres-data"
+  if $FRESH && docker volume inspect "$volume" >/dev/null 2>&1; then
+    die "the volume $volume is from an earlier install and holds other passwords than the ones just made. Remove it (docker volume rm $volume), or put that install's .env back, then run this again."
+  fi
+
+  say "starting ${commit:0:12}"
+  as_tachy git -C "$TACHY_DIR" checkout -q --detach "$commit"
+  pin_release "$commit"
+  chown tachy:tachy "$TACHY_DIR/.env"
+  dc up -d --wait postgres >&2
+  ensure_accounts
+  systemctl start tachy
+  if ! wait_ready; then
+    dc logs --tail 50 api >&2 || true
+    die "the stack did not become ready"
+  fi
+  # A deploy of what already runs: the first backup, the first smoke run and
+  # the first line of the deploy log.
+  as_tachy tachy-deploy "$commit" >&2 || die "the first deploy did not pass; see $TACHY_SRV/deploy.log"
+}
+
+export_root_certificate() {
+  [ "$(app_env TACHY_TLS internal)" = internal ] || return 0
+  local root=/etc/tachy/caddy-root.crt
+  dc cp caddy:/data/caddy/pki/authorities/local/root.crt "$root" >/dev/null 2>&1 ||
+    { say "caddy has no root certificate yet"; return 0; }
+  chmod 0644 "$root"
+  [ ! -d "$KIT_DIR" ] || cp "$root" "$KIT_DIR/tachy-root.crt"
+}
+
+root_fingerprint() {
+  openssl x509 -in /etc/tachy/caddy-root.crt -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2
+}
+
+# Into the kit as soon as they exist: a run that stops later has still handed
+# them over.
+keep_generated_secrets() {
+  [ ${#GENERATED[@]} -gt 0 ] || return 0
+  mkdir -p "$KIT_DIR"
+  chmod 0700 "$KIT_DIR"
+  (umask 077 && printf '%s\n' "${GENERATED[@]}" >>"$KIT_DIR/secrets.env")
+}
+
+write_kit_readme() {
+  [ -d "$KIT_DIR" ] || return 0
+  (umask 077 && cat >"$KIT_DIR/README.txt" <<TEXT
+tachy admin kit, written $(utc_now) on $(uname -n)
+
+Site: $(site_url)
+
+Copy this folder to the password manager, then delete it from the host:
+
+  sudo find $KIT_DIR -type f -exec shred -u {} + && sudo rmdir $KIT_DIR
+
+tachy-watch warns while a private key is still here.
+
+backup-team.key, backup-breakglass.key
+  The private halves of the two keys every backup is encrypted to. Nothing
+  else can open a backup, and there is no other copy. They must not stay on
+  this host: a backup next to its key is not encrypted.
+
+secrets.env
+  The secrets generated for this install. The running copies are in
+  $TACHY_DIR/.env. TACHY_SECRET_KEY opens every credential stored in the
+  app; without it a restored database has none. TACHY_API_TOKEN, when
+  listed, is for the first start only and is removed by
+  'sudo tachy-install finish'.
+
+tachy-root.crt
+  With caddy's own authority: the root certificate clients install once
+  (deploy/runbooks/tls-client-trust.md). Not a secret.
+  SHA-256 $(root_fingerprint)
+
+Not here, because they can be made again: the watch token and the smoke
+account's password, both in /etc/tachy/tachy.env.
+TEXT
+  )
+}
+
+finish() {
+  has_admin || die "no admin yet: open $(site_url) and run the setup wizard; its setup code is $(setup_code)"
+  if [ -n "$(app_env TACHY_API_TOKEN)" ]; then
+    say "removing the first-start token"
+    sed -i '/^TACHY_API_TOKEN=/d' "$TACHY_DIR/.env"
+    dc stop api worker-light worker-heavy >&2
+    dc up -d >&2
+    wait_ready || die "the stack did not become ready again"
+  fi
+  status
+}
+
+# line <ok|todo|info> <what> <detail>
+line() { printf '%-5s %-18s %s\n' "$1" "$2" "$3"; }
+
+status() {
+  local name release host_release running downloaders alerts=0 key
+  name=$(app_env TACHY_HOSTNAME)
+  [ -n "$name" ] || die "no stack is configured in $TACHY_DIR/.env"
+
+  running=$(app_env TACHY_COMMIT)
+  line info release "${running:-none} ($(app_env TACHY_IMAGE))"
+  site_get /readyz 2>/dev/null | grep -q '"ready":true' && line ok stack "ready at https://$name" ||
+    line todo stack "not ready: docker compose logs api, in $TACHY_DIR"
+  host_release=$(cat "$HOST_RELEASE_FILE" 2>/dev/null || true)
+  release=$(as_tachy git -C "$TACHY_DIR" rev-parse -q --verify HEAD 2>/dev/null || true)
+  if [ -n "$host_release" ] && [ "$host_release" = "$release" ]; then
+    line ok "host scripts" "from ${host_release:0:12}, the release that runs"
+  else
+    line info "host scripts" "from ${host_release:0:12}; the stack runs ${release:0:12}"
+  fi
+
+  if has_admin; then
+    line ok admin "exists"
+    if [ -n "$(app_env TACHY_API_TOKEN)" ]; then
+      line todo "first-start token" "still in $TACHY_DIR/.env: sudo tachy-install finish"
+    else
+      line ok "first-start token" "removed"
+    fi
+  else
+    line todo admin "none yet: open https://$name and run the wizard; setup code $(setup_code)"
+  fi
+
+  if [ -n "$(app_env OIDC_ISSUER)" ]; then
+    line ok sign-in "single sign-on, $(app_env OIDC_ISSUER)"
+  else
+    line info sign-in "passwords"
+  fi
+
+  case "$(app_env TACHY_TLS internal)" in
+  internal)
+    if [ -s /etc/tachy/caddy-root.crt ]; then
+      line ok certificate "caddy's own authority; root /etc/tachy/caddy-root.crt, SHA-256 $(root_fingerprint)"
+    else
+      line todo certificate "caddy's own authority; its root is not exported yet"
+    fi
+    ;;
+  /certs/*) line ok certificate "files in $(app_env TACHY_TLS_CERT_DIR)" ;;
+  *) line ok certificate "let's encrypt, $(app_env TACHY_TLS)" ;;
+  esac
+
+  if [ -e "$PASSWORD_SSH_FILE" ]; then
+    line todo ssh "password login is on: delete $PASSWORD_SSH_FILE once keys work, then systemctl restart ssh"
+  else
+    line ok ssh "keys only"
+  fi
+
+  if [ -n "$(host_env TACHY_UPDATE_BRANCH)" ]; then
+    line ok updates "follows $(host_env TACHY_UPDATE_BRANCH) at night"
+  else
+    line info updates "by hand: tachy-deploy <commit|branch>"
+  fi
+
+  [ -n "$(host_env WATCH_API_TOKEN)" ] && line ok "watch token" "set" ||
+    line todo "watch token" "missing: tachy-watch cannot read the api"
+  [ -n "$(host_env SMOKE_PASSWORD)" ] && line ok "smoke account" "$(host_env SMOKE_EMAIL)" ||
+    line todo "smoke account" "missing: deploys need --skip-smoke"
+
+  [ -n "$(host_env TEAMS_WEBHOOK_URL)" ] && line ok alerts "teams webhook set" ||
+    line todo alerts "no TEAMS_WEBHOOK_URL in $TACHY_ENV_FILE: tachy-watch alerts nobody"
+  for key in HC_BACKUP_URL HC_RESTORE_URL HC_WATCH_URL; do
+    [ -z "$(host_env "$key")" ] || alerts=$((alerts + 1))
+  done
+  [ "$alerts" -eq 3 ] && line ok heartbeats "3 of 3 set" ||
+    line todo heartbeats "$alerts of 3 set in $TACHY_ENV_FILE: a dead host goes unnoticed"
+
+  downloaders=$(host_query count backup_downloaders)
+  line info "backup keys" "$(host_query count backup_recipients) recipients"
+  [ "$downloaders" -gt 0 ] && line ok downloaders "$downloaders" ||
+    line todo downloaders "none in $HOST_FILE: backups stay on this disk"
+
+  if compgen -G "$KIT_DIR/*.key" >/dev/null; then
+    line todo "admin kit" "$KIT_DIR still holds the backup private keys"
+  else
+    line ok "admin kit" "no private key on the host"
+  fi
+
+  docker info --format '{{range $name, $_ := .Runtimes}}{{$name}} {{end}}' 2>/dev/null | grep -qw runsc &&
+    line ok sandboxes "gVisor runtime registered" ||
+    line todo sandboxes "docker has no runsc runtime"
+}
+
+wait_for_wizard() {
+  say ""
+  say "open $(site_url) and run the setup wizard. setup code: $(setup_code)"
+  say "waiting for it; ctrl-c is safe, 'sudo tachy-install finish' picks up from here"
+  until has_admin; do sleep "$WIZARD_POLL_SECONDS"; done
+  finish
+}
+
+case "$COMMAND" in
+host)
+  [ -f "$HOST_FILE" ] || die "no $HOST_FILE"
+  run_playbook "$COMMIT"
+  exit 0
+  ;;
+finish)
+  finish
+  exit 0
+  ;;
+status)
+  status
+  exit 0
+  ;;
+esac
+
+# A dropped SSH session takes the terminal with it, not the install or its
+# record.
+trap '' HUP
+(umask 077 && touch "$INSTALL_LOG")
+exec > >(tee --output-error=warn -a "$INSTALL_LOG") 2>&1
+say "tachy-install $(utc_now)"
+
+ensure_prerequisites
+if [ ! -f "$HOST_FILE" ]; then
+  $UNATTENDED && die "--unattended needs $HOST_FILE; deploy/host/host.example.yml is the model"
+  ask_host
+fi
+complete_host
+run_playbook
+render_env
+chown tachy:tachy "$TACHY_DIR/.env"
+keep_generated_secrets
+
+if ! has_first_deploy; then
+  first_start
+  export_root_certificate
+fi
+write_kit_readme
+
+say ""
+status
+if [ -d "$KIT_DIR" ]; then
+  say ""
+  say "the admin kit is in $KIT_DIR: copy it to the password manager, then delete it"
+fi
+if ! has_admin; then
+  if $UNATTENDED; then
+    say "open $(site_url) and run the setup wizard, then: sudo tachy-install finish"
+  else
+    wait_for_wizard
+  fi
+fi
