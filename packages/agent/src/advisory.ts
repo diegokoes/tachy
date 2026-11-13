@@ -24,6 +24,8 @@ export interface Advisory {
    * them has already checked that redaction allows it.
    */
   images?: ModelImage[];
+  /** Scrubs the prompt with the org's switch off too: its text comes off a redacting connection. */
+  redact?: boolean;
   /** "cheap" for a quick verdict, "caller" when the judgement is the product. */
   tier: "cheap" | "caller";
   timeoutMs: number;
@@ -50,8 +52,8 @@ export async function runAdvisory(
   if (!agentAuth) return null;
 
   const tokens = new TokenMap();
-  const scrub = (text: string) =>
-    settings.redaction_global.value ? scrubText(text, tokens) : text;
+  const redacts = settings.redaction_global.value || advisory.redact === true;
+  const scrub = (text: string) => (redacts ? scrubText(text, tokens) : text);
   const model =
     advisory.tier === "cheap" ? CHEAP_MODEL : prefs.agent_model.value;
   const allowedModels = settings.allowed_models.value;

@@ -154,11 +154,13 @@ export async function reviewTicket(
   request: ReviewRequest,
   ctx: ScopeContext,
   userId: string | null,
+  opts: { redact?: boolean } = {},
 ): Promise<TicketReview> {
   const text = await runAdvisory(
     {
       system: SYSTEM,
       prompt: (scrub) => reviewPrompt(request, scrub),
+      redact: opts.redact,
       tier: "caller",
       timeoutMs: 90_000,
       mode: "review",
