@@ -2,8 +2,10 @@
  * The archive of what past work items taught: searching it, adding to it, and
  * correcting an entry once it exists.
  */
+import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import {
+  assertKnowledgeUpdateApplies,
   listEntryTickets,
   nearDuplicateEntries,
   prepareKnowledgeEntry,
@@ -23,7 +25,11 @@ import { insertOrProposeEntry, updateOrProposeEntry } from "@tachy/core/review";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import { resolveCustomerFilter } from "@tachy/core/catalog";
 import { DUPLICATE_FLOOR } from "@tachy/core/search";
-import type { KnowledgeUpdateInput } from "@tachy/core/knowledge";
+import type {
+  KnowledgeUpdateInput,
+  PreparedEntry,
+} from "@tachy/core/knowledge";
+import type { ActorRef } from "@tachy/core/library";
 import { tool } from "../server";
 import { GRADE_NOTE, out, searchOut, outScrubbed } from "../results";
 import {
@@ -113,169 +119,193 @@ const DUPLICATE_NEXT =
 const PROPOSED_NOTE =
   "Not live yet: the user does not curate this product's team, so this waits for a team admin under library › review, and search does not return it until it is accepted. Say that in one line. Do not retry, and do not call it saved or published.";
 
+const entryDraftFields = {
+  work_item_id: z.string().optional(),
+  product_slug: z
+    .string()
+    .optional()
+    .describe(
+      "Product slug or alias - the normal way to scope an entry. Required for manual entries that set component.",
+    ),
+  team_slug: z.string().optional().describe("Team slug or alias."),
+  product_id: z
+    .string()
+    .optional()
+    .describe(
+      "Product UUID - only if you already hold one (e.g. from fetch_work_item); otherwise use product_slug.",
+    ),
+  team_id: z
+    .string()
+    .optional()
+    .describe("Team UUID - otherwise use team_slug."),
+  customer_slug: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      "Set ONLY when the lesson is true of one customer's install and not of the product - their addon, their configuration, their version. It is not inherited from the ticket, and whose ticket it was is not the test: most problems found on a customer's ticket are the product's behaviour and must stay general, or they will not be found for anyone else. Setting it makes every future answer cite the entry as that customer's case.",
+    ),
+  unit: z
+    .string()
+    .optional()
+    .describe(
+      "Which part of that customer's estate it was learned on - a unit slug from list_customer_units. Needs customer_slug. When the entry comes from a ticket already filed against a unit AND you name that same customer, it is inherited automatically, so pass this only to override.",
+    ),
+  status: knowledgeStatusSchema.optional(),
+  title: entryTitleSchema.describe(
+    'The one line the library lists the entry by: what fails and where, in under ten words, e.g. "Printer error 023 on labels with many variable fields".',
+  ),
+  issue_summary: z
+    .string()
+    .optional()
+    .describe(
+      "One-paragraph summary of the problem, with error codes and key symptoms inline.",
+    ),
+  symptoms: symptomsField,
+  signals: signalsField,
+  root_cause: z
+    .string()
+    .optional()
+    .describe(
+      "The underlying technical cause, stated precisely, with the rule or limit it comes from. Omit rather than guess - an unknown cause means confidence 'low'.",
+    ),
+  resolution: z
+    .string()
+    .optional()
+    .describe(
+      "What was done, or should be done, to fix it, naming the settings it changes and the conditions it needs.",
+    ),
+  investigation: investigationField,
+  resolution_pattern: z
+    .string()
+    .optional()
+    .describe(
+      "Slug from list_resolution_patterns - a controlled vocabulary, never free text. Omit entirely if none fits.",
+    ),
+  component: z
+    .string()
+    .optional()
+    .describe(
+      "Slug or alias from list_components. Unknown values are rejected with nearest-match suggestions.",
+    ),
+  confidence: confidenceSchema
+    .optional()
+    .describe(
+      "How sure you are that the root_cause and resolution written here are CORRECT - a property of this entry, not of the ticket. 'high': cause identified and the fix confirmed to address it. 'medium': plausible cause, fix worked but was never confirmed to be the reason. 'low': cause unknown or guessed. No root_cause means 'low'.",
+    ),
+  tags: tagsField,
+  cloud: cloudSchema
+    .optional()
+    .describe(
+      "Environment the issue was observed in - lowercase slug (e.g. prod, qa, dev). Call list_environments first and reuse an existing value when one fits.",
+    ),
+  resolution_clarity: resolutionClaritySchema
+    .optional()
+    .describe(
+      "Whether the ticket actually ended in a fix - a property of what happened, not of how sure you are. 'clear': a specific fix was applied and the issue confirmed gone. 'partial': mitigated or worked around, the underlying cause still stands. 'unclear': closed with no real resolution - it stopped recurring, the customer went quiet, nobody identified a fix. Independent of confidence: a restart that verifiably fixed it with no known cause is clear + low; a cause you fully understand that was never fixed is unclear + high.",
+    ),
+  hidden_fix: z
+    .boolean()
+    .optional()
+    .describe(
+      "True when the real fix was not visible on the ticket surface - the reporter's described problem and the actual cause diverged. Marks the entries worth reading before trusting a ticket at face value, and is filterable in the library.",
+    ),
+  affected_version: z
+    .string()
+    .optional()
+    .describe(
+      "Product version the issue was observed in. When omitted, seeds automatically from the work item's observed_version.",
+    ),
+  fixed_version: z
+    .string()
+    .optional()
+    .describe("Product version the fix landed in  only when actually known."),
+  related_links: relatedLinksField,
+  confirm_new: z
+    .boolean()
+    .optional()
+    .describe(
+      "Only after a save came back with possible_duplicates and the user says this is a different case.",
+    ),
+};
+
+type EntryDraft = z.infer<z.ZodObject<typeof entryDraftFields>>;
+
+interface PreparedDraft {
+  args: EntryDraft;
+  prepared: PreparedEntry;
+  actor: ActorRef;
+  canEdit: boolean;
+}
+
+/** A save is checked and then run on the same input, so it is embedded once. */
+let lastPrepared: PreparedDraft | undefined;
+
+async function preparedDraft(args: EntryDraft): Promise<PreparedDraft> {
+  if (lastPrepared && isDeepStrictEqual(lastPrepared.args, args))
+    return lastPrepared;
+  const resolved = await resolveScopeIds(args);
+  const productId = args.product_id ?? resolved.productId;
+  const teamId = args.team_id ?? resolved.teamId;
+  const canEdit = await canEditHere(
+    await newEntryScope({ productId, teamId, workItemId: args.work_item_id }),
+  );
+  const actor = await mcpActor();
+  const prepared = await prepareKnowledgeEntry({
+    workItemId: args.work_item_id,
+    productId,
+    teamId,
+    customerSlug: args.customer_slug,
+    unit: args.unit,
+    createdById: await resolveCurrentUserId(),
+    actor,
+    status: args.status ?? "approved",
+    title: args.title,
+    issueSummary: args.issue_summary,
+    symptoms: args.symptoms,
+    signals: args.signals,
+    rootCause: args.root_cause,
+    resolution: args.resolution,
+    investigation: args.investigation,
+    resolutionPattern: args.resolution_pattern,
+    component: args.component,
+    confidence: args.confidence,
+    tags: args.tags,
+    relatedLinks: args.related_links,
+    cloud: args.cloud,
+    resolutionClarity: args.resolution_clarity,
+    hiddenFix: args.hidden_fix,
+    affectedVersion: args.affected_version,
+    fixedVersion: args.fixed_version,
+  });
+  lastPrepared = { args, prepared, actor, canEdit };
+  return lastPrepared;
+}
+
+async function draftRefusal(args: EntryDraft) {
+  const { prepared } = await preparedDraft(args);
+  if (DUPLICATE_FLOOR === undefined || args.confirm_new) return undefined;
+  const duplicates = await nearDuplicateEntries(prepared, DUPLICATE_FLOOR);
+  if (!duplicates.length) return undefined;
+  return outScrubbed({
+    saved: false,
+    possible_duplicates: duplicates,
+    next: DUPLICATE_NEXT,
+  });
+}
+
 tool(
   "save_knowledge_entry",
   {
     description:
       "Persist a knowledge entry. The call is gated by a review box the user can edit before it runs, so draft it and call - do not ask for approval in prose first. resolution_pattern must be an existing slug from list_resolution_patterns (or omitted) - it is not free text. component must be an existing slug/alias from list_components; if the ticket's area is missing from the glossary, call add_component first - it gets its own review box - then save. product_area is derived automatically from the component hierarchy - it is not an input. For manual entries (no work_item_id) that set component, pass product_slug - component slugs resolve within a product.",
-    inputSchema: {
-      work_item_id: z.string().optional(),
-      product_slug: z
-        .string()
-        .optional()
-        .describe(
-          "Product slug or alias - the normal way to scope an entry. Required for manual entries that set component.",
-        ),
-      team_slug: z.string().optional().describe("Team slug or alias."),
-      product_id: z
-        .string()
-        .optional()
-        .describe(
-          "Product UUID - only if you already hold one (e.g. from fetch_work_item); otherwise use product_slug.",
-        ),
-      team_id: z
-        .string()
-        .optional()
-        .describe("Team UUID - otherwise use team_slug."),
-      customer_slug: z
-        .string()
-        .nullable()
-        .optional()
-        .describe(
-          "Set ONLY when the lesson is true of one customer's install and not of the product - their addon, their configuration, their version. It is not inherited from the ticket, and whose ticket it was is not the test: most problems found on a customer's ticket are the product's behaviour and must stay general, or they will not be found for anyone else. Setting it makes every future answer cite the entry as that customer's case.",
-        ),
-      unit: z
-        .string()
-        .optional()
-        .describe(
-          "Which part of that customer's estate it was learned on - a unit slug from list_customer_units. Needs customer_slug. When the entry comes from a ticket already filed against a unit AND you name that same customer, it is inherited automatically, so pass this only to override.",
-        ),
-      status: knowledgeStatusSchema.optional(),
-      title: entryTitleSchema.describe(
-        'The one line the library lists the entry by: what fails and where, in under ten words, e.g. "Printer error 023 on labels with many variable fields".',
-      ),
-      issue_summary: z
-        .string()
-        .optional()
-        .describe(
-          "One-paragraph summary of the problem, with error codes and key symptoms inline.",
-        ),
-      symptoms: symptomsField,
-      signals: signalsField,
-      root_cause: z
-        .string()
-        .optional()
-        .describe(
-          "The underlying technical cause, stated precisely, with the rule or limit it comes from. Omit rather than guess - an unknown cause means confidence 'low'.",
-        ),
-      resolution: z
-        .string()
-        .optional()
-        .describe(
-          "What was done, or should be done, to fix it, naming the settings it changes and the conditions it needs.",
-        ),
-      investigation: investigationField,
-      resolution_pattern: z
-        .string()
-        .optional()
-        .describe(
-          "Slug from list_resolution_patterns - a controlled vocabulary, never free text. Omit entirely if none fits.",
-        ),
-      component: z
-        .string()
-        .optional()
-        .describe(
-          "Slug or alias from list_components. Unknown values are rejected with nearest-match suggestions.",
-        ),
-      confidence: confidenceSchema
-        .optional()
-        .describe(
-          "How sure you are that the root_cause and resolution written here are CORRECT - a property of this entry, not of the ticket. 'high': cause identified and the fix confirmed to address it. 'medium': plausible cause, fix worked but was never confirmed to be the reason. 'low': cause unknown or guessed. No root_cause means 'low'.",
-        ),
-      tags: tagsField,
-      cloud: cloudSchema
-        .optional()
-        .describe(
-          "Environment the issue was observed in - lowercase slug (e.g. prod, qa, dev). Call list_environments first and reuse an existing value when one fits.",
-        ),
-      resolution_clarity: resolutionClaritySchema
-        .optional()
-        .describe(
-          "Whether the ticket actually ended in a fix - a property of what happened, not of how sure you are. 'clear': a specific fix was applied and the issue confirmed gone. 'partial': mitigated or worked around, the underlying cause still stands. 'unclear': closed with no real resolution - it stopped recurring, the customer went quiet, nobody identified a fix. Independent of confidence: a restart that verifiably fixed it with no known cause is clear + low; a cause you fully understand that was never fixed is unclear + high.",
-        ),
-      hidden_fix: z
-        .boolean()
-        .optional()
-        .describe(
-          "True when the real fix was not visible on the ticket surface - the reporter's described problem and the actual cause diverged. Marks the entries worth reading before trusting a ticket at face value, and is filterable in the library.",
-        ),
-      affected_version: z
-        .string()
-        .optional()
-        .describe(
-          "Product version the issue was observed in. When omitted, seeds automatically from the work item's observed_version.",
-        ),
-      fixed_version: z
-        .string()
-        .optional()
-        .describe(
-          "Product version the fix landed in  only when actually known.",
-        ),
-      related_links: relatedLinksField,
-      confirm_new: z
-        .boolean()
-        .optional()
-        .describe(
-          "Only after a save came back with possible_duplicates and the user says this is a different case.",
-        ),
-    },
+    inputSchema: entryDraftFields,
+    check: draftRefusal,
   },
   async (args) => {
-    const resolved = await resolveScopeIds(args);
-    const productId = args.product_id ?? resolved.productId;
-    const teamId = args.team_id ?? resolved.teamId;
-    const canEdit = await canEditHere(
-      await newEntryScope({ productId, teamId, workItemId: args.work_item_id }),
-    );
-    const actor = await mcpActor();
-    const prepared = await prepareKnowledgeEntry({
-      workItemId: args.work_item_id,
-      productId,
-      teamId,
-      customerSlug: args.customer_slug,
-      unit: args.unit,
-      createdById: await resolveCurrentUserId(),
-      actor,
-      status: args.status ?? "approved",
-      title: args.title,
-      issueSummary: args.issue_summary,
-      symptoms: args.symptoms,
-      signals: args.signals,
-      rootCause: args.root_cause,
-      resolution: args.resolution,
-      investigation: args.investigation,
-      resolutionPattern: args.resolution_pattern,
-      component: args.component,
-      confidence: args.confidence,
-      tags: args.tags,
-      relatedLinks: args.related_links,
-      cloud: args.cloud,
-      resolutionClarity: args.resolution_clarity,
-      hiddenFix: args.hidden_fix,
-      affectedVersion: args.affected_version,
-      fixedVersion: args.fixed_version,
-    });
-    const duplicates =
-      DUPLICATE_FLOOR === undefined || args.confirm_new
-        ? []
-        : await nearDuplicateEntries(prepared, DUPLICATE_FLOOR);
-    if (duplicates.length)
-      return outScrubbed({
-        saved: false,
-        possible_duplicates: duplicates,
-        next: DUPLICATE_NEXT,
-      });
+    const { prepared, actor, canEdit } = await preparedDraft(args);
     const saved = await insertOrProposeEntry(prepared, { actor, canEdit });
+    lastPrepared = undefined;
     return out({
       saved: true,
       id: saved.id,
@@ -317,103 +347,107 @@ tool(
   },
 );
 
+const entryPatchFields = {
+  id: z.string(),
+  work_item_id: z
+    .string()
+    .optional()
+    .describe(
+      "The ticket this update draws on (the id fetch_work_item returned). It joins the entry's tickets, so the entry says which cases it rests on. Pass it whenever a ticket is why the entry changes.",
+    ),
+  reason: z
+    .string()
+    .optional()
+    .describe(
+      "Why the entry changes, in one line. A reviewer reads it when the update has to wait for one.",
+    ),
+  status: knowledgeStatusSchema.optional(),
+  title: entryTitleSchema.optional(),
+  issue_summary: z.string().nullable().optional(),
+  root_cause: z.string().nullable().optional(),
+  resolution: z.string().nullable().optional(),
+  investigation: investigationField,
+  resolution_pattern: z.string().nullable().optional(),
+  symptoms: symptomsField,
+  signals: signalsField,
+  tags: tagsField,
+  related_links: relatedLinksField,
+  component: z.string().nullable().optional(),
+  customer_slug: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      "Re-file whose install this was learned on; null makes the lesson general again.",
+    ),
+  superseded_by: z.string().nullable().optional(),
+  confidence: confidenceSchema.nullable().optional(),
+  cloud: cloudSchema
+    .nullable()
+    .optional()
+    .describe(
+      "Environment slug - reuse an existing value from list_environments when one fits; null clears it.",
+    ),
+  resolution_clarity: resolutionClaritySchema.nullable().optional(),
+  hidden_fix: z.boolean().nullable().optional(),
+  affected_version: z
+    .string()
+    .nullable()
+    .optional()
+    .describe("Product version the issue was observed in; null clears it."),
+  fixed_version: z
+    .string()
+    .nullable()
+    .optional()
+    .describe("Product version the fix landed in; null clears it."),
+  expected_version: z.number().int().optional(),
+};
+
+function entryPatchOf(
+  args: z.infer<z.ZodObject<typeof entryPatchFields>>,
+): KnowledgeUpdateInput {
+  const patch: KnowledgeUpdateInput = {};
+  if (args.work_item_id !== undefined) patch.workItemId = args.work_item_id;
+  if (args.status !== undefined) patch.status = args.status;
+  if (args.title !== undefined) patch.title = args.title;
+  if (args.issue_summary !== undefined) patch.issueSummary = args.issue_summary;
+  if (args.root_cause !== undefined) patch.rootCause = args.root_cause;
+  if (args.resolution !== undefined) patch.resolution = args.resolution;
+  if (args.investigation !== undefined)
+    patch.investigation = args.investigation;
+  if (args.resolution_pattern !== undefined)
+    patch.resolutionPattern = args.resolution_pattern;
+  if (args.symptoms !== undefined) patch.symptoms = args.symptoms;
+  if (args.signals !== undefined) patch.signals = args.signals;
+  if (args.tags !== undefined) patch.tags = args.tags;
+  if (args.related_links !== undefined) patch.relatedLinks = args.related_links;
+  if (args.component !== undefined) patch.component = args.component;
+  if (args.customer_slug !== undefined) patch.customerSlug = args.customer_slug;
+  if (args.superseded_by !== undefined) patch.supersededBy = args.superseded_by;
+  if (args.confidence !== undefined) patch.confidence = args.confidence;
+  if (args.cloud !== undefined) patch.cloud = args.cloud;
+  if (args.resolution_clarity !== undefined)
+    patch.resolutionClarity = args.resolution_clarity;
+  if (args.hidden_fix !== undefined) patch.hiddenFix = args.hidden_fix;
+  if (args.affected_version !== undefined)
+    patch.affectedVersion = args.affected_version;
+  if (args.fixed_version !== undefined) patch.fixedVersion = args.fixed_version;
+  if (args.expected_version !== undefined)
+    patch.expectedVersion = args.expected_version;
+  return patch;
+}
+
 tool(
   "update_knowledge_entry",
   {
     description:
       "Update fields on an existing knowledge entry, or change its status. Mark outdated knowledge with status 'deprecated' (it stays searchable but flagged; set superseded_by when a newer entry replaces it) - reserve 'archived' for entries that should vanish from search entirely. Pass only the fields you want to change; omitted fields are left as-is. Nullable fields (issue_summary, root_cause, etc.) accept null to clear them. component takes a slug/alias from list_components (product_area is re-derived from it; null clears both). The search results include 'version' - pass it as expected_version to guard against concurrent edits.",
-    inputSchema: {
-      id: z.string(),
-      work_item_id: z
-        .string()
-        .optional()
-        .describe(
-          "The ticket this update draws on (the id fetch_work_item returned). It joins the entry's tickets, so the entry says which cases it rests on. Pass it whenever a ticket is why the entry changes.",
-        ),
-      reason: z
-        .string()
-        .optional()
-        .describe(
-          "Why the entry changes, in one line. A reviewer reads it when the update has to wait for one.",
-        ),
-      status: knowledgeStatusSchema.optional(),
-      title: entryTitleSchema.optional(),
-      issue_summary: z.string().nullable().optional(),
-      root_cause: z.string().nullable().optional(),
-      resolution: z.string().nullable().optional(),
-      investigation: investigationField,
-      resolution_pattern: z.string().nullable().optional(),
-      symptoms: symptomsField,
-      signals: signalsField,
-      tags: tagsField,
-      related_links: relatedLinksField,
-      component: z.string().nullable().optional(),
-      customer_slug: z
-        .string()
-        .nullable()
-        .optional()
-        .describe(
-          "Re-file whose install this was learned on; null makes the lesson general again.",
-        ),
-      superseded_by: z.string().nullable().optional(),
-      confidence: confidenceSchema.nullable().optional(),
-      cloud: cloudSchema
-        .nullable()
-        .optional()
-        .describe(
-          "Environment slug - reuse an existing value from list_environments when one fits; null clears it.",
-        ),
-      resolution_clarity: resolutionClaritySchema.nullable().optional(),
-      hidden_fix: z.boolean().nullable().optional(),
-      affected_version: z
-        .string()
-        .nullable()
-        .optional()
-        .describe("Product version the issue was observed in; null clears it."),
-      fixed_version: z
-        .string()
-        .nullable()
-        .optional()
-        .describe("Product version the fix landed in; null clears it."),
-      expected_version: z.number().int().optional(),
-    },
+    inputSchema: entryPatchFields,
+    check: (args) => assertKnowledgeUpdateApplies(args.id, entryPatchOf(args)),
   },
   async (args) => {
     const canEdit = await canEditHere(await knowledgeEntryScope(args.id));
-    const patch: KnowledgeUpdateInput = {};
-    if (args.work_item_id !== undefined) patch.workItemId = args.work_item_id;
-    if (args.status !== undefined) patch.status = args.status;
-    if (args.title !== undefined) patch.title = args.title;
-    if (args.issue_summary !== undefined)
-      patch.issueSummary = args.issue_summary;
-    if (args.root_cause !== undefined) patch.rootCause = args.root_cause;
-    if (args.resolution !== undefined) patch.resolution = args.resolution;
-    if (args.investigation !== undefined)
-      patch.investigation = args.investigation;
-    if (args.resolution_pattern !== undefined)
-      patch.resolutionPattern = args.resolution_pattern;
-    if (args.symptoms !== undefined) patch.symptoms = args.symptoms;
-    if (args.signals !== undefined) patch.signals = args.signals;
-    if (args.tags !== undefined) patch.tags = args.tags;
-    if (args.related_links !== undefined)
-      patch.relatedLinks = args.related_links;
-    if (args.component !== undefined) patch.component = args.component;
-    if (args.customer_slug !== undefined)
-      patch.customerSlug = args.customer_slug;
-    if (args.superseded_by !== undefined)
-      patch.supersededBy = args.superseded_by;
-    if (args.confidence !== undefined) patch.confidence = args.confidence;
-    if (args.cloud !== undefined) patch.cloud = args.cloud;
-    if (args.resolution_clarity !== undefined)
-      patch.resolutionClarity = args.resolution_clarity;
-    if (args.hidden_fix !== undefined) patch.hiddenFix = args.hidden_fix;
-    if (args.affected_version !== undefined)
-      patch.affectedVersion = args.affected_version;
-    if (args.fixed_version !== undefined)
-      patch.fixedVersion = args.fixed_version;
-    if (args.expected_version !== undefined)
-      patch.expectedVersion = args.expected_version;
-    const row = await updateOrProposeEntry(args.id, patch, {
+    const row = await updateOrProposeEntry(args.id, entryPatchOf(args), {
       actor: await mcpActor(),
       canEdit,
       note: args.reason,

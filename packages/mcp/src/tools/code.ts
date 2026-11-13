@@ -26,7 +26,7 @@ import {
 import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
 import { GRADE_NOTE, out, outScrubbed, searchOut } from "../results";
-import { resolveScopeIds } from "../context";
+import { COMPONENT_NEEDS_PRODUCT, resolveScopeIds } from "../context";
 import { MAX_CODE_RANGE_LINES } from "../fields";
 
 const PROJECT_FIELD =
@@ -114,6 +114,7 @@ tool(
   },
   async ({ product_slug, component, customer, project }) => {
     const { productId } = await resolveScopeIds({ product_slug });
+    if (component && !productId) throw badInput(COMPONENT_NEEDS_PRODUCT);
     const inProject = await scopedRepoSlugs({ project });
     const listed = await listRepos({
       productId,
@@ -210,8 +211,7 @@ tool(
     limit,
   }) => {
     const { productId } = await resolveScopeIds({ product_slug });
-    if (component && !productId)
-      throw badInput("component needs product_slug to resolve against");
+    if (component && !productId) throw badInput(COMPONENT_NEEDS_PRODUCT);
     const repoSlugs = await scopedRepoSlugs({ repo, repos, project });
     const hits = await searchCode(query, {
       repoSlugs,

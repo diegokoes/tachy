@@ -36,7 +36,7 @@ class ScriptedTurn implements AgentTurn {
   finished = false;
   pendingApprovals = 0;
   oldestPendingApprovalAt = null;
-  approve() {}
+  async approve() {}
   abort() {}
   async *events(): AsyncGenerator<AgentEvent> {
     yield SESSION;

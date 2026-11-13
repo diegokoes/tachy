@@ -8,3 +8,4 @@ export * from "./background";
 export * from "./schema-stamp";
 export * from "./issues";
 export * from "./known-secrets";
+export * from "./check-tool";

@@ -407,7 +407,7 @@ export const agent = new Hono()
     // unattributed turn would open it to anyone who guesses its id.
     if (entry.email !== email)
       throw forbidden("only the user who started this turn can approve it");
-    entry.turn.approve(id, { approve, message, updatedInput });
+    await entry.turn.approve(id, { approve, message, updatedInput });
     return c.json({ ok: true });
   })
 

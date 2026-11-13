@@ -50,9 +50,9 @@ tool(
         .optional(),
       config: z.record(z.string(), z.any()).optional(),
     },
+    check: () => requireGlobalAdmin(),
   },
   async (args) => {
-    await requireGlobalAdmin();
     return out(
       await audited("source_connection_save", args.slug, () =>
         addSourceConnection({
@@ -145,16 +145,18 @@ tool(
         ),
       notes: z.string().optional(),
     },
+    check: async ({ product_slug, team_slug }) => {
+      if (product_slug)
+        await requireCanEdit({
+          productId: await getProductIdBySlug(product_slug),
+        });
+      else
+        await requireCanManageTeam(
+          team_slug ? await getTeamIdBySlug(team_slug) : null,
+        );
+    },
   },
   async (args) => {
-    if (args.product_slug)
-      await requireCanEdit({
-        productId: await getProductIdBySlug(args.product_slug),
-      });
-    else
-      await requireCanManageTeam(
-        args.team_slug ? await getTeamIdBySlug(args.team_slug) : null,
-      );
     return out(
       await addSourceProject({
         sourceSlug: args.source_slug,
@@ -180,9 +182,10 @@ tool(
       area_prefix: z.string(),
       component: z.string(),
     },
+    check: async ({ source_project_id }) =>
+      requireCanEdit(await sourceProjectScope(source_project_id)),
   },
   async (args) => {
-    await requireCanEdit(await sourceProjectScope(args.source_project_id));
     return out(
       await setProjectAreaMap({
         sourceProjectId: args.source_project_id,

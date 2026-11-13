@@ -40,20 +40,25 @@ export abstract class TurnBase implements AgentTurn {
     return this.queue.iterator();
   }
 
-  approve(id: string, decision: Decision): void {
+  async approve(id: string, decision: Decision): Promise<void> {
     const entry = this.pending.get(id);
     if (!entry) return;
     const problem =
       decision.approve && decision.updatedInput
-        ? this.editProblem(entry.tool, decision.updatedInput)
+        ? await this.editProblem(entry.tool, decision.updatedInput)
         : null;
     if (problem) throw badInput(`the edited input does not fit: ${problem}`);
+    // Answered or timed out while the edit was checked.
+    if (this.pending.get(id) !== entry) return;
     this.pending.delete(id);
     entry.resolve(decision);
   }
 
-  /** Why the input a person approved does not fit `tool`, or null. */
-  protected editProblem(_tool: string, _input: unknown): string | null {
+  /** Why `tool` would refuse the input a person approved, or null. */
+  protected async editProblem(
+    _tool: string,
+    _input: unknown,
+  ): Promise<string | null> {
     return null;
   }
 

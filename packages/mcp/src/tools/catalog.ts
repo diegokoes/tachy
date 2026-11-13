@@ -66,9 +66,9 @@ tool(
     description:
       "Add a new resolution_pattern slug to the controlled vocabulary. Call ONLY when the user explicitly asks to add a new pattern - never invent one just to tag a ticket; leave resolution_pattern unset instead.",
     inputSchema: { slug: z.string(), description: z.string() },
+    check: () => requireAnyTeamAdmin(),
   },
   async ({ slug, description }) => {
-    await requireAnyTeamAdmin();
     return out(
       await audited("catalog_add", `pattern:${slug}`, () =>
         addResolutionPattern(slug, description),
@@ -102,10 +102,11 @@ tool(
       description: z.string().optional(),
       aliases: z.array(z.string()).optional(),
     },
+    check: async ({ product_slug }) =>
+      requireCanEdit({ productId: await getProductIdBySlug(product_slug) }),
   },
   async (args) => {
     const productId = await getProductIdBySlug(args.product_slug);
-    await requireCanEdit({ productId });
     return out(
       await audited(
         "catalog_add",
@@ -178,13 +179,18 @@ tool(
         .optional()
         .describe("A product the customer uses, linked as it is added."),
     },
+    check: async ({ product_slug }) => {
+      await requireAnyTeamAdmin();
+      if (product_slug)
+        await requireCanEdit({
+          productId: await getProductIdBySlug(product_slug),
+        });
+    },
   },
   async (args) => {
-    await requireAnyTeamAdmin();
     const productId = args.product_slug
       ? await getProductIdBySlug(args.product_slug)
       : null;
-    if (productId) await requireCanEdit({ productId });
     return out(
       await audited("catalog_add", `customer:${args.slug}`, async () =>
         addCustomer(
@@ -331,14 +337,18 @@ tool(
         .describe("Other names the site calls it by."),
       notes: z.string().optional(),
     },
+    check: async ({ customer, product_slug }) => {
+      await requireAnyTeamAdmin();
+      await requireCustomerPartEditor(
+        await getCustomerIdBySlug(customer),
+        product_slug ? await getProductIdBySlug(product_slug) : null,
+      );
+    },
   },
   async (args) => {
-    await requireAnyTeamAdmin();
-    const customerId = await getCustomerIdBySlug(args.customer);
     const productId = args.product_slug
       ? await getProductIdBySlug(args.product_slug)
       : null;
-    await requireCustomerPartEditor(customerId, productId);
     return out(
       await audited(
         "catalog_add",
@@ -420,12 +430,14 @@ tool(
           "Id of the library doc that details this fact - a drawing, an interface spec. null removes the link.",
         ),
     },
+    check: async (args) => {
+      await requireAnyTeamAdmin();
+      const customerId = await getCustomerIdBySlug(args.customer);
+      const unit = args.unit ? await resolveUnit(customerId, args.unit) : null;
+      await requireCustomerPartEditor(customerId, unit?.product_id ?? null);
+    },
   },
   async (args) => {
-    await requireAnyTeamAdmin();
-    const customerId = await getCustomerIdBySlug(args.customer);
-    const unit = args.unit ? await resolveUnit(customerId, args.unit) : null;
-    await requireCustomerPartEditor(customerId, unit?.product_id ?? null);
     return out(
       await audited("catalog_update", `customer:${args.customer}`, async () =>
         setCustomerFact(
@@ -462,11 +474,15 @@ tool(
       linked: z.boolean().optional().describe("false removes the link"),
       notes: z.string().optional(),
     },
+    check: async ({ product_slug }) => {
+      await requireAnyTeamAdmin();
+      await requireCanEdit({
+        productId: await getProductIdBySlug(product_slug),
+      });
+    },
   },
   async (args) => {
-    await requireAnyTeamAdmin();
     const productId = await getProductIdBySlug(args.product_slug);
-    await requireCanEdit({ productId });
     return out(
       await audited("catalog_update", `customer:${args.customer}`, async () => {
         const actor = await mcpActor();
@@ -529,10 +545,11 @@ tool(
         )
         .optional(),
     },
+    check: async ({ product_slug }) =>
+      requireCanEdit({ productId: await getProductIdBySlug(product_slug) }),
   },
   async (args) => {
     const productId = await getProductIdBySlug(args.product_slug);
-    await requireCanEdit({ productId });
     return out(
       await audited(
         "catalog_add",
@@ -569,9 +586,9 @@ tool(
     description:
       "Add (or rename) a team. The slug is a short kebab-case identifier used by all other tools.",
     inputSchema: { slug: z.string(), name: z.string() },
+    check: () => requireGlobalAdmin(),
   },
   async ({ slug, name }) => {
-    await requireGlobalAdmin();
     return out(
       await audited("catalog_add", `team:${slug}`, () => addTeam(slug, name)),
     );
@@ -600,9 +617,10 @@ tool(
       name: z.string(),
       aliases: z.array(z.string()).optional(),
     },
+    check: async ({ team_slug }) =>
+      requireCanManageTeam(await getTeamIdBySlug(team_slug)),
   },
   async ({ team_slug, slug, name, aliases }) => {
-    await requireCanManageTeam(await getTeamIdBySlug(team_slug));
     return out(
       await audited("catalog_add", `product:${team_slug}/${slug}`, () =>
         addProduct(team_slug, slug, name, aliases),
@@ -633,10 +651,11 @@ tool(
       slug: z.string(),
       description: z.string().optional(),
     },
+    check: async ({ product_slug }) =>
+      requireCanEdit({ productId: await getProductIdBySlug(product_slug) }),
   },
   async ({ product_slug, slug, description }) => {
     const productId = await getProductIdBySlug(product_slug);
-    await requireCanEdit({ productId });
     return out(
       await audited("catalog_add", `label:${product_slug}/${slug}`, () =>
         addLabel(productId, slug, description),

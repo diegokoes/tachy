@@ -1,8 +1,9 @@
 /** The MCP server itself, and how a tool is declared on it. */
 import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ZodRawShape } from "zod";
+import { z, type ZodRawShape } from "zod";
 import {
   AppError,
+  CHECK_TOOL,
   inBackground,
   log,
   errorText,
@@ -14,10 +15,17 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export const server = new McpServer({ name: "tachy", version: "0.1.0" });
 
+type Check = (args: never) => Promise<unknown>;
+
 export type ToolConfig<I extends ZodRawShape> = {
   description?: string;
   inputSchema?: I;
   annotations?: Record<string, unknown>;
+  /**
+   * What the handler would refuse the call for, writing nothing: it throws, or
+   * returns the result that says why. Runs ahead of the handler on every call.
+   */
+  check?: (args: z.infer<z.ZodObject<I>>) => Promise<unknown>;
 };
 
 /**
@@ -89,6 +97,47 @@ export async function runTool(
   }
 }
 
+const checkedTools = new Map<string, { input: z.ZodType; check: Check }>();
+
+const NOT_REFUSED = { content: [] };
+
+const refusedWith = (message: string) => ({
+  content: [{ type: "text" as const, text: message }],
+  isError: true,
+});
+
+/**
+ * No content for a call that would run, the refusal otherwise. `isError` marks
+ * a refusal the tool throws, which a real call answers the same way.
+ */
+async function checkWrite(tool: string, input: unknown) {
+  const checked = checkedTools.get(tool);
+  if (!checked) return NOT_REFUSED;
+  const args = checked.input.safeParse(input);
+  if (!args.success) return refusedWith(z.prettifyError(args.error));
+  try {
+    const refusal = await checked.check(args.data as never);
+    return refusal ? withSecretsMasked(refusal) : NOT_REFUSED;
+  } catch (err) {
+    return refusedWith(errorText(err));
+  }
+}
+
+server.registerTool(
+  CHECK_TOOL,
+  {
+    description:
+      "Dry run of a write tool: says why the call would be refused (rights, an unknown slug, a duplicate), or nothing when it would run. Writes nothing.",
+    inputSchema: {
+      tool: z.string(),
+      input: z.record(z.string(), z.unknown()),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  (async ({ tool, input }: { tool: string; input: unknown }) =>
+    checkWrite(tool, input)) as never,
+);
+
 /**
  * Tools with no readOnlyHint whose only write is caching the ticket they were
  * asked to read. The hint is left alone - it is also what an MCP client decides
@@ -104,13 +153,18 @@ export function tool<I extends ZodRawShape>(
 ): void {
   const writes =
     config.annotations?.readOnlyHint !== true && !CACHES_ONLY.has(name);
+  const { check, ...registered } = config;
+  const run = handler as (args: unknown, extra: unknown) => unknown;
+  const checkedRun = check
+    ? async (args: unknown, extra: unknown) =>
+        (await check(args as never)) ?? run(args, extra)
+    : run;
+  if (check)
+    checkedTools.set(name, {
+      input: z.object(config.inputSchema ?? {}),
+      check: check as Check,
+    });
   const wrapped = ((args: unknown, extra: unknown) =>
-    runTool(
-      name,
-      handler as (args: unknown, extra: unknown) => unknown,
-      args,
-      extra,
-      writes,
-    )) as ToolCallback<I>;
-  server.registerTool(name, config as never, wrapped);
+    runTool(name, checkedRun, args, extra, writes)) as ToolCallback<I>;
+  server.registerTool(name, registered as never, wrapped);
 }

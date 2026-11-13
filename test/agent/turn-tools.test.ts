@@ -7,6 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  editNote,
   startTurnTools,
   type TurnTools,
 } from "../../packages/agent/src/turn-tools";
@@ -36,7 +37,7 @@ describe("a turn's tools", () => {
     tools = await startTurnTools({
       command: process.execPath,
       args: [STUB_TOOLS],
-      env: { STUB_TOOLS_LOG: toolsLog },
+      env: { STUB_TOOLS_LOG: toolsLog, STUB_TOOLS_CHECK: "1" },
       cwd: dir,
     });
     const [claudeSide, toolsSide] = InMemoryTransport.createLinkedPair();
@@ -109,6 +110,46 @@ describe("a turn's tools", () => {
     expect(tools.inputProblem("no_such_tool", {})).toBeNull();
   });
 
+  it("asks the tools process why it would refuse a write, running nothing", async () => {
+    await claudeCode.listTools();
+    expect(await tools.refusal("post_private_note", NOTE)).toBeNull();
+    expect(
+      await tools.refusal("post_private_note", { ...NOTE, body: "forbidden" }),
+    ).toEqual({ text: "no right to post here", thrown: true });
+    expect(
+      await tools.refusal("post_private_note", { ...NOTE, body: "duplicate" }),
+    ).toEqual({ text: "already posted", thrown: false });
+    expect(ran()).toEqual([]);
+  });
+
+  it("keeps the check to itself: a model can neither see it nor call it", async () => {
+    const { tools: offered } = await claudeCode.listTools();
+    expect(offered.map((tool) => tool.name)).not.toContain("check_write");
+    const called = await call("check_write", {
+      tool: "post_private_note",
+      input: NOTE,
+    });
+    expect(called.isError).toBe(true);
+  });
+
+  it("tells the model what the person changed, after the tool's own result", async () => {
+    const edited = { ...NOTE, body: "edited" };
+    tools.allow("post_private_note", edited, NOTE);
+    expect((await call("post_private_note", edited)).content).toEqual([
+      { type: "text", text: "posted" },
+      {
+        type: "text",
+        text: expect.stringContaining(
+          'their values, not yours: {"body":"edited"}',
+        ),
+      },
+    ]);
+    tools.allow("post_private_note", NOTE, NOTE);
+    expect((await call("post_private_note", NOTE)).content).toEqual([
+      { type: "text", text: "posted" },
+    ]);
+  });
+
   it("holds a URL fetch for approval, but not pasted text", async () => {
     const fetched = await call("ingest_context", {
       urls: ["https://example.com/page"],
@@ -117,6 +158,45 @@ describe("a turn's tools", () => {
     expect(fetched.isError).toBe(true);
     expect(pasted.isError).toBeFalsy();
     expect(ran()).toEqual(["ingest_context text"]);
+  });
+});
+
+describe("a turn's tools with no check to ask", () => {
+  it("find no refusal, and ask nothing", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "tachy-turn-tools-"));
+    const tools = await startTurnTools({
+      command: process.execPath,
+      args: [STUB_TOOLS],
+      env: { STUB_TOOLS_LOG: join(dir, "tools.log") },
+      cwd: dir,
+    });
+    const [claudeSide, toolsSide] = InMemoryTransport.createLinkedPair();
+    await tools.server.connect(toolsSide);
+    const claudeCode = new Client({ name: "claude-code", version: "1" });
+    await claudeCode.connect(claudeSide);
+    await claudeCode.listTools();
+    expect(
+      await tools.refusal("post_private_note", { ...NOTE, body: "forbidden" }),
+    ).toBeNull();
+    await claudeCode.close();
+    await tools.close();
+  });
+});
+
+describe("what a result says of a person's edit", () => {
+  it("names each changed field with its value, a long one cut, a removed one null", () => {
+    const note = editNote(
+      { title: "draft", body: "kept", tags: ["a"] },
+      { title: "theirs", body: "kept", resolution: "x".repeat(400) },
+    );
+    expect(note).toContain('"title":"theirs"');
+    expect(note).toContain('"tags":null');
+    expect(note).toContain(`"resolution":"${"x".repeat(300)}…"`);
+    expect(note).not.toContain("kept");
+  });
+
+  it("is nothing when they changed nothing", () => {
+    expect(editNote({ body: "same" }, { body: "same" })).toBeNull();
   });
 });
 

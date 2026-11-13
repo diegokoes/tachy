@@ -173,6 +173,22 @@ describe("Claude Code under tachy's options", () => {
     expect(turn.ran).toContain("post_private_note edited by the person");
   });
 
+  it("tells the model of the edit, which its own transcript does not hold", () => {
+    const blocks = model
+      .transcript()
+      .flatMap((message) =>
+        Array.isArray(message.content)
+          ? (message.content as Record<string, any>[])
+          : [],
+      );
+    const drafted = blocks.filter((block) => block.type === "tool_use").at(-1);
+    const result = blocks
+      .filter((block) => block.type === "tool_result")
+      .at(-1);
+    expect(drafted?.input.body).toBe("note");
+    expect(JSON.stringify(result?.content)).toContain("edited by the person");
+  });
+
   it("sends a write its schema refuses back to the model, unasked and unrun", () => {
     const notes = turn.results.filter(
       (result) => result.tool === `${TACHY}post_private_note`,

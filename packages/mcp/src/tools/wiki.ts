@@ -22,6 +22,12 @@ import { tool } from "../server";
 import { out, outScrubbed } from "../results";
 import { mcpActor, requireCanEdit } from "../permissions";
 
+/** `productSlug` undefined: the org-wide wiki. */
+async function requireWikiEditor(productSlug: string | undefined) {
+  const productId = productSlug ? await getProductIdBySlug(productSlug) : null;
+  await requireCanEdit(productId ? { productId } : {});
+}
+
 tool(
   "draft_wiki_page",
   {
@@ -131,12 +137,12 @@ tool(
           "Component slugs this section covers, for per-section coverage and gaps. A section may bundle several. Omit to leave the section purely editorial.",
         ),
     },
+    check: ({ product_slug }) => requireWikiEditor(product_slug),
   },
   async (args) => {
     const productId = args.product_slug
       ? await getProductIdBySlug(args.product_slug)
       : null;
-    await requireCanEdit(productId ? { productId } : {});
     return out(
       await addWikiCategory({
         productId,
@@ -161,10 +167,10 @@ tool(
         .string()
         .describe("The product whose components seed the sections."),
     },
+    check: ({ product_slug }) => requireWikiEditor(product_slug),
   },
   async (args) => {
     const productId = await getProductIdBySlug(args.product_slug);
-    await requireCanEdit({ productId });
     const { created } = await seedSectionsFromComponents(productId);
     return out({
       created,
@@ -215,12 +221,12 @@ tool(
       status: referenceStatusSchema.optional(),
       doc_version: z.string().optional(),
     },
+    check: ({ product_slug }) => requireWikiEditor(product_slug),
   },
   async (args) => {
     const productId = args.product_slug
       ? await getProductIdBySlug(args.product_slug)
       : null;
-    await requireCanEdit(productId ? { productId } : {});
 
     // Only "no such article" takes the create branch. Any other failure
     // rethrows, or a transient one would insert a second row at the same slug.

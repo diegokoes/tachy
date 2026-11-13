@@ -357,14 +357,15 @@ describe("turnCanUseTool", () => {
     decision: Decision,
     inputProblem: () => string | null = () => null,
   ) {
-    const handed: { tool: string; input: Record<string, unknown> }[] = [];
+    const handed: Record<string, unknown>[] = [];
     const announced: string[] = [];
     const gate = gateWith(decision);
     const canUseTool = turnCanUseTool({
       gate,
       tools: {
-        allow: (tool, input) => handed.push({ tool, input }),
+        allow: (tool, input, drafted) => handed.push({ tool, input, drafted }),
         inputProblem,
+        refusal: async () => null,
       },
       onWriteAllowed: ({ tool }) => announced.push(tool),
     });
@@ -382,7 +383,11 @@ describe("turnCanUseTool", () => {
       USE as never,
     );
     expect(turn.handed).toEqual([
-      { tool: "post_private_note", input: { body: "edited" } },
+      {
+        tool: "post_private_note",
+        input: { body: "edited" },
+        drafted: { body: "draft" },
+      },
     ]);
     expect(turn.announced).toEqual(["post_private_note"]);
   });
@@ -500,7 +505,7 @@ describe("TurnBase approval lifecycle", () => {
   it("resolves a pending approval through approve()", async () => {
     const turn = new FakeTurn();
     const pending = turn.ask("a1");
-    turn.approve("a1", { approve: true, updatedInput: { x: 1 } });
+    await turn.approve("a1", { approve: true, updatedInput: { x: 1 } });
     expect(await pending).toEqual({ approve: true, updatedInput: { x: 1 } });
     expect(turn.finished).toBe(false);
     turn.end();
@@ -509,7 +514,7 @@ describe("TurnBase approval lifecycle", () => {
 
   it("refuses an edit that does not fit, and keeps the approval waiting", async () => {
     class CheckedTurn extends FakeTurn {
-      protected editProblem(tool: string, input: unknown): string | null {
+      protected async editProblem(tool: string, input: unknown) {
         const { title } = input as { title?: unknown };
         return typeof title === "string"
           ? null
@@ -518,20 +523,18 @@ describe("TurnBase approval lifecycle", () => {
     }
     const turn = new CheckedTurn();
     const pending = turn.ask("a4");
-    expect(() =>
+    await expect(
       turn.approve("a4", { approve: true, updatedInput: { title: 1 } }),
-    ).toThrow(
-      expect.objectContaining({
-        code: "bad_input",
-        message:
-          "the edited input does not fit: save_knowledge_entry: title must be string",
-      }),
-    );
+    ).rejects.toMatchObject({
+      code: "bad_input",
+      message:
+        "the edited input does not fit: save_knowledge_entry: title must be string",
+    });
     expect(turn.pendingApprovals).toBe(1);
-    turn.approve("a4", { approve: false });
+    await turn.approve("a4", { approve: false });
     expect(await pending).toEqual({ approve: false });
     const next = turn.ask("a5");
-    turn.approve("a5", { approve: true, updatedInput: { title: "ok" } });
+    await turn.approve("a5", { approve: true, updatedInput: { title: "ok" } });
     expect(await next).toEqual({
       approve: true,
       updatedInput: { title: "ok" },

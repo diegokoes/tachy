@@ -22,7 +22,7 @@ import {
   type SessionFacts,
 } from "./backend";
 import { TurnBase, type ApprovalGate } from "./turn";
-import { startTurnTools, type TurnTools } from "./turn-tools";
+import { startTurnTools, type Refusal, type TurnTools } from "./turn-tools";
 import { sandboxOption, stateNameOf } from "./sandboxed-spawn";
 
 interface ContentBlock {
@@ -181,6 +181,8 @@ interface ApprovalPolicy {
   proxiedTools?: readonly string[];
   /** Why a call's input does not fit its tool's schema, or null. */
   inputProblem?: (tool: string, input: unknown) => string | null;
+  /** Why the tool itself would refuse the call, or null. */
+  refusal?: (tool: string, input: unknown) => Promise<Refusal | null>;
   /** The id the turn's tools log under, so a refused call joins their lines. */
   turnId?: string;
 }
@@ -211,6 +213,17 @@ export async function claudePermission(
       message: `Invalid arguments for ${base}: ${problem}. Nothing ran and no one was asked; call it again with arguments that fit the tool's schema.`,
     };
   }
+  const refusal = await policy.refusal?.(base, input);
+  if (refusal) {
+    log("info", "tool_call_refused", {
+      ...(policy.turnId ? { turn: policy.turnId } : {}),
+      tool: base,
+    });
+    return {
+      behavior: "deny",
+      message: `${base} did not run and no one was asked: ${refusal.text}`,
+    };
+  }
   if (isPreApproved(policy.preApproved ?? [], base, input))
     return { behavior: "allow", updatedInput: input };
   const decision = await policy.gate(toolUseID, toolName, input);
@@ -231,20 +244,22 @@ interface AllowedWrite {
  */
 export function turnCanUseTool(
   turn: ApprovalPolicy & {
-    tools: Pick<TurnTools, "allow" | "inputProblem">;
+    tools: Pick<TurnTools, "allow" | "inputProblem" | "refusal">;
     onWriteAllowed?: (write: AllowedWrite) => void;
   },
 ): CanUseTool {
   const inputProblem = (tool: string, input: unknown) =>
     turn.tools.inputProblem(tool, input);
+  const refusal = (tool: string, input: unknown) =>
+    turn.tools.refusal(tool, input);
   return async (toolName, input, { toolUseID }) => {
     const permission = await claudePermission(
       { toolName, input, toolUseID },
-      { inputProblem, ...turn },
+      { inputProblem, refusal, ...turn },
     );
     const { cls, base } = classifyCall(toolName, input, turn.proxiedTools);
     if (permission.behavior !== "allow" || cls !== "write") return permission;
-    turn.tools.allow(base, permission.updatedInput ?? input);
+    turn.tools.allow(base, permission.updatedInput ?? input, input);
     turn.onWriteAllowed?.({ toolUseID, tool: base, input });
     return permission;
   };
@@ -300,9 +315,16 @@ export class ClaudeTurn extends TurnBase {
     this.controller.abort();
   }
 
-  protected editProblem(tool: string, input: unknown): string | null {
+  protected async editProblem(
+    tool: string,
+    input: unknown,
+  ): Promise<string | null> {
     const { base } = classifyCall(tool, input, this.proxiedTools);
-    return this.tools?.inputProblem(base, input) ?? null;
+    const problem = this.tools?.inputProblem(base, input);
+    if (problem) return problem;
+    // A refusal the tool returns as a result goes to the model, with the edit.
+    const refusal = await this.tools?.refusal(base, input);
+    return refusal?.thrown ? refusal.text : null;
   }
 
   private async pump(

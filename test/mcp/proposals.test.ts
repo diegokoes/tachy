@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createUser } from "@tachy/core/access";
-import { env } from "@tachy/core/infra";
+import { CHECK_TOOL, env } from "@tachy/core/infra";
 import {
   getKnowledgeEntry,
   saveKnowledgeEntry,
@@ -59,6 +59,24 @@ beforeAll(async () => {
 });
 
 afterAll(() => client.close());
+
+describe("catalog tools without the right to them", () => {
+  it("are refused by the dry run, before anyone is asked", async () => {
+    const refused = await call(CHECK_TOOL, {
+      tool: "add_customer",
+      input: { name: "Dalmoor", slug: "dalmoor" },
+    });
+    expect(refused).toMatchObject({
+      isError: true,
+      text: "this action requires team admin or app admin rights",
+    });
+    const component = await call(CHECK_TOOL, {
+      tool: "add_component",
+      input: { product_slug: "tqx", slug: "renderer", name: "Renderer" },
+    });
+    expect(component.isError).toBe(true);
+  });
+});
 
 describe("knowledge tools without curation rights", () => {
   it("stores a save as a draft for review and tells the agent it is not live", async () => {
