@@ -390,6 +390,9 @@ export async function codeNextFor(
     : undefined;
 }
 
+export const COMPONENT_NEEDS_PRODUCT =
+  "component needs product_slug to resolve against";
+
 export async function componentIntoFilter(
   productId: string | undefined,
   component: string | undefined,
@@ -399,6 +402,7 @@ export async function componentIntoFilter(
   componentId?: string;
   componentTags?: string[];
 }> {
+  if (component && !productId) throw badInput(COMPONENT_NEEDS_PRODUCT);
   const tagFilter = [...(tags ?? [])];
   let componentId: string | undefined;
   let componentTags: string[] | undefined;

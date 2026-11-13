@@ -138,6 +138,8 @@ tool(
     annotations: { readOnlyHint: true },
   },
   async (args) => {
+    if (!args.source && !args.product_slug)
+      throw badInput("pass source or product_slug");
     const { sourceSlug, project } = args.product_slug
       ? await resolveAdoTarget(args)
       : { sourceSlug: args.source!, project: args.project! };
