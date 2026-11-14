@@ -61,11 +61,11 @@ smoke)
 prod)
   # What only the overlay has: Caddy and TLS, the read-only root, the
   # least-privilege roles, the embedder, the two workers and the turn
-  # sandboxes. The CPU limits are the runner's, which has fewer cores than the
-  # overlay's defaults ask for. The mock model is one more egress destination.
-  # The names and secrets come from the installer, as on a host, so the
-  # overlay starts on what an install writes. It keeps the passwords the
-  # database was created with.
+  # sandboxes. The mock model is one more egress destination.
+  # The names, the secrets and the CPU limits come from the installer, as on a
+  # host, so the overlay starts on what an install writes: the runner has
+  # fewer cores than the overlay's defaults ask for. It keeps the passwords
+  # the database was created with.
   render=$(mktemp -d)
   cp .env "$render/.env"
   printf 'hostname: %s\n' "$host" >"$render/host.yml"
@@ -74,8 +74,6 @@ prod)
   rm -rf "$render"
   cat >>.env <<ENV
 TACHY_STATUS_HOST_DIR=$PWD/.smoke-status
-TACHY_EMBEDDER_CPUS=2
-TACHY_WORKER_HEAVY_CPUS=2
 TACHY_SANDBOX_IMAGE=$sandbox_image
 TACHY_SANDBOX_RUNTIME=$sandbox_runtime
 TACHY_DOCKER_GID=$(stat -c %g /var/run/docker.sock)

@@ -225,6 +225,7 @@ render_env() {
   ensure_secret TACHY_SECRET_KEY "$(openssl rand -base64 32)"
   ensure_secret TACHY_SESSION_SECRET
   ensure_secret TACHY_INTERNAL_SECRET
+  fit_cpu_limits
 
   local issuer
   issuer=$(host_value oidc_issuer)
@@ -255,6 +256,17 @@ render_env() {
     files) put_host_env TACHY_CA_FILE "" ;;
     esac
   fi
+}
+
+# Docker refuses to start a container whose CPU limit is above the host's
+# cores, and the overlay's defaults are the 8-thread laptop's.
+fit_cpu_limits() {
+  local overlay="$TACHY_DIR/deploy/compose.prod.yml" cores name limit
+  [ -f "$overlay" ] || overlay="$HERE/../compose.prod.yml"
+  cores=${TACHY_INSTALL_CORES:-$(nproc)}
+  while IFS=: read -r name limit; do
+    [ "$limit" -le "$cores" ] || ensure_env "$name" "$cores"
+  done < <(grep -oE 'TACHY_[A-Z_]+_CPUS:-[0-9]+' "$overlay" | sort -u | sed 's/:-/:/')
 }
 
 watched_mounts() {
