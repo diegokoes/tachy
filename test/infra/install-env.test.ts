@@ -39,7 +39,11 @@ function render(hostYml: string, given: Record<string, string> = {}): string {
 }
 
 function renderAgain(dir: string, given: Record<string, string> = {}): void {
-  const env = { ...process.env, ...given };
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    TACHY_INSTALL_CORES: "16",
+    ...given,
+  };
   for (const name of OPTIONAL_SETTINGS) if (!(name in given)) delete env[name];
   execFileSync("bash", [installer, "render", dir, "--commit", COMMIT], {
     env,
@@ -202,6 +206,23 @@ describe("tachy-install render", () => {
     expect(envOf(join(dir, "tachy.env"))).not.toHaveProperty(
       "TACHY_UPDATE_BRANCH",
     );
+  });
+
+  it("lowers a CPU limit that is above the host's cores, and only that", () => {
+    const limits = (cores: string) => {
+      const env = envOf(
+        join(render(LAN_HOST, { TACHY_INSTALL_CORES: cores }), ".env"),
+      );
+      return Object.fromEntries(
+        Object.entries(env).filter(([name]) => name.endsWith("_CPUS")),
+      );
+    };
+    expect(limits("8")).toEqual({});
+    expect(limits("4")).toEqual({ TACHY_EMBEDDER_CPUS: "4" });
+    expect(limits("2")).toEqual({
+      TACHY_EMBEDDER_CPUS: "2",
+      TACHY_WORKER_HEAVY_CPUS: "2",
+    });
   });
 
   it("refuses a host file that cannot work", () => {

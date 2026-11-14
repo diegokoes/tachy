@@ -225,6 +225,7 @@ render_env() {
   ensure_secret TACHY_SECRET_KEY "$(openssl rand -base64 32)"
   ensure_secret TACHY_SESSION_SECRET
   ensure_secret TACHY_INTERNAL_SECRET
+  fit_cpu_limits
 
   local issuer
   issuer=$(host_value oidc_issuer)
@@ -255,6 +256,17 @@ render_env() {
     files) put_host_env TACHY_CA_FILE "" ;;
     esac
   fi
+}
+
+# Docker refuses to start a container whose CPU limit is above the host's
+# cores, and the overlay's defaults are the 8-thread laptop's.
+fit_cpu_limits() {
+  local overlay="$TACHY_DIR/deploy/compose.prod.yml" cores name limit
+  [ -f "$overlay" ] || overlay="$HERE/../compose.prod.yml"
+  cores=${TACHY_INSTALL_CORES:-$(nproc)}
+  while IFS=: read -r name limit; do
+    [ "$limit" -le "$cores" ] || ensure_env "$name" "$cores"
+  done < <(grep -oE 'TACHY_[A-Z_]+_CPUS:-[0-9]+' "$overlay" | sort -u | sed 's/:-/:/')
 }
 
 watched_mounts() {
@@ -341,6 +353,24 @@ yaml_list() {
   (IFS=,; echo "[${items[*]}]")
 }
 
+# ssh_networks <subnet> <client address>: what to suggest for SSH. A session
+# from outside the subnet, as on a cloud VM's public address, is added to it.
+ssh_networks() {
+  local subnet=$1 client=$2
+  case "$client" in
+  *.*) ;;
+  *) echo "$subnet"; return ;;
+  esac
+  python3 - "$subnet" "$client" <<'PY'
+import ipaddress
+import sys
+
+subnet, client = sys.argv[1:3]
+inside = ipaddress.ip_address(client) in ipaddress.ip_network(subnet, strict=False)
+print(subnet if inside else f"{subnet},{client}/32")
+PY
+}
+
 first_public_key() {
   local home
   home=$(getent passwd "$1" | cut -d: -f6)
@@ -363,7 +393,7 @@ ask_host() {
   name=$(ask "the name people open in a browser" "$name")
 
   reach=$(ask "who may reach the site, as networks, or 'any'" "$subnet")
-  ssh_from=$(ask "who may reach SSH, as networks" "$subnet")
+  ssh_from=$(ask "who may reach SSH, as networks" "$(ssh_networks "$subnet" "$(ssh_client)")")
 
   tls=$(ask_choice "certificate: caddy's own authority, let's encrypt, or files from IT" internal internal acme files)
   address=""
@@ -567,6 +597,36 @@ ensure_accounts() {
   fi
 }
 
+# site_status <curl args>: the HTTP status of a request through Caddy
+site_status() {
+  local name
+  name=$(app_env TACHY_HOSTNAME)
+  curl -sk -m 10 -o /dev/null -w '%{http_code}' --resolve "$name:443:127.0.0.1" "$@"
+}
+
+watch_token_refused() {
+  local status
+  status=$(site_status -H "authorization: Bearer $(host_env WATCH_API_TOKEN)" "$(site_url)/api/system")
+  [ "$status" = 401 ] || [ "$status" = 403 ]
+}
+
+smoke_login_refused() {
+  local status
+  status=$(jq -nc --arg email "$(host_env SMOKE_EMAIL)" --arg password "$(host_env SMOKE_PASSWORD)" \
+    '{email: $email, password: $password}' |
+    site_status -H "content-type: application/json" --data-binary @- "$(site_url)/auth/password/login")
+  [ "$status" = 401 ] || [ "$status" = 403 ]
+}
+
+# A restored database holds the accounts of the host it was dumped on, with
+# another token and another password than tachy.env has here.
+repair_accounts() {
+  site_get /readyz 2>/dev/null | grep -q '"ready":true' || return 0
+  ! watch_token_refused || put_host_env WATCH_API_TOKEN ""
+  ! smoke_login_refused || put_host_env SMOKE_PASSWORD ""
+  ensure_accounts
+}
+
 # A first start that was cut short is taken up again: every step of it can
 # run twice.
 has_first_deploy() { grep -q '"result":"deployed"' "$TACHY_SRV/deploy.log" 2>/dev/null; }
@@ -661,15 +721,18 @@ TEXT
   )
 }
 
+drop_first_start_token() {
+  [ -n "$(app_env TACHY_API_TOKEN)" ] || return 0
+  say "removing the first-start token"
+  sed -i '/^TACHY_API_TOKEN=/d' "$TACHY_DIR/.env"
+  dc stop api worker-light worker-heavy >&2
+  dc up -d >&2
+  wait_ready || die "the stack did not become ready again"
+}
+
 finish() {
   has_admin || die "no admin yet: open $(site_url) and run the setup wizard; its setup code is $(setup_code)"
-  if [ -n "$(app_env TACHY_API_TOKEN)" ]; then
-    say "removing the first-start token"
-    sed -i '/^TACHY_API_TOKEN=/d' "$TACHY_DIR/.env"
-    dc stop api worker-light worker-heavy >&2
-    dc up -d >&2
-    wait_ready || die "the stack did not become ready again"
-  fi
+  drop_first_start_token
   status
 }
 
@@ -809,8 +872,11 @@ keep_generated_secrets
 
 if ! has_first_deploy; then
   first_start
-  export_root_certificate
+else
+  repair_accounts
+  ! has_admin || drop_first_start_token
 fi
+export_root_certificate
 write_kit_readme
 
 say ""

@@ -5,7 +5,8 @@ keep. It runs on the host itself.
 
 1. **Host.** Debian 13 on wired Ethernet, with a DHCP reservation and an
    internal DNS name. A laptop: with LUKS (see
-   [replace-host.md](replace-host.md) for TPM2 unlock).
+   [replace-host.md](replace-host.md) for TPM2 unlock). A cloud VM:
+   [azure.md](azure.md).
 2. **Install.** As a login that has sudo, and whose SSH key is in its
    `authorized_keys`:
 
@@ -58,7 +59,8 @@ keep. It runs on the host itself.
      ([backups-and-restore.md](backups-and-restore.md)), then `sudo
 tachy-install` and `WATCH_DOWNLOADS=1`;
    - on another host than the 16 GB laptop, the `Host sizing` block of
-     `.env.example` in `/opt/tachy/.env`.
+     `.env.example` in `/opt/tachy/.env`. The installer has already lowered
+     a CPU limit that was above the host's cores.
 7. **Prove the alerts.** `sudo tachy-watch --force disk_srv=fail`, then run it
    plainly; both messages must arrive in Teams. Pull the network cable for
    10 minutes; healthchecks.io must alert.
@@ -73,8 +75,12 @@ tachy-install` and `WATCH_DOWNLOADS=1`;
 | `/root/tachy-admin-kit/` | what goes to the password manager                                    | nothing: it is deleted once copied              |
 
 `tachy-install` writes a key of the two env files only while it is missing or
-empty, so running it again keeps every secret and every edit.
-`deploy/host/host.example.yml` explains each key of `host.yml`.
+empty, so running it again keeps every secret and every edit. A run also
+takes up a first start that was cut short, makes the watch token or the smoke
+login again when the api refuses the one in `tachy.env`, and exports Caddy's
+root again. It outlives the SSH session it was started from and logs to
+`/var/log/tachy-install.log`. `deploy/host/host.example.yml` explains each key
+of `host.yml`.
 
 ## With nobody at it
 
