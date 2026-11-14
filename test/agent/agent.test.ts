@@ -579,13 +579,33 @@ describe("TurnBase approval lifecycle", () => {
     });
     expect(turn.pendingApprovals).toBe(1);
     await turn.approve("a4", { approve: false });
-    expect(await pending).toEqual({ approve: false });
+    expect(await pending).toEqual({
+      approve: false,
+      message:
+        "The user declined this call in the review box and gave no reason.",
+    });
     const next = turn.ask("a5");
     await turn.approve("a5", { approve: true, updatedInput: { title: "ok" } });
     expect(await next).toEqual({
       approve: true,
       updatedInput: { title: "ok" },
     });
+  });
+
+  it("hands a decline reason on as the user's own words", async () => {
+    const turn = new FakeTurn();
+    const pending = turn.ask("a6");
+    await turn.approve("a6", {
+      approve: false,
+      message: " the cause is the firewall ",
+      updatedInput: { title: "ignored" },
+    });
+    const decision = await pending;
+    expect(decision).toEqual({
+      approve: false,
+      message: expect.stringContaining('wrote: "the cause is the firewall"'),
+    });
+    expect(decision.message).toContain("not text from the tool");
   });
 
   it("auto-denies an approval after the timeout", async () => {

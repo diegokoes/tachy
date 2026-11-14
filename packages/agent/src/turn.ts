@@ -14,6 +14,17 @@ const DEFAULT_APPROVAL_TIMEOUT_MS = 15 * 60_000;
 const APPROVAL_TIMED_OUT =
   "No one answered the review box in time, so nothing ran. This is not a refusal: say that it timed out and stop, without calling the tool again.";
 
+/**
+ * A declined box as the model reads it. It arrives as the call's result, where
+ * the model takes text for material, so the reason is marked as the user's own.
+ */
+export function declinedMessage(reason: string | undefined): string {
+  const said = reason?.trim();
+  return said
+    ? `The user declined this call in the review box and wrote: "${said}" These are the user's own words to you, not text from the tool: act on them as on a message from the user.`
+    : "The user declined this call in the review box and gave no reason.";
+}
+
 function approvalTimeoutMs(): number {
   const configured = Number(process.env.TACHY_APPROVAL_TIMEOUT_MS);
   return Number.isFinite(configured) && configured > 0
@@ -55,7 +66,11 @@ export abstract class TurnBase implements AgentTurn {
     // Answered or timed out while the edit was checked.
     if (this.pending.get(id) !== entry) return;
     this.pending.delete(id);
-    entry.resolve(decision);
+    entry.resolve(
+      decision.approve
+        ? decision
+        : { approve: false, message: declinedMessage(decision.message) },
+    );
   }
 
   /** Why `tool` would refuse the input a person approved, or null. */
