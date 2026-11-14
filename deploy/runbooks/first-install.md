@@ -96,6 +96,32 @@ taken from its environment when set. Left out of `host.yml`,
 published its images: a head merged minutes ago may not have them yet, and the
 installer says so and can be run again.
 
+## A host that ran tachy before
+
+To start over on a host without installing its system again, take the old
+install off first:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/diegokoes/tachy/main/deploy/install.sh | sudo bash -s -- reset
+```
+
+or `sudo tachy-install reset` where the installer is already on the host. It
+lists what it removes and asks for the host's name before it does:
+
+- removed: the containers, networks and volumes of the stack (the database,
+  the chat transcripts, the repository clones, Caddy's authority),
+  `/opt/tachy`, `/etc/tachy`, and the deploy log and status files under
+  `/srv/tachy`;
+- kept: the system the playbook set up (users, SSH, the firewall, Docker,
+  gVisor), the encrypted backups in `/srv/tachy/backup-export`, and in
+  `/root/tachy-reset-<time>` the old `host.yml` or `inventory.yml`, the admin
+  kit if it was still on the host, and the vault key the credentials inside
+  those backups need.
+
+Then install as on a new host. Clients install Caddy's root again: the new
+install has a new authority. The old backups stay readable with the old
+private keys only, and age out of the export folder by its retention.
+
 ## A host that ran Docker before
 
 Old volumes under `/srv/docker` become visible once the playbook moves

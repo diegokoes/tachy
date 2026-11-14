@@ -15,6 +15,10 @@
 #   tachy-install finish           once the wizard has made an admin: removes
 #                                  the first-start token and checks the host
 #   tachy-install status           what is set up and what is not; no secrets
+#   tachy-install reset            takes the install off the host: the stack,
+#                                  its data and its settings. The system the
+#                                  playbook set up and the encrypted backups
+#                                  stay. Asks for the host's name first
 #   tachy-install render <dir> [--commit <sha>]
 #                                  writes .env and tachy.env into <dir> from
 #                                  <dir>/host.yml and touches nothing else;
@@ -41,7 +45,7 @@ say() { printf '%s\n' "$*" >&2; }
 
 COMMAND=install
 case "${1:-}" in
-host | finish | status | render)
+host | finish | status | reset | render)
   COMMAND=$1
   shift
   ;;
@@ -836,7 +840,87 @@ wait_for_wizard() {
   finish
 }
 
+# remove_tree <path>: only ever something below a top-level directory
+remove_tree() {
+  case "$1" in
+  /*/*) ;;
+  *) die "refusing to remove '$1'" ;;
+  esac
+  rm -rf --one-file-system -- "$1"
+}
+
+HOST_TIMERS=(tachy-backup-db.timer tachy-backup-files.timer tachy-restore-test.timer tachy-watch.timer tachy-update.timer)
+
+reset() {
+  local project name answer kept settings file ids
+  project=$(project)
+  name=$(uname -n)
+  settings=$(dirname "$TACHY_ENV_FILE")
+  kept=/root/tachy-reset-$(date -u +%Y%m%dT%H%M%SZ)
+
+  cat >&2 <<TEXT
+this takes tachy off $name. it removes:
+  - the containers, networks and volumes of the compose project '$project':
+    the database, the chat transcripts, the repository clones, caddy's authority
+  - $TACHY_DIR, with the stack's settings and secrets
+  - $settings, $TACHY_SRV/backups, $TACHY_SRV/status and $TACHY_SRV/deploy.log
+
+it keeps:
+  - the system: users, ssh, the firewall, docker, gVisor
+  - the encrypted backups in $TACHY_SRV/backup-export
+  - in $kept: host.yml or inventory.yml, the admin kit if one is still here,
+    and the vault key, which the credentials inside those backups need
+
+for a last copy of the database, stop here and run: sudo tachy-backup db
+TEXT
+  read -r -p "type this host's name, $name, to go on: " answer </dev/tty
+  [ "$answer" = "$name" ] || die "nothing was removed"
+
+  (umask 077 && mkdir -p "$kept")
+  for file in "$settings/host.yml" "$settings/inventory.yml"; do
+    [ ! -f "$file" ] || cp "$file" "$kept/"
+  done
+  [ ! -d "$KIT_DIR" ] || mv "$KIT_DIR" "$kept/admin-kit"
+  (umask 077 && grep -E '^TACHY_SECRET_KEY(_PREVIOUS)?=' "$TACHY_DIR/.env" >"$kept/vault-key.env" 2>/dev/null) || true
+
+  say "stopping the timers and the stack"
+  # Disabled too: at the next boot there is no checkout to start from. The
+  # playbook enables them again.
+  systemctl disable --now tachy.service "${HOST_TIMERS[@]}" >/dev/null 2>&1 || true
+
+  if command -v docker >/dev/null; then
+    ids=$({
+      docker ps -aq --filter "label=com.docker.compose.project=$project"
+      docker ps -aq --filter "label=tachy.sandbox=$project"
+    } | sort -u)
+    # shellcheck disable=SC2086
+    [ -z "$ids" ] || docker rm -f $ids >/dev/null
+    ids=$(docker volume ls -q --filter "label=com.docker.compose.project=$project")
+    # shellcheck disable=SC2086
+    [ -z "$ids" ] || docker volume rm $ids >/dev/null
+    ids=$(docker network ls -q --filter "label=com.docker.compose.project=$project")
+    # shellcheck disable=SC2086
+    [ -z "$ids" ] || docker network rm $ids >/dev/null
+  fi
+
+  say "removing the files"
+  remove_tree "$TACHY_DIR"
+  remove_tree "$settings"
+  remove_tree "$TACHY_SRV/backups"
+  remove_tree "$TACHY_SRV/status"
+  rm -f -- "$TACHY_SRV/deploy.log"
+  remove_tree /var/lib/tachy-watch
+
+  say ""
+  say "tachy is off $name. what was kept is in $kept and $TACHY_SRV/backup-export"
+  say "to install again: deploy/install.sh (deploy/runbooks/first-install.md)"
+}
+
 case "$COMMAND" in
+reset)
+  reset
+  exit 0
+  ;;
 host)
   [ -f "$HOST_FILE" ] || die "no $HOST_FILE"
   run_playbook "$COMMIT"
