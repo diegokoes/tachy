@@ -143,8 +143,9 @@ differently:
   - `ci.yml`, on pull requests and on pushes to `main` and `dev`: typecheck,
     `web:check`, the server build and `coverage`. On a push it also builds and
     pushes the two images, and runs gitleaks.
-  - `image-gates.yml`, on pull requests that touch the image: a Trivy scan of
-    both images and the container smoke test, on the base stack and under the
+  - `image-gates.yml`, on pull requests that touch the image: shellcheck over
+    the host scripts and a syntax check of the playbook, a Trivy scan of both
+    images and the container smoke test, on the base stack and under the
     production overlay.
   - `schema-plan.yml`, when `db/schema.sql` or `db/roles.sql` changes.
   - `load-scripts.yml`, when `load/` changes: bundles the k6 scripts.
@@ -154,9 +155,18 @@ differently:
   - `codeql.yml`: static analysis of the TypeScript and the workflows.
 - **Only Caddy is published,** on 80 and 443. The overlay removes the api's
   port. Postgres listens on `127.0.0.1:5433`.
-- **The repository can't show what the laptop runs.** The host playbook has
-  not been run there yet. Everything in §13's exit criteria that needs the
-  laptop is still open.
+- **A host is set up by `tachy-install`,** started with `deploy/install.sh` on
+  the host itself. It writes `/etc/tachy/host.yml`, makes the secrets and the
+  backup keys, runs the playbook in `deploy/host`, starts the stack, and
+  leaves `/root/tachy-admin-kit` for the password manager
+  (`deploy/runbooks/first-install.md`). The playbook records the commit it ran
+  from in `/etc/tachy/host-release`.
+- **The host's own scripts come with the release.** `tachy-deploy` runs a
+  release's playbook before it rolls the release, when that release changes
+  what the playbook installs (§10).
+- **The office laptop was set up before the installer.** It has no
+  `host-release`, so a deploy there leaves its host scripts alone until it is
+  installed again. §13's exit criteria that need the laptop are still open.
 - **The dev stack** doesn't run on the laptop. Where it goes is open (§15.1).
 
 ### 2.4 What fails first
@@ -629,7 +639,9 @@ value shown is its default, the laptop's. `0` lifts a memory or CPU limit
   pulling the encrypted dumps (§6.2) until a cloud or NAS target exists.
 
 **Portability.** If "more professional" turns out to mean a cloud VM, the same
-images run on any Docker host. Managed Postgres works if the service offers
+images run on any Docker host, and `tachy-install` sets one up with
+`host_profile: server`. `deploy/runbooks/azure.md` lists what a VM on Azure
+needs; whether to use one is open (§15.1). Managed Postgres works if the service offers
 `vector`, `pg_trgm` and `pgcrypto` (**to verify** on the chosen service), and
 then only `DATABASE_URL` changes. The hard constraint is the turn process tree:
 turns spawn subprocesses and need roughly 0.4–0.6 GB each once the model is
@@ -2209,8 +2221,8 @@ gets their own SFTP login on the host, tied to an SSH key on their laptop, and
 that login can do nothing else. Have at least two, so the backups never live on
 a single laptop.
 
-The list of downloaders is configuration in the host playbook
-(`deploy/host/`):
+The list of downloaders is configuration of the host, in
+`/etc/tachy/host.yml`:
 
 ```yaml
 backup_downloaders:
@@ -2253,9 +2265,9 @@ own `from=`.
 - **To add a downloader:** on their laptop, in PowerShell, they run
   `ssh-keygen -t ed25519 -f $HOME\.ssh\tachy_backup` and give the key a
   passphrase. Downloads are manual, so typing it costs nothing. They send the
-  `.pub` file; the operator adds it to `backup_downloaders` and runs the
-  playbook.
-- **To remove one:** delete the entry and run the playbook.
+  `.pub` file; the operator adds it to `backup_downloaders` and runs
+  `sudo tachy-install`.
+- **To remove one:** delete the entry and run `sudo tachy-install`.
 
 **Laptop side: `Get-TachyBackup.ps1`.** A PowerShell script in `deploy/backup/`
 that uses only what Windows ships with:
@@ -2460,8 +2472,9 @@ and the SFTP pull keeps working as it is.
 - Least-privilege roles (§5.9), and generated passwords. The overlay refuses
   to start without `POSTGRES_PASSWORD`.
 - `.env` is mode 0600 and owned by `tachy`, with every secret also in the
-  password manager. The first-install runbook sets the mode; the playbook
-  doesn't. `.dockerignore` keeps `.env` out of the image.
+  password manager. `tachy-install` writes it that way, and hands the secrets
+  it made over in `/root/tachy-admin-kit`, which `tachy-watch` reports while
+  a backup private key is still in it. `.dockerignore` keeps `.env` out of the image.
 - The per-turn MCP env isolation invariant stays as it is: caller-scoped
   tokens, built fresh for each turn (`api/src/turn-config.ts`).
 - **What a turn's model can call.** Claude Code runs with no built-in tool but
@@ -2753,8 +2766,12 @@ Docker starts anyway, so a host with no uplink still serves the LAN.
   against the mock model (`load/turns.mjs`): Caddy, the read-only root,
   `tachy_app`, `tachy_mcp`, the embedder, the workers, the sandbox launcher, a
   sandbox and the egress proxy are exercised on every pull request that
-  touches the image or `deploy/`. The host scripts
-  (`tachy-deploy`, `tachy-backup`, `tachy-watch`) are not.
+  touches the image or `deploy/`. Its production `.env` comes from
+  `tachy-install render`, the step that writes a host's. The host scripts
+  (`tachy-install`, `tachy-deploy`, `tachy-backup`, `tachy-watch`) are linted
+  there and not run; `test/infra/install-env.test.ts` and
+  `test/infra/host-sync.test.ts` cover the env an install writes and the
+  comparison a deploy makes.
 - **`schema-plan`** uploads the plan as an artifact. Destructive hazards fail
   the job unless the pull request carries the `schema-destructive` label.
 - **`build`, `image-gates`, `schema-plan` and `secrets` are required checks**
@@ -2795,7 +2812,13 @@ So promoting a digest from dev to main needs no rebuild.
 
 1. refuse to start when the smoke login (`SMOKE_EMAIL`, `SMOKE_PASSWORD` in
    `/etc/tachy/tachy.env`) is not set, unless `--skip-smoke` is given;
-2. resolve the argument to a commit and pull `sha-<12 characters>`;
+2. resolve the argument to a commit. When the release changes
+   `deploy/host`, `deploy/backup`, `deploy/watch` or `schema-hazards.sh`
+   against the commit in `/etc/tachy/host-release`, run its playbook
+   (`sudo tachy-install host --commit <commit>`, from a copy root fetches
+   itself) and start over on the scripts it installed. A playbook that fails
+   refuses the deploy, and `TACHY_HOST_SYNC=off` leaves the playbook to a
+   person. Then pull `sha-<12 characters>`;
 3. bring the `vector` extension level with the image, then plan the schema
    diff with the pg-schema-diff in the new image. Stop if the plan is
    destructive and `--allow-destructive` wasn't given;
@@ -3027,8 +3050,9 @@ does vary per environment.
   Postgres image changes only through a pinned-tag bump followed by a restore
   test.
 - **Provisioning as code.** Everything in this section is an idempotent
-  Ansible playbook under `deploy/host/`, run from the operator's machine with
-  `--ask-become-pass`. It has not been run on the laptop yet (§13):
+  Ansible playbook under `deploy/host/`, which `tachy-install` runs on the
+  host itself with `/etc/tachy/host.yml` as its variables. `host_profile:
+server` leaves out the battery, lid and mDNS parts:
   - users, SSH, the firewall and Docker;
   - the downloader logins and the SFTP chroot, from `backup_downloaders` (§6.2);
   - the systemd units: `tachy.service`, the backup and restore-test timers,
@@ -3077,8 +3101,8 @@ system pages and tests section, and key ids for the vault.
 | one request id can be followed across api and MCP log lines                          | done                                            |
 | both new CI jobs are required checks                                                 | done (§10)                                      |
 
-**Still to do by hand,** for both phases: run the playbook on the laptop, the
-two Teams workflows and the healthchecks.io checks, the backup keys and the
+**Still to do by hand,** for both phases: install the laptop again with
+`deploy/install.sh`, the two Teams workflows and the healthchecks.io checks, the backup keys and the
 downloaders, an Entra registration for SSO, and the load windows that produce
 the laptop's own numbers.
 
@@ -3125,23 +3149,24 @@ downloads, and `Get-TachyBackup.ps1` under Windows PowerShell 5.1.
 
 All in `deploy/runbooks/`. `README.md` there is the index.
 
-| Runbook                  | Covers                                                                                     |
-| ------------------------ | ------------------------------------------------------------------------------------------ |
-| `first-install.md`       | from `deploy/host/` through to the setup wizard; a database from before the schema stamp   |
-| `deploy-and-rollback.md` | deploying, rolling back, reading the deploy log                                            |
-| `schema-change.md`       | reading the plan, destructive changes, expand and contract, the dump-and-restore fallback  |
-| `maintenance.md`         | draining, the monthly update window                                                        |
-| `credentials.md`         | rotating the session secret, the API token, source tokens, provider keys and the vault key |
-| `backups-and-restore.md` | adding a downloader, restoring, the quarterly drill, rotating the team backup key          |
-| `replace-host.md`        | replacing a failed laptop or server, including LUKS and TPM2                               |
-| `full-disk.md`           | a disk alert, including the `/var` partition                                               |
-| `upgrades.md`            | Postgres and pgvector; the embedding model or vector dimension (§5.15)                     |
-| `investigation.md`       | a slow search, a stuck or expensive turn, a failed sync, a failed index                    |
-| `jobs-and-flows.md`      | a job or a flow that keeps failing; nothing running them                                   |
-| `onboarding.md`          | adding a team, a source connection, a linked repo or a bucket                              |
-| `housekeeping.md`        | certificates, retention, incident ownership                                                |
-| `tls-client-trust.md`    | installing Caddy's root certificate on clients                                             |
-| `load-window.md`         | measuring on the laptop outside working hours (§11.1)                                      |
+| Runbook                  | Covers                                                                                       |
+| ------------------------ | -------------------------------------------------------------------------------------------- |
+| `first-install.md`       | `install.sh` through to the setup wizard and the admin kit; a database from before the stamp |
+| `azure.md`               | what a VM on Azure needs, the commands to create one; not run                                |
+| `deploy-and-rollback.md` | deploying, rolling back, reading the deploy log                                              |
+| `schema-change.md`       | reading the plan, destructive changes, expand and contract, the dump-and-restore fallback    |
+| `maintenance.md`         | draining, the monthly update window                                                          |
+| `credentials.md`         | rotating the session secret, the API token, source tokens, provider keys and the vault key   |
+| `backups-and-restore.md` | adding a downloader, restoring, the quarterly drill, rotating the team backup key            |
+| `replace-host.md`        | replacing a failed laptop or server, including LUKS and TPM2                                 |
+| `full-disk.md`           | a disk alert, including the `/var` partition                                                 |
+| `upgrades.md`            | Postgres and pgvector; the embedding model or vector dimension (§5.15)                       |
+| `investigation.md`       | a slow search, a stuck or expensive turn, a failed sync, a failed index                      |
+| `jobs-and-flows.md`      | a job or a flow that keeps failing; nothing running them                                     |
+| `onboarding.md`          | adding a team, a source connection, a linked repo or a bucket                                |
+| `housekeeping.md`        | certificates, retention, incident ownership                                                  |
+| `tls-client-trust.md`    | installing Caddy's root certificate on clients                                               |
+| `load-window.md`         | measuring on the laptop outside working hours (§11.1)                                        |
 
 ## 15. Open questions and known gaps
 
@@ -3190,7 +3215,11 @@ All in `deploy/runbooks/`. `README.md` there is the index.
      personal development instance, so the dev stack would need its own
      Compose project and ports;
   3. a small cloud VM. It works, but it puts company data outside the office,
-     which the no-cloud decision (§1) rules out for now.
+     which is the question the next point leaves open.
+- **A VM on Azure.** Under consideration, for production reached by the
+  company with single sign-on. It would put company data outside the office,
+  which §1 keeps the backups from today. `deploy/runbooks/azure.md` lists what
+  it needs; nothing has been run there.
 - **Downloaders.** Which two people. Disk space is no constraint at the
   current dump size.
 - **A GPU for profile B.** It decides between tier B-cpu and B-gpu (§4.6), and

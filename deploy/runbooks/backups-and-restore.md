@@ -40,13 +40,13 @@ removed.
 
 Use the newest good copy: on the host (`/srv/tachy/backup-export`) if it
 survived, otherwise a laptop's. The laptop is only the courier: copy the
-`.age` file to the host and decrypt there.
+`.age` file to the host and decrypt there. As root, in `/opt/tachy`:
 
 ```sh
 sha256sum -c tachy-db-<ts>.dump.age.sha256
 age -d -i <team.key from the password manager> -o /srv/tachy/backups/restore.dump tachy-db-<ts>.dump.age
 C="docker compose -f docker-compose.yml -f deploy/compose.prod.yml"
-$C stop api caddy
+$C stop api caddy worker-light worker-heavy
 $C exec -T postgres psql -U tachy -d postgres -c 'drop database tachy with (force)' -c 'create database tachy'
 $C exec -T postgres pg_restore --no-owner -U tachy -d tachy < /srv/tachy/backups/restore.dump
 $C exec -T postgres psql -U tachy -d tachy -f - < db/roles.sql

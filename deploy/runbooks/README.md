@@ -6,6 +6,7 @@ is in [DEPLOYMENT-ARCHITECTURE.md](../../DEPLOYMENT-ARCHITECTURE.md).
 | Runbook                                          | When                                                      |
 | ------------------------------------------------ | --------------------------------------------------------- |
 | [first-install.md](first-install.md)             | A new or rebuilt host, through to the setup wizard        |
+| [azure.md](azure.md)                             | What a VM on Azure needs; under consideration, not run    |
 | [tls-client-trust.md](tls-client-trust.md)       | A laptop shows "Your connection is not private"           |
 | [deploy-and-rollback.md](deploy-and-rollback.md) | Every release; reading the deploy log                     |
 | [schema-change.md](schema-change.md)             | A release changes `db/schema.sql`                         |
